@@ -20,6 +20,7 @@ export function PosClient({
   const router = useRouter();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [paidInForeignCurrency, setPaidInForeignCurrency] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completedSale, setCompletedSale] = useState<SaleWithItems | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -77,6 +78,7 @@ export function PosClient({
       const result = await completeSale({
         items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
         paymentMethod,
+        paidInForeignCurrency,
       });
       if (!result.success) {
         setError(result.error);
@@ -91,6 +93,7 @@ export function PosClient({
   function newSale() {
     setLines([]);
     setPaymentMethod("CASH");
+    setPaidInForeignCurrency(false);
     setCompletedSale(null);
   }
 
@@ -109,6 +112,8 @@ export function PosClient({
         rate={rate}
         paymentMethod={paymentMethod}
         onPaymentMethodChange={setPaymentMethod}
+        paidInForeignCurrency={paidInForeignCurrency}
+        onPaidInForeignCurrencyChange={setPaidInForeignCurrency}
         onIncrement={increment}
         onDecrement={decrement}
         onRemove={remove}

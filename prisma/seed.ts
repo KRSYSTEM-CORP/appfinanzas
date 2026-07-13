@@ -98,6 +98,7 @@ async function main() {
           createdAt: daysAgo(day, randomInt(9, 20), randomInt(0, 59)),
           totalCents,
           paymentMethod: paymentMethods[randomInt(0, paymentMethods.length - 1)],
+          paidInForeignCurrency: randomInt(0, 4) === 0,
           companyId: company.id,
           exchangeRate: DEMO_EXCHANGE_RATE,
           items: { create: itemsData },

@@ -25,6 +25,8 @@ export function Cart({
   rate,
   paymentMethod,
   onPaymentMethodChange,
+  paidInForeignCurrency,
+  onPaidInForeignCurrencyChange,
   onIncrement,
   onDecrement,
   onRemove,
@@ -36,6 +38,8 @@ export function Cart({
   rate: number | null;
   paymentMethod: PaymentMethod;
   onPaymentMethodChange: (method: PaymentMethod) => void;
+  paidInForeignCurrency: boolean;
+  onPaidInForeignCurrencyChange: (value: boolean) => void;
   onIncrement: (productId: string) => void;
   onDecrement: (productId: string) => void;
   onRemove: (productId: string) => void;
@@ -120,6 +124,27 @@ export function Cart({
             {paymentLabels[method]}
           </Button>
         ))}
+      </div>
+
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={!paidInForeignCurrency ? "default" : "outline"}
+          onClick={() => onPaidInForeignCurrencyChange(false)}
+          className="flex-1"
+        >
+          Bolívares
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={paidInForeignCurrency ? "default" : "outline"}
+          onClick={() => onPaidInForeignCurrencyChange(true)}
+          className="flex-1"
+        >
+          Divisas (USD/EUR)
+        </Button>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

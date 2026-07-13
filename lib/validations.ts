@@ -33,6 +33,7 @@ export const CartItemSchema = z.object({
 export const SaleSchema = z.object({
   items: z.array(CartItemSchema).min(1, "El carrito está vacío"),
   paymentMethod: z.enum(["CASH", "CARD", "OTHER"]).default("CASH"),
+  paidInForeignCurrency: z.boolean().default(false),
 });
 
 export type SaleInput = z.infer<typeof SaleSchema>;

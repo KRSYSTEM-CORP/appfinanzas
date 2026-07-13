@@ -22,6 +22,7 @@ export function ReceiptView({
     createdAt: Date;
     totalCents: number;
     paymentMethod: PaymentMethod;
+    paidInForeignCurrency: boolean;
     exchangeRate: number | null;
     items: SaleItem[];
   };
@@ -63,6 +64,10 @@ export function ReceiptView({
       <div className="flex justify-between text-sm text-muted-foreground">
         <span>Método de pago</span>
         <span>{paymentLabels[sale.paymentMethod]}</span>
+      </div>
+      <div className="flex justify-between text-sm text-muted-foreground">
+        <span>Moneda</span>
+        <span>{sale.paidInForeignCurrency ? "Divisas (USD/EUR)" : "Bolívares"}</span>
       </div>
 
       <Button size="lg" onClick={onNewSale}>

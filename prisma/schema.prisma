@@ -57,18 +57,21 @@ model Product {
 }
 
 model Sale {
-  id            String        @id @default(cuid())
-  createdAt     DateTime      @default(now())
-  totalCents    Int
-  paymentMethod PaymentMethod @default(CASH)
-  note          String?
+  id                    String        @id @default(cuid())
+  createdAt             DateTime      @default(now())
+  totalCents            Int
+  paymentMethod         PaymentMethod @default(CASH)
+  note                  String?
   // Snapshot of Company.exchangeRate (VES per EUR) at the moment this sale was
   // completed, so historical receipts/reports never change if the rate is
   // updated later. Null for sales completed before this feature existed.
-  exchangeRate  Decimal?      @db.Decimal(12, 4)
-  companyId     String
-  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  items         SaleItem[]
+  exchangeRate          Decimal?      @db.Decimal(12, 4)
+  // Whether the customer paid in physical foreign currency (USD/EUR) rather
+  // than bolívares, regardless of paymentMethod.
+  paidInForeignCurrency Boolean       @default(false)
+  companyId             String
+  company               Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items                 SaleItem[]
 
   @@index([companyId, createdAt])
 }

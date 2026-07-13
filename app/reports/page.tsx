@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/reports/StatCard";
 import { SalesByDayChart } from "@/components/reports/SalesByDayChart";
 import { TopProductsChart } from "@/components/reports/TopProductsChart";
@@ -125,6 +126,7 @@ export default async function ReportsPage({
                   <TableHead>Fecha</TableHead>
                   <TableHead>Artículos</TableHead>
                   <TableHead>Método</TableHead>
+                  <TableHead>Moneda</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                 </TableRow>
               </TableHeader>
@@ -136,6 +138,13 @@ export default async function ReportsPage({
                       {sale.items.reduce((sum, i) => sum + i.quantity, 0)}
                     </TableCell>
                     <TableCell>{sale.paymentMethod}</TableCell>
+                    <TableCell>
+                      {sale.paidInForeignCurrency ? (
+                        <Badge variant="secondary">Divisas</Badge>
+                      ) : (
+                        <Badge variant="outline">Bolívares</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <Price
                         eurCents={sale.totalCents}
@@ -146,7 +155,7 @@ export default async function ReportsPage({
                 ))}
                 {recentSales.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                       Aún no hay ventas registradas.
                     </TableCell>
                   </TableRow>
