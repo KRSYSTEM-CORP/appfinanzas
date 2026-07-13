@@ -1,6 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Price } from "@/components/money/Price";
 import { PAYMENT_METHOD_LABELS, eurCentsToVES, formatEUR, formatVES } from "@/lib/format";
@@ -19,6 +21,8 @@ export function Cart({
   rate,
   paymentMethod,
   onPaymentMethodChange,
+  paymentReference,
+  onPaymentReferenceChange,
   paidInForeignCurrency,
   onPaidInForeignCurrencyChange,
   onIncrement,
@@ -32,6 +36,8 @@ export function Cart({
   rate: number | null;
   paymentMethod: PaymentMethod;
   onPaymentMethodChange: (method: PaymentMethod) => void;
+  paymentReference: string;
+  onPaymentReferenceChange: (value: string) => void;
   paidInForeignCurrency: boolean;
   onPaidInForeignCurrencyChange: (value: boolean) => void;
   onIncrement: (productId: string) => void;
@@ -119,6 +125,18 @@ export function Cart({
           </Button>
         ))}
       </div>
+
+      {paymentMethod === "CARD" && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="paymentReference">Número de referencia (Pago Móvil)</Label>
+          <Input
+            id="paymentReference"
+            value={paymentReference}
+            onChange={(e) => onPaymentReferenceChange(e.target.value)}
+            placeholder="Ej. 001234567"
+          />
+        </div>
+      )}
 
       <div className="flex gap-2">
         <Button

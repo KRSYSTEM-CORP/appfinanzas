@@ -143,7 +143,14 @@ export default async function ReportsPage({
                     <TableCell>
                       {sale.items.reduce((sum, i) => sum + i.quantity, 0)}
                     </TableCell>
-                    <TableCell>{PAYMENT_METHOD_LABELS[sale.paymentMethod]}</TableCell>
+                    <TableCell>
+                      {PAYMENT_METHOD_LABELS[sale.paymentMethod]}
+                      {sale.paymentReference && (
+                        <span className="block text-xs text-muted-foreground">
+                          Ref: {sale.paymentReference}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {sale.paidInForeignCurrency ? (
                         <Badge variant="secondary">Divisas</Badge>

@@ -78,6 +78,8 @@ model Sale {
   customerLastName      String?
   customerPhone         String?
   customerAddress       String?
+  // Confirmation/reference number for Pago Móvil transfers, entered manually.
+  paymentReference      String?
   companyId             String
   company               Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   items                 SaleItem[]

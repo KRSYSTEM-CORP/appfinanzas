@@ -44,11 +44,27 @@ export const CustomerSchema = z.object({
 
 export type CustomerInput = z.infer<typeof CustomerSchema>;
 
-export const SaleSchema = z.object({
-  items: z.array(CartItemSchema).min(1, "El carrito está vacío"),
-  paymentMethod: z.enum(["CASH", "CARD", "OTHER"]).default("CASH"),
-  paidInForeignCurrency: z.boolean().default(false),
-}).merge(CustomerSchema);
+export const SaleSchema = z
+  .object({
+    items: z.array(CartItemSchema).min(1, "El carrito está vacío"),
+    paymentMethod: z.enum(["CASH", "CARD", "OTHER"]).default("CASH"),
+    paidInForeignCurrency: z.boolean().default(false),
+    paymentReference: z
+      .string()
+      .trim()
+      .optional()
+      .transform((v) => (v === "" ? undefined : v)),
+  })
+  .merge(CustomerSchema)
+  .superRefine((data, ctx) => {
+    if (data.paymentMethod === "CARD" && !data.paymentReference) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["paymentReference"],
+        message: "El número de referencia es obligatorio para Pago Móvil",
+      });
+    }
+  });
 
 export type SaleInput = z.infer<typeof SaleSchema>;
 

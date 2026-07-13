@@ -27,6 +27,7 @@ export function PosClient({
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
   const [lines, setLines] = useState<CartLine[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [paymentReference, setPaymentReference] = useState("");
   const [paidInForeignCurrency, setPaidInForeignCurrency] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completedSale, setCompletedSale] = useState<SaleWithItems | null>(null);
@@ -92,6 +93,7 @@ export function PosClient({
         items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
         paymentMethod,
         paidInForeignCurrency,
+        paymentReference,
         customerFirstName: customer.firstName,
         customerLastName: customer.lastName,
         customerPhone: customer.phone,
@@ -112,6 +114,7 @@ export function PosClient({
     setCustomer(null);
     setLines([]);
     setPaymentMethod("CASH");
+    setPaymentReference("");
     setPaidInForeignCurrency(false);
     setCompletedSale(null);
     setStep("customer");
@@ -149,6 +152,8 @@ export function PosClient({
           rate={rate}
           paymentMethod={paymentMethod}
           onPaymentMethodChange={setPaymentMethod}
+          paymentReference={paymentReference}
+          onPaymentReferenceChange={setPaymentReference}
           paidInForeignCurrency={paidInForeignCurrency}
           onPaidInForeignCurrencyChange={setPaidInForeignCurrency}
           onIncrement={increment}

@@ -17,6 +17,7 @@ export function ReceiptView({
     totalCents: number;
     paymentMethod: PaymentMethod;
     paidInForeignCurrency: boolean;
+    paymentReference: string | null;
     exchangeRate: number | null;
     customerFirstName: string | null;
     customerLastName: string | null;
@@ -89,6 +90,12 @@ export function ReceiptView({
         <span>Método de pago</span>
         <span>{PAYMENT_METHOD_LABELS[sale.paymentMethod]}</span>
       </div>
+      {sale.paymentReference && (
+        <div className="flex justify-between text-sm text-muted-foreground">
+          <span>Referencia</span>
+          <span>{sale.paymentReference}</span>
+        </div>
+      )}
       <div className="flex justify-between text-sm text-muted-foreground">
         <span>Moneda</span>
         <span>{sale.paidInForeignCurrency ? "Divisas (USD/EUR)" : "Bolívares"}</span>
