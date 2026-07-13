@@ -12,16 +12,28 @@ const links = [
   { href: "/settings", label: "Tasa de cambio" },
 ];
 
-export function NavBar({ companyName }: { companyName: string }) {
+export function NavBar({
+  companyName,
+  logoDataUrl,
+}: {
+  companyName: string;
+  logoDataUrl: string | null;
+}) {
   const pathname = usePathname();
 
   return (
     <nav className="flex items-center gap-1 border-b px-6 h-14 shrink-0">
-      <div className="flex items-baseline gap-2 mr-4">
-        <span className="font-semibold">KYRA</span>
-        <span className="text-sm text-muted-foreground truncate max-w-[180px]">
-          {companyName}
-        </span>
+      <div className="flex items-center gap-2 mr-4">
+        {logoDataUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoDataUrl} alt="" className="h-7 w-7 rounded object-cover" />
+        )}
+        <div className="flex items-baseline gap-2">
+          <span className="font-semibold">KYRA</span>
+          <span className="text-sm text-muted-foreground truncate max-w-[180px]">
+            {companyName}
+          </span>
+        </div>
       </div>
       {links.map((link) => {
         const active = pathname.startsWith(link.href);

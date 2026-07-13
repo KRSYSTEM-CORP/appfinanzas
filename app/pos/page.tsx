@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { PosClient } from "@/components/pos/PosClient";
-import { listActiveProducts } from "@/lib/actions/products";
+import { listActiveProducts, listCategories } from "@/lib/actions/products";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 
 export const dynamic = "force-dynamic";
 
 export default async function PosPage() {
-  const [products, { rate }] = await Promise.all([
+  const [products, { rate }, categories] = await Promise.all([
     listActiveProducts(),
     getExchangeRateInfo(),
+    listCategories(),
   ]);
 
   return (
@@ -24,7 +25,7 @@ export default async function PosPage() {
         </p>
       )}
       <div className="flex-1 min-h-0">
-        <PosClient products={products} rate={rate} />
+        <PosClient products={products} rate={rate} categories={categories} />
       </div>
     </div>
   );

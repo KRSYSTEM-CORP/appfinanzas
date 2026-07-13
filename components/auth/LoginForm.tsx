@@ -5,10 +5,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { login } from "@/lib/actions/auth";
+import { login, getCompanyLogoByEmail } from "@/lib/actions/auth";
 
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(formData: FormData) {
@@ -21,11 +22,32 @@ export function LoginForm() {
     });
   }
 
+  async function handleEmailBlur(e: React.FocusEvent<HTMLInputElement>) {
+    const email = e.target.value;
+    if (!email) {
+      setCompanyLogo(null);
+      return;
+    }
+    try {
+      const { logoDataUrl } = await getCompanyLogoByEmail(email);
+      setCompanyLogo(logoDataUrl);
+    } catch {
+      setCompanyLogo(null);
+    }
+  }
+
   return (
     <form action={handleSubmit} className="flex flex-col gap-4 max-w-sm mx-auto">
+      {companyLogo && (
+        <div className="flex justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={companyLogo} alt="" className="h-16 w-16 rounded object-cover" />
+        </div>
+      )}
+
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="email">Correo</Label>
-        <Input id="email" name="email" type="email" required />
+        <Input id="email" name="email" type="email" onBlur={handleEmailBlur} required />
       </div>
 
       <div className="flex flex-col gap-1.5">

@@ -1,5 +1,7 @@
 import { ExchangeRateForm } from "@/components/settings/ExchangeRateForm";
-import { getExchangeRateInfo } from "@/lib/actions/settings";
+import { BrandingForm } from "@/components/settings/BrandingForm";
+import { Separator } from "@/components/ui/separator";
+import { getBranding, getExchangeRateInfo } from "@/lib/actions/settings";
 import { formatDate, formatVES } from "@/lib/format";
 import { SHOP_TIME_ZONE, zonedDateParts } from "@/lib/report-types";
 
@@ -17,33 +19,51 @@ function isStale(updatedAt: Date | null): boolean {
 }
 
 export default async function SettingsPage() {
-  const { rate, updatedAt } = await getExchangeRateInfo();
+  const [{ rate, updatedAt }, { logoDataUrl, brandColor }] = await Promise.all([
+    getExchangeRateInfo(),
+    getBranding(),
+  ]);
   const stale = isStale(updatedAt);
 
   return (
-    <div className="flex flex-col gap-4 p-6 max-w-sm">
-      <h1 className="text-2xl font-semibold">Tasa de cambio</h1>
+    <div className="flex flex-col gap-8 p-6">
+      <div className="flex flex-col gap-4 max-w-sm">
+        <h1 className="text-2xl font-semibold">Tasa de cambio</h1>
 
-      <div className="rounded-lg border p-4 flex flex-col gap-1">
-        <span className="text-sm text-muted-foreground">Tasa actual</span>
-        <span className="text-2xl font-semibold">
-          {rate != null ? formatVES(rate) : "No configurada"}
-          {rate != null && <span className="text-sm text-muted-foreground font-normal"> / €1</span>}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {updatedAt ? `Última actualización: ${formatDate(updatedAt)}` : "Nunca se ha configurado"}
-        </span>
+        <div className="rounded-lg border p-4 flex flex-col gap-1">
+          <span className="text-sm text-muted-foreground">Tasa actual</span>
+          <span className="text-2xl font-semibold">
+            {rate != null ? formatVES(rate) : "No configurada"}
+            {rate != null && <span className="text-sm text-muted-foreground font-normal"> / €1</span>}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {updatedAt ? `Última actualización: ${formatDate(updatedAt)}` : "Nunca se ha configurado"}
+          </span>
+        </div>
+
+        {stale && (
+          <p className="text-sm text-destructive">
+            {rate != null
+              ? "No has actualizado la tasa hoy. Los precios en bolívares pueden estar desactualizados."
+              : "Configura una tasa para poder ver precios en bolívares y completar ventas."}
+          </p>
+        )}
+
+        <ExchangeRateForm currentRate={rate} />
       </div>
 
-      {stale && (
-        <p className="text-sm text-destructive">
-          {rate != null
-            ? "No has actualizado la tasa hoy. Los precios en bolívares pueden estar desactualizados."
-            : "Configura una tasa para poder ver precios en bolívares y completar ventas."}
-        </p>
-      )}
+      <Separator />
 
-      <ExchangeRateForm currentRate={rate} />
+      <div className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold">Personalización</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Sube el logo de tu empresa y elige un color corporativo. Aparecerán en la barra de
+            navegación y en la pantalla de inicio de sesión.
+          </p>
+        </div>
+        <BrandingForm currentLogo={logoDataUrl} currentColor={brandColor} />
+      </div>
     </div>
   );
 }

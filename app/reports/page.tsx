@@ -13,7 +13,7 @@ import { StatCard } from "@/components/reports/StatCard";
 import { SalesByDayChart } from "@/components/reports/SalesByDayChart";
 import { TopProductsChart } from "@/components/reports/TopProductsChart";
 import { Price } from "@/components/money/Price";
-import { formatDate, formatEUR, formatVES } from "@/lib/format";
+import { PAYMENT_METHOD_LABELS, formatDate, formatEUR, formatVES } from "@/lib/format";
 import { revenueTotals, salesByDay, topProducts } from "@/lib/actions/reports";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import type { DateRangePreset } from "@/lib/report-types";
@@ -124,6 +124,7 @@ export default async function ReportsPage({
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha</TableHead>
+                  <TableHead>Cliente</TableHead>
                   <TableHead>Artículos</TableHead>
                   <TableHead>Método</TableHead>
                   <TableHead>Moneda</TableHead>
@@ -135,9 +136,14 @@ export default async function ReportsPage({
                   <TableRow key={sale.id}>
                     <TableCell>{formatDate(sale.createdAt)}</TableCell>
                     <TableCell>
+                      {sale.customerFirstName
+                        ? `${sale.customerFirstName} ${sale.customerLastName ?? ""}`.trim()
+                        : "—"}
+                    </TableCell>
+                    <TableCell>
                       {sale.items.reduce((sum, i) => sum + i.quantity, 0)}
                     </TableCell>
-                    <TableCell>{sale.paymentMethod}</TableCell>
+                    <TableCell>{PAYMENT_METHOD_LABELS[sale.paymentMethod]}</TableCell>
                     <TableCell>
                       {sale.paidInForeignCurrency ? (
                         <Badge variant="secondary">Divisas</Badge>
@@ -155,7 +161,7 @@ export default async function ReportsPage({
                 ))}
                 {recentSales.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                       Aún no hay ventas registradas.
                     </TableCell>
                   </TableRow>

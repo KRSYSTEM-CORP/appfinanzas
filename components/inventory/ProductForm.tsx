@@ -10,10 +10,11 @@ import type { Product } from "@prisma/client";
 
 type Props = {
   product?: Product;
+  categories: string[];
   action: (formData: FormData) => Promise<ActionResult>;
 };
 
-export function ProductForm({ product, action }: Props) {
+export function ProductForm({ product, categories, action }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -41,6 +42,22 @@ export function ProductForm({ product, action }: Props) {
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="sku">SKU (opcional)</Label>
         <Input id="sku" name="sku" defaultValue={product?.sku ?? ""} />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="category">Categoría (opcional)</Label>
+        <Input
+          id="category"
+          name="category"
+          list="category-options"
+          defaultValue={product?.category ?? ""}
+          placeholder="Ej. Ropa, Calzado, Accesorios..."
+        />
+        <datalist id="category-options">
+          {categories.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
       </div>
 
       <div className="grid grid-cols-2 gap-4">

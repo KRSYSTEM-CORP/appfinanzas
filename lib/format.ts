@@ -1,3 +1,11 @@
+import type { PaymentMethod } from "@prisma/client";
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  CASH: "Efectivo",
+  CARD: "Pago Móvil",
+  OTHER: "Otro",
+};
+
 export function formatVES(amount: number): string {
   const formatted = new Intl.NumberFormat("es-VE", {
     minimumFractionDigits: 2,

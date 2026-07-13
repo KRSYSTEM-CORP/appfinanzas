@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ProductTable } from "@/components/inventory/ProductTable";
-import { listAllProducts } from "@/lib/actions/products";
+import { listAllProducts, listCategories } from "@/lib/actions/products";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { isLowStock } from "@/lib/inventory";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
-  const [products, { rate }] = await Promise.all([listAllProducts(), getExchangeRateInfo()]);
+  const [products, { rate }, categories] = await Promise.all([
+    listAllProducts(),
+    getExchangeRateInfo(),
+    listCategories(),
+  ]);
   const lowStockCount = products.filter((p) => p.isActive && isLowStock(p)).length;
 
   return (
@@ -37,7 +41,7 @@ export default async function InventoryPage() {
         </p>
       )}
 
-      <ProductTable products={products} rate={rate} />
+      <ProductTable products={products} rate={rate} categories={categories} />
     </div>
   );
 }

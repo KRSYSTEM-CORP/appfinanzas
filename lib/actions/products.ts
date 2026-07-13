@@ -31,11 +31,23 @@ function readProductForm(formData: FormData) {
   return ProductSchema.safeParse({
     name: formData.get("name"),
     sku: formData.get("sku"),
+    category: formData.get("category"),
     price: formData.get("price"),
     cost: formData.get("cost") || undefined,
     stock: formData.get("stock"),
     lowStockThreshold: formData.get("lowStockThreshold"),
   });
+}
+
+export async function listCategories(): Promise<string[]> {
+  const { companyId } = await requireSession();
+  const rows = await prisma.product.findMany({
+    where: { companyId, category: { not: null } },
+    select: { category: true },
+    distinct: ["category"],
+    orderBy: { category: "asc" },
+  });
+  return rows.map((r) => r.category).filter((c): c is string => !!c);
 }
 
 export async function createProduct(formData: FormData): Promise<ActionResult> {

@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Price } from "@/components/money/Price";
-import { eurCentsToVES, formatEUR, formatVES } from "@/lib/format";
+import { PAYMENT_METHOD_LABELS, eurCentsToVES, formatEUR, formatVES } from "@/lib/format";
 import type { PaymentMethod } from "@prisma/client";
 
 export type CartLine = {
@@ -12,12 +12,6 @@ export type CartLine = {
   unitPriceCents: number;
   quantity: number;
   maxStock: number;
-};
-
-const paymentLabels: Record<PaymentMethod, string> = {
-  CASH: "Efectivo",
-  CARD: "Tarjeta",
-  OTHER: "Otro",
 };
 
 export function Cart({
@@ -112,7 +106,7 @@ export function Cart({
       </div>
 
       <div className="flex gap-2">
-        {(Object.keys(paymentLabels) as PaymentMethod[]).map((method) => (
+        {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((method) => (
           <Button
             key={method}
             type="button"
@@ -121,7 +115,7 @@ export function Cart({
             onClick={() => onPaymentMethodChange(method)}
             className="flex-1"
           >
-            {paymentLabels[method]}
+            {PAYMENT_METHOD_LABELS[method]}
           </Button>
         ))}
       </div>

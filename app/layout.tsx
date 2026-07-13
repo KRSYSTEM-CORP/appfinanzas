@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { NavBar } from "@/components/nav/NavBar";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { getSession } from "@/lib/session";
+import { getBranding } from "@/lib/actions/settings";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,15 +39,19 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await getSession();
+  const branding = session ? await getBranding() : { logoDataUrl: null, brandColor: null };
 
   return (
     <html
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      style={branding.brandColor ? ({ "--primary": branding.brandColor } as React.CSSProperties) : undefined}
     >
       <body className="min-h-full flex flex-col">
         <ServiceWorkerRegistration />
-        {session && <NavBar companyName={session.companyName} />}
+        {session && (
+          <NavBar companyName={session.companyName} logoDataUrl={branding.logoDataUrl} />
+        )}
         <main className="flex-1 min-h-0">{children}</main>
       </body>
     </html>

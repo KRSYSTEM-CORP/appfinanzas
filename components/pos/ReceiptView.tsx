@@ -3,14 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Price } from "@/components/money/Price";
-import { formatDate } from "@/lib/format";
+import { PAYMENT_METHOD_LABELS, formatDate } from "@/lib/format";
 import type { PaymentMethod, SaleItem } from "@prisma/client";
-
-const paymentLabels: Record<PaymentMethod, string> = {
-  CASH: "Efectivo",
-  CARD: "Tarjeta",
-  OTHER: "Otro",
-};
 
 export function ReceiptView({
   sale,
@@ -24,6 +18,10 @@ export function ReceiptView({
     paymentMethod: PaymentMethod;
     paidInForeignCurrency: boolean;
     exchangeRate: number | null;
+    customerFirstName: string | null;
+    customerLastName: string | null;
+    customerPhone: string | null;
+    customerAddress: string | null;
     items: SaleItem[];
   };
   rate: number | null;
@@ -41,6 +39,32 @@ export function ReceiptView({
         <p className="text-sm text-muted-foreground">{formatDate(sale.createdAt)}</p>
         <p className="text-xs text-muted-foreground">Ticket #{sale.id.slice(-8)}</p>
       </div>
+
+      {sale.customerFirstName && (
+        <>
+          <Separator />
+          <div className="flex flex-col gap-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Cliente</span>
+              <span className="font-medium">
+                {sale.customerFirstName} {sale.customerLastName}
+              </span>
+            </div>
+            {sale.customerPhone && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Teléfono</span>
+                <span>{sale.customerPhone}</span>
+              </div>
+            )}
+            {sale.customerAddress && (
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground shrink-0">Dirección</span>
+                <span className="text-right">{sale.customerAddress}</span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <Separator />
 
@@ -63,7 +87,7 @@ export function ReceiptView({
       </div>
       <div className="flex justify-between text-sm text-muted-foreground">
         <span>Método de pago</span>
-        <span>{paymentLabels[sale.paymentMethod]}</span>
+        <span>{PAYMENT_METHOD_LABELS[sale.paymentMethod]}</span>
       </div>
       <div className="flex justify-between text-sm text-muted-foreground">
         <span>Moneda</span>

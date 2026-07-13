@@ -15,7 +15,15 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Carrito inválido" };
   }
-  const { items, paymentMethod, paidInForeignCurrency } = parsed.data;
+  const {
+    items,
+    paymentMethod,
+    paidInForeignCurrency,
+    customerFirstName,
+    customerLastName,
+    customerPhone,
+    customerAddress,
+  } = parsed.data;
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
@@ -63,6 +71,10 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
           totalCents,
           paymentMethod,
           paidInForeignCurrency,
+          customerFirstName,
+          customerLastName,
+          customerPhone,
+          customerAddress,
           companyId,
           exchangeRate,
           items: { create: itemsData },

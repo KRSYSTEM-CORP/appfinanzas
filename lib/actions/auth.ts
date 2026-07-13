@@ -78,3 +78,18 @@ export async function logout(): Promise<void> {
   await clearSessionCookie();
   redirect("/login");
 }
+
+// Public lookup used on the login screen before authenticating: returns the
+// same shape (a logo or null) whether the email doesn't exist or exists
+// without a logo, so it can't be used to check whether an email is registered.
+export async function getCompanyLogoByEmail(email: string): Promise<{ logoDataUrl: string | null }> {
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed || !trimmed.includes("@")) return { logoDataUrl: null };
+
+  const user = await prisma.user.findUnique({
+    where: { email: trimmed },
+    select: { company: { select: { logoDataUrl: true } } },
+  });
+
+  return { logoDataUrl: user?.company.logoDataUrl ?? null };
+}

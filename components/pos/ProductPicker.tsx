@@ -4,29 +4,35 @@ import { useMemo, useState } from "react";
 import type { Product } from "@prisma/client";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Price } from "@/components/money/Price";
 import { isLowStock } from "@/lib/inventory";
+
+const ALL_CATEGORIES = "__all__";
 
 export function ProductPicker({
   products,
   rate,
+  categories,
   onAdd,
 }: {
   products: Product[];
   rate: number | null;
+  categories: string[];
   onAdd: (product: Product) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState(ALL_CATEGORIES);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.sku ?? "").toLowerCase().includes(q)
-    );
-  }, [products, query]);
+    return products.filter((p) => {
+      const matchesQuery =
+        !q || p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q);
+      const matchesCategory = category === ALL_CATEGORIES || p.category === category;
+      return matchesQuery && matchesCategory;
+    });
+  }, [products, query, category]);
 
   return (
     <div className="flex flex-col gap-3 h-full">
@@ -36,6 +42,29 @@ export function ProductPicker({
         onChange={(e) => setQuery(e.target.value)}
         autoFocus
       />
+      {categories.length > 0 && (
+        <div className="flex gap-1.5 flex-wrap">
+          <Button
+            type="button"
+            size="xs"
+            variant={category === ALL_CATEGORIES ? "default" : "outline"}
+            onClick={() => setCategory(ALL_CATEGORIES)}
+          >
+            Todas
+          </Button>
+          {categories.map((c) => (
+            <Button
+              key={c}
+              type="button"
+              size="xs"
+              variant={category === c ? "default" : "outline"}
+              onClick={() => setCategory(c)}
+            >
+              {c}
+            </Button>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto pr-1">
         {filtered.map((p) => {
           const outOfStock = p.stock <= 0;

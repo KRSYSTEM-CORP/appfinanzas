@@ -9,6 +9,11 @@ export const ProductSchema = z.object({
     .trim()
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
+  category: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
   price: z.coerce
     .number()
     .min(0, "El precio no puede ser negativo")
@@ -30,11 +35,20 @@ export const CartItemSchema = z.object({
   quantity: z.number().int().min(1),
 });
 
+export const CustomerSchema = z.object({
+  customerFirstName: z.string().trim().min(1, "El nombre es obligatorio"),
+  customerLastName: z.string().trim().min(1, "El apellido es obligatorio"),
+  customerPhone: z.string().trim().min(1, "El teléfono es obligatorio"),
+  customerAddress: z.string().trim().min(1, "La dirección es obligatoria"),
+});
+
+export type CustomerInput = z.infer<typeof CustomerSchema>;
+
 export const SaleSchema = z.object({
   items: z.array(CartItemSchema).min(1, "El carrito está vacío"),
   paymentMethod: z.enum(["CASH", "CARD", "OTHER"]).default("CASH"),
   paidInForeignCurrency: z.boolean().default(false),
-});
+}).merge(CustomerSchema);
 
 export type SaleInput = z.infer<typeof SaleSchema>;
 
@@ -51,4 +65,20 @@ export const LoginSchema = z.object({
 
 export const ExchangeRateSchema = z.object({
   rate: z.coerce.number().positive("La tasa debe ser mayor a 0"),
+});
+
+export const BrandingSchema = z.object({
+  logoDataUrl: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v))
+    .refine((v) => v == null || v.startsWith("data:image/"), "Logo inválido")
+    .refine((v) => v == null || v.length < 400_000, "El logo es demasiado grande"),
+  brandColor: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v))
+    .refine((v) => v == null || /^#[0-9a-fA-F]{6}$/.test(v), "Color inválido"),
 });
