@@ -6,7 +6,7 @@ export default function SignupPage() {
       <div className="text-center">
         <h1 className="text-2xl font-semibold">Crea tu cuenta</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Regístrate para empezar a usar tu punto de venta e inventario.
+          KYRA Software — regístrate para empezar a usar tu punto de venta e inventario.
         </p>
       </div>
       <SignupForm />

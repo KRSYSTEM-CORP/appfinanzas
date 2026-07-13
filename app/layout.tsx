@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NavBar } from "@/components/nav/NavBar";
+import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { getSession } from "@/lib/session";
 import "./globals.css";
 
@@ -14,9 +15,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Mi Tienda — Ventas e Inventario",
-  description: "Aplicación de ventas y control de inventario",
+export async function generateMetadata(): Promise<Metadata> {
+  const session = await getSession();
+  return {
+    title: session ? `${session.companyName} · KYRA Software` : "KYRA Software",
+    description: "Ventas y control de inventario — KYRA Software",
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: "KYRA Software",
+    },
+  };
+}
+
+export const viewport: Viewport = {
+  themeColor: "#111111",
 };
 
 export default async function RootLayout({
@@ -32,6 +45,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <ServiceWorkerRegistration />
         {session && <NavBar companyName={session.companyName} />}
         <main className="flex-1 min-h-0">{children}</main>
       </body>

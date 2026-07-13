@@ -16,7 +16,12 @@ export function NavBar({ companyName }: { companyName: string }) {
 
   return (
     <nav className="flex items-center gap-1 border-b px-6 h-14 shrink-0">
-      <span className="font-semibold mr-4 truncate max-w-[200px]">{companyName}</span>
+      <div className="flex items-baseline gap-2 mr-4">
+        <span className="font-semibold">KYRA</span>
+        <span className="text-sm text-muted-foreground truncate max-w-[180px]">
+          {companyName}
+        </span>
+      </div>
       {links.map((link) => {
         const active = pathname.startsWith(link.href);
         return (
