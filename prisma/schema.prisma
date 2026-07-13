@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  OTHER
+}
+
+model Product {
+  id                String     @id @default(cuid())
+  name              String
+  sku               String?    @unique
+  priceCents        Int
+  costCents         Int?
+  stock             Int        @default(0)
+  lowStockThreshold Int        @default(5)
+  isActive          Boolean    @default(true)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  saleItems         SaleItem[]
+
+  @@index([isActive])
+}
+
+model Sale {
+  id            String        @id @default(cuid())
+  createdAt     DateTime      @default(now())
+  totalCents    Int
+  paymentMethod PaymentMethod @default(CASH)
+  note          String?
+  items         SaleItem[]
+
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id             String   @id @default(cuid())
+  saleId         String
+  sale           Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName    String
+  unitPriceCents Int
+  quantity       Int
+  subtotalCents  Int
+
+  @@index([saleId])
+  @@index([productId])
+}
