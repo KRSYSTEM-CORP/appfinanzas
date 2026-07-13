@@ -8,6 +8,8 @@ const prisma = new PrismaClient({ adapter });
 
 const DEMO_EMAIL = "demo@empresademo.com";
 const DEMO_PASSWORD = "demo1234";
+// Placeholder demo rate (VES per EUR) — not a live/authoritative value.
+const DEMO_EXCHANGE_RATE = 45;
 
 const productsData = [
   { name: "Playera básica blanca", sku: "PLB-BLA", priceCents: 25000, costCents: 12000, stock: 40, lowStockThreshold: 10 },
@@ -44,7 +46,13 @@ async function main() {
   await prisma.company.deleteMany();
 
   console.log("Creando Empresa Demo...");
-  const company = await prisma.company.create({ data: { name: "Empresa Demo" } });
+  const company = await prisma.company.create({
+    data: {
+      name: "Empresa Demo",
+      exchangeRate: DEMO_EXCHANGE_RATE,
+      exchangeRateUpdatedAt: new Date(),
+    },
+  });
   await prisma.user.create({
     data: {
       email: DEMO_EMAIL,
@@ -91,6 +99,7 @@ async function main() {
           totalCents,
           paymentMethod: paymentMethods[randomInt(0, paymentMethods.length - 1)],
           companyId: company.id,
+          exchangeRate: DEMO_EXCHANGE_RATE,
           items: { create: itemsData },
         },
       });

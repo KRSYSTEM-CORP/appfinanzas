@@ -45,7 +45,7 @@ export function ProductForm({ product, action }: Props) {
 
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="price">Precio de venta (MXN)</Label>
+          <Label htmlFor="price">Precio de venta (EUR)</Label>
           <Input
             id="price"
             name="price"
@@ -57,7 +57,7 @@ export function ProductForm({ product, action }: Props) {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="cost">Costo (MXN, opcional)</Label>
+          <Label htmlFor="cost">Costo (EUR, opcional)</Label>
           <Input
             id="cost"
             name="cost"

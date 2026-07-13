@@ -2,7 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { formatCurrency } from "@/lib/format";
+import { Price } from "@/components/money/Price";
+import { eurCentsToVES, formatEUR, formatVES } from "@/lib/format";
 import type { PaymentMethod } from "@prisma/client";
 
 export type CartLine = {
@@ -21,6 +22,7 @@ const paymentLabels: Record<PaymentMethod, string> = {
 
 export function Cart({
   lines,
+  rate,
   paymentMethod,
   onPaymentMethodChange,
   onIncrement,
@@ -31,6 +33,7 @@ export function Cart({
   error,
 }: {
   lines: CartLine[];
+  rate: number | null;
   paymentMethod: PaymentMethod;
   onPaymentMethodChange: (method: PaymentMethod) => void;
   onIncrement: (productId: string) => void;
@@ -57,7 +60,9 @@ export function Cart({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{line.name}</p>
               <p className="text-xs text-muted-foreground">
-                {formatCurrency(line.unitPriceCents)} c/u
+                {rate != null
+                  ? `${formatVES(eurCentsToVES(line.unitPriceCents, rate))} / ${formatEUR(line.unitPriceCents)} c/u`
+                  : `${formatEUR(line.unitPriceCents)} c/u`}
               </p>
             </div>
             <div className="flex items-center gap-1">
@@ -80,9 +85,9 @@ export function Cart({
                 +
               </Button>
             </div>
-            <p className="w-20 text-right text-sm font-medium">
-              {formatCurrency(line.unitPriceCents * line.quantity)}
-            </p>
+            <div className="w-28 text-right">
+              <Price eurCents={line.unitPriceCents * line.quantity} rate={rate} />
+            </div>
             <Button
               type="button"
               size="sm"
@@ -97,9 +102,9 @@ export function Cart({
 
       <Separator />
 
-      <div className="flex items-center justify-between text-lg font-semibold">
-        <span>Total</span>
-        <span>{formatCurrency(total)}</span>
+      <div className="flex items-center justify-between">
+        <span className="text-lg font-semibold">Total</span>
+        <Price eurCents={total} rate={rate} size="lg" className="items-end" />
       </div>
 
       <div className="flex gap-2">

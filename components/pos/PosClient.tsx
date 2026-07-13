@@ -2,15 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Product, PaymentMethod, Sale, SaleItem } from "@prisma/client";
+import type { Product, PaymentMethod } from "@prisma/client";
 import { ProductPicker } from "@/components/pos/ProductPicker";
 import { Cart, type CartLine } from "@/components/pos/Cart";
 import { ReceiptView } from "@/components/pos/ReceiptView";
 import { completeSale, getSaleReceipt } from "@/lib/actions/sales";
 
-type SaleWithItems = Sale & { items: SaleItem[] };
+type SaleWithItems = NonNullable<Awaited<ReturnType<typeof getSaleReceipt>>>;
 
-export function PosClient({ products }: { products: Product[] }) {
+export function PosClient({
+  products,
+  rate,
+}: {
+  products: Product[];
+  rate: number | null;
+}) {
   const router = useRouter();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
@@ -89,17 +95,18 @@ export function PosClient({ products }: { products: Product[] }) {
   }
 
   if (completedSale) {
-    return <ReceiptView sale={completedSale} onNewSale={newSale} />;
+    return <ReceiptView sale={completedSale} rate={rate} onNewSale={newSale} />;
   }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-6 h-full">
-      <ProductPicker products={products} onAdd={addProduct} />
+      <ProductPicker products={products} rate={rate} onAdd={addProduct} />
       <Cart
         lines={lines.map((l) => ({
           ...l,
           maxStock: productById.get(l.productId)?.stock ?? l.maxStock,
         }))}
+        rate={rate}
         paymentMethod={paymentMethod}
         onPaymentMethodChange={setPaymentMethod}
         onIncrement={increment}

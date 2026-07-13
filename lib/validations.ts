@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const pesosToCents = (v: number) => Math.round(v * 100);
+const toCents = (v: number) => Math.round(v * 100);
 
 export const ProductSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio"),
@@ -12,13 +12,13 @@ export const ProductSchema = z.object({
   price: z.coerce
     .number()
     .min(0, "El precio no puede ser negativo")
-    .transform(pesosToCents),
+    .transform(toCents),
   cost: z.coerce
     .number()
     .min(0)
     .optional()
     .nullable()
-    .transform((v) => (v == null ? v : pesosToCents(v))),
+    .transform((v) => (v == null ? v : toCents(v))),
   stock: z.coerce.number().int().min(0, "El stock no puede ser negativo"),
   lowStockThreshold: z.coerce.number().int().min(0),
 });
@@ -46,4 +46,8 @@ export const SignupSchema = z.object({
 export const LoginSchema = z.object({
   email: z.string().trim().toLowerCase().email("Correo inválido"),
   password: z.string().min(1, "La contraseña es obligatoria"),
+});
+
+export const ExchangeRateSchema = z.object({
+  rate: z.coerce.number().positive("La tasa debe ser mayor a 0"),
 });

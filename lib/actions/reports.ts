@@ -10,33 +10,57 @@ import {
   type TopProductPoint,
 } from "@/lib/report-types";
 
+async function getCurrentRate(companyId: string): Promise<number> {
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { exchangeRate: true },
+  });
+  return company?.exchangeRate != null ? Number(company.exchangeRate) : 0;
+}
+
 export async function revenueTotals(range: DateRangePreset) {
   const { companyId } = await requireSession();
   const { start, end } = rangeToDates(range);
+  const currentRate = await getCurrentRate(companyId);
+
   const result = await prisma.sale.aggregate({
     _sum: { totalCents: true },
     _count: true,
     where: { companyId, createdAt: { gte: start, lte: end } },
   });
-  const totalCents = result._sum.totalCents ?? 0;
+  const totalEurCents = result._sum.totalCents ?? 0;
   const count = result._count;
+
+  // Sums each sale's own historical rate (falling back to the company's
+  // current rate for pre-feature sales with no snapshot), so this reflects
+  // the real bolívares collected in the period rather than today's value.
+  const [vesRow] = await prisma.$queryRaw<{ ves_total: number | null }[]>`
+    SELECT COALESCE(SUM("totalCents"::numeric * COALESCE("exchangeRate", ${currentRate}) / 100), 0) AS ves_total
+    FROM "Sale"
+    WHERE "companyId" = ${companyId} AND "createdAt" >= ${start} AND "createdAt" <= ${end}
+  `;
+
   return {
-    totalCents,
+    totalEurCents,
+    totalVES: Number(vesRow?.ves_total ?? 0),
     count,
-    avgCents: count > 0 ? Math.round(totalCents / count) : 0,
+    avgEurCents: count > 0 ? Math.round(totalEurCents / count) : 0,
   };
 }
 
 export async function salesByDay(range: DateRangePreset): Promise<SalesByDayPoint[]> {
   const { companyId } = await requireSession();
   const { start, end } = rangeToDates(range);
+  const currentRate = await getCurrentRate(companyId);
+
   // "createdAt" is stored as a naive UTC timestamp; convert to the shop's local
   // timezone before truncating so a day bucket matches the shop's actual business day.
   const rows = await prisma.$queryRaw<
-    { day: Date; totalCents: bigint; count: bigint }[]
+    { day: Date; totalEurCents: bigint; totalVES: number; count: bigint }[]
   >`
     SELECT DATE_TRUNC('day', "createdAt" AT TIME ZONE 'UTC' AT TIME ZONE ${SHOP_TIME_ZONE})::date AS day,
-           SUM("totalCents")::bigint AS "totalCents",
+           SUM("totalCents")::bigint AS "totalEurCents",
+           COALESCE(SUM("totalCents"::numeric * COALESCE("exchangeRate", ${currentRate}) / 100), 0) AS "totalVES",
            COUNT(*)::bigint AS count
     FROM "Sale"
     WHERE "companyId" = ${companyId} AND "createdAt" >= ${start} AND "createdAt" <= ${end}
@@ -49,7 +73,8 @@ export async function salesByDay(range: DateRangePreset): Promise<SalesByDayPoin
     day: `${r.day.getUTCFullYear()}-${String(r.day.getUTCMonth() + 1).padStart(2, "0")}-${String(
       r.day.getUTCDate()
     ).padStart(2, "0")}`,
-    totalCents: Number(r.totalCents),
+    totalEurCents: Number(r.totalEurCents),
+    totalVES: Number(r.totalVES),
     count: Number(r.count),
   }));
 }

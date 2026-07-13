@@ -2,7 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { Price } from "@/components/money/Price";
+import { formatDate } from "@/lib/format";
 import type { PaymentMethod, SaleItem } from "@prisma/client";
 
 const paymentLabels: Record<PaymentMethod, string> = {
@@ -13,6 +14,7 @@ const paymentLabels: Record<PaymentMethod, string> = {
 
 export function ReceiptView({
   sale,
+  rate,
   onNewSale,
 }: {
   sale: {
@@ -20,10 +22,17 @@ export function ReceiptView({
     createdAt: Date;
     totalCents: number;
     paymentMethod: PaymentMethod;
+    exchangeRate: number | null;
     items: SaleItem[];
   };
+  rate: number | null;
   onNewSale: () => void;
 }) {
+  // Prefer the rate that was actually in effect when this sale was charged;
+  // fall back to the company's current rate only for pre-feature sales that
+  // have no snapshot.
+  const effectiveRate = sale.exchangeRate != null ? Number(sale.exchangeRate) : rate;
+
   return (
     <div className="flex flex-col gap-4 max-w-sm mx-auto py-8">
       <div className="text-center">
@@ -36,20 +45,20 @@ export function ReceiptView({
 
       <div className="flex flex-col gap-1.5">
         {sale.items.map((item) => (
-          <div key={item.id} className="flex justify-between text-sm">
+          <div key={item.id} className="flex justify-between items-center text-sm">
             <span>
               {item.quantity} × {item.productName}
             </span>
-            <span>{formatCurrency(item.subtotalCents)}</span>
+            <Price eurCents={item.subtotalCents} rate={effectiveRate} />
           </div>
         ))}
       </div>
 
       <Separator />
 
-      <div className="flex justify-between font-semibold text-lg">
-        <span>Total</span>
-        <span>{formatCurrency(sale.totalCents)}</span>
+      <div className="flex justify-between items-center">
+        <span className="font-semibold text-lg">Total</span>
+        <Price eurCents={sale.totalCents} rate={effectiveRate} size="lg" className="items-end" />
       </div>
       <div className="flex justify-between text-sm text-muted-foreground">
         <span>Método de pago</span>

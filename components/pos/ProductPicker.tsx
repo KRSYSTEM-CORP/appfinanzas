@@ -4,14 +4,16 @@ import { useMemo, useState } from "react";
 import type { Product } from "@prisma/client";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/format";
+import { Price } from "@/components/money/Price";
 import { isLowStock } from "@/lib/inventory";
 
 export function ProductPicker({
   products,
+  rate,
   onAdd,
 }: {
   products: Product[];
+  rate: number | null;
   onAdd: (product: Product) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -46,7 +48,7 @@ export function ProductPicker({
               className="flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span className="font-medium text-sm">{p.name}</span>
-              <span className="text-sm text-muted-foreground">{formatCurrency(p.priceCents)}</span>
+              <Price eurCents={p.priceCents} rate={rate} />
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted-foreground">Stock: {p.stock}</span>
                 {isLowStock(p) && (

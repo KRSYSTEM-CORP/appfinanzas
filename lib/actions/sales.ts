@@ -17,6 +17,18 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
   }
   const { items, paymentMethod } = parsed.data;
 
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { exchangeRate: true },
+  });
+  if (company?.exchangeRate == null) {
+    return {
+      success: false,
+      error: "Configura la tasa de cambio antes de completar una venta.",
+    };
+  }
+  const exchangeRate = company.exchangeRate;
+
   try {
     const saleId = await prisma.$transaction(async (tx) => {
       const products = await tx.product.findMany({
@@ -51,6 +63,7 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
           totalCents,
           paymentMethod,
           companyId,
+          exchangeRate,
           items: { create: itemsData },
         },
       });
@@ -77,10 +90,14 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
 
 export async function getSaleReceipt(saleId: string) {
   const { companyId } = await requireSession();
-  return prisma.sale.findFirst({
+  const sale = await prisma.sale.findFirst({
     where: { id: saleId, companyId },
     include: { items: true },
   });
+  if (!sale) return null;
+  // Client Components can't receive Prisma's Decimal instances across the
+  // server action boundary — convert to a plain number first.
+  return { ...sale, exchangeRate: sale.exchangeRate != null ? Number(sale.exchangeRate) : null };
 }
 
 export async function listRecentSales(limit = 10) {

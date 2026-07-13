@@ -14,11 +14,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency } from "@/lib/format";
+import { Price } from "@/components/money/Price";
 import { LowStockBadge } from "@/components/inventory/LowStockBadge";
 import { setProductActive } from "@/lib/actions/products";
 
-export function ProductTable({ products }: { products: Product[] }) {
+export function ProductTable({
+  products,
+  rate,
+}: {
+  products: Product[];
+  rate: number | null;
+}) {
   const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -65,7 +71,9 @@ export function ProductTable({ products }: { products: Product[] }) {
               <TableRow key={p.id} className={!p.isActive ? "opacity-50" : undefined}>
                 <TableCell className="font-medium">{p.name}</TableCell>
                 <TableCell>{p.sku ?? "—"}</TableCell>
-                <TableCell>{formatCurrency(p.priceCents)}</TableCell>
+                <TableCell>
+                  <Price eurCents={p.priceCents} rate={rate} />
+                </TableCell>
                 <TableCell className="flex items-center gap-2">
                   {p.stock}
                   <LowStockBadge product={p} />

@@ -9,13 +9,33 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatCurrency, formatDayLabel } from "@/lib/format";
+import { formatDayLabel, formatEUR, formatVES } from "@/lib/format";
 import type { SalesByDayPoint } from "@/lib/report-types";
 
+type ChartPoint = { day: string; ves: number; eur: number };
+
+function ChartTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: { payload: ChartPoint }[];
+}) {
+  if (!active || !payload?.length) return null;
+  const point = payload[0].payload;
+  return (
+    <div className="rounded-md border bg-popover px-3 py-2 text-sm shadow-sm">
+      <p className="font-medium">{formatVES(point.ves)}</p>
+      <p className="text-xs text-muted-foreground">{formatEUR(point.eur)}</p>
+    </div>
+  );
+}
+
 export function SalesByDayChart({ data }: { data: SalesByDayPoint[] }) {
-  const chartData = data.map((d) => ({
+  const chartData: ChartPoint[] = data.map((d) => ({
     day: formatDayLabel(d.day),
-    total: d.totalCents / 100,
+    ves: d.totalVES,
+    eur: d.totalEurCents,
   }));
 
   if (chartData.length === 0) {
@@ -31,14 +51,9 @@ export function SalesByDayChart({ data }: { data: SalesByDayPoint[] }) {
       <BarChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         <XAxis dataKey="day" fontSize={12} tickLine={false} axisLine={false} />
-        <YAxis
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-          tickFormatter={(v) => `$${v}`}
-        />
-        <Tooltip formatter={(value) => formatCurrency(Number(value) * 100)} />
-        <Bar dataKey="total" radius={[4, 4, 0, 0]} fill="var(--primary)" />
+        <YAxis fontSize={12} tickLine={false} axisLine={false} />
+        <Tooltip content={<ChartTooltip />} />
+        <Bar dataKey="ves" radius={[4, 4, 0, 0]} fill="var(--primary)" />
       </BarChart>
     </ResponsiveContainer>
   );

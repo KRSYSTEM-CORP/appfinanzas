@@ -9,6 +9,7 @@ const links = [
   { href: "/pos", label: "Punto de venta" },
   { href: "/inventory", label: "Inventario" },
   { href: "/reports", label: "Reportes" },
+  { href: "/settings", label: "Tasa de cambio" },
 ];
 
 export function NavBar({ companyName }: { companyName: string }) {

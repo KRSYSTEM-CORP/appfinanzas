@@ -11,8 +11,10 @@ import {
 import { StatCard } from "@/components/reports/StatCard";
 import { SalesByDayChart } from "@/components/reports/SalesByDayChart";
 import { TopProductsChart } from "@/components/reports/TopProductsChart";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { Price } from "@/components/money/Price";
+import { formatDate, formatEUR, formatVES } from "@/lib/format";
 import { revenueTotals, salesByDay, topProducts } from "@/lib/actions/reports";
+import { getExchangeRateInfo } from "@/lib/actions/settings";
 import type { DateRangePreset } from "@/lib/report-types";
 import { listRecentSales } from "@/lib/actions/sales";
 
@@ -35,11 +37,12 @@ export default async function ReportsPage({
     ? (rawRange as DateRangePreset)
     : "7d";
 
-  const [totals, byDay, top, recentSales] = await Promise.all([
+  const [totals, byDay, top, recentSales, { rate }] = await Promise.all([
     revenueTotals(range),
     salesByDay(range),
     topProducts(range),
     listRecentSales(10),
+    getExchangeRateInfo(),
   ]);
 
   return (
@@ -64,9 +67,31 @@ export default async function ReportsPage({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard label="Ingresos totales" value={formatCurrency(totals.totalCents)} />
+        <StatCard
+          label="Ingresos totales"
+          value={
+            <div className="flex flex-col">
+              <span>{formatVES(totals.totalVES)}</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                {formatEUR(totals.totalEurCents)}
+              </span>
+            </div>
+          }
+        />
         <StatCard label="Número de ventas" value={String(totals.count)} />
-        <StatCard label="Ticket promedio" value={formatCurrency(totals.avgCents)} />
+        <StatCard
+          label="Ticket promedio"
+          value={
+            <div className="flex flex-col">
+              <span>
+                {formatVES(totals.count > 0 ? totals.totalVES / totals.count : 0)}
+              </span>
+              <span className="text-xs text-muted-foreground font-normal">
+                {formatEUR(totals.avgEurCents)}
+              </span>
+            </div>
+          }
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -112,7 +137,10 @@ export default async function ReportsPage({
                     </TableCell>
                     <TableCell>{sale.paymentMethod}</TableCell>
                     <TableCell className="text-right">
-                      {formatCurrency(sale.totalCents)}
+                      <Price
+                        eurCents={sale.totalCents}
+                        rate={sale.exchangeRate != null ? Number(sale.exchangeRate) : rate}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

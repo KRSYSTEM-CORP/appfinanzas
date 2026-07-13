@@ -2,12 +2,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ProductTable } from "@/components/inventory/ProductTable";
 import { listAllProducts } from "@/lib/actions/products";
+import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { isLowStock } from "@/lib/inventory";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
-  const products = await listAllProducts();
+  const [products, { rate }] = await Promise.all([listAllProducts(), getExchangeRateInfo()]);
   const lowStockCount = products.filter((p) => p.isActive && isLowStock(p)).length;
 
   return (
@@ -26,7 +27,17 @@ export default async function InventoryPage() {
         </Button>
       </div>
 
-      <ProductTable products={products} />
+      {rate == null && (
+        <p className="text-sm text-destructive">
+          No has configurado tu tasa de cambio.{" "}
+          <Link href="/settings" className="underline underline-offset-4">
+            Configúrala aquí
+          </Link>{" "}
+          para ver los precios en bolívares.
+        </p>
+      )}
+
+      <ProductTable products={products} rate={rate} />
     </div>
   );
 }

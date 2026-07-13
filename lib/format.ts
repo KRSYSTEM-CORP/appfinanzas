@@ -1,13 +1,25 @@
-export function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat("es-MX", {
+export function formatVES(amount: number): string {
+  const formatted = new Intl.NumberFormat("es-VE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+  return `Bs. ${formatted}`;
+}
+
+export function formatEUR(cents: number): string {
+  return new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency: "MXN",
+    currency: "EUR",
   }).format(cents / 100);
+}
+
+export function eurCentsToVES(eurCents: number, rate: number): number {
+  return (eurCents / 100) * rate;
 }
 
 export function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return new Intl.DateTimeFormat("es-MX", {
+  return new Intl.DateTimeFormat("es-VE", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -18,7 +30,7 @@ export function formatDate(date: Date | string): string {
 
 export function formatDateShort(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return new Intl.DateTimeFormat("es-MX", {
+  return new Intl.DateTimeFormat("es-VE", {
     day: "2-digit",
     month: "short",
   }).format(d);

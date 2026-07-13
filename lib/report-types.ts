@@ -1,8 +1,8 @@
 export type DateRangePreset = "today" | "7d" | "30d" | "month";
 
-export const SHOP_TIME_ZONE = "America/Mexico_City";
+export const SHOP_TIME_ZONE = "America/Caracas";
 
-function zonedDateParts(instant: Date, timeZone: string) {
+export function zonedDateParts(instant: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
@@ -50,7 +50,12 @@ export function rangeToDates(range: DateRangePreset): { start: Date; end: Date }
   return { start, end };
 }
 
-export type SalesByDayPoint = { day: string; totalCents: number; count: number };
+export type SalesByDayPoint = {
+  day: string;
+  totalEurCents: number;
+  totalVES: number;
+  count: number;
+};
 
 export type TopProductPoint = {
   productId: string | null;
