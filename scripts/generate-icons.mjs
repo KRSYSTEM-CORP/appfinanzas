@@ -4,26 +4,23 @@ import { fileURLToPath } from "url";
 import path from "path";
 
 const OUT_DIR = fileURLToPath(new URL("../public/icons/", import.meta.url));
+const SOURCE = fileURLToPath(new URL("../branding-input/logo.JPG", import.meta.url));
 mkdirSync(OUT_DIR, { recursive: true });
 
-// Simple wordmark: near-black rounded square with a white "K", matching the
-// app's neutral black/white theme (see app/globals.css --primary).
-function svgIcon({ size, padding = 0 }) {
+const BG = "#000000";
+
+async function renderIcon({ name, size, padding = 0 }) {
   const inner = size - padding * 2;
-  return `
-<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" fill="#111111"/>
-  <text
-    x="50%"
-    y="50%"
-    dominant-baseline="central"
-    text-anchor="middle"
-    font-family="Georgia, 'Times New Roman', serif"
-    font-weight="700"
-    font-size="${inner * 0.58}"
-    fill="#ffffff"
-  >K</text>
-</svg>`;
+  const resized = await sharp(SOURCE).resize(inner, inner, { fit: "cover" }).toBuffer();
+
+  await sharp({
+    create: { width: size, height: size, channels: 3, background: BG },
+  })
+    .composite([{ input: resized, left: padding, top: padding }])
+    .png()
+    .toFile(path.join(OUT_DIR, name));
+
+  console.log("Wrote", name);
 }
 
 const targets = [
@@ -37,7 +34,5 @@ const targets = [
 ];
 
 for (const t of targets) {
-  const svg = Buffer.from(svgIcon(t));
-  await sharp(svg).png().toFile(path.join(OUT_DIR, t.name));
-  console.log("Wrote", t.name);
+  await renderIcon(t);
 }

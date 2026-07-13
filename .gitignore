@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# raw branding source files (not needed at runtime)
+/branding-input
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
