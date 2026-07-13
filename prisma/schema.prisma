@@ -12,10 +12,32 @@ enum PaymentMethod {
   OTHER
 }
 
+model Company {
+  id        String    @id @default(cuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  users     User[]
+  products  Product[]
+  sales     Sale[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([companyId])
+}
+
 model Product {
   id                String     @id @default(cuid())
   name              String
-  sku               String?    @unique
+  sku               String?
   priceCents        Int
   costCents         Int?
   stock             Int        @default(0)
@@ -23,9 +45,12 @@ model Product {
   isActive          Boolean    @default(true)
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+  companyId         String
+  company           Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   saleItems         SaleItem[]
 
-  @@index([isActive])
+  @@unique([companyId, sku])
+  @@index([companyId, isActive])
 }
 
 model Sale {
@@ -34,9 +59,11 @@ model Sale {
   totalCents    Int
   paymentMethod PaymentMethod @default(CASH)
   note          String?
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   items         SaleItem[]
 
-  @@index([createdAt])
+  @@index([companyId, createdAt])
 }
 
 model SaleItem {

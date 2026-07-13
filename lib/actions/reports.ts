@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/session";
 import {
   rangeToDates,
   SHOP_TIME_ZONE,
@@ -10,11 +11,12 @@ import {
 } from "@/lib/report-types";
 
 export async function revenueTotals(range: DateRangePreset) {
+  const { companyId } = await requireSession();
   const { start, end } = rangeToDates(range);
   const result = await prisma.sale.aggregate({
     _sum: { totalCents: true },
     _count: true,
-    where: { createdAt: { gte: start, lte: end } },
+    where: { companyId, createdAt: { gte: start, lte: end } },
   });
   const totalCents = result._sum.totalCents ?? 0;
   const count = result._count;
@@ -26,6 +28,7 @@ export async function revenueTotals(range: DateRangePreset) {
 }
 
 export async function salesByDay(range: DateRangePreset): Promise<SalesByDayPoint[]> {
+  const { companyId } = await requireSession();
   const { start, end } = rangeToDates(range);
   // "createdAt" is stored as a naive UTC timestamp; convert to the shop's local
   // timezone before truncating so a day bucket matches the shop's actual business day.
@@ -36,7 +39,7 @@ export async function salesByDay(range: DateRangePreset): Promise<SalesByDayPoin
            SUM("totalCents")::bigint AS "totalCents",
            COUNT(*)::bigint AS count
     FROM "Sale"
-    WHERE "createdAt" >= ${start} AND "createdAt" <= ${end}
+    WHERE "companyId" = ${companyId} AND "createdAt" >= ${start} AND "createdAt" <= ${end}
     GROUP BY day
     ORDER BY day ASC
   `;
@@ -52,10 +55,11 @@ export async function salesByDay(range: DateRangePreset): Promise<SalesByDayPoin
 }
 
 export async function topProducts(range: DateRangePreset, limit = 10): Promise<TopProductPoint[]> {
+  const { companyId } = await requireSession();
   const { start, end } = rangeToDates(range);
   const grouped = await prisma.saleItem.groupBy({
     by: ["productId", "productName"],
-    where: { sale: { createdAt: { gte: start, lte: end } } },
+    where: { sale: { companyId, createdAt: { gte: start, lte: end } } },
     _sum: { quantity: true, subtotalCents: true },
     orderBy: { _sum: { quantity: "desc" } },
     take: limit,

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/session";
 import { SaleSchema, type SaleInput } from "@/lib/validations";
 
 export type CompleteSaleResult =
@@ -9,6 +10,7 @@ export type CompleteSaleResult =
   | { success: false; error: string };
 
 export async function completeSale(input: SaleInput): Promise<CompleteSaleResult> {
+  const { companyId } = await requireSession();
   const parsed = SaleSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Carrito inválido" };
@@ -18,7 +20,7 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
   try {
     const saleId = await prisma.$transaction(async (tx) => {
       const products = await tx.product.findMany({
-        where: { id: { in: items.map((i) => i.productId) } },
+        where: { id: { in: items.map((i) => i.productId) }, companyId },
       });
       const productById = new Map(products.map((p) => [p.id, p]));
 
@@ -48,13 +50,14 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
         data: {
           totalCents,
           paymentMethod,
+          companyId,
           items: { create: itemsData },
         },
       });
 
       for (const item of itemsData) {
-        await tx.product.update({
-          where: { id: item.productId },
+        await tx.product.updateMany({
+          where: { id: item.productId, companyId },
           data: { stock: { decrement: item.quantity } },
         });
       }
@@ -73,14 +76,17 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
 }
 
 export async function getSaleReceipt(saleId: string) {
-  return prisma.sale.findUnique({
-    where: { id: saleId },
+  const { companyId } = await requireSession();
+  return prisma.sale.findFirst({
+    where: { id: saleId, companyId },
     include: { items: true },
   });
 }
 
 export async function listRecentSales(limit = 10) {
+  const { companyId } = await requireSession();
   return prisma.sale.findMany({
+    where: { companyId },
     orderBy: { createdAt: "desc" },
     take: limit,
     include: { items: true },

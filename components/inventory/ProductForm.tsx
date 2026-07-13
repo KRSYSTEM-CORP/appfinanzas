@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { ActionResult } from "@/lib/actions/products";
+import type { ActionResult } from "@/lib/types";
 import type { Product } from "@prisma/client";
 
 type Props = {

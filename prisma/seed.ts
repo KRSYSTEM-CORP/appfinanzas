@@ -1,9 +1,13 @@
 import "dotenv/config";
 import { PrismaClient, PaymentMethod } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { hashPassword } from "../lib/password";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
+
+const DEMO_EMAIL = "demo@empresademo.com";
+const DEMO_PASSWORD = "demo1234";
 
 const productsData = [
   { name: "Playera básica blanca", sku: "PLB-BLA", priceCents: 25000, costCents: 12000, stock: 40, lowStockThreshold: 10 },
@@ -36,10 +40,22 @@ async function main() {
   await prisma.saleItem.deleteMany();
   await prisma.sale.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.company.deleteMany();
+
+  console.log("Creando Empresa Demo...");
+  const company = await prisma.company.create({ data: { name: "Empresa Demo" } });
+  await prisma.user.create({
+    data: {
+      email: DEMO_EMAIL,
+      passwordHash: hashPassword(DEMO_PASSWORD),
+      companyId: company.id,
+    },
+  });
 
   console.log("Creando productos...");
   const products = await Promise.all(
-    productsData.map((p) => prisma.product.create({ data: p }))
+    productsData.map((p) => prisma.product.create({ data: { ...p, companyId: company.id } }))
   );
 
   console.log("Creando ventas de ejemplo (últimos 14 días)...");
@@ -74,6 +90,7 @@ async function main() {
           createdAt: daysAgo(day, randomInt(9, 20), randomInt(0, 59)),
           totalCents,
           paymentMethod: paymentMethods[randomInt(0, paymentMethods.length - 1)],
+          companyId: company.id,
           items: { create: itemsData },
         },
       });
@@ -81,6 +98,9 @@ async function main() {
   }
 
   console.log("Listo. Productos:", products.length);
+  console.log("\nAcceso de la Empresa Demo:");
+  console.log(`  Correo:      ${DEMO_EMAIL}`);
+  console.log(`  Contraseña:  ${DEMO_PASSWORD}`);
 }
 
 main()

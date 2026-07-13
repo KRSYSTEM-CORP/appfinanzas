@@ -36,3 +36,14 @@ export const SaleSchema = z.object({
 });
 
 export type SaleInput = z.infer<typeof SaleSchema>;
+
+export const SignupSchema = z.object({
+  companyName: z.string().trim().min(1, "El nombre de la empresa es obligatorio"),
+  email: z.string().trim().toLowerCase().email("Correo inválido"),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+});
+
+export const LoginSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Correo inválido"),
+  password: z.string().min(1, "La contraseña es obligatoria"),
+});
