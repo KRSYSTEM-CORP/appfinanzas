@@ -12,9 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/reports/StatCard";
 import { SalesByDayChart } from "@/components/reports/SalesByDayChart";
 import { TopProductsChart } from "@/components/reports/TopProductsChart";
+import { SaleActions } from "@/components/reports/SaleActions";
 import { Price } from "@/components/money/Price";
-import { PAYMENT_METHOD_LABELS, formatDate, formatEUR, formatVES } from "@/lib/format";
-import { revenueTotals, salesByDay, topProducts } from "@/lib/actions/reports";
+import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, formatDate, formatEUR, formatVES } from "@/lib/format";
+import { revenueTotals, receivablesTotals, salesByDay, topProducts } from "@/lib/actions/reports";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import type { DateRangePreset } from "@/lib/report-types";
 import { listRecentSales } from "@/lib/actions/sales";
@@ -38,8 +39,9 @@ export default async function ReportsPage({
     ? (rawRange as DateRangePreset)
     : "7d";
 
-  const [totals, byDay, top, recentSales, { rate }] = await Promise.all([
+  const [totals, receivables, byDay, top, recentSales, { rate }] = await Promise.all([
     revenueTotals(range),
+    receivablesTotals(),
     salesByDay(range),
     topProducts(range),
     listRecentSales(10),
@@ -67,7 +69,7 @@ export default async function ReportsPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Ingresos totales"
           value={
@@ -89,6 +91,19 @@ export default async function ReportsPage({
               </span>
               <span className="text-xs text-muted-foreground font-normal">
                 {formatEUR(totals.avgEurCents)}
+              </span>
+            </div>
+          }
+        />
+        <StatCard
+          label={`Por cobrar (${receivables.count})`}
+          value={
+            <div className="flex flex-col">
+              <span className={receivables.count > 0 ? "text-destructive" : undefined}>
+                {formatVES(receivables.totalVES)}
+              </span>
+              <span className="text-xs text-muted-foreground font-normal">
+                {formatEUR(receivables.totalEurCents)}
               </span>
             </div>
           }
@@ -127,14 +142,23 @@ export default async function ReportsPage({
                   <TableHead>Cliente</TableHead>
                   <TableHead>Artículos</TableHead>
                   <TableHead>Método</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead>Moneda</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {recentSales.map((sale) => (
-                  <TableRow key={sale.id}>
-                    <TableCell>{formatDate(sale.createdAt)}</TableCell>
+                  <TableRow key={sale.id} className={sale.voided ? "opacity-50" : undefined}>
+                    <TableCell>
+                      {formatDate(sale.createdAt)}
+                      {sale.voided && (
+                        <span className="block">
+                          <Badge variant="destructive">Anulada</Badge>
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {sale.customerFirstName
                         ? `${sale.customerFirstName} ${sale.customerLastName ?? ""}`.trim()
@@ -144,11 +168,30 @@ export default async function ReportsPage({
                       {sale.items.reduce((sum, i) => sum + i.quantity, 0)}
                     </TableCell>
                     <TableCell>
-                      {PAYMENT_METHOD_LABELS[sale.paymentMethod]}
-                      {sale.paymentReference && (
-                        <span className="block text-xs text-muted-foreground">
-                          Ref: {sale.paymentReference}
-                        </span>
+                      {sale.paymentMethod ? (
+                        <>
+                          {PAYMENT_METHOD_LABELS[sale.paymentMethod]}
+                          {sale.paymentReference && (
+                            <span className="block text-xs text-muted-foreground">
+                              Ref: {sale.paymentReference}
+                            </span>
+                          )}
+                          {sale.paidExchangeRate != null && sale.paidAt && (
+                            <span className="block text-xs text-muted-foreground">
+                              Cobrado: {formatDate(sale.paidAt)} · Tasa{" "}
+                              {formatVES(Number(sale.paidExchangeRate))}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {sale.paymentStatus === "CREDIT" ? (
+                        <Badge variant="destructive">{PAYMENT_STATUS_LABELS.CREDIT}</Badge>
+                      ) : (
+                        <Badge variant="secondary">{PAYMENT_STATUS_LABELS.PAID}</Badge>
                       )}
                     </TableCell>
                     <TableCell>
@@ -164,11 +207,18 @@ export default async function ReportsPage({
                         rate={sale.exchangeRate != null ? Number(sale.exchangeRate) : rate}
                       />
                     </TableCell>
+                    <TableCell className="text-right">
+                      <SaleActions
+                        saleId={sale.id}
+                        voided={sale.voided}
+                        paymentStatus={sale.paymentStatus}
+                      />
+                    </TableCell>
                   </TableRow>
                 ))}
                 {recentSales.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                       Aún no hay ventas registradas.
                     </TableCell>
                   </TableRow>

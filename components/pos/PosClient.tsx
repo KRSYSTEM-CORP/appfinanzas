@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Product, PaymentMethod } from "@prisma/client";
+import type { Product, PaymentMethod, PaymentStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { CustomerForm, type CustomerInfo } from "@/components/pos/CustomerForm";
 import { ProductPicker } from "@/components/pos/ProductPicker";
@@ -17,16 +17,21 @@ export function PosClient({
   products,
   rate,
   categories,
+  companyName,
+  companyLogoDataUrl,
 }: {
   products: Product[];
   rate: number | null;
   categories: string[];
+  companyName: string;
+  companyLogoDataUrl: string | null;
 }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("customer");
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
   const [lines, setLines] = useState<CartLine[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("PAID");
   const [paymentReference, setPaymentReference] = useState("");
   const [paidInForeignCurrency, setPaidInForeignCurrency] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +97,7 @@ export function PosClient({
       const result = await completeSale({
         items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
         paymentMethod,
+        paymentStatus,
         paidInForeignCurrency,
         paymentReference,
         customerFirstName: customer.firstName,
@@ -114,6 +120,7 @@ export function PosClient({
     setCustomer(null);
     setLines([]);
     setPaymentMethod("CASH");
+    setPaymentStatus("PAID");
     setPaymentReference("");
     setPaidInForeignCurrency(false);
     setCompletedSale(null);
@@ -121,7 +128,15 @@ export function PosClient({
   }
 
   if (step === "receipt" && completedSale) {
-    return <ReceiptView sale={completedSale} rate={rate} onNewSale={newSale} />;
+    return (
+      <ReceiptView
+        sale={completedSale}
+        rate={rate}
+        companyName={companyName}
+        companyLogoDataUrl={companyLogoDataUrl}
+        onNewSale={newSale}
+      />
+    );
   }
 
   if (step === "customer") {
@@ -152,6 +167,8 @@ export function PosClient({
           rate={rate}
           paymentMethod={paymentMethod}
           onPaymentMethodChange={setPaymentMethod}
+          paymentStatus={paymentStatus}
+          onPaymentStatusChange={setPaymentStatus}
           paymentReference={paymentReference}
           onPaymentReferenceChange={setPaymentReference}
           paidInForeignCurrency={paidInForeignCurrency}

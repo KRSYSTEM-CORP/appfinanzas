@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { searchCustomers } from "@/lib/actions/customers";
+import type { Customer } from "@prisma/client";
 
 export type CustomerInfo = {
   firstName: string;
@@ -23,6 +25,38 @@ export function CustomerForm({
   const [lastName, setLastName] = useState(initial?.lastName ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [address, setAddress] = useState(initial?.address ?? "");
+  const [suggestions, setSuggestions] = useState<Customer[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [, startSearch] = useTransition();
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    const query = firstName.trim();
+    if (query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const id = ++requestId.current;
+    const timeout = setTimeout(() => {
+      startSearch(async () => {
+        const results = await searchCustomers(query);
+        if (id === requestId.current) {
+          setSuggestions(results);
+          setShowSuggestions(true);
+        }
+      });
+    }, 250);
+    return () => clearTimeout(timeout);
+  }, [firstName]);
+
+  function pickSuggestion(customer: Customer) {
+    setFirstName(customer.firstName);
+    setLastName(customer.lastName);
+    setPhone(customer.phone);
+    setAddress(customer.address ?? "");
+    setSuggestions([]);
+    setShowSuggestions(false);
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,15 +73,35 @@ export function CustomerForm({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 relative">
           <Label htmlFor="firstName">Nombre</Label>
           <Input
             id="firstName"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
+            onFocus={() => setShowSuggestions(suggestions.length > 0)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             required
             autoFocus
+            autoComplete="off"
           />
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 z-10 rounded-md border bg-popover shadow-md overflow-hidden">
+              {suggestions.map((c) => (
+                <button
+                  type="button"
+                  key={c.id}
+                  onMouseDown={() => pickSuggestion(c)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                >
+                  <span className="font-medium">
+                    {c.firstName} {c.lastName}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">{c.phone}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="lastName">Apellido</Label>
@@ -68,6 +122,7 @@ export function CustomerForm({
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           required
+          autoComplete="off"
         />
       </div>
 

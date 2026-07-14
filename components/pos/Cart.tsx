@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Price } from "@/components/money/Price";
-import { PAYMENT_METHOD_LABELS, eurCentsToVES, formatEUR, formatVES } from "@/lib/format";
-import type { PaymentMethod } from "@prisma/client";
+import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, eurCentsToVES, formatEUR, formatVES } from "@/lib/format";
+import type { PaymentMethod, PaymentStatus } from "@prisma/client";
 
 export type CartLine = {
   productId: string;
@@ -21,6 +21,8 @@ export function Cart({
   rate,
   paymentMethod,
   onPaymentMethodChange,
+  paymentStatus,
+  onPaymentStatusChange,
   paymentReference,
   onPaymentReferenceChange,
   paidInForeignCurrency,
@@ -36,6 +38,8 @@ export function Cart({
   rate: number | null;
   paymentMethod: PaymentMethod;
   onPaymentMethodChange: (method: PaymentMethod) => void;
+  paymentStatus: PaymentStatus;
+  onPaymentStatusChange: (status: PaymentStatus) => void;
   paymentReference: string;
   onPaymentReferenceChange: (value: string) => void;
   paidInForeignCurrency: boolean;
@@ -112,30 +116,54 @@ export function Cart({
       </div>
 
       <div className="flex gap-2">
-        {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((method) => (
+        {(Object.keys(PAYMENT_STATUS_LABELS) as PaymentStatus[]).map((status) => (
           <Button
-            key={method}
+            key={status}
             type="button"
             size="sm"
-            variant={paymentMethod === method ? "default" : "outline"}
-            onClick={() => onPaymentMethodChange(method)}
+            variant={paymentStatus === status ? "default" : "outline"}
+            onClick={() => onPaymentStatusChange(status)}
             className="flex-1"
           >
-            {PAYMENT_METHOD_LABELS[method]}
+            {PAYMENT_STATUS_LABELS[status]}
           </Button>
         ))}
       </div>
 
-      {paymentMethod === "CARD" && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="paymentReference">Número de referencia (Pago Móvil)</Label>
-          <Input
-            id="paymentReference"
-            value={paymentReference}
-            onChange={(e) => onPaymentReferenceChange(e.target.value)}
-            placeholder="Ej. 001234567"
-          />
-        </div>
+      {paymentStatus === "PAID" ? (
+        <>
+          <div className="flex gap-2">
+            {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((method) => (
+              <Button
+                key={method}
+                type="button"
+                size="sm"
+                variant={paymentMethod === method ? "default" : "outline"}
+                onClick={() => onPaymentMethodChange(method)}
+                className="flex-1"
+              >
+                {PAYMENT_METHOD_LABELS[method]}
+              </Button>
+            ))}
+          </div>
+
+          {paymentMethod === "CARD" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="paymentReference">Número de referencia (Pago Móvil)</Label>
+              <Input
+                id="paymentReference"
+                value={paymentReference}
+                onChange={(e) => onPaymentReferenceChange(e.target.value)}
+                placeholder="Ej. 001234567"
+              />
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
+          Esta venta quedará pendiente de cobro. El método de pago se registrará cuando el
+          cliente pague, desde la sección de Reportes.
+        </p>
       )}
 
       <div className="flex gap-2">

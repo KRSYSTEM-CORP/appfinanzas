@@ -25,5 +25,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/).*)"],
+  // Also excludes any path with a file extension (icons, manifest.webmanifest,
+  // sw.js, apple-icon.png, etc.) so static/public assets are never redirected
+  // to /login on the logged-out screen — that redirect breaks the asset fetch.
+  matcher: ["/((?!_next/static|_next/image|api/|.*\\.[\\w]+$).*)"],
 };

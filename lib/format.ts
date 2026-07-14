@@ -1,9 +1,14 @@
-import type { PaymentMethod } from "@prisma/client";
+import type { PaymentMethod, PaymentStatus } from "@prisma/client";
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CASH: "Efectivo",
   CARD: "Pago Móvil",
   OTHER: "Otro",
+};
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  PAID: "Pagada",
+  CREDIT: "A crédito",
 };
 
 export function formatVES(amount: number): string {

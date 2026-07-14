@@ -44,10 +44,24 @@ export const CustomerSchema = z.object({
 
 export type CustomerInput = z.infer<typeof CustomerSchema>;
 
+export const CustomerRecordSchema = z.object({
+  firstName: z.string().trim().min(1, "El nombre es obligatorio"),
+  lastName: z.string().trim().min(1, "El apellido es obligatorio"),
+  phone: z.string().trim().min(1, "El teléfono es obligatorio"),
+  address: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
+});
+
+export type CustomerRecordInput = z.infer<typeof CustomerRecordSchema>;
+
 export const SaleSchema = z
   .object({
     items: z.array(CartItemSchema).min(1, "El carrito está vacío"),
-    paymentMethod: z.enum(["CASH", "CARD", "OTHER"]).default("CASH"),
+    paymentMethod: z.enum(["CASH", "CARD", "OTHER"]).optional(),
+    paymentStatus: z.enum(["PAID", "CREDIT"]).default("PAID"),
     paidInForeignCurrency: z.boolean().default(false),
     paymentReference: z
       .string()
@@ -57,16 +71,38 @@ export const SaleSchema = z
   })
   .merge(CustomerSchema)
   .superRefine((data, ctx) => {
-    if (data.paymentMethod === "CARD" && !data.paymentReference) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["paymentReference"],
-        message: "El número de referencia es obligatorio para Pago Móvil",
-      });
+    // Credit sales aren't paid at checkout, so no payment method applies yet —
+    // it's captured later when the customer actually pays (see registerPayment).
+    if (data.paymentStatus === "PAID") {
+      if (!data.paymentMethod) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["paymentMethod"],
+          message: "El método de pago es obligatorio",
+        });
+      }
+      if (data.paymentMethod === "CARD" && !data.paymentReference) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["paymentReference"],
+          message: "El número de referencia es obligatorio para Pago Móvil",
+        });
+      }
     }
   });
 
 export type SaleInput = z.infer<typeof SaleSchema>;
+
+export const RegisterPaymentSchema = z.object({
+  paymentMethod: z.enum(["CASH", "CARD", "OTHER"]),
+  paymentReference: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
+});
+
+export type RegisterPaymentInput = z.infer<typeof RegisterPaymentSchema>;
 
 export const SignupSchema = z.object({
   companyName: z.string().trim().min(1, "El nombre de la empresa es obligatorio"),

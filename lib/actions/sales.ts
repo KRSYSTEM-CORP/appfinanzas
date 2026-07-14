@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
-import { SaleSchema, type SaleInput } from "@/lib/validations";
+import { SaleSchema, RegisterPaymentSchema, type SaleInput } from "@/lib/validations";
+import type { ActionResult } from "@/lib/types";
 
 export type CompleteSaleResult =
   | { success: true; saleId: string }
@@ -18,6 +20,7 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
   const {
     items,
     paymentMethod,
+    paymentStatus,
     paidInForeignCurrency,
     paymentReference,
     customerFirstName,
@@ -67,18 +70,41 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
         };
       });
 
+      const customer = await tx.customer.upsert({
+        where: { companyId_phone: { companyId, phone: customerPhone } },
+        create: {
+          companyId,
+          firstName: customerFirstName,
+          lastName: customerLastName,
+          phone: customerPhone,
+          address: customerAddress,
+        },
+        update: {
+          firstName: customerFirstName,
+          lastName: customerLastName,
+          address: customerAddress,
+        },
+      });
+
+      const isPaid = paymentStatus === "PAID";
+      const previousCount = await tx.sale.count({ where: { companyId } });
+
       const sale = await tx.sale.create({
         data: {
           totalCents,
-          paymentMethod,
+          paymentMethod: isPaid ? paymentMethod : null,
+          paymentStatus,
+          paidAt: isPaid ? new Date() : null,
           paidInForeignCurrency,
-          paymentReference,
+          paymentReference: isPaid ? paymentReference : null,
           customerFirstName,
           customerLastName,
           customerPhone,
           customerAddress,
+          customerId: customer.id,
           companyId,
           exchangeRate,
+          controlNumber: previousCount + 1,
           items: { create: itemsData },
         },
       });
@@ -96,11 +122,103 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
     revalidatePath("/inventory");
     revalidatePath("/pos");
     revalidatePath("/reports");
+    revalidatePath("/customers");
     return { success: true, saleId };
   } catch (err) {
     const message = err instanceof Error ? err.message : "No se pudo completar la venta";
     return { success: false, error: message };
   }
+}
+
+async function restoreStock(tx: Prisma.TransactionClient, saleId: string, companyId: string) {
+  const items = await tx.saleItem.findMany({ where: { saleId } });
+  for (const item of items) {
+    if (!item.productId) continue;
+    await tx.product.updateMany({
+      where: { id: item.productId, companyId },
+      data: { stock: { increment: item.quantity } },
+    });
+  }
+}
+
+export async function voidSale(saleId: string): Promise<ActionResult> {
+  const { companyId } = await requireSession();
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const sale = await tx.sale.findFirst({ where: { id: saleId, companyId } });
+      if (!sale) throw new Error("Venta no encontrada");
+      if (sale.voided) throw new Error("La venta ya está anulada");
+
+      await restoreStock(tx, saleId, companyId);
+      await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "No se pudo anular la venta";
+    return { success: false, error: message };
+  }
+
+  revalidatePath("/inventory");
+  revalidatePath("/pos");
+  revalidatePath("/reports");
+  return { success: true };
+}
+
+export async function deleteSale(saleId: string): Promise<ActionResult> {
+  const { companyId } = await requireSession();
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const sale = await tx.sale.findFirst({ where: { id: saleId, companyId } });
+      if (!sale) throw new Error("Venta no encontrada");
+
+      if (!sale.voided) {
+        await restoreStock(tx, saleId, companyId);
+      }
+      await tx.sale.delete({ where: { id: saleId } });
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "No se pudo eliminar la venta";
+    return { success: false, error: message };
+  }
+
+  revalidatePath("/inventory");
+  revalidatePath("/pos");
+  revalidatePath("/reports");
+  return { success: true };
+}
+
+export async function registerPayment(
+  saleId: string,
+  input: { paymentMethod: string; paymentReference?: string }
+): Promise<ActionResult> {
+  const { companyId } = await requireSession();
+  const parsed = RegisterPaymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  }
+
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { exchangeRate: true },
+  });
+
+  const result = await prisma.sale.updateMany({
+    where: { id: saleId, companyId, paymentStatus: "CREDIT" },
+    data: {
+      paymentStatus: "PAID",
+      paidAt: new Date(),
+      paymentMethod: parsed.data.paymentMethod,
+      paymentReference: parsed.data.paymentReference,
+      paidExchangeRate: company?.exchangeRate ?? null,
+    },
+  });
+  if (result.count === 0) {
+    return { success: false, error: "Venta no encontrada o ya estaba pagada" };
+  }
+
+  revalidatePath("/reports");
+  return { success: true };
 }
 
 export async function getSaleReceipt(saleId: string) {
@@ -112,7 +230,11 @@ export async function getSaleReceipt(saleId: string) {
   if (!sale) return null;
   // Client Components can't receive Prisma's Decimal instances across the
   // server action boundary — convert to a plain number first.
-  return { ...sale, exchangeRate: sale.exchangeRate != null ? Number(sale.exchangeRate) : null };
+  return {
+    ...sale,
+    exchangeRate: sale.exchangeRate != null ? Number(sale.exchangeRate) : null,
+    paidExchangeRate: sale.paidExchangeRate != null ? Number(sale.paidExchangeRate) : null,
+  };
 }
 
 export async function listRecentSales(limit = 10) {

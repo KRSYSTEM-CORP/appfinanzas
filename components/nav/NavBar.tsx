@@ -8,6 +8,7 @@ import { logout } from "@/lib/actions/auth";
 const links = [
   { href: "/pos", label: "Punto de venta" },
   { href: "/inventory", label: "Inventario" },
+  { href: "/customers", label: "Clientes" },
   { href: "/reports", label: "Reportes" },
   { href: "/settings", label: "Tasa de cambio" },
 ];

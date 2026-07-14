@@ -26,7 +26,7 @@ export async function revenueTotals(range: DateRangePreset) {
   const result = await prisma.sale.aggregate({
     _sum: { totalCents: true },
     _count: true,
-    where: { companyId, createdAt: { gte: start, lte: end } },
+    where: { companyId, createdAt: { gte: start, lte: end }, voided: false },
   });
   const totalEurCents = result._sum.totalCents ?? 0;
   const count = result._count;
@@ -37,7 +37,7 @@ export async function revenueTotals(range: DateRangePreset) {
   const [vesRow] = await prisma.$queryRaw<{ ves_total: number | null }[]>`
     SELECT COALESCE(SUM("totalCents"::numeric * COALESCE("exchangeRate", ${currentRate}) / 100), 0) AS ves_total
     FROM "Sale"
-    WHERE "companyId" = ${companyId} AND "createdAt" >= ${start} AND "createdAt" <= ${end}
+    WHERE "companyId" = ${companyId} AND "createdAt" >= ${start} AND "createdAt" <= ${end} AND "voided" = false
   `;
 
   return {
@@ -45,6 +45,31 @@ export async function revenueTotals(range: DateRangePreset) {
     totalVES: Number(vesRow?.ves_total ?? 0),
     count,
     avgEurCents: count > 0 ? Math.round(totalEurCents / count) : 0,
+  };
+}
+
+export async function receivablesTotals() {
+  const { companyId } = await requireSession();
+  const currentRate = await getCurrentRate(companyId);
+
+  const result = await prisma.sale.aggregate({
+    _sum: { totalCents: true },
+    _count: true,
+    where: { companyId, voided: false, paymentStatus: "CREDIT" },
+  });
+  const totalEurCents = result._sum.totalCents ?? 0;
+  const count = result._count;
+
+  const [vesRow] = await prisma.$queryRaw<{ ves_total: number | null }[]>`
+    SELECT COALESCE(SUM("totalCents"::numeric * COALESCE("exchangeRate", ${currentRate}) / 100), 0) AS ves_total
+    FROM "Sale"
+    WHERE "companyId" = ${companyId} AND "voided" = false AND "paymentStatus" = 'CREDIT'
+  `;
+
+  return {
+    totalEurCents,
+    totalVES: Number(vesRow?.ves_total ?? 0),
+    count,
   };
 }
 
@@ -63,7 +88,7 @@ export async function salesByDay(range: DateRangePreset): Promise<SalesByDayPoin
            COALESCE(SUM("totalCents"::numeric * COALESCE("exchangeRate", ${currentRate}) / 100), 0) AS "totalVES",
            COUNT(*)::bigint AS count
     FROM "Sale"
-    WHERE "companyId" = ${companyId} AND "createdAt" >= ${start} AND "createdAt" <= ${end}
+    WHERE "companyId" = ${companyId} AND "createdAt" >= ${start} AND "createdAt" <= ${end} AND "voided" = false
     GROUP BY day
     ORDER BY day ASC
   `;
@@ -84,7 +109,7 @@ export async function topProducts(range: DateRangePreset, limit = 10): Promise<T
   const { start, end } = rangeToDates(range);
   const grouped = await prisma.saleItem.groupBy({
     by: ["productId", "productName"],
-    where: { sale: { companyId, createdAt: { gte: start, lte: end } } },
+    where: { sale: { companyId, createdAt: { gte: start, lte: end }, voided: false } },
     _sum: { quantity: true, subtotalCents: true },
     orderBy: { _sum: { quantity: "desc" } },
     take: limit,
