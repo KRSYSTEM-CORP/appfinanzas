@@ -6,8 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateExchangeRate } from "@/lib/actions/settings";
+import { getCurrency } from "@/lib/currencies";
+import type { ReferenceCurrency } from "@prisma/client";
 
-export function ExchangeRateForm({ currentRate }: { currentRate: number | null }) {
+export function ExchangeRateForm({
+  currentRate,
+  currencyCode,
+  referenceCurrency,
+}: {
+  currentRate: number | null;
+  currencyCode: string;
+  referenceCurrency: ReferenceCurrency;
+}) {
+  const currencyName = getCurrency(currencyCode).name.split(" (")[0];
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -27,7 +38,7 @@ export function ExchangeRateForm({ currentRate }: { currentRate: number | null }
   return (
     <form action={handleSubmit} className="flex flex-col gap-4 max-w-sm">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="rate">Bolívares por 1 EUR</Label>
+        <Label htmlFor="rate">{currencyName} por 1 {referenceCurrency}</Label>
         <Input
           id="rate"
           name="rate"

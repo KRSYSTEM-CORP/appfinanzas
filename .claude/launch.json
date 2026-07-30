@@ -6,6 +6,36 @@
       "runtimeExecutable": "/Users/ar/.nvm/versions/node/v24.18.0/bin/node",
       "runtimeArgs": ["/Users/ar/.nvm/versions/node/v24.18.0/bin/npm", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "kyra-citas-dev",
+      "runtimeExecutable": "/Users/ar/.nvm/versions/node/v24.18.0/bin/node",
+      "runtimeArgs": [
+        "/Users/ar/.nvm/versions/node/v24.18.0/bin/npm",
+        "--prefix",
+        "/Users/ar/Desktop/KYRA SYSTEM/KYRA CITAS",
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3001"
+      ],
+      "port": 3001
+    },
+    {
+      "name": "kr-corp-site",
+      "runtimeExecutable": "/Users/ar/.nvm/versions/node/v24.18.0/bin/node",
+      "runtimeArgs": [
+        "/Users/ar/.nvm/versions/node/v24.18.0/bin/npm",
+        "--prefix",
+        "/Users/ar/Desktop/KYRA SYSTEM/kr-corp-site",
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3002"
+      ],
+      "port": 3002
     }
   ]
 }

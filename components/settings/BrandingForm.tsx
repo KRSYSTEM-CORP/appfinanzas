@@ -5,47 +5,23 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { updateBranding } from "@/lib/actions/settings";
+import { resizeImageToDataUrl } from "@/lib/image-utils";
 
 const MAX_DIMENSION = 160;
-
-function resizeToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = () => {
-      img.onload = () => {
-        const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
-        const width = Math.round(img.width * scale);
-        const height = Math.round(img.height * scale);
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("No se pudo procesar la imagen"));
-          return;
-        }
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/png"));
-      };
-      img.onerror = () => reject(new Error("No se pudo leer la imagen"));
-      img.src = reader.result as string;
-    };
-    reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
-    reader.readAsDataURL(file);
-  });
-}
 
 export function BrandingForm({
   currentLogo,
   currentColor,
+  currentBackground,
 }: {
   currentLogo: string | null;
   currentColor: string | null;
+  currentBackground: string | null;
 }) {
   const router = useRouter();
   const [logoDataUrl, setLogoDataUrl] = useState(currentLogo ?? "");
-  const [brandColor, setBrandColor] = useState(currentColor ?? "#111111");
+  const [brandColor, setBrandColor] = useState(currentColor ?? "#2a78d6");
+  const [brandBackground, setBrandBackground] = useState(currentBackground ?? "#f9f9f7");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,7 +30,7 @@ export function BrandingForm({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const dataUrl = await resizeToDataUrl(file);
+      const dataUrl = await resizeImageToDataUrl(file, { maxDimension: MAX_DIMENSION, format: "image/png" });
       setLogoDataUrl(dataUrl);
     } catch {
       setError("No se pudo procesar la imagen. Intenta con otro archivo.");
@@ -65,6 +41,7 @@ export function BrandingForm({
     setError(null);
     formData.set("logoDataUrl", logoDataUrl);
     formData.set("brandColor", brandColor);
+    formData.set("brandBackground", brandBackground);
     startTransition(async () => {
       const result = await updateBranding(formData);
       if (result.success) {
@@ -103,7 +80,7 @@ export function BrandingForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="brandColorInput">Color corporativo</Label>
+        <Label htmlFor="brandColorInput">Color de botones e iconos</Label>
         <div className="flex items-center gap-3">
           <input
             id="brandColorInput"
@@ -114,6 +91,24 @@ export function BrandingForm({
           />
           <span className="text-sm text-muted-foreground">{brandColor}</span>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="brandBackgroundInput">Color de fondo</Label>
+        <div className="flex items-center gap-3">
+          <input
+            id="brandBackgroundInput"
+            type="color"
+            value={brandBackground}
+            onChange={(e) => setBrandBackground(e.target.value)}
+            className="h-9 w-14 rounded border cursor-pointer"
+          />
+          <span className="text-sm text-muted-foreground">{brandBackground}</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          El resto de los colores (tarjetas, bordes, texto) se ajustan automáticamente para que se
+          sigan viendo bien, sea un fondo claro u oscuro.
+        </p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

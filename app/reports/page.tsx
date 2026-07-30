@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -9,129 +8,81 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { StatCard } from "@/components/reports/StatCard";
-import { SalesByDayChart } from "@/components/reports/SalesByDayChart";
-import { TopProductsChart } from "@/components/reports/TopProductsChart";
 import { SaleActions } from "@/components/reports/SaleActions";
+import { SaleDocumentButtons } from "@/components/reports/SaleDocumentButtons";
+import { CashClosingPanel } from "@/components/reports/CashClosingPanel";
 import { Price } from "@/components/money/Price";
-import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, formatDate, formatEUR, formatVES } from "@/lib/format";
-import { revenueTotals, receivablesTotals, salesByDay, topProducts } from "@/lib/actions/reports";
-import { getExchangeRateInfo } from "@/lib/actions/settings";
-import type { DateRangePreset } from "@/lib/report-types";
+import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, formatDate } from "@/lib/format";
+import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, getCurrency } from "@/lib/currencies";
+import { legacyCurrencyForPayment } from "@/lib/payment-currency";
+import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
+import { requireSession } from "@/lib/session";
 import { listRecentSales } from "@/lib/actions/sales";
+import { getDailyClosingSummary } from "@/lib/actions/cash-closing";
+import { todayDateString } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
 
-const presets: { key: DateRangePreset; label: string }[] = [
-  { key: "today", label: "Hoy" },
-  { key: "7d", label: "7 días" },
-  { key: "30d", label: "30 días" },
-  { key: "month", label: "Este mes" },
-];
+export default async function ReportsPage() {
+  const session = await requireSession();
+  const canManage = session.role === "GERENTE" || session.isSuperAdmin;
+  const todayStr = todayDateString();
 
-export default async function ReportsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ range?: string }>;
-}) {
-  const { range: rawRange } = await searchParams;
-  const range: DateRangePreset = presets.some((p) => p.key === rawRange)
-    ? (rawRange as DateRangePreset)
-    : "7d";
-
-  const [totals, receivables, byDay, top, recentSales, { rate }] = await Promise.all([
-    revenueTotals(range),
-    receivablesTotals(),
-    salesByDay(range),
-    topProducts(range),
-    listRecentSales(10),
+  const [
+    recentSales,
+    { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency, printPaperSize },
+    { logoDataUrl },
+    fiscalData,
+    todaySummary,
+  ] = await Promise.all([
+    listRecentSales(500),
     getExchangeRateInfo(),
+    getBranding(),
+    getFiscalData(),
+    canManage ? getDailyClosingSummary(todayStr) : Promise.resolve(null),
   ]);
+  const company = { name: session.companyName, logoDataUrl, ...fiscalData };
+  const localCurrencyName = getCurrency(localCurrencyCode).name.split(" (")[0];
+  // Outstanding balance for a CREDIT sale — equal to totalCents until any
+  // abono has been registered against it (see registerPayment).
+  const remainingCentsBySaleId = new Map(
+    recentSales.map((sale) => [
+      sale.id,
+      sale.totalCents - sale.payments.reduce((sum, p) => sum + p.amountEurCents, 0),
+    ])
+  );
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div>
         <h1 className="text-2xl font-semibold">Reportes</h1>
-        <div className="flex gap-1 rounded-lg border p-1">
-          {presets.map((p) => (
-            <Link
-              key={p.key}
-              href={`/reports?range=${p.key}`}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                range === p.key
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted"
-              }`}
-            >
-              {p.label}
-            </Link>
-          ))}
-        </div>
+        <p className="text-sm text-muted-foreground mt-1">
+          Historial de ventas de contado y a crédito — registra pagos, anula o elimina ventas
+          desde aquí.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Ingresos totales"
-          value={
-            <div className="flex flex-col">
-              <span>{formatVES(totals.totalVES)}</span>
-              <span className="text-xs text-muted-foreground font-normal">
-                {formatEUR(totals.totalEurCents)}
-              </span>
-            </div>
-          }
-        />
-        <StatCard label="Número de ventas" value={String(totals.count)} />
-        <StatCard
-          label="Ticket promedio"
-          value={
-            <div className="flex flex-col">
-              <span>
-                {formatVES(totals.count > 0 ? totals.totalVES / totals.count : 0)}
-              </span>
-              <span className="text-xs text-muted-foreground font-normal">
-                {formatEUR(totals.avgEurCents)}
-              </span>
-            </div>
-          }
-        />
-        <StatCard
-          label={`Por cobrar (${receivables.count})`}
-          value={
-            <div className="flex flex-col">
-              <span className={receivables.count > 0 ? "text-destructive" : undefined}>
-                {formatVES(receivables.totalVES)}
-              </span>
-              <span className="text-xs text-muted-foreground font-normal">
-                {formatEUR(receivables.totalEurCents)}
-              </span>
-            </div>
-          }
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
+      {canManage && todaySummary && (
+        <Card className="max-w-2xl">
           <CardHeader>
-            <CardTitle>Ventas por día</CardTitle>
+            <CardTitle>Cierre de caja</CardTitle>
           </CardHeader>
           <CardContent>
-            <SalesByDayChart data={byDay} />
+            <CashClosingPanel
+              initialSummary={todaySummary}
+              todayStr={todayStr}
+              rate={rate}
+              currencyCode={localCurrencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+            />
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Top productos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TopProductsChart data={top} />
-          </CardContent>
-        </Card>
-      </div>
+      )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Ventas recientes</CardTitle>
+          <CardTitle>Ventas</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -140,11 +91,13 @@ export default async function ReportsPage({
                 <TableRow>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>Vendedor</TableHead>
                   <TableHead>Artículos</TableHead>
                   <TableHead>Método</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Moneda</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Documentos</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -164,11 +117,32 @@ export default async function ReportsPage({
                         ? `${sale.customerFirstName} ${sale.customerLastName ?? ""}`.trim()
                         : "—"}
                     </TableCell>
+                    <TableCell className="text-muted-foreground">{sale.sellerName ?? "—"}</TableCell>
                     <TableCell>
                       {sale.items.reduce((sum, i) => sum + i.quantity, 0)}
                     </TableCell>
                     <TableCell>
-                      {sale.paymentMethod ? (
+                      {sale.payments.length > 0 ? (
+                        <>
+                          {sale.payments.map((p) => (
+                            <span key={p.id} className="block text-xs">
+                              {PAYMENT_METHOD_LABELS[p.paymentMethod]}:{" "}
+                              {formatCurrencyCents(
+                                p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency),
+                                p.amountCurrencyCents ?? p.amountEurCents
+                              )}
+                              {p.reference && ` (${p.reference})`}
+                              {(p.createdAt || p.exchangeRate != null) && (
+                                <span className="block text-muted-foreground">
+                                  {formatDate(p.createdAt)}
+                                  {p.exchangeRate != null &&
+                                    ` · Tasa ${formatLocalCurrency(Number(p.exchangeRate), localCurrencyCode)}`}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                        </>
+                      ) : sale.paymentMethod ? (
                         <>
                           {PAYMENT_METHOD_LABELS[sale.paymentMethod]}
                           {sale.paymentReference && (
@@ -176,35 +150,78 @@ export default async function ReportsPage({
                               Ref: {sale.paymentReference}
                             </span>
                           )}
-                          {sale.paidExchangeRate != null && sale.paidAt && (
+                          {exchangeRateEnabled && sale.paidExchangeRate != null && sale.paidAt && (
                             <span className="block text-xs text-muted-foreground">
                               Cobrado: {formatDate(sale.paidAt)} · Tasa{" "}
-                              {formatVES(Number(sale.paidExchangeRate))}
+                              {formatLocalCurrency(Number(sale.paidExchangeRate), localCurrencyCode)}
                             </span>
                           )}
                         </>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
+                      {sale.paymentStatus === "CREDIT" &&
+                        remainingCentsBySaleId.get(sale.id) !== sale.totalCents && (
+                          <span className="block text-xs font-medium text-warning">
+                            Saldo pendiente:{" "}
+                            {exchangeRateEnabled && rate != null
+                              ? formatLocalCurrency(
+                                  eurCentsToLocal(remainingCentsBySaleId.get(sale.id) ?? 0, rate),
+                                  localCurrencyCode
+                                )
+                              : formatCurrencyCents(referenceCurrency, remainingCentsBySaleId.get(sale.id) ?? 0)}
+                          </span>
+                        )}
                     </TableCell>
                     <TableCell>
                       {sale.paymentStatus === "CREDIT" ? (
                         <Badge variant="destructive">{PAYMENT_STATUS_LABELS.CREDIT}</Badge>
                       ) : (
-                        <Badge variant="secondary">{PAYMENT_STATUS_LABELS.PAID}</Badge>
+                        <Badge variant="success">{PAYMENT_STATUS_LABELS.PAID}</Badge>
                       )}
                     </TableCell>
                     <TableCell>
-                      {sale.paidInForeignCurrency ? (
+                      {!exchangeRateEnabled ? (
+                        <Badge variant="outline">{referenceCurrency}</Badge>
+                      ) : sale.paidInForeignCurrency ? (
                         <Badge variant="secondary">Divisas</Badge>
                       ) : (
-                        <Badge variant="outline">Bolívares</Badge>
+                        <Badge variant="outline">{localCurrencyName}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
                       <Price
                         eurCents={sale.totalCents}
-                        rate={sale.exchangeRate != null ? Number(sale.exchangeRate) : rate}
+                        rate={
+                          sale.paidExchangeRate != null
+                            ? Number(sale.paidExchangeRate)
+                            : sale.exchangeRate != null
+                              ? Number(sale.exchangeRate)
+                              : rate
+                        }
+                        currencyCode={localCurrencyCode}
+                        exchangeRateEnabled={exchangeRateEnabled}
+                        referenceCurrency={referenceCurrency}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <SaleDocumentButtons
+                        sale={{
+                          ...sale,
+                          exchangeRate: sale.exchangeRate != null ? Number(sale.exchangeRate) : null,
+                          paidExchangeRate:
+                            sale.paidExchangeRate != null ? Number(sale.paidExchangeRate) : null,
+                          payments: sale.payments.map((p) => ({
+                            ...p,
+                            exchangeRate: p.exchangeRate != null ? Number(p.exchangeRate) : null,
+                          })),
+                        }}
+                        company={company}
+                        currentRate={rate}
+                        currencyCode={localCurrencyCode}
+                        exchangeRateEnabled={exchangeRateEnabled}
+                        referenceCurrency={referenceCurrency}
+                        printPaperSize={printPaperSize}
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -212,13 +229,19 @@ export default async function ReportsPage({
                         saleId={sale.id}
                         voided={sale.voided}
                         paymentStatus={sale.paymentStatus}
+                        totalCents={sale.totalCents}
+                        remainingCents={remainingCentsBySaleId.get(sale.id) ?? sale.totalCents}
+                        currentRate={rate}
+                        currencyCode={localCurrencyCode}
+                        exchangeRateEnabled={exchangeRateEnabled}
+                        referenceCurrency={referenceCurrency}
                       />
                     </TableCell>
                   </TableRow>
                 ))}
                 {recentSales.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                       Aún no hay ventas registradas.
                     </TableCell>
                   </TableRow>

@@ -12,6 +12,9 @@ export type CustomerInfo = {
   lastName: string;
   phone: string;
   address: string;
+  // Cédula/RIF — optional, only useful for a Factura the customer wants to
+  // deduct/declare; most retail sales stay "Consumidor Final" without one.
+  rif: string;
 };
 
 export function CustomerForm({
@@ -25,6 +28,7 @@ export function CustomerForm({
   const [lastName, setLastName] = useState(initial?.lastName ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [address, setAddress] = useState(initial?.address ?? "");
+  const [rif, setRif] = useState(initial?.rif ?? "");
   const [suggestions, setSuggestions] = useState<Customer[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [, startSearch] = useTransition();
@@ -54,13 +58,14 @@ export function CustomerForm({
     setLastName(customer.lastName);
     setPhone(customer.phone);
     setAddress(customer.address ?? "");
+    setRif(customer.rif ?? "");
     setSuggestions([]);
     setShowSuggestions(false);
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    onContinue({ firstName, lastName, phone, address });
+    onContinue({ firstName, lastName, phone, address, rif });
   }
 
   return (
@@ -133,6 +138,17 @@ export function CustomerForm({
           value={address}
           onChange={(e) => setAddress(e.target.value)}
           required
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="rif">Cédula/RIF (opcional)</Label>
+        <Input
+          id="rif"
+          value={rif}
+          onChange={(e) => setRif(e.target.value)}
+          placeholder="Ej. V-12345678 o J-12345678-9"
+          autoComplete="off"
         />
       </div>
 

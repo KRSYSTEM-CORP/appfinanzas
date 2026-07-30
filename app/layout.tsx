@@ -4,6 +4,8 @@ import { NavBar } from "@/components/nav/NavBar";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { getSession } from "@/lib/session";
 import { getBranding } from "@/lib/actions/settings";
+import { listBranches } from "@/lib/actions/branches";
+import { deriveBrandVars } from "@/lib/theme-color";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,12 +21,12 @@ const geistMono = Geist_Mono({
 export async function generateMetadata(): Promise<Metadata> {
   const session = await getSession();
   return {
-    title: session ? `${session.companyName} · KYRA Software` : "KYRA Software",
-    description: "Ventas y control de inventario — KYRA Software",
+    title: session ? `${session.companyName} · App Finanzas` : "App Finanzas - By KR System",
+    description: "Ventas y control de inventario — App Finanzas, by KR System",
     appleWebApp: {
       capable: true,
       statusBarStyle: "default",
-      title: "KYRA Software",
+      title: "App Finanzas",
     },
   };
 }
@@ -39,18 +41,31 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await getSession();
-  const branding = session ? await getBranding() : { logoDataUrl: null, brandColor: null };
+  const canManage = session ? session.role === "GERENTE" || session.isSuperAdmin : false;
+  const [branding, branches] = await Promise.all([
+    session ? getBranding() : Promise.resolve({ logoDataUrl: null, brandColor: null, brandBackground: null }),
+    canManage ? listBranches() : Promise.resolve([]),
+  ]);
+  const brandVars = deriveBrandVars(branding.brandBackground, branding.brandColor);
 
   return (
     <html
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      style={branding.brandColor ? ({ "--primary": branding.brandColor } as React.CSSProperties) : undefined}
+      style={brandVars as React.CSSProperties}
     >
       <body className="min-h-full flex flex-col">
         <ServiceWorkerRegistration />
         {session && (
-          <NavBar companyName={session.companyName} logoDataUrl={branding.logoDataUrl} />
+          <NavBar
+            companyName={session.companyName}
+            logoDataUrl={branding.logoDataUrl}
+            isSuperAdmin={session.isSuperAdmin}
+            role={session.role}
+            branches={branches.map((b) => ({ id: b.id, name: b.name }))}
+            currentBranchId={session.branchId}
+            currentBranchName={session.branchName}
+          />
         )}
         <main className="flex-1 min-h-0">{children}</main>
       </body>

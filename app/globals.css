@@ -27,6 +27,10 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -48,73 +52,55 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* KYRA's default theme: light background, blue accent — the fallback for any
+   company that hasn't customized its own colors (see Settings' "Apariencia"
+   section). A company's chosen background/accent overrides these via
+   lib/theme-color.ts's deriveBrandVars(): applied as an inline style on
+   <html> for its own signed-in users (app/layout.tsx), and live on the login
+   screen itself once the company is identified by email or company code,
+   before the visitor has authenticated (components/auth/LoginForm.tsx) — so
+   a company's branding is consistent everywhere its people see the app.
+   Chart colors (chart-1..5) and --success/--destructive/--warning keep this
+   environment's validated light-mode dataviz values, since a per-company
+   background override only touches the neutral surface + accent tokens
+   above, not the chart palette. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.42 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --background: #f9f9f7;
+  --foreground: #0b0b0b;
+  --card: #fcfcfb;
+  --card-foreground: #0b0b0b;
+  --popover: #fcfcfb;
+  --popover-foreground: #0b0b0b;
+  --primary: #2a78d6;
+  --primary-foreground: #ffffff;
+  --secondary: #e8f0fb;
+  --secondary-foreground: #184f95;
+  --muted: #f0efec;
+  --muted-foreground: #52514e;
+  --accent: #e8f0fb;
+  --accent-foreground: #184f95;
+  --destructive: #d03b3b;
+  --success: #0ca30c;
+  --success-foreground: #ffffff;
+  --warning: #b8790f;
+  --warning-foreground: #ffffff;
+  --border: #e1e0d9;
+  --input: #e1e0d9;
+  --ring: #2a78d6;
+  --chart-1: #2a78d6;
+  --chart-2: #1baf7a;
+  --chart-3: #eda100;
+  --chart-4: #008300;
+  --chart-5: #4a3aa7;
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: #fcfcfb;
+  --sidebar-foreground: #0b0b0b;
+  --sidebar-primary: #2a78d6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e8f0fb;
+  --sidebar-accent-foreground: #184f95;
+  --sidebar-border: #e1e0d9;
+  --sidebar-ring: #2a78d6;
 }
 
 @layer base {
@@ -126,5 +112,35 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Printing a single document (components/print/PrintDialog.tsx) without
+   opening a new window. .print-portal-content is rendered through a React
+   portal directly onto document.body — a sibling of the dialog, not nested
+   inside it — specifically so it has no `position: fixed` / `transform`
+   ancestor to get its own positioning trapped by (Base UI's DialogContent is
+   both, which would otherwise clip/shrink the printed page to the small
+   on-screen modal box). Parked off-screen normally; @media print reveals it
+   and drops it back into normal document flow so it fills the page. The
+   @page size/margin itself is set per print by an inline <style> tag inside
+   the portal (it depends on which paper size the user picked), not here. */
+.print-portal-content {
+  position: fixed;
+  top: -10000px;
+  left: -10000px;
+}
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-portal-content,
+  .print-portal-content * {
+    visibility: visible;
+  }
+  .print-portal-content {
+    position: static;
+    top: auto;
+    left: auto;
   }
 }

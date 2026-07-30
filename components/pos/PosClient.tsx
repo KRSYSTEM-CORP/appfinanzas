@@ -1,14 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Product, PaymentMethod, PaymentStatus } from "@prisma/client";
+import type { Product, PaymentStatus, SaleItem, SalePayment } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { CustomerForm, type CustomerInfo } from "@/components/pos/CustomerForm";
 import { ProductPicker } from "@/components/pos/ProductPicker";
 import { Cart, type CartLine } from "@/components/pos/Cart";
 import { ReceiptView } from "@/components/pos/ReceiptView";
+import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { completeSale, getSaleReceipt } from "@/lib/actions/sales";
+import { resolveSalePayments } from "@/lib/payment-currency";
+import { useOnlineStatus } from "@/lib/offline/use-online-status";
+import { queueSale, type PendingSaleInput } from "@/lib/offline/sync";
+import type { DeliveryNoteCompany } from "@/lib/delivery-note";
+import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 
 type SaleWithItems = NonNullable<Awaited<ReturnType<typeof getSaleReceipt>>>;
 type Step = "customer" | "cart" | "receipt";
@@ -16,29 +22,52 @@ type Step = "customer" | "cart" | "receipt";
 export function PosClient({
   products,
   rate,
+  currencyCode,
+  exchangeRateEnabled,
+  referenceCurrency,
+  printPaperSize,
   categories,
-  companyName,
-  companyLogoDataUrl,
+  company,
+  sellerName,
 }: {
   products: Product[];
   rate: number | null;
+  currencyCode: string;
+  exchangeRateEnabled: boolean;
+  referenceCurrency: ReferenceCurrency;
+  printPaperSize: PrintPaperSize;
   categories: string[];
-  companyName: string;
-  companyLogoDataUrl: string | null;
+  company: DeliveryNoteCompany;
+  sellerName: string;
 }) {
   const router = useRouter();
+  const online = useOnlineStatus();
   const [step, setStep] = useState<Step>("customer");
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
   const [lines, setLines] = useState<CartLine[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("PAID");
-  const [paymentReference, setPaymentReference] = useState("");
-  const [paidInForeignCurrency, setPaidInForeignCurrency] = useState(false);
+  const [paymentRows, setPaymentRows] = useState<PaymentSplitRow[]>(() =>
+    defaultPaymentSplitRows(0, rate, exchangeRateEnabled)
+  );
+  const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Either a real, server-confirmed sale, or a locally-built stand-in for one
+  // queued while offline (see queueOfflineSale below) — both render fine in
+  // ReceiptView since they share the same shape.
   const [completedSale, setCompletedSale] = useState<SaleWithItems | null>(null);
+  const [pendingSync, setPendingSync] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const productById = new Map(products.map((p) => [p.id, p]));
+  const total = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+
+  // Keep the single default payment row in sync with the cart total as
+  // products are added/removed, so the common single-method case never
+  // requires the user to manually retype the amount. Once a second row is
+  // added (an intentional split), amounts are fully user-controlled.
+  useEffect(() => {
+    setPaymentRows((prev) => (prev.length === 1 ? defaultPaymentSplitRows(total, rate, exchangeRateEnabled) : prev));
+  }, [total, rate, exchangeRateEnabled]);
 
   function addProduct(product: Product) {
     setError(null);
@@ -90,40 +119,174 @@ export function PosClient({
     setStep("cart");
   }
 
+  // Builds a stand-in Sale (matching what ReceiptView expects) from data
+  // already on the client, for a sale that was queued offline and has no
+  // real database row yet — control numbers are null until it actually
+  // syncs. resolveSalePayments is the same shared helper the server itself
+  // uses, so the currency breakdown shown here matches what will be
+  // persisted once the sync succeeds.
+  function buildPendingReceipt(customer: CustomerInfo): SaleWithItems {
+    const now = new Date();
+    const localId = crypto.randomUUID();
+    const resolvedPayments =
+      paymentStatus === "PAID"
+        ? resolveSalePayments(
+            paymentRows.map((r) => ({
+              paymentMethod: r.paymentMethod,
+              amount: Math.round(parseFloat(r.amount || "0") * 100),
+              paidInForeignCurrency: r.paidInForeignCurrency,
+              reference: r.reference || null,
+            })),
+            currencyCode,
+            rate,
+            exchangeRateEnabled,
+            referenceCurrency
+          )
+        : [];
+
+    const items: SaleItem[] = lines.map((l) => {
+      const subtotalCents = l.unitPriceCents * l.quantity;
+      return {
+        id: crypto.randomUUID(),
+        saleId: localId,
+        productId: l.productId,
+        productName: productById.get(l.productId)?.name ?? l.name,
+        category: productById.get(l.productId)?.category ?? null,
+        unitPriceCents: l.unitPriceCents,
+        quantity: l.quantity,
+        subtotalCents,
+        // The real IVA breakdown is computed server-side once this offline
+        // sale actually syncs (see completeSale) — this optimistic preview
+        // never shows a tax breakdown, so these are placeholders only.
+        taxCategory: "GENERAL",
+        taxRatePercent: 0,
+        baseCents: subtotalCents,
+        taxCents: 0,
+      };
+    });
+
+    const payments: SalePayment[] = resolvedPayments.map((p) => ({
+      id: crypto.randomUUID(),
+      saleId: localId,
+      paymentMethod: p.paymentMethod,
+      amountEurCents: p.amountEurCents,
+      currencyCode: p.currencyCode,
+      amountCurrencyCents: p.amountCurrencyCents,
+      paidInForeignCurrency: p.paidInForeignCurrency,
+      reference: p.reference,
+      // Prisma's Decimal type can't be constructed client-side without
+      // importing the runtime class just for this optimistic preview object
+      // (never persisted) — null is a valid value and nothing reads it here.
+      exchangeRate: null,
+      createdAt: now,
+    }));
+
+    return {
+      id: localId,
+      createdAt: now,
+      totalCents: total,
+      paymentMethod: payments[0]?.paymentMethod ?? null,
+      note: note.trim() || null,
+      exchangeRate: rate,
+      paidInForeignCurrency: payments.some((p) => p.currencyCode !== currencyCode),
+      customerFirstName: customer.firstName,
+      customerLastName: customer.lastName,
+      customerPhone: customer.phone,
+      customerAddress: customer.address,
+      customerRif: customer.rif || null,
+      customerId: null,
+      paymentReference: payments[0]?.reference ?? null,
+      paymentStatus,
+      paidAt: paymentStatus === "PAID" ? now : null,
+      paidExchangeRate: null,
+      controlNumber: null,
+      receiptControlNumber: null,
+      voided: false,
+      voidedAt: null,
+      companyId: "",
+      sellerId: null,
+      sellerName,
+      items,
+      payments,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+  }
+
   function checkout() {
     if (!customer) return;
     setError(null);
-    startTransition(async () => {
-      const result = await completeSale({
-        items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
-        paymentMethod,
-        paymentStatus,
-        paidInForeignCurrency,
-        paymentReference,
-        customerFirstName: customer.firstName,
-        customerLastName: customer.lastName,
-        customerPhone: customer.phone,
-        customerAddress: customer.address,
+    const saleInput: PendingSaleInput = {
+      items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+      paymentStatus,
+      payments:
+        paymentStatus === "PAID"
+          ? paymentRows.map((r) => ({
+              paymentMethod: r.paymentMethod,
+              amount: r.amount,
+              paidInForeignCurrency: r.paidInForeignCurrency,
+              reference: r.reference,
+            }))
+          : [],
+      customerFirstName: customer.firstName,
+      customerLastName: customer.lastName,
+      customerPhone: customer.phone,
+      customerAddress: customer.address,
+      customerRif: customer.rif || undefined,
+      note: note.trim() || undefined,
+    };
+
+    async function queueOfflineSale(customerInfo: CustomerInfo) {
+      await queueSale(saleInput, {
+        totalCents: total,
+        items: lines.map((l) => ({
+          productName: productById.get(l.productId)?.name ?? l.name,
+          category: productById.get(l.productId)?.category ?? null,
+          quantity: l.quantity,
+          unitPriceCents: l.unitPriceCents,
+          subtotalCents: l.unitPriceCents * l.quantity,
+        })),
+        sellerName,
+        note: note.trim() || null,
       });
-      if (!result.success) {
-        setError(result.error);
+      setCompletedSale(buildPendingReceipt(customerInfo));
+      setPendingSync(true);
+      setStep("receipt");
+    }
+
+    startTransition(async () => {
+      if (!online) {
+        await queueOfflineSale(customer);
         return;
       }
-      const sale = await getSaleReceipt(result.saleId);
-      if (sale) setCompletedSale(sale);
-      setStep("receipt");
-      router.refresh();
+      try {
+        const result = await completeSale(saleInput);
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
+        const sale = await getSaleReceipt(result.saleId);
+        if (sale) setCompletedSale(sale);
+        setPendingSync(false);
+        setStep("receipt");
+        router.refresh();
+      } catch {
+        // A network-shaped failure mid-submit — queue it rather than risk
+        // losing the sale; if it turns out the server had actually received
+        // it, syncing later will surface a duplicate the seller can spot and
+        // delete from Reportes (safer than silently dropping a real sale).
+        await queueOfflineSale(customer);
+      }
     });
   }
 
   function newSale() {
     setCustomer(null);
     setLines([]);
-    setPaymentMethod("CASH");
     setPaymentStatus("PAID");
-    setPaymentReference("");
-    setPaidInForeignCurrency(false);
+    setPaymentRows(defaultPaymentSplitRows(0, rate, exchangeRateEnabled));
+    setNote("");
     setCompletedSale(null);
+    setPendingSync(false);
     setStep("customer");
   }
 
@@ -132,9 +295,13 @@ export function PosClient({
       <ReceiptView
         sale={completedSale}
         rate={rate}
-        companyName={companyName}
-        companyLogoDataUrl={companyLogoDataUrl}
+        currencyCode={currencyCode}
+        exchangeRateEnabled={exchangeRateEnabled}
+        referenceCurrency={referenceCurrency}
+        printPaperSize={printPaperSize}
+        company={company}
         onNewSale={newSale}
+        pendingSync={pendingSync}
       />
     );
   }
@@ -158,24 +325,33 @@ export function PosClient({
         </Button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-6 flex-1 min-h-0">
-        <ProductPicker products={products} rate={rate} categories={categories} onAdd={addProduct} />
+        <ProductPicker
+          products={products}
+          rate={rate}
+          currencyCode={currencyCode}
+          exchangeRateEnabled={exchangeRateEnabled}
+          referenceCurrency={referenceCurrency}
+          categories={categories}
+          onAdd={addProduct}
+        />
         <Cart
           lines={lines.map((l) => ({
             ...l,
             maxStock: productById.get(l.productId)?.stock ?? l.maxStock,
           }))}
           rate={rate}
-          paymentMethod={paymentMethod}
-          onPaymentMethodChange={setPaymentMethod}
+          currencyCode={currencyCode}
+          exchangeRateEnabled={exchangeRateEnabled}
+          referenceCurrency={referenceCurrency}
           paymentStatus={paymentStatus}
           onPaymentStatusChange={setPaymentStatus}
-          paymentReference={paymentReference}
-          onPaymentReferenceChange={setPaymentReference}
-          paidInForeignCurrency={paidInForeignCurrency}
-          onPaidInForeignCurrencyChange={setPaidInForeignCurrency}
+          paymentRows={paymentRows}
+          onPaymentRowsChange={setPaymentRows}
           onIncrement={increment}
           onDecrement={decrement}
           onRemove={remove}
+          note={note}
+          onNoteChange={setNote}
           onCheckout={checkout}
           isPending={isPending}
           error={error}

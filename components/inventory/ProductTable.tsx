@@ -21,19 +21,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Price } from "@/components/money/Price";
 import { LowStockBadge } from "@/components/inventory/LowStockBadge";
-import { setProductActive } from "@/lib/actions/products";
+import { deleteProduct, setProductActive } from "@/lib/actions/products";
+import type { ReferenceCurrency } from "@prisma/client";
 
 const ALL_CATEGORIES = "__all__";
 
 export function ProductTable({
   products,
   rate,
+  currencyCode,
+  exchangeRateEnabled,
+  referenceCurrency,
   categories,
 }: {
   products: Product[];
   rate: number | null;
+  currencyCode: string;
+  exchangeRateEnabled: boolean;
+  referenceCurrency: ReferenceCurrency;
   categories: string[];
 }) {
   const [query, setQuery] = useState("");
@@ -54,6 +71,13 @@ export function ProductTable({
   function toggleActive(id: string, isActive: boolean) {
     startTransition(async () => {
       await setProductActive(id, !isActive);
+      router.refresh();
+    });
+  }
+
+  function handleDelete(id: string) {
+    startTransition(async () => {
+      await deleteProduct(id);
       router.refresh();
     });
   }
@@ -101,11 +125,27 @@ export function ProductTable({
           <TableBody>
             {filtered.map((p) => (
               <TableRow key={p.id} className={!p.isActive ? "opacity-50" : undefined}>
-                <TableCell className="font-medium">{p.name}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    {p.imageDataUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.imageDataUrl} alt="" className="h-8 w-8 rounded object-cover border shrink-0" />
+                    ) : (
+                      <div className="h-8 w-8 rounded border bg-muted shrink-0" />
+                    )}
+                    {p.name}
+                  </div>
+                </TableCell>
                 <TableCell>{p.sku ?? "—"}</TableCell>
                 <TableCell>{p.category ?? "—"}</TableCell>
                 <TableCell>
-                  <Price eurCents={p.priceCents} rate={rate} />
+                  <Price
+                    eurCents={p.priceCents}
+                    rate={rate}
+                    currencyCode={currencyCode}
+                    exchangeRateEnabled={exchangeRateEnabled}
+                    referenceCurrency={referenceCurrency}
+                  />
                 </TableCell>
                 <TableCell className="flex items-center gap-2">
                   {p.stock}
@@ -130,6 +170,30 @@ export function ProductTable({
                     >
                       {p.isActive ? "Desactivar" : "Activar"}
                     </Button>
+                    <Dialog>
+                      <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
+                        Eliminar
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>¿Eliminar &quot;{p.name}&quot;?</DialogTitle>
+                          <DialogDescription>
+                            Esta acción es irreversible. El producto desaparecerá del inventario y
+                            del punto de venta. Las ventas y presupuestos ya generados con este
+                            producto no se ven afectados.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                          <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                          <DialogClose
+                            render={<Button variant="destructive" disabled={isPending} />}
+                            onClick={() => handleDelete(p.id)}
+                          >
+                            Eliminar
+                          </DialogClose>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </TableCell>
               </TableRow>

@@ -6,23 +6,32 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Price } from "@/components/money/Price";
+import { BarcodeScannerDialog } from "@/components/scanner/BarcodeScannerDialog";
 import { isLowStock } from "@/lib/inventory";
+import type { ReferenceCurrency } from "@prisma/client";
 
 const ALL_CATEGORIES = "__all__";
 
 export function ProductPicker({
   products,
   rate,
+  currencyCode,
+  exchangeRateEnabled,
+  referenceCurrency,
   categories,
   onAdd,
 }: {
   products: Product[];
   rate: number | null;
+  currencyCode: string;
+  exchangeRateEnabled: boolean;
+  referenceCurrency: ReferenceCurrency;
   categories: string[];
   onAdd: (product: Product) => void;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -34,14 +43,29 @@ export function ProductPicker({
     });
   }, [products, query, category]);
 
+  function handleScan(code: string) {
+    setScanError(null);
+    const match = products.find((p) => p.sku === code);
+    if (!match) {
+      setScanError(`Código no encontrado: ${code}`);
+      return;
+    }
+    onAdd(match);
+  }
+
   return (
     <div className="flex flex-col gap-3 h-full">
-      <Input
-        placeholder="Buscar producto por nombre o SKU..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        autoFocus
-      />
+      <div className="flex gap-2">
+        <Input
+          placeholder="Buscar producto por nombre o SKU..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+          className="flex-1"
+        />
+        <BarcodeScannerDialog onDetected={handleScan} />
+      </div>
+      {scanError && <p className="text-sm text-destructive">{scanError}</p>}
       {categories.length > 0 && (
         <div className="flex gap-1.5 flex-wrap">
           <Button
@@ -76,12 +100,22 @@ export function ProductPicker({
               onClick={() => onAdd(p)}
               className="flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             >
+              {p.imageDataUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.imageDataUrl} alt="" className="h-16 w-full rounded object-cover" />
+              )}
               <span className="font-medium text-sm">{p.name}</span>
-              <Price eurCents={p.priceCents} rate={rate} />
+              <Price
+                eurCents={p.priceCents}
+                rate={rate}
+                currencyCode={currencyCode}
+                exchangeRateEnabled={exchangeRateEnabled}
+                referenceCurrency={referenceCurrency}
+              />
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted-foreground">Stock: {p.stock}</span>
                 {isLowStock(p) && (
-                  <Badge variant="destructive" className="text-[10px] h-4">
+                  <Badge variant="warning" className="text-[10px] h-4">
                     bajo
                   </Badge>
                 )}

@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { TopProductPoint } from "@/lib/report-types";
+import { productPointLabel, type TopProductPoint } from "@/lib/report-types";
 
 export function TopProductsChart({ data }: { data: TopProductPoint[] }) {
   if (data.length === 0) {
@@ -20,7 +20,7 @@ export function TopProductsChart({ data }: { data: TopProductPoint[] }) {
     );
   }
 
-  const chartData = [...data].reverse();
+  const chartData = [...data].reverse().map((p) => ({ ...p, label: productPointLabel(p) }));
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(280, chartData.length * 36)}>
@@ -29,14 +29,14 @@ export function TopProductsChart({ data }: { data: TopProductPoint[] }) {
         <XAxis type="number" fontSize={12} tickLine={false} axisLine={false} />
         <YAxis
           type="category"
-          dataKey="productName"
+          dataKey="label"
           fontSize={12}
           tickLine={false}
           axisLine={false}
           width={140}
         />
         <Tooltip />
-        <Bar dataKey="quantity" radius={[0, 4, 4, 0]} fill="var(--primary)" />
+        <Bar dataKey="quantity" radius={[0, 4, 4, 0]} fill="var(--chart-1)" />
       </BarChart>
     </ResponsiveContainer>
   );

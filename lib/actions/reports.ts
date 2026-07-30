@@ -1,17 +1,19 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/session";
+import { Prisma } from "@prisma/client";
+import { requireManager } from "@/lib/session";
+import { withTenant } from "@/lib/tenant-db";
 import {
   rangeToDates,
   SHOP_TIME_ZONE,
+  type BottomProductPoint,
   type DateRangePreset,
   type SalesByDayPoint,
   type TopProductPoint,
 } from "@/lib/report-types";
 
-async function getCurrentRate(companyId: string): Promise<number> {
-  const company = await prisma.company.findUnique({
+async function getCurrentRate(tx: Prisma.TransactionClient, companyId: string): Promise<number> {
+  const company = await tx.company.findUnique({
     where: { id: companyId },
     select: { exchangeRate: true },
   });
@@ -19,79 +21,101 @@ async function getCurrentRate(companyId: string): Promise<number> {
 }
 
 export async function revenueTotals(range: DateRangePreset) {
-  const { companyId } = await requireSession();
+  const { companyId, branchId } = await requireManager();
   const { start, end } = rangeToDates(range);
-  const currentRate = await getCurrentRate(companyId);
 
-  const result = await prisma.sale.aggregate({
-    _sum: { totalCents: true },
-    _count: true,
-    where: { companyId, createdAt: { gte: start, lte: end }, voided: false },
+  return withTenant(companyId, async (tx) => {
+    const currentRate = await getCurrentRate(tx, companyId);
+
+    const result = await tx.sale.aggregate({
+      _sum: { totalCents: true },
+      _count: true,
+      where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: start, lte: end }, voided: false },
+    });
+    const totalEurCents = result._sum.totalCents ?? 0;
+    const count = result._count;
+
+    // Sums each sale's own historical rate — except a credit sale that has
+    // since been collected, which uses the rate in effect on the day it was
+    // actually paid (paidExchangeRate), so this total stays reconciled with
+    // what was actually collected instead of the stale rate at sale time.
+    // Falls back to the company's current rate for pre-feature sales with no
+    // snapshot at all.
+    const [vesRow] = await tx.$queryRaw<{ ves_total: number | null }[]>`
+      SELECT COALESCE(SUM("totalCents"::numeric * COALESCE("paidExchangeRate", "exchangeRate", ${currentRate}) / 100), 0) AS ves_total
+      FROM "Sale"
+      WHERE "companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+        AND "createdAt" >= ${start} AND "createdAt" <= ${end} AND "voided" = false
+    `;
+
+    return {
+      totalEurCents,
+      totalVES: Number(vesRow?.ves_total ?? 0),
+      count,
+      avgEurCents: count > 0 ? Math.round(totalEurCents / count) : 0,
+    };
   });
-  const totalEurCents = result._sum.totalCents ?? 0;
-  const count = result._count;
-
-  // Sums each sale's own historical rate (falling back to the company's
-  // current rate for pre-feature sales with no snapshot), so this reflects
-  // the real bolívares collected in the period rather than today's value.
-  const [vesRow] = await prisma.$queryRaw<{ ves_total: number | null }[]>`
-    SELECT COALESCE(SUM("totalCents"::numeric * COALESCE("exchangeRate", ${currentRate}) / 100), 0) AS ves_total
-    FROM "Sale"
-    WHERE "companyId" = ${companyId} AND "createdAt" >= ${start} AND "createdAt" <= ${end} AND "voided" = false
-  `;
-
-  return {
-    totalEurCents,
-    totalVES: Number(vesRow?.ves_total ?? 0),
-    count,
-    avgEurCents: count > 0 ? Math.round(totalEurCents / count) : 0,
-  };
 }
 
 export async function receivablesTotals() {
-  const { companyId } = await requireSession();
-  const currentRate = await getCurrentRate(companyId);
+  const { companyId, branchId } = await requireManager();
 
-  const result = await prisma.sale.aggregate({
-    _sum: { totalCents: true },
-    _count: true,
-    where: { companyId, voided: false, paymentStatus: "CREDIT" },
+  return withTenant(companyId, async (tx) => {
+    const currentRate = await getCurrentRate(tx, companyId);
+
+    const result = await tx.sale.aggregate({
+      _sum: { totalCents: true },
+      _count: true,
+      where: { companyId, ...(branchId ? { branchId } : {}), voided: false, paymentStatus: "CREDIT" },
+    });
+    const totalEurCents = result._sum.totalCents ?? 0;
+    const count = result._count;
+
+    // Unlike settled sales, an outstanding credit balance isn't worth a fixed
+    // amount of bolívares until it's collected — always value it at today's
+    // rate rather than the (possibly stale) rate from whenever it was sold.
+    const [vesRow] = await tx.$queryRaw<{ ves_total: number | null }[]>`
+      SELECT COALESCE(SUM("totalCents"::numeric * ${currentRate} / 100), 0) AS ves_total
+      FROM "Sale"
+      WHERE "companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+        AND "voided" = false AND "paymentStatus" = 'CREDIT'
+    `;
+
+    return {
+      totalEurCents,
+      totalVES: Number(vesRow?.ves_total ?? 0),
+      count,
+    };
   });
-  const totalEurCents = result._sum.totalCents ?? 0;
-  const count = result._count;
-
-  const [vesRow] = await prisma.$queryRaw<{ ves_total: number | null }[]>`
-    SELECT COALESCE(SUM("totalCents"::numeric * COALESCE("exchangeRate", ${currentRate}) / 100), 0) AS ves_total
-    FROM "Sale"
-    WHERE "companyId" = ${companyId} AND "voided" = false AND "paymentStatus" = 'CREDIT'
-  `;
-
-  return {
-    totalEurCents,
-    totalVES: Number(vesRow?.ves_total ?? 0),
-    count,
-  };
 }
 
 export async function salesByDay(range: DateRangePreset): Promise<SalesByDayPoint[]> {
-  const { companyId } = await requireSession();
+  const { companyId, branchId } = await requireManager();
   const { start, end } = rangeToDates(range);
-  const currentRate = await getCurrentRate(companyId);
 
-  // "createdAt" is stored as a naive UTC timestamp; convert to the shop's local
-  // timezone before truncating so a day bucket matches the shop's actual business day.
-  const rows = await prisma.$queryRaw<
-    { day: Date; totalEurCents: bigint; totalVES: number; count: bigint }[]
-  >`
-    SELECT DATE_TRUNC('day', "createdAt" AT TIME ZONE 'UTC' AT TIME ZONE ${SHOP_TIME_ZONE})::date AS day,
-           SUM("totalCents")::bigint AS "totalEurCents",
-           COALESCE(SUM("totalCents"::numeric * COALESCE("exchangeRate", ${currentRate}) / 100), 0) AS "totalVES",
-           COUNT(*)::bigint AS count
-    FROM "Sale"
-    WHERE "companyId" = ${companyId} AND "createdAt" >= ${start} AND "createdAt" <= ${end} AND "voided" = false
-    GROUP BY day
-    ORDER BY day ASC
-  `;
+  const rows = await withTenant(companyId, async (tx) => {
+    const currentRate = await getCurrentRate(tx, companyId);
+
+    // "createdAt" is stored as a naive UTC timestamp; convert to the shop's local
+    // timezone before truncating so a day bucket matches the shop's actual business day.
+    return tx.$queryRaw<
+      { day: Date; totalEurCents: bigint; totalVES: number; count: bigint }[]
+    >`
+      SELECT DATE_TRUNC('day', "createdAt" AT TIME ZONE 'UTC' AT TIME ZONE ${SHOP_TIME_ZONE})::date AS day,
+             SUM("totalCents")::bigint AS "totalEurCents",
+             COALESCE(SUM("totalCents"::numeric * COALESCE("paidExchangeRate", "exchangeRate", ${currentRate}) / 100), 0) AS "totalVES",
+             COUNT(*)::bigint AS count
+      FROM "Sale"
+      WHERE "companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+        AND "createdAt" >= ${start} AND "createdAt" <= ${end} AND "voided" = false
+      GROUP BY day
+      ORDER BY day ASC
+    `;
+  });
+
   return rows.map((r) => ({
     // `date` columns come back as a UTC-midnight JS Date; read the Y-M-D with
     // UTC getters to avoid re-shifting the day in the server/client's own timezone.
@@ -104,20 +128,90 @@ export async function salesByDay(range: DateRangePreset): Promise<SalesByDayPoin
   }));
 }
 
-export async function topProducts(range: DateRangePreset, limit = 10): Promise<TopProductPoint[]> {
-  const { companyId } = await requireSession();
+export type CurrencyIncomeRow = { currencyCode: string; totalCents: number };
+
+// Actual income received, broken down by the currency each payment line was
+// collected in (USD via Zelle/Binance/PayPal/foreign cash, the company's own
+// local currency for everything else, or "EUR" for split-payment rows
+// recorded before per-line currency tracking existed). Scoped to when the
+// money was actually collected (SalePayment.createdAt) rather than the
+// sale's own date, so a credit sale collected later counts as income on the
+// day it was actually paid, not the day it was sold.
+export async function incomeByCurrency(range: DateRangePreset): Promise<CurrencyIncomeRow[]> {
+  const { companyId, branchId } = await requireManager();
   const { start, end } = rangeToDates(range);
-  const grouped = await prisma.saleItem.groupBy({
-    by: ["productId", "productName"],
-    where: { sale: { companyId, createdAt: { gte: start, lte: end }, voided: false } },
-    _sum: { quantity: true, subtotalCents: true },
-    orderBy: { _sum: { quantity: "desc" } },
-    take: limit,
+
+  return withTenant(companyId, async (tx) => {
+    const rows = await tx.$queryRaw<{ currency: string; total_cents: bigint }[]>`
+      SELECT COALESCE(
+               sp."currencyCode",
+               CASE WHEN sp."paymentMethod"::text IN ('ZELLE', 'BINANCE', 'PAYPAL') THEN 'USD' ELSE 'EUR' END
+             ) AS currency,
+             SUM(COALESCE(sp."amountCurrencyCents", sp."amountEurCents"))::bigint AS total_cents
+      FROM "SalePayment" sp
+      JOIN "Sale" s ON s.id = sp."saleId"
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND sp."createdAt" >= ${start} AND sp."createdAt" <= ${end}
+        AND s."voided" = false
+      GROUP BY currency
+      ORDER BY total_cents DESC
+    `;
+    return rows.map((r) => ({ currencyCode: r.currency, totalCents: Number(r.total_cents) }));
   });
+}
+
+export async function topProducts(range: DateRangePreset, limit = 10): Promise<TopProductPoint[]> {
+  const { companyId, branchId } = await requireManager();
+  const { start, end } = rangeToDates(range);
+  const grouped = await withTenant(companyId, (tx) =>
+    tx.saleItem.groupBy({
+      by: ["productId", "productName", "category"],
+      where: {
+        sale: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: start, lte: end }, voided: false },
+      },
+      _sum: { quantity: true, subtotalCents: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: limit,
+    })
+  );
   return grouped.map((g) => ({
     productId: g.productId,
     productName: g.productName,
+    category: g.category,
     quantity: g._sum.quantity ?? 0,
     revenueCents: g._sum.subtotalCents ?? 0,
   }));
+}
+
+// Every active product, ranked by units sold ascending (0 first) — a LEFT
+// JOIN from Product rather than grouping SaleItem, so a product that hasn't
+// sold at all in the range still shows up as "0 vendidos" instead of being
+// invisible. That's the useful signal here: dead stock, not just the
+// bottom of what happened to sell.
+export async function bottomProducts(range: DateRangePreset, limit = 10): Promise<BottomProductPoint[]> {
+  const { companyId, branchId } = await requireManager();
+  const { start, end } = rangeToDates(range);
+
+  return withTenant(companyId, (tx) =>
+    tx.$queryRaw<{ id: string; name: string; category: string | null; quantity: bigint }[]>`
+      SELECT p.id, p.name, p.category,
+             COALESCE(SUM(si.quantity), 0)::bigint AS quantity
+      FROM "Product" p
+      LEFT JOIN "SaleItem" si ON si."productId" = p.id
+        AND si."saleId" IN (
+          SELECT id FROM "Sale"
+          WHERE "companyId" = ${companyId}
+            ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+            AND "createdAt" >= ${start} AND "createdAt" <= ${end} AND "voided" = false
+        )
+      WHERE p."companyId" = ${companyId} AND p."isActive" = true
+        ${branchId ? Prisma.sql`AND p."branchId" = ${branchId}` : Prisma.empty}
+      GROUP BY p.id, p.name, p.category
+      ORDER BY quantity ASC, p.name ASC
+      LIMIT ${limit}
+    `
+  ).then((rows) =>
+    rows.map((r) => ({ productId: r.id, productName: r.name, category: r.category, quantity: Number(r.quantity) }))
+  );
 }

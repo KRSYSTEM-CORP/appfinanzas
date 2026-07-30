@@ -1,0 +1,48 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { withSuperAdmin } from "@/lib/tenant-db";
+import { fetchBcvRate } from "@/lib/bcv-rate";
+
+// Runs once a day (see vercel.json's "crons" entry) and refreshes
+// Company.exchangeRate for every VES company automatically — this is what
+// makes the BCV rate "just update itself" instead of requiring someone to
+// open Settings and click a button every morning. Vercel signs its own cron
+// requests with `Authorization: Bearer $CRON_SECRET` once that env var is
+// set on the project, which is what's checked below.
+export async function GET(request: NextRequest) {
+  const auth = request.headers.get("authorization");
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const [usdRate, eurRate] = await Promise.allSettled([fetchBcvRate("USD"), fetchBcvRate("EUR")]);
+
+  const results = await withSuperAdmin(async (tx) => {
+    const companies = await tx.company.findMany({
+      where: { localCurrencyCode: "VES", exchangeRateEnabled: true },
+      select: { id: true, referenceCurrency: true },
+    });
+
+    let updated = 0;
+    let skipped = 0;
+    for (const company of companies) {
+      const rateResult = company.referenceCurrency === "USD" ? usdRate : eurRate;
+      if (rateResult.status !== "fulfilled") {
+        skipped++;
+        continue;
+      }
+      await tx.company.update({
+        where: { id: company.id },
+        data: { exchangeRate: rateResult.value, exchangeRateUpdatedAt: new Date() },
+      });
+      updated++;
+    }
+    return { total: companies.length, updated, skipped };
+  });
+
+  return NextResponse.json({
+    ok: true,
+    usdRate: usdRate.status === "fulfilled" ? usdRate.value : null,
+    eurRate: eurRate.status === "fulfilled" ? eurRate.value : null,
+    ...results,
+  });
+}

@@ -7,6 +7,12 @@ export type SessionPayload = {
   uid: string;
   cid: string;
   companyName: string;
+  // Which Branch this session is currently operating as — null means "every
+  // branch" (only ever chosen by a GERENTE/owner via switchBranch(); a
+  // VENDEDOR is always pinned to their own branch, never null). Re-validated
+  // against the DB on every request in getSession(), same as everything else
+  // in this payload.
+  bid: string | null;
   exp: number;
 };
 

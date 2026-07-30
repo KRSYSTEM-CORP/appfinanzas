@@ -81,6 +81,14 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
                       size="sm"
                       variant="outline"
                       nativeButton={false}
+                      render={<Link href={`/customers/${c.id}/crm`} />}
+                    >
+                      CRM
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      nativeButton={false}
                       render={<Link href={`/customers/${c.id}`} />}
                     >
                       Editar

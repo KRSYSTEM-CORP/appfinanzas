@@ -43,15 +43,20 @@ async function main() {
   await prisma.sale.deleteMany();
   await prisma.product.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.branch.deleteMany();
   await prisma.company.deleteMany();
 
   console.log("Creando Empresa Demo...");
   const company = await prisma.company.create({
     data: {
       name: "Empresa Demo",
+      loginCode: "DEMO01",
       exchangeRate: DEMO_EXCHANGE_RATE,
       exchangeRateUpdatedAt: new Date(),
     },
+  });
+  const branch = await prisma.branch.create({
+    data: { companyId: company.id, name: "Sucursal Principal" },
   });
   await prisma.user.create({
     data: {
@@ -63,7 +68,9 @@ async function main() {
 
   console.log("Creando productos...");
   const products = await Promise.all(
-    productsData.map((p) => prisma.product.create({ data: { ...p, companyId: company.id } }))
+    productsData.map((p) =>
+      prisma.product.create({ data: { ...p, companyId: company.id, branchId: branch.id } })
+    )
   );
 
   console.log("Creando ventas de ejemplo (últimos 14 días)...");
@@ -100,6 +107,7 @@ async function main() {
           paymentMethod: paymentMethods[randomInt(0, paymentMethods.length - 1)],
           paidInForeignCurrency: randomInt(0, 4) === 0,
           companyId: company.id,
+          branchId: branch.id,
           exchangeRate: DEMO_EXCHANGE_RATE,
           items: { create: itemsData },
         },

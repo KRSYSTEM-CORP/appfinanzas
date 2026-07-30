@@ -2,53 +2,96 @@
 
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/session";
-import { SaleSchema, RegisterPaymentSchema, type SaleInput } from "@/lib/validations";
+import { withTenant } from "@/lib/tenant-db";
+import { SaleSchema, RegisterPaymentSchema } from "@/lib/validations";
+import {
+  resolveSalePayments,
+  assertPaymentsMatchTotal,
+  assertPaymentsWithinRemaining,
+} from "@/lib/payment-currency";
+import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
+import { zonedDateParts, SHOP_TIME_ZONE } from "@/lib/report-types";
+import { decomposeTax, rateForCategory } from "@/lib/tax";
 import type { ActionResult } from "@/lib/types";
+
+// Blocks voiding/deleting a sale from a business day that's already been
+// formally closed out (see lib/actions/cash-closing.ts) — the whole point
+// of a cierre de caja is that the day's numbers stop moving afterward.
+// Cash closings are per-branch, so this always checks the SALE's own
+// branch, regardless of which branch the acting session is currently on.
+async function assertDayNotClosed(tx: Prisma.TransactionClient, branchId: string, saleCreatedAt: Date) {
+  const { year, month, day } = zonedDateParts(saleCreatedAt, SHOP_TIME_ZONE);
+  const closingDate = new Date(Date.UTC(year, month - 1, day));
+  const closed = await tx.cashClosing.findUnique({
+    where: { branchId_closingDate: { branchId, closingDate } },
+  });
+  if (closed) {
+    throw new Error("Ese día ya tiene un cierre de caja — no se puede modificar esta venta.");
+  }
+}
 
 export type CompleteSaleResult =
   | { success: true; saleId: string }
   | { success: false; error: string };
 
-export async function completeSale(input: SaleInput): Promise<CompleteSaleResult> {
-  const { companyId } = await requireSession();
+export async function completeSale(input: unknown): Promise<CompleteSaleResult> {
+  const session = await requireSession();
+  const { companyId, userId, sellerName } = session;
+  if (!session.branchId) {
+    return {
+      success: false,
+      error: 'Selecciona una sucursal antes de completar una venta — no se puede con "Todas las sucursales".',
+    };
+  }
+  const branchId = session.branchId;
   const parsed = SaleSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Carrito inválido" };
   }
   const {
     items,
-    paymentMethod,
     paymentStatus,
-    paidInForeignCurrency,
-    paymentReference,
+    payments,
     customerFirstName,
     customerLastName,
     customerPhone,
     customerAddress,
+    customerRif,
+    note,
   } = parsed.data;
 
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    select: { exchangeRate: true },
-  });
-  if (company?.exchangeRate == null) {
-    return {
-      success: false,
-      error: "Configura la tasa de cambio antes de completar una venta.",
-    };
-  }
-  const exchangeRate = company.exchangeRate;
-
   try {
-    const saleId = await prisma.$transaction(async (tx) => {
+    const saleId = await withTenant(companyId, async (tx) => {
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+        select: {
+          exchangeRate: true,
+          localCurrencyCode: true,
+          exchangeRateEnabled: true,
+          referenceCurrency: true,
+          ivaGeneralRatePercent: true,
+          ivaReducedRatePercent: true,
+        },
+      });
+      const exchangeRateEnabled = company?.exchangeRateEnabled ?? true;
+      if (exchangeRateEnabled && company?.exchangeRate == null) {
+        throw new Error("Configura la tasa de cambio antes de completar una venta.");
+      }
+      const exchangeRate = company?.exchangeRate ?? null;
+      const rate = exchangeRate != null ? Number(exchangeRate) : null;
+      const referenceCurrency = company?.referenceCurrency ?? "EUR";
+      const ivaGeneralRatePercent = company?.ivaGeneralRatePercent ?? 16;
+      const ivaReducedRatePercent = company?.ivaReducedRatePercent ?? 8;
+
       const products = await tx.product.findMany({
-        where: { id: { in: items.map((i) => i.productId) }, companyId },
+        where: { id: { in: items.map((i) => i.productId) }, companyId, branchId },
       });
       const productById = new Map(products.map((p) => [p.id, p]));
 
       let totalCents = 0;
+      let baseImponibleCents = 0;
+      let taxTotalCents = 0;
       const itemsData = items.map((item) => {
         const product = productById.get(item.productId);
         if (!product) {
@@ -61,14 +104,32 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
         }
         const subtotalCents = product.priceCents * item.quantity;
         totalCents += subtotalCents;
+        const taxRatePercent = rateForCategory(product.taxCategory, ivaGeneralRatePercent, ivaReducedRatePercent);
+        const { baseCents, taxCents } = decomposeTax(subtotalCents, product.taxCategory, taxRatePercent);
+        baseImponibleCents += baseCents;
+        taxTotalCents += taxCents;
         return {
           productId: product.id,
           productName: product.name,
+          category: product.category,
           unitPriceCents: product.priceCents,
           quantity: item.quantity,
           subtotalCents,
+          taxCategory: product.taxCategory,
+          taxRatePercent,
+          baseCents,
+          taxCents,
         };
       });
+
+      const localCurrencyCode = company?.localCurrencyCode ?? DEFAULT_CURRENCY_CODE;
+      const isPaid = paymentStatus === "PAID";
+      const resolvedPayments = isPaid
+        ? resolveSalePayments(payments, localCurrencyCode, rate, exchangeRateEnabled, referenceCurrency)
+        : [];
+      if (isPaid) {
+        assertPaymentsMatchTotal(resolvedPayments, totalCents, referenceCurrency);
+      }
 
       const customer = await tx.customer.upsert({
         where: { companyId_phone: { companyId, phone: customerPhone } },
@@ -78,41 +139,76 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
           lastName: customerLastName,
           phone: customerPhone,
           address: customerAddress,
+          rif: customerRif ?? null,
         },
         update: {
           firstName: customerFirstName,
           lastName: customerLastName,
           address: customerAddress,
+          // Only overwrite the saved RIF when this checkout actually
+          // provided one — an existing customer's RIF shouldn't be wiped out
+          // by a later sale that just didn't ask for it again.
+          ...(customerRif ? { rif: customerRif } : {}),
         },
       });
 
-      const isPaid = paymentStatus === "PAID";
-      const previousCount = await tx.sale.count({ where: { companyId } });
+      const previousCount = await tx.sale.count({ where: { branchId } });
+      // The singular fields mirror the first payment split so any code that
+      // only needs a quick summary (older reports, receipts) still has one —
+      // the full breakdown lives in `payments`.
+      const firstPayment = isPaid ? resolvedPayments[0] : undefined;
 
       const sale = await tx.sale.create({
         data: {
           totalCents,
-          paymentMethod: isPaid ? paymentMethod : null,
+          baseImponibleCents,
+          taxCents: taxTotalCents,
+          paymentMethod: firstPayment?.paymentMethod ?? null,
           paymentStatus,
           paidAt: isPaid ? new Date() : null,
-          paidInForeignCurrency,
-          paymentReference: isPaid ? paymentReference : null,
+          // For credit sales, the customer hasn't decided currency yet — that's
+          // captured later when payment is registered. Otherwise true if ANY
+          // split line was paid in a currency other than the company's own.
+          paidInForeignCurrency: isPaid
+            ? resolvedPayments.some((p) => p.currencyCode !== localCurrencyCode)
+            : false,
+          paymentReference: firstPayment?.reference ?? null,
           customerFirstName,
           customerLastName,
           customerPhone,
           customerAddress,
+          customerRif: customerRif ?? null,
           customerId: customer.id,
           companyId,
+          branchId,
           exchangeRate,
           controlNumber: previousCount + 1,
+          sellerId: userId,
+          sellerName,
+          note: note ?? null,
           items: { create: itemsData },
+          payments: isPaid
+            ? {
+                create: resolvedPayments.map((p) => ({
+                  paymentMethod: p.paymentMethod,
+                  amountEurCents: p.amountEurCents,
+                  currencyCode: p.currencyCode,
+                  amountCurrencyCents: p.amountCurrencyCents,
+                  paidInForeignCurrency: p.paidInForeignCurrency,
+                  reference: p.reference,
+                  exchangeRate,
+                })),
+              }
+            : undefined,
         },
       });
 
       for (const item of itemsData) {
+        const product = productById.get(item.productId)!;
+        const newStock = product.stock - item.quantity;
         await tx.product.updateMany({
-          where: { id: item.productId, companyId },
-          data: { stock: { decrement: item.quantity } },
+          where: { id: item.productId, companyId, branchId },
+          data: { stock: newStock, ...(newStock === 0 ? { isActive: false } : {}) },
         });
       }
 
@@ -130,27 +226,33 @@ export async function completeSale(input: SaleInput): Promise<CompleteSaleResult
   }
 }
 
-async function restoreStock(tx: Prisma.TransactionClient, saleId: string, companyId: string) {
+async function restoreStock(tx: Prisma.TransactionClient, saleId: string, companyId: string, branchId: string) {
   const items = await tx.saleItem.findMany({ where: { saleId } });
   for (const item of items) {
     if (!item.productId) continue;
+    const product = await tx.product.findFirst({ where: { id: item.productId, companyId, branchId } });
+    if (!product) continue;
+    const newStock = product.stock + item.quantity;
     await tx.product.updateMany({
-      where: { id: item.productId, companyId },
-      data: { stock: { increment: item.quantity } },
+      where: { id: item.productId, companyId, branchId },
+      data: { stock: newStock, ...(product.stock === 0 && newStock > 0 ? { isActive: true } : {}) },
     });
   }
 }
 
 export async function voidSale(saleId: string): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId, branchId: sessionBranchId } = await requireSession();
 
   try {
-    await prisma.$transaction(async (tx) => {
-      const sale = await tx.sale.findFirst({ where: { id: saleId, companyId } });
+    await withTenant(companyId, async (tx) => {
+      const sale = await tx.sale.findFirst({
+        where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
+      });
       if (!sale) throw new Error("Venta no encontrada");
       if (sale.voided) throw new Error("La venta ya está anulada");
+      await assertDayNotClosed(tx, sale.branchId, sale.createdAt);
 
-      await restoreStock(tx, saleId, companyId);
+      await restoreStock(tx, saleId, companyId, sale.branchId);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
@@ -165,15 +267,18 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
 }
 
 export async function deleteSale(saleId: string): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId, branchId: sessionBranchId } = await requireSession();
 
   try {
-    await prisma.$transaction(async (tx) => {
-      const sale = await tx.sale.findFirst({ where: { id: saleId, companyId } });
+    await withTenant(companyId, async (tx) => {
+      const sale = await tx.sale.findFirst({
+        where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
+      });
       if (!sale) throw new Error("Venta no encontrada");
+      await assertDayNotClosed(tx, sale.branchId, sale.createdAt);
 
       if (!sale.voided) {
-        await restoreStock(tx, saleId, companyId);
+        await restoreStock(tx, saleId, companyId, sale.branchId);
       }
       await tx.sale.delete({ where: { id: saleId } });
     });
@@ -188,61 +293,175 @@ export async function deleteSale(saleId: string): Promise<ActionResult> {
   return { success: true };
 }
 
-export async function registerPayment(
-  saleId: string,
-  input: { paymentMethod: string; paymentReference?: string }
-): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+// Registers an abono (partial or full) toward a CREDIT sale's outstanding
+// balance. Each call adds one or more SalePayment rows (one per method in
+// the split), stamped with today's date and exchange rate, without
+// requiring the abono to cover the whole remaining balance — a sale can be
+// collected across several of these over different days. The Sale itself
+// only flips to PAID (and gets its receiptControlNumber, gating the Recibo
+// de Pago document) once the sum of every abono actually reaches the total;
+// until then it stays CREDIT with a smaller remaining balance.
+export async function registerPayment(saleId: string, input: unknown): Promise<ActionResult> {
+  const { companyId, branchId: sessionBranchId } = await requireSession();
   const parsed = RegisterPaymentSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    select: { exchangeRate: true },
-  });
+  try {
+    await withTenant(companyId, async (tx) => {
+      const sale = await tx.sale.findFirst({
+        where: {
+          id: saleId,
+          companyId,
+          paymentStatus: "CREDIT",
+          ...(sessionBranchId ? { branchId: sessionBranchId } : {}),
+        },
+        include: { payments: true },
+      });
+      if (!sale) throw new Error("Venta no encontrada o ya estaba pagada");
 
-  const result = await prisma.sale.updateMany({
-    where: { id: saleId, companyId, paymentStatus: "CREDIT" },
-    data: {
-      paymentStatus: "PAID",
-      paidAt: new Date(),
-      paymentMethod: parsed.data.paymentMethod,
-      paymentReference: parsed.data.paymentReference,
-      paidExchangeRate: company?.exchangeRate ?? null,
-    },
-  });
-  if (result.count === 0) {
-    return { success: false, error: "Venta no encontrada o ya estaba pagada" };
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+        select: {
+          exchangeRate: true,
+          localCurrencyCode: true,
+          exchangeRateEnabled: true,
+          referenceCurrency: true,
+        },
+      });
+      const rate = company?.exchangeRate != null ? Number(company.exchangeRate) : null;
+      const localCurrencyCode = company?.localCurrencyCode ?? DEFAULT_CURRENCY_CODE;
+      const exchangeRateEnabled = company?.exchangeRateEnabled ?? true;
+      const referenceCurrency = company?.referenceCurrency ?? "EUR";
+      const resolvedPayments = resolveSalePayments(
+        parsed.data.payments,
+        localCurrencyCode,
+        rate,
+        exchangeRateEnabled,
+        referenceCurrency
+      );
+
+      const alreadyPaidCents = sale.payments.reduce((sum, p) => sum + p.amountEurCents, 0);
+      const remainingCents = sale.totalCents - alreadyPaidCents;
+      const abonoCents = assertPaymentsWithinRemaining(resolvedPayments, remainingCents, referenceCurrency);
+
+      const firstPayment = resolvedPayments[0];
+      // Same rounding tolerance assertPaymentsWithinRemaining itself applies
+      // (a mixed-currency split can be off by a cent or two per
+      // locally-denominated line) — reused here to decide whether this
+      // abono is the one that closes out the balance.
+      const localLines = resolvedPayments.filter(
+        (p) => p.currencyCode !== "USD" && p.currencyCode !== referenceCurrency
+      ).length;
+      const tolerance = localLines > 0 ? Math.max(1, localLines) : 0;
+      const isFullySettled = remainingCents - abonoCents <= tolerance;
+
+      await tx.salePayment.createMany({
+        data: resolvedPayments.map((p) => ({
+          saleId: sale.id,
+          paymentMethod: p.paymentMethod,
+          amountEurCents: p.amountEurCents,
+          currencyCode: p.currencyCode,
+          amountCurrencyCents: p.amountCurrencyCents,
+          paidInForeignCurrency: p.paidInForeignCurrency,
+          reference: p.reference,
+          exchangeRate: company?.exchangeRate ?? null,
+        })),
+      });
+
+      if (!isFullySettled) return;
+
+      // Progressive, per-branch sequence for the "Recibo de pago" document —
+      // independent of controlNumber (the Nota de entrega's own sequence),
+      // assigned only now, the moment this credit sale's debt is fully
+      // collected (possibly across several abonos).
+      const previousReceiptCount = await tx.sale.count({
+        where: { branchId: sale.branchId, receiptControlNumber: { not: null } },
+      });
+
+      await tx.sale.update({
+        where: { id: saleId },
+        data: {
+          paymentStatus: "PAID",
+          paidAt: new Date(),
+          paymentMethod: firstPayment.paymentMethod,
+          paymentReference: firstPayment.reference,
+          paidInForeignCurrency: resolvedPayments.some((p) => p.currencyCode !== localCurrencyCode),
+          // Snapshot of the rate in effect the day the balance was fully
+          // settled, since a credit sale can be collected days (or several
+          // abonos) after the original sale/rate snapshot.
+          paidExchangeRate: company?.exchangeRate ?? null,
+          receiptControlNumber: previousReceiptCount + 1,
+        },
+      });
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "No se pudo registrar el pago";
+    return { success: false, error: message };
   }
 
   revalidatePath("/reports");
   return { success: true };
 }
 
-export async function getSaleReceipt(saleId: string) {
-  const { companyId } = await requireSession();
-  const sale = await prisma.sale.findFirst({
-    where: { id: saleId, companyId },
-    include: { items: true },
+// Lazily assigns a Factura number the first time anyone actually requests a
+// Factura for this sale — same "progressive, per-company sequence" pattern
+// as receiptControlNumber, kept independent of it and of controlNumber.
+// Returns the (possibly just-assigned) number so the caller can build the
+// PDF immediately without a second round trip. A placeholder ahead of real
+// SENIAT fiscal-machine integration — this alone does not make the document
+// fiscally compliant.
+export async function getOrCreateInvoiceNumber(saleId: string): Promise<{ invoiceNumber: number } | null> {
+  const { companyId, branchId: sessionBranchId } = await requireSession();
+
+  return withTenant(companyId, async (tx) => {
+    const sale = await tx.sale.findFirst({
+      where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
+    });
+    if (!sale) return null;
+    if (sale.invoiceNumber != null) return { invoiceNumber: sale.invoiceNumber };
+
+    const previousCount = await tx.sale.count({
+      where: { branchId: sale.branchId, invoiceNumber: { not: null } },
+    });
+    const invoiceNumber = previousCount + 1;
+    await tx.sale.update({ where: { id: saleId }, data: { invoiceNumber } });
+    return { invoiceNumber };
   });
+}
+
+export async function getSaleReceipt(saleId: string) {
+  const { companyId, branchId } = await requireSession();
+  const sale = await withTenant(companyId, (tx) =>
+    tx.sale.findFirst({
+      where: { id: saleId, companyId, ...(branchId ? { branchId } : {}) },
+      include: { items: true, payments: true },
+    })
+  );
   if (!sale) return null;
   // Client Components can't receive Prisma's Decimal instances across the
-  // server action boundary — convert to a plain number first.
+  // server action boundary — convert to a plain number first (including
+  // each payment line's own rate snapshot, see SalePayment.exchangeRate).
   return {
     ...sale,
     exchangeRate: sale.exchangeRate != null ? Number(sale.exchangeRate) : null,
     paidExchangeRate: sale.paidExchangeRate != null ? Number(sale.paidExchangeRate) : null,
+    payments: sale.payments.map((p) => ({
+      ...p,
+      exchangeRate: p.exchangeRate != null ? Number(p.exchangeRate) : null,
+    })),
   };
 }
 
 export async function listRecentSales(limit = 10) {
-  const { companyId } = await requireSession();
-  return prisma.sale.findMany({
-    where: { companyId },
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    include: { items: true },
-  });
+  const { companyId, branchId } = await requireSession();
+  return withTenant(companyId, (tx) =>
+    tx.sale.findMany({
+      where: { companyId, ...(branchId ? { branchId } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: { items: true, payments: true },
+    })
+  );
 }

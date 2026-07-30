@@ -10,6 +10,14 @@ enum PaymentMethod {
   CASH
   CARD
   OTHER
+  ZELLE
+  BINANCE
+  PAYPAL
+  // Physical card terminal ("punto de venta") — distinct from CARD/Pago
+  // Móvil above, which is the instant phone-number bank transfer.
+  POS
+  // Bank wire transfer, as opposed to Pago Móvil's instant phone transfer.
+  TRANSFER
 }
 
 enum PaymentStatus {
@@ -17,67 +25,289 @@ enum PaymentStatus {
   CREDIT
 }
 
+enum UserStatus {
+  // Awaiting approval from a KYRA System platform admin after signup.
+  PENDING
+  ACTIVE
+  // Approval denied, or access later revoked by a platform admin.
+  SUSPENDED
+}
+
+enum PaymentReportStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BinancePayOrderStatus {
+  PENDING
+  PAID
+  EXPIRED
+  FAILED
+}
+
+// The currency that Product.priceCents/Sale.totalCents/etc. are canonically
+// denominated in. Same stored cents value either way — this app has always
+// treated USD and EUR as 1:1 equivalent (no real forex tracked between them),
+// so switching a company's reference currency is purely a display/label
+// choice, not a data conversion.
+enum ReferenceCurrency {
+  EUR
+  USD
+}
+
+// GERENTE has full access; VENDEDOR has access to everything except
+// Finanzas and Administración de perfiles (see requireManager() in
+// lib/session.ts).
+enum Role {
+  GERENTE
+  VENDEDOR
+}
+
+// Paper size used to lay out the browser print view (window.print()) for
+// delivery notes, quotes and payment receipts — separate from the jsPDF
+// downloads, which are always Letter-sized. THERMAL_* sizes render a
+// single-column stacked layout; LETTER/A4 render a table like the PDF.
+enum PrintPaperSize {
+  THERMAL_58
+  THERMAL_80
+  LETTER
+  A4
+}
+
+// Venezuelan IVA (VAT) treatment of a product/line item. GENERAL and REDUCED
+// use Company.ivaGeneralRatePercent/ivaReducedRatePercent (configurable,
+// since these rates change by law over time); EXEMPT is always 0% (many
+// food staples, medicines, books). See lib/tax.ts — prices are always
+// tax-INCLUSIVE in this app (matching Venezuelan retail sticker-price
+// convention), so this category only decomposes an already-fixed total into
+// base imponible + IVA for reporting; it never changes what the customer
+// pays.
+enum TaxCategory {
+  GENERAL
+  REDUCED
+  EXEMPT
+}
+
+// Whether a Purchase's bill has been settled with the supplier yet — the
+// simplest possible cuentas por pagar (accounts payable) tracking, mirroring
+// Sale.paymentStatus's PAID/CREDIT split.
+enum PurchasePaymentStatus {
+  PAID
+  PENDING
+}
+
+// Follow-up state for a Quote — PENDING means still awaiting the customer's
+// decision, CONVERTED means they came back and bought (as a separate Sale),
+// LOST means they decided not to buy. Manually set, not derived.
+enum QuoteStatus {
+  PENDING
+  CONVERTED
+  LOST
+}
+
 model Company {
-  id                    String     @id @default(cuid())
+  id                    String            @id @default(cuid())
   name                  String
-  // Bolívares (VES) per 1 EUR. Set by the shop owner and updated daily.
-  exchangeRate          Decimal?   @db.Decimal(12, 4)
+  // Short code (derived from id, see signup()) employees use, together with
+  // their name and password, to log in without needing an email address.
+  loginCode             String            @unique
+  // Whether this company uses the dual-currency conversion feature at all.
+  // When false, every price/payment is shown/collected in a single
+  // referenceCurrency below — no local-currency conversion, no exchange-rate
+  // requirement anywhere (POS, reports, PDFs all collapse to one currency).
+  exchangeRateEnabled   Boolean           @default(true)
+  // See ReferenceCurrency above. Defaults to EUR to preserve the meaning of
+  // every company's already-stored prices from before this field existed.
+  referenceCurrency     ReferenceCurrency @default(EUR)
+  // Local currency per 1 referenceCurrency unit. Set by the shop owner and
+  // updated daily. Only meaningful when exchangeRateEnabled is true.
+  exchangeRate          Decimal?          @db.Decimal(12, 4)
   exchangeRateUpdatedAt DateTime?
-  // Small logo image as a base64 data URL, and a hex brand accent color.
-  logoDataUrl           String?    @db.Text
+  // ISO 4217 code of the currency this company sells in locally (see
+  // lib/currencies.ts for the supported list) — drives all retail-facing
+  // formatting (POS, inventory, reports, PDFs). Defaults to VES since every
+  // company predating this feature was Venezuelan. Only meaningful when
+  // exchangeRateEnabled is true.
+  localCurrencyCode     String            @default("VES")
+  // Small logo image as a base64 data URL, a hex brand accent color (buttons,
+  // icons, links), and a hex background color — all optional; when unset the
+  // app falls back to its default light/blue theme. Applied app-wide for the
+  // company's own users (owners and employees alike) and on the login screen
+  // itself once the company is identified (by email or company code), before
+  // the user has actually authenticated.
+  logoDataUrl           String?           @db.Text
   brandColor            String?
-  createdAt             DateTime   @default(now())
-  updatedAt             DateTime   @updatedAt
+  brandBackground       String?
+  // Fiscal/legal data for delivery notes, quotes and payment receipts. Optional
+  // — printed only when the company has filled them in from Settings.
+  fiscalLegalName       String?
+  fiscalRif             String?
+  fiscalAddress         String?           @db.Text
+  fiscalPhone           String?
+  // Default paper size for the "Imprimir" browser print view. Editable
+  // per-print from the print dialog itself; this is just the preselected
+  // default.
+  printPaperSize        PrintPaperSize    @default(LETTER)
+  // Venezuelan IVA rates, configurable since they change by law over time
+  // (e.g. the general rate has moved between 12%/15%/16% historically) —
+  // see TaxCategory/lib/tax.ts. Defaults match the rate in effect when this
+  // feature was added.
+  ivaGeneralRatePercent Int               @default(16)
+  ivaReducedRatePercent Int               @default(8)
+  // "Contribuyente especial" status — SENIAT designates certain companies as
+  // agentes de retención, requiring them to withhold a percentage of IVA on
+  // supplier purchases and remit it directly instead of paying the supplier
+  // in full (see Purchase.ivaRetainedCents). Most SMBs are NOT designated
+  // special taxpayers, hence defaulting to false.
+  isIvaWithholdingAgent Boolean           @default(false)
+  ivaWithholdingPercent Int               @default(75)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
   users                 User[]
   products              Product[]
   sales                 Sale[]
   customers             Customer[]
+  quotes                Quote[]
+  suppliers             Supplier[]
+  purchases             Purchase[]
+  // Maintenance billing, managed by a KYRA System platform admin from /admin.
+  // Activation itself is charged outside the app for now — only the recurring
+  // maintenance cycle is tracked here and can block access. Priced in USD —
+  // KYRA System's own billing currency, independent of each company's local
+  // retail currency above. The USD/Bs rate used to preview what's owed in
+  // bolívares (for VES companies paying via Pago Móvil) is platform-wide
+  // (see PlatformSettings), not per company.
+  isExempt              Boolean           @default(false)
+  monthlyFeeUsdCents    Int?
+  nextPaymentDueDate    DateTime?
+  payments              Payment[]
+  paymentReports        PaymentReport[]
+  binancePayOrders      BinancePayOrder[]
+  expenses              Expense[]
+  cashClosings          CashClosing[]
+  branches              Branch[]
 }
 
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  companyId    String
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+// A physical location/sucursal of a company — each one has its OWN
+// independent product catalog and its own cash register (sales, quotes,
+// cierre de caja); nothing is shared between branches except the customer
+// list, which stays company-wide (see Customer, unchanged). Every existing
+// company got exactly one auto-created "Sucursal Principal" when this model
+// was introduced (see the add_branches migration), so nothing already in
+// production lost access to its own data.
+model Branch {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
 
+  products     Product[]
+  sales        Sale[]
+  quotes       Quote[]
+  cashClosings CashClosing[]
+  users        User[]
+  purchases    Purchase[]
+
+  @@unique([companyId, name])
   @@index([companyId])
 }
 
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  companyId    String
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Which branch this employee is fixed to — null for GERENTE/the owner
+  // account (they can access/switch between every branch, see
+  // switchBranch() in lib/actions/branches.ts), set for every VENDEDOR at
+  // creation time (see createEmployee, lib/actions/employees.ts).
+  branchId     String?
+  branch       Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  // Existing accounts default to ACTIVE so this migration never locks out a
+  // user who could already log in; only new signups start at PENDING.
+  status       UserStatus @default(ACTIVE)
+  // Platform-wide admin (KYRA System itself), not scoped to a company —
+  // can see and manage every tenant's users from /admin.
+  isSuperAdmin Boolean    @default(false)
+  // Null for the original owner account created via signup() (which still
+  // logs in with email). Set for employee profiles created from
+  // /employees, who log in with companyCode + firstName + lastName instead.
+  firstName    String?
+  lastName     String?
+  // Existing rows default to GERENTE so every pre-existing owner account
+  // keeps its current full access after this migration.
+  role         Role       @default(GERENTE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  sales        Sale[]     @relation("SaleSeller")
+  quotes       Quote[]    @relation("QuoteSeller")
+  expenses     Expense[]
+
+  @@unique([companyId, firstName, lastName])
+  @@index([companyId])
+  @@index([branchId])
+}
+
 model Product {
-  id                String     @id @default(cuid())
+  id                String         @id @default(cuid())
   name              String
   sku               String?
   category          String?
   priceCents        Int
   costCents         Int?
-  stock             Int        @default(0)
-  lowStockThreshold Int        @default(5)
-  isActive          Boolean    @default(true)
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  stock             Int            @default(0)
+  lowStockThreshold Int            @default(5)
+  isActive          Boolean        @default(true)
+  imageDataUrl      String?
+  // IVA treatment for this product — see TaxCategory. Defaults to GENERAL
+  // (the standard rate) so every product created before this feature existed
+  // is treated the same way checkout already implicitly assumed.
+  taxCategory       TaxCategory    @default(GENERAL)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
   companyId         String
-  company           Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Each branch has its own independent catalog — a product belongs to
+  // exactly one branch, not shared/counted across the company's other
+  // branches (see the plan doc for why: confirmed with the user).
+  branchId          String
+  branch            Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
   saleItems         SaleItem[]
+  quoteItems        QuoteItem[]
+  purchaseItems     PurchaseItem[]
 
-  @@unique([companyId, sku])
+  @@unique([branchId, sku])
   @@index([companyId, isActive])
+  @@index([branchId, isActive])
   @@index([companyId, category])
 }
 
 model Customer {
-  id        String   @id @default(cuid())
-  companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  firstName String
-  lastName  String
-  phone     String
-  address   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  sales     Sale[]
+  id              String    @id @default(cuid())
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  firstName       String
+  lastName        String
+  phone           String
+  address         String?
+  // Cédula/RIF — optional, needed on the Libro de Ventas SENIAT report for
+  // any customer who wants a proper fiscal invoice ("Consumidor Final"
+  // customers without one are still valid, just reported without a RIF).
+  rif             String?
+  // Free-text notes a seller/manager jots down about this customer
+  // (preferences, agreements, context for the next call) — shown on the
+  // ficha de cliente, not on any customer-facing document.
+  notes           String?   @db.Text
+  // Optional reminder date — surfaced as "clientes a contactar" on the
+  // customers list once this date arrives (see listCustomersToContact).
+  nextContactDate DateTime? @db.Date
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  sales           Sale[]
 
   @@unique([companyId, phone])
   @@index([companyId])
@@ -87,6 +317,14 @@ model Sale {
   id                    String         @id @default(cuid())
   createdAt             DateTime       @default(now())
   totalCents            Int
+  // IVA breakdown of totalCents, aggregated from each SaleItem's own
+  // baseCents/taxCents (see lib/tax.ts) — purely a decomposition of the
+  // already-fixed tax-inclusive total for the Libro de Ventas report and a
+  // properly-broken-down Factura; baseImponibleCents + taxCents always
+  // equals totalCents. Default 0 for every sale completed before this
+  // feature existed (their true breakdown was never tracked).
+  baseImponibleCents    Int            @default(0)
+  taxCents              Int            @default(0)
   // Null for CREDIT sales until the customer actually pays (see paymentStatus).
   paymentMethod         PaymentMethod?
   note                  String?
@@ -103,6 +341,10 @@ model Sale {
   customerLastName      String?
   customerPhone         String?
   customerAddress       String?
+  // Snapshot of Customer.rif at sale time, same reasoning as the other
+  // customerXxx snapshot fields above — needed on the Libro de Ventas report
+  // regardless of whether the Customer record is later edited.
+  customerRif           String?
   customerId            String?
   customer              Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
   // Confirmation/reference number for Pago Móvil transfers, entered manually.
@@ -117,29 +359,385 @@ model Sale {
   paidExchangeRate      Decimal?       @db.Decimal(12, 4)
   // Sequential per-company number for the "Nota de entrega" document.
   controlNumber         Int?
+  // Sequential per-company number for the "Recibo de pago" document —
+  // independent of controlNumber above. Only assigned the moment a CREDIT
+  // sale's debt is actually collected (see registerPayment); a sale that's
+  // paid up front at checkout never gets one, since no Recibo de Pago is
+  // ever generated for it.
+  receiptControlNumber  Int?
+  // Sequential per-company number for the "Factura" document — a selectable
+  // alternative to "Nota de entrega" for the same sale (same layout, just a
+  // different title/numbering), assigned lazily the first time someone
+  // actually requests a Factura for this sale (see getOrCreateInvoiceNumber
+  // in lib/actions/sales.ts). This is a placeholder ahead of real SENIAT
+  // fiscal-machine/homologación integration, deliberately deferred — it does
+  // NOT make this a fiscally-compliant invoice yet.
+  invoiceNumber         Int?
   // Voided sales are excluded from revenue/report totals but stay visible in
   // history for auditing. Stock is restored when a sale is voided or deleted.
   voided                Boolean        @default(false)
   voidedAt              DateTime?
   companyId             String
   company               Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Which branch's register this sale happened at — each branch numbers its
+  // own controlNumber/receiptControlNumber/invoiceNumber sequence, same as a
+  // physically separate cash register would.
+  branchId              String
+  branch                Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
   items                 SaleItem[]
+  // Breakdown when the customer split payment across multiple methods (e.g.
+  // half cash USD, half Pago Móvil in Bs). The singular paymentMethod/
+  // paymentReference/paidInForeignCurrency fields above still mirror the
+  // first entry for any code that only needs a quick summary.
+  payments              SalePayment[]
+  // The employee who made this sale. sellerName is a snapshot (same pattern
+  // as customerFirstName/etc above) so it survives the employee being
+  // renamed or deleted later; sellerId is nulled in that case but the name
+  // printed on past documents never changes.
+  sellerId              String?
+  seller                User?          @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: SetNull)
+  sellerName            String?
 
-  @@unique([companyId, controlNumber])
+  @@unique([branchId, controlNumber])
+  @@unique([branchId, receiptControlNumber])
+  @@unique([branchId, invoiceNumber])
   @@index([companyId, createdAt])
+  @@index([branchId, createdAt])
+}
+
+// One entry in a sale's payment breakdown. amountEurCents entries for a sale
+// sum to that sale's totalCents (or, for a CREDIT sale being collected, to
+// the amount being collected).
+model SalePayment {
+  id                    String        @id @default(cuid())
+  saleId                String
+  sale                  Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  paymentMethod         PaymentMethod
+  amountEurCents        Int
+  // The currency this specific line was actually collected in — "USD" for
+  // Zelle/Binance/PayPal, or the company's own localCurrencyCode for
+  // Cash/Card/Other (unless marked as foreign cash, then also "USD").
+  // amountEurCents above is this converted to the EUR reference used for
+  // Sale.totalCents/reconciliation; amountCurrencyCents below is the raw,
+  // as-entered amount in currencyCode's own cents. Both null for rows
+  // created before per-line currency tracking existed.
+  currencyCode          String?
+  amountCurrencyCents   Int?
+  paidInForeignCurrency Boolean       @default(false)
+  reference             String?
+  // Snapshot of Company.exchangeRate on the day THIS specific line was
+  // recorded — for a credit sale collected via one or more later abonos,
+  // each installment can fall on a different day with a different rate,
+  // unlike Sale.exchangeRate/paidExchangeRate which only capture the
+  // original-sale and final-settlement moments. Null for rows created
+  // before this snapshot existed.
+  exchangeRate          Decimal?      @db.Decimal(12, 4)
+  createdAt             DateTime      @default(now())
+
+  @@index([saleId])
 }
 
 model SaleItem {
-  id             String   @id @default(cuid())
+  id             String      @id @default(cuid())
   saleId         String
-  sale           Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sale           Sale        @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName    String
+  // Snapshotted at sale time, same reasoning as productName above — a
+  // product's category can change (or the product can be deleted) after the
+  // sale, but the document must keep showing what was actually sold. Needed
+  // to tell apart two products that share a name but differ by category.
+  category       String?
+  unitPriceCents Int
+  quantity       Int
+  subtotalCents  Int
+  // IVA breakdown snapshot (see lib/tax.ts) — taxCategory/taxRatePercent
+  // capture the product's tax treatment AT SALE TIME (a product's category
+  // or the company's rate can change later without altering past documents),
+  // and baseCents/taxCents decompose subtotalCents (unchanged, still
+  // tax-inclusive) into base imponible + IVA. baseCents + taxCents always
+  // equals subtotalCents. Default GENERAL/16/subtotal/0 for rows created
+  // before this feature existed — an approximation, not a real historical
+  // record, since the true rate/category in effect back then isn't known.
+  taxCategory    TaxCategory @default(GENERAL)
+  taxRatePercent Int         @default(16)
+  baseCents      Int         @default(0)
+  taxCents       Int         @default(0)
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+// Budgets/quotes: same customer+product flow as a Sale, but never decrements
+// stock or takes a payment — just produces a "PRESUPUESTO" PDF with its own
+// control-number sequence, separate from Sale.controlNumber.
+model Quote {
+  id                String      @id @default(cuid())
+  createdAt         DateTime    @default(now())
+  controlNumber     Int?
+  totalCents        Int
+  exchangeRate      Decimal?    @db.Decimal(12, 4)
+  customerFirstName String?
+  customerLastName  String?
+  customerPhone     String?
+  customerAddress   String?
+  companyId         String
+  company           Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId          String
+  branch            Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  items             QuoteItem[]
+  sellerId          String?
+  seller            User?       @relation("QuoteSeller", fields: [sellerId], references: [id], onDelete: SetNull)
+  sellerName        String?
+  // Free-text, optional — printed on the generated PDF/print view when set.
+  note              String?
+  // Manually set by the seller once they know the outcome — there's no
+  // automatic link to a Sale (a converted quote's actual sale is a separate,
+  // independently-entered Sale row), so this is a follow-up flag, not a
+  // derived fact. Drives the "seguimiento de presupuestos" list.
+  status            QuoteStatus @default(PENDING)
+
+  @@unique([branchId, controlNumber])
+  @@index([companyId, createdAt])
+  @@index([branchId, createdAt])
+}
+
+model QuoteItem {
+  id             String   @id @default(cuid())
+  quoteId        String
+  quote          Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   productId      String?
   product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   productName    String
+  // Snapshotted at quote time — same reasoning as SaleItem.category.
+  category       String?
   unitPriceCents Int
   quantity       Int
   subtotalCents  Int
 
-  @@index([saleId])
+  @@index([quoteId])
   @@index([productId])
+}
+
+// A vendor the company buys from — company-wide (not branch-scoped), same
+// reasoning as Customer: a supplier can sell to any of the company's
+// branches.
+model Supplier {
+  id        String     @id @default(cuid())
+  companyId String
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  rif       String?
+  phone     String?
+  address   String?
+  email     String?
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  purchases Purchase[]
+
+  @@index([companyId])
+}
+
+// A recorded purchase from a supplier — the inverse of Sale: receiving one
+// increases Product.stock (and updates Product.costCents) instead of
+// decrementing it, and its paymentStatus tracks cuentas por pagar (money the
+// company owes the supplier) instead of money collected from a customer.
+// Branch-scoped like Sale/Product, since it affects one branch's own stock
+// and its own controlNumber sequence.
+model Purchase {
+  id                 String                @id @default(cuid())
+  companyId          String
+  company            Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId           String
+  branch             Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  supplierId         String
+  supplier           Supplier              @relation(fields: [supplierId], references: [id])
+  // Sequential per-branch number KYRA assigns to this purchase — independent
+  // of the supplier's own invoice numbering below.
+  controlNumber      Int?
+  // The supplier's own invoice/control number, free text (unlike Sale's
+  // controlNumber, this isn't KYRA's to assign).
+  supplierInvoiceNo  String?
+  createdAt          DateTime              @default(now())
+  totalCents         Int
+  // IVA breakdown, same reasoning as Sale.baseImponibleCents/taxCents.
+  baseImponibleCents Int                   @default(0)
+  taxCents           Int                   @default(0)
+  // IVA withheld from the supplier when the company is a designated
+  // "agente de retención" (see Company.isIvaWithholdingAgent) — this amount
+  // is remitted to SENIAT directly instead of paid to the supplier, so the
+  // supplier is actually owed (totalCents - ivaRetainedCents), not
+  // totalCents, once paymentStatus flips to PAID.
+  ivaRetainedCents   Int                   @default(0)
+  paymentStatus      PurchasePaymentStatus @default(PENDING)
+  paidAt             DateTime?
+  note               String?
+  // Voided purchases are excluded from cost/stock reports but stay visible
+  // for auditing; stock is reversed (decremented back out) same as a voided
+  // Sale restores it.
+  voided             Boolean               @default(false)
+  voidedAt           DateTime?
+  items              PurchaseItem[]
+
+  @@unique([branchId, controlNumber])
+  @@index([companyId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([supplierId])
+}
+
+model PurchaseItem {
+  id             String      @id @default(cuid())
+  purchaseId     String
+  purchase       Purchase    @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName    String
+  taxCategory    TaxCategory @default(GENERAL)
+  taxRatePercent Int         @default(16)
+  unitCostCents  Int
+  quantity       Int
+  baseCents      Int
+  taxCents       Int
+  subtotalCents  Int
+
+  @@index([purchaseId])
+  @@index([productId])
+}
+
+// A recorded maintenance-fee payment, confirmed manually by a platform admin.
+// Each payment extends Company.nextPaymentDueDate to `periodEnd`.
+model Payment {
+  id             String   @id @default(cuid())
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  amountUsdCents Int
+  // Platform Bs/USD rate in effect for this payment (snapshot, independent
+  // of the company's own retail exchangeRate) — only meaningful for VES
+  // companies previewing the bolívar equivalent.
+  exchangeRate   Decimal  @db.Decimal(12, 4)
+  periodEnd      DateTime
+  note           String?
+  verifiedById   String
+  createdAt      DateTime @default(now())
+
+  @@index([companyId, createdAt])
+}
+
+// A company user's self-reported claim of having paid the maintenance fee
+// externally (per the platform's payment instructions). Stays PENDING until
+// a super admin reviews it — approving one creates the matching Payment
+// record and pushes out Company.nextPaymentDueDate; rejecting one leaves
+// billing state untouched.
+model PaymentReport {
+  id                String              @id @default(cuid())
+  companyId         String
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reportedById      String
+  // Proof-of-payment image (base64 data URL), same storage pattern as
+  // Company.logoDataUrl. Required by the submission form, kept nullable here
+  // so a future schema change never needs a backfill.
+  proofImageDataUrl String?             @db.Text
+  note              String?
+  status            PaymentReportStatus @default(PENDING)
+  reviewedById      String?
+  reviewedAt        DateTime?
+  reviewNote        String?
+  createdAt         DateTime            @default(now())
+  lines             PaymentReportLine[]
+
+  @@index([companyId, status])
+  @@index([status, createdAt])
+}
+
+// One payment-method entry in a self-reported maintenance payment (e.g. part
+// Zelle, part Pago Móvil) — mirrors SalePayment for the same reason.
+model PaymentReportLine {
+  id              String        @id @default(cuid())
+  paymentReportId String
+  paymentReport   PaymentReport @relation(fields: [paymentReportId], references: [id], onDelete: Cascade)
+  paymentMethod   PaymentMethod
+  amountUsdCents  Int
+  reference       String?
+
+  @@index([paymentReportId])
+}
+
+// A Binance Pay checkout created for a company's maintenance-fee cycle —
+// unlike PaymentReport, this needs no manual admin review: the webhook at
+// app/api/webhooks/binance-pay/route.ts marks it PAID and advances
+// Company.nextPaymentDueDate automatically once Binance confirms funds
+// actually arrived (see lib/binance-pay.ts for the signed request/webhook
+// verification). merchantTradeNo is the idempotency key both directions —
+// Binance echoes it back in the webhook payload, and a retried webhook for
+// an already-PAID order is a no-op.
+model BinancePayOrder {
+  id              String                @id @default(cuid())
+  companyId       String
+  company         Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  merchantTradeNo String                @unique
+  prepayId        String?
+  amountUsdCents  Int
+  status          BinancePayOrderStatus @default(PENDING)
+  checkoutUrl     String?               @db.Text
+  qrcodeLink      String?               @db.Text
+  createdAt       DateTime              @default(now())
+  paidAt          DateTime?
+
+  @@index([companyId, status])
+}
+
+// A manually logged business expense (Finanzas), used together with revenue
+// and Product.costCents to estimate net profit for a date range.
+model Expense {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  description String
+  category    String?
+  amountCents Int
+  spentAt     DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([companyId, spentAt])
+}
+
+// A formal end-of-day cash register closing — freezes that business day's
+// totals (see lib/actions/cash-closing.ts, computed the same way the Reportes
+// breakdown is) and blocks voiding/deleting any sale from that day
+// afterward (see voidSale/deleteSale in lib/actions/sales.ts), the same way
+// a real end-of-day reconciliation would. closingDate is a calendar day in
+// the shop's timezone (America/Caracas, see SHOP_TIME_ZONE), not a instant.
+model CashClosing {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  closingDate DateTime @db.Date
+  totalCents  Int
+  salesCount  Int
+  note        String?
+  closedById  String
+  closedAt    DateTime @default(now())
+
+  @@unique([branchId, closingDate])
+  @@index([companyId, closingDate])
+}
+
+// Single global row of platform-wide config, managed by the super admin —
+// currently just the default payment instructions shown to every company
+// (e.g. Pago Móvil/transfer details). Not scoped by company, so it's
+// deliberately outside Row-Level Security, like User/Company.
+model PlatformSettings {
+  id                  String   @id
+  paymentInstructions String?  @db.Text
+  // Platform-wide Bs/USD rate, used only to preview the bolívar equivalent
+  // for VES companies (who typically pay via Pago Móvil); every other
+  // company just pays the USD amount directly via Zelle/Binance/PayPal.
+  billingExchangeRate Decimal? @db.Decimal(12, 4)
+  updatedAt           DateTime @updatedAt
 }

@@ -9,6 +9,7 @@ import { signup } from "@/lib/actions/auth";
 
 export function SignupForm() {
   const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(formData: FormData) {
@@ -17,8 +18,25 @@ export function SignupForm() {
       const result = await signup(formData);
       if (!result.success) {
         setError(result.error);
+      } else {
+        setSubmitted(true);
       }
     });
+  }
+
+  if (submitted) {
+    return (
+      <div className="flex flex-col gap-3 max-w-sm mx-auto text-center">
+        <h2 className="text-lg font-semibold">Cuenta creada</h2>
+        <p className="text-sm text-muted-foreground">
+          Tu cuenta está pendiente de aprobación por un administrador de KR System. Te
+          avisaremos cuando puedas iniciar sesión.
+        </p>
+        <Link href="/login" className="text-sm text-foreground underline underline-offset-4">
+          Volver a iniciar sesión
+        </Link>
+      </div>
+    );
   }
 
   return (

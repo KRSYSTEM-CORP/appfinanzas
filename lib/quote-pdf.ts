@@ -1,0 +1,178 @@
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import { formatDate } from "@/lib/format";
+import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, referenceNote } from "@/lib/currencies";
+import {
+  dataUrlImageFormat,
+  itemDescription,
+  loadImageSize,
+  renderFiscalHeader,
+  renderNote,
+  type DeliveryNoteCompany,
+} from "@/lib/delivery-note";
+import { COPYRIGHT_LINE } from "@/lib/legal";
+import type { ReferenceCurrency } from "@prisma/client";
+
+export type QuoteForPdf = {
+  id: string;
+  controlNumber: number | null;
+  createdAt: Date;
+  totalCents: number;
+  customerFirstName: string | null;
+  customerLastName: string | null;
+  customerPhone: string | null;
+  customerAddress: string | null;
+  sellerName?: string | null;
+  note?: string | null;
+  items: {
+    productName: string;
+    category?: string | null;
+    quantity: number;
+    unitPriceCents: number;
+    subtotalCents: number;
+  }[];
+};
+
+export function quoteControlNumberLabel(quote: Pick<QuoteForPdf, "id" | "controlNumber">): string {
+  return quote.controlNumber != null
+    ? String(quote.controlNumber).padStart(6, "0")
+    : quote.id.slice(-8).toUpperCase();
+}
+
+export async function buildQuotePDF(
+  quote: QuoteForPdf,
+  company: DeliveryNoteCompany,
+  rate: number | null,
+  currencyCode: string = DEFAULT_CURRENCY_CODE,
+  exchangeRateEnabled: boolean = true,
+  referenceCurrency: ReferenceCurrency = "EUR",
+  format: "letter" | "a4" = "letter"
+): Promise<jsPDF> {
+  const doc = new jsPDF({ unit: "pt", format });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 40;
+  let y = 40;
+  const showLocal = exchangeRateEnabled && rate != null;
+
+  let logoWidth = 0;
+  if (company.logoDataUrl) {
+    try {
+      const { width, height } = await loadImageSize(company.logoDataUrl);
+      const maxBox = 50;
+      const scale = Math.min(1, maxBox / Math.max(width, height));
+      logoWidth = width * scale;
+      const logoHeight = height * scale;
+      doc.addImage(company.logoDataUrl, dataUrlImageFormat(company.logoDataUrl), margin, y, logoWidth, logoHeight);
+    } catch {
+      logoWidth = 0;
+    }
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.text(company.name, margin + (logoWidth > 0 ? logoWidth + 12 : 0), y + 20);
+  const fiscalEndY = renderFiscalHeader(doc, company, margin + (logoWidth > 0 ? logoWidth + 12 : 0), y + 32);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("PRESUPUESTO", pageWidth / 2, y + 20, { align: "center" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(`Nº de control: ${quoteControlNumberLabel(quote)}`, pageWidth - margin, y + 5, { align: "right" });
+  doc.text(`Fecha: ${formatDate(quote.createdAt)}`, pageWidth - margin, y + 20, { align: "right" });
+
+  y = Math.max(y + 70, fiscalEndY + 20);
+  doc.setDrawColor(200);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 20;
+
+  const customerName = `${quote.customerFirstName ?? ""} ${quote.customerLastName ?? ""}`.trim();
+  const infoLines: [string, string][] = [["Cliente:", customerName || "—"]];
+  if (quote.customerPhone) infoLines.push(["Teléfono:", quote.customerPhone]);
+  if (quote.customerAddress) infoLines.push(["Dirección:", quote.customerAddress]);
+  if (quote.sellerName) infoLines.push(["Vendedor:", quote.sellerName]);
+
+  for (const [label, value] of infoLines) {
+    doc.setFont("helvetica", "bold");
+    doc.text(label, margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(value, margin + 60, y, { maxWidth: pageWidth - margin * 2 - 60 });
+    y += 16;
+  }
+  y += 10;
+  y = renderNote(doc, quote.note, margin, y, pageWidth);
+
+  const rows = quote.items.map((item) => [
+    String(item.quantity),
+    itemDescription(item),
+    showLocal
+      ? formatLocalCurrency(eurCentsToLocal(item.unitPriceCents, rate!), currencyCode)
+      : formatCurrencyCents(referenceCurrency, item.unitPriceCents),
+    showLocal
+      ? formatLocalCurrency(eurCentsToLocal(item.subtotalCents, rate!), currencyCode)
+      : formatCurrencyCents(referenceCurrency, item.subtotalCents),
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    head: [["Cant.", "Descripción", `Precio unit. (${referenceCurrency} ref.)`, "Subtotal"]],
+    body: rows,
+    theme: "grid",
+    headStyles: { fillColor: [30, 41, 59] },
+    styles: { fontSize: 9, cellPadding: 6 },
+    columnStyles: {
+      0: { cellWidth: 40, halign: "center" },
+      2: { halign: "right" },
+      3: { halign: "right" },
+    },
+  });
+
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
+
+  if (exchangeRateEnabled) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(
+      `Tasa del día: ${rate != null ? `${formatLocalCurrency(rate, currencyCode)} por 1${referenceCurrency === "USD" ? "$" : "€"}` : "No disponible"}`,
+      margin,
+      y
+    );
+    y += 14;
+    doc.setFontSize(8);
+    doc.setTextColor(110);
+    doc.text(referenceNote(currencyCode, referenceCurrency), margin, y);
+    doc.setTextColor(0, 0, 0);
+    y += 22;
+  } else {
+    y += 8;
+  }
+
+  doc.setDrawColor(200);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 20;
+
+  const totalLocal = showLocal ? formatLocalCurrency(eurCentsToLocal(quote.totalCents, rate!), currencyCode) : null;
+  const totalReference = formatCurrencyCents(referenceCurrency, quote.totalCents);
+  const totalLabel = totalLocal ? `${totalLocal} (${totalReference})` : totalReference;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text("Subtotal:", margin, y);
+  doc.text(totalLabel, pageWidth - margin, y, { align: "right" });
+  y += 20;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("TOTAL ESTIMADO:", margin, y);
+  doc.text(totalLabel, pageWidth - margin, y, { align: "right" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(110);
+  doc.text(COPYRIGHT_LINE, pageWidth / 2, pageHeight - 30, { align: "center" });
+
+  return doc;
+}

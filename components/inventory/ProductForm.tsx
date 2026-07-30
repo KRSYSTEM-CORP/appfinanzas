@@ -1,26 +1,57 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BarcodeScannerDialog } from "@/components/scanner/BarcodeScannerDialog";
+import { resizeImageToDataUrl } from "@/lib/image-utils";
+import { TAX_CATEGORY_LABELS } from "@/lib/tax";
 import type { ActionResult } from "@/lib/types";
-import type { Product } from "@prisma/client";
+import type { Product, ReferenceCurrency, TaxCategory } from "@prisma/client";
+
+const MAX_IMAGE_DIMENSION = 480;
 
 type Props = {
   product?: Product;
   categories: string[];
+  referenceCurrency: ReferenceCurrency;
   action: (formData: FormData) => Promise<ActionResult>;
 };
 
-export function ProductForm({ product, categories, action }: Props) {
+export function ProductForm({ product, categories, referenceCurrency, action }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [sku, setSku] = useState(product?.sku ?? "");
+  const [image, setImage] = useState(product?.imageDataUrl ?? "");
+  const [taxCategory, setTaxCategory] = useState<TaxCategory>(product?.taxCategory ?? "GENERAL");
+  const [imageError, setImageError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageError(null);
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, { maxDimension: MAX_IMAGE_DIMENSION, format: "image/jpeg", quality: 0.82 });
+      setImage(dataUrl);
+    } catch {
+      setImageError("No se pudo procesar la imagen. Intenta con otro archivo.");
+    }
+  }
+
+  function removeImage() {
+    setImage("");
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  }
 
   function handleSubmit(formData: FormData) {
     setError(null);
+    formData.set("image", image);
+    formData.set("taxCategory", taxCategory);
     startTransition(async () => {
       const result = await action(formData);
       if (result.success) {
@@ -41,7 +72,39 @@ export function ProductForm({ product, categories, action }: Props) {
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="sku">SKU (opcional)</Label>
-        <Input id="sku" name="sku" defaultValue={product?.sku ?? ""} />
+        <div className="flex gap-2">
+          <Input id="sku" name="sku" value={sku} onChange={(e) => setSku(e.target.value)} className="flex-1" />
+          <BarcodeScannerDialog onDetected={setSku} />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Imagen del producto (opcional)</Label>
+        <div className="flex items-center gap-3">
+          {image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={image} alt="" className="h-16 w-16 rounded object-cover border" />
+          ) : (
+            <div className="h-16 w-16 rounded border flex items-center justify-center text-xs text-muted-foreground text-center">
+              Sin imagen
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="text-sm"
+            />
+            {image && (
+              <Button type="button" variant="outline" size="sm" onClick={removeImage} className="self-start">
+                Quitar imagen
+              </Button>
+            )}
+          </div>
+        </div>
+        {imageError && <p className="text-sm text-destructive">{imageError}</p>}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -62,7 +125,7 @@ export function ProductForm({ product, categories, action }: Props) {
 
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="price">Precio de venta (EUR)</Label>
+          <Label htmlFor="price">Precio de venta ({referenceCurrency})</Label>
           <Input
             id="price"
             name="price"
@@ -74,7 +137,7 @@ export function ProductForm({ product, categories, action }: Props) {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="cost">Costo (EUR, opcional)</Label>
+          <Label htmlFor="cost">Costo ({referenceCurrency}, opcional)</Label>
           <Input
             id="cost"
             name="cost"
@@ -84,6 +147,28 @@ export function ProductForm({ product, categories, action }: Props) {
             defaultValue={product?.costCents != null ? product.costCents / 100 : ""}
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="taxCategory">IVA</Label>
+        <Select value={taxCategory} onValueChange={(v) => v && setTaxCategory(v as TaxCategory)}>
+          <SelectTrigger id="taxCategory">
+            <SelectValue placeholder="Selecciona el tratamiento de IVA">
+              {(value: string | null) => (value ? TAX_CATEGORY_LABELS[value as TaxCategory] : "Selecciona")}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(TAX_CATEGORY_LABELS) as TaxCategory[]).map((cat) => (
+              <SelectItem key={cat} value={cat}>
+                {TAX_CATEGORY_LABELS[cat]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          El precio de venta ya incluye el IVA (como en el estante) — esto solo decide cómo se
+          descompone en el Libro de Ventas y la Factura.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">

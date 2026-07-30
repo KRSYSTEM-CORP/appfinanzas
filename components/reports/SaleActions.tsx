@@ -3,8 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogClose,
@@ -16,23 +14,53 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { voidSale, deleteSale, registerPayment } from "@/lib/actions/sales";
-import { PAYMENT_METHOD_LABELS } from "@/lib/format";
-import type { PaymentMethod, PaymentStatus } from "@prisma/client";
+import {
+  PaymentSplitBuilder,
+  defaultPaymentSplitRows,
+  isPaymentSplitWithinRemaining,
+} from "@/components/payments/PaymentSplitBuilder";
+import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import type { PaymentStatus, ReferenceCurrency } from "@prisma/client";
 
 export function SaleActions({
   saleId,
   voided,
   paymentStatus,
+  totalCents,
+  remainingCents,
+  currentRate,
+  currencyCode,
+  exchangeRateEnabled,
+  referenceCurrency,
 }: {
   saleId: string;
   voided: boolean;
   paymentStatus: PaymentStatus;
+  totalCents: number;
+  // Outstanding balance for a CREDIT sale — equal to totalCents until any
+  // abono has been registered against it (see registerPayment).
+  remainingCents: number;
+  currentRate: number | null;
+  currencyCode: string;
+  exchangeRateEnabled: boolean;
+  referenceCurrency: ReferenceCurrency;
 }) {
   const [isPending, startTransition] = useTransition();
-  const [payMethod, setPayMethod] = useState<PaymentMethod>("CASH");
-  const [payReference, setPayReference] = useState("");
+  const [payOpen, setPayOpen] = useState(false);
+  const [paymentRows, setPaymentRows] = useState(() =>
+    defaultPaymentSplitRows(remainingCents, currentRate, exchangeRateEnabled)
+  );
   const [payError, setPayError] = useState<string | null>(null);
   const router = useRouter();
+
+  const withinRemaining = isPaymentSplitWithinRemaining(
+    paymentRows,
+    currencyCode,
+    currentRate,
+    remainingCents,
+    exchangeRateEnabled,
+    referenceCurrency
+  );
 
   function handleVoid() {
     startTransition(async () => {
@@ -53,68 +81,99 @@ export function SaleActions({
     setPayError(null);
     startTransition(async () => {
       const result = await registerPayment(saleId, {
-        paymentMethod: payMethod,
-        paymentReference: payReference,
+        payments: paymentRows.map((r) => ({
+          paymentMethod: r.paymentMethod,
+          amount: r.amount,
+          paidInForeignCurrency: r.paidInForeignCurrency,
+          reference: r.reference,
+        })),
       });
       if (!result.success) {
+        // Kept open (unlike the DialogClose-driven dialogs below) so a
+        // rejected abono — e.g. the balance changed concurrently, or it
+        // exceeds what's owed — is actually visible instead of the dialog
+        // closing optimistically and silently discarding the error.
         setPayError(result.error);
         return;
       }
+      setPayOpen(false);
       router.refresh();
     });
   }
 
+  const isPartiallyPaid = remainingCents < totalCents;
+
   return (
     <div className="flex justify-end gap-2">
       {!voided && paymentStatus === "CREDIT" && (
-        <Dialog>
+        <Dialog
+          open={payOpen}
+          onOpenChange={(open) => {
+            setPayOpen(open);
+            if (!open) setPayError(null);
+          }}
+        >
           <DialogTrigger render={<Button size="sm" disabled={isPending} />}>
-            Registrar pago
+            {isPartiallyPaid ? "Registrar abono" : "Registrar pago"}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Registrar pago de esta venta</DialogTitle>
+              <DialogTitle>Registrar abono a esta venta</DialogTitle>
               <DialogDescription>
-                Indica cómo pagó el cliente. La venta pasará a &quot;Pagada&quot; con la tasa de
-                cambio de hoy y dejará de contar en el total por cobrar.
+                Indica cómo y en qué moneda pagó el cliente — puedes dividirlo en varios métodos, y
+                no tiene que ser el saldo completo: cada abono queda con su propia fecha y tasa de
+                cambio. La venta solo pasa a &quot;Pagada&quot; (con el recibo de pago disponible)
+                cuando el saldo llega a 0.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3">
-              <div className="flex gap-2">
-                {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((method) => (
-                  <Button
-                    key={method}
-                    type="button"
-                    size="sm"
-                    variant={payMethod === method ? "default" : "outline"}
-                    onClick={() => setPayMethod(method)}
-                    className="flex-1"
-                  >
-                    {PAYMENT_METHOD_LABELS[method]}
-                  </Button>
-                ))}
-              </div>
-              {payMethod === "CARD" && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`payRef-${saleId}`}>Número de referencia (Pago Móvil)</Label>
-                  <Input
-                    id={`payRef-${saleId}`}
-                    value={payReference}
-                    onChange={(e) => setPayReference(e.target.value)}
-                    placeholder="Ej. 001234567"
-                  />
+              {isPartiallyPaid && (
+                <div className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                  <span className="text-muted-foreground">Total de la venta</span>
+                  <span className="font-medium">
+                    {exchangeRateEnabled
+                      ? currentRate != null
+                        ? formatLocalCurrency(eurCentsToLocal(totalCents, currentRate), currencyCode)
+                        : "—"
+                      : formatCurrencyCents(referenceCurrency, totalCents)}
+                  </span>
                 </div>
               )}
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <span className="text-sm text-muted-foreground">Saldo pendiente</span>
+                <div className="flex flex-col items-end">
+                  <span className="font-semibold">
+                    {exchangeRateEnabled
+                      ? currentRate != null
+                        ? formatLocalCurrency(eurCentsToLocal(remainingCents, currentRate), currencyCode)
+                        : "—"
+                      : formatCurrencyCents(referenceCurrency, remainingCents)}
+                  </span>
+                  {exchangeRateEnabled && (
+                    <span className="text-xs text-muted-foreground">
+                      {formatCurrencyCents(referenceCurrency, remainingCents)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <PaymentSplitBuilder
+                rows={paymentRows}
+                onChange={setPaymentRows}
+                totalCents={remainingCents}
+                rate={currentRate}
+                currencyCode={currencyCode}
+                exchangeRateEnabled={exchangeRateEnabled}
+                referenceCurrency={referenceCurrency}
+                idPrefix={`pay-${saleId}`}
+                mode="upTo"
+              />
               {payError && <p className="text-sm text-destructive">{payError}</p>}
             </div>
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-              <DialogClose
-                render={<Button disabled={isPending} />}
-                onClick={handleRegisterPayment}
-              >
-                Registrar pago
-              </DialogClose>
+              <Button disabled={isPending || !withinRemaining} onClick={handleRegisterPayment}>
+                Registrar abono
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -54,6 +54,11 @@ export function CustomerRecordForm({ customer, action }: Props) {
         <Input id="address" name="address" defaultValue={customer?.address ?? ""} />
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="rif">Cédula/RIF (opcional)</Label>
+        <Input id="rif" name="rif" defaultValue={customer?.rif ?? ""} placeholder="Ej. V-12345678 o J-12345678-9" />
+      </div>
+
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="flex gap-2">
