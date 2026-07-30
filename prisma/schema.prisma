@@ -246,10 +246,27 @@ model User {
   sales        Sale[]     @relation("SaleSeller")
   quotes       Quote[]    @relation("QuoteSeller")
   expenses     Expense[]
+  passwordResetTokens PasswordResetToken[]
 
   @@unique([companyId, firstName, lastName])
   @@index([companyId])
   @@index([branchId])
+}
+
+// Single-use, short-lived tokens for the "forgot password" flow. Only the
+// sha256 hash of the raw token is stored — like a password itself, the raw
+// value only ever exists in the emailed link and the requester's browser, so
+// a database leak alone can't be used to reset anyone's password.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Product {

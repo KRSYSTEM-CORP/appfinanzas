@@ -248,6 +248,20 @@ export const ChangePasswordSchema = z
     path: ["confirmPassword"],
   });
 
+export const RequestPasswordResetSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Correo inválido"),
+});
+
+export const ResetPasswordSchema = z
+  .object({
+    password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    confirmPassword: z.string().min(1, "Confirma la nueva contraseña"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Las contraseñas no coinciden",
+    path: ["confirmPassword"],
+  });
+
 export const EmployeeLoginSchema = z.object({
   companyCode: z.string().trim().min(1, "El código de empresa es obligatorio"),
   firstName: nameField("El nombre es obligatorio"),
@@ -393,6 +407,11 @@ export const PaymentReportSchema = z
   });
 
 export type PaymentReportInput = z.infer<typeof PaymentReportSchema>;
+
+export const AnnouncementSchema = z.object({
+  subject: z.string().trim().min(1, "El asunto es obligatorio"),
+  message: z.string().trim().min(1, "El mensaje es obligatorio"),
+});
 
 export const RejectPaymentReportSchema = z.object({
   reviewNote: z

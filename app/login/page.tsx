@@ -1,10 +1,12 @@
 import Image from "next/image";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { WelcomeModal } from "@/components/auth/WelcomeModal";
 import { COPYRIGHT_LINE } from "@/lib/legal";
 
 export default function LoginPage() {
   return (
     <div className="flex flex-col gap-6 p-6 py-16 bg-gradient-to-b from-secondary/50 via-background to-background min-h-full">
+      <WelcomeModal />
       <div className="text-center flex flex-col items-center gap-3">
         <div className="rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),black_20%)] p-2 shadow-lg shadow-primary/20">
           <Image src="/icons/icon-512.png" alt="App Finanzas" width={64} height={64} className="rounded-xl" />

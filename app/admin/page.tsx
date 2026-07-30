@@ -3,10 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/reports/StatCard";
 import { AdminUserTable } from "@/components/admin/AdminUserTable";
 import { PlatformSettingsForm, PendingReportsTable } from "@/components/admin/PaymentReportsPanel";
+import { AnnouncementForm } from "@/components/admin/AnnouncementForm";
 import {
   listAllCompanies,
   listPendingPaymentReports,
   getPlatformSettings,
+  listAnnouncementRecipients,
 } from "@/lib/actions/admin";
 import { getSession } from "@/lib/session";
 
@@ -17,10 +19,11 @@ export default async function AdminPage() {
   if (!session) redirect("/login");
   if (!session.isSuperAdmin) redirect("/pos");
 
-  const [companies, pendingReports, platformSettings] = await Promise.all([
+  const [companies, pendingReports, platformSettings, announcementRecipients] = await Promise.all([
     listAllCompanies(),
     listPendingPaymentReports(),
     getPlatformSettings(),
+    listAnnouncementRecipients(),
   ]);
   // Each company's own status is its owner account's status (users[0] —
   // see listAllCompanies()), same semantics as before this was grouped.
@@ -71,6 +74,15 @@ export default async function AdminPage() {
         </CardHeader>
         <CardContent>
           <AdminUserTable companies={companies} currentUserId={session.userId} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Enviar anuncio a las empresas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AnnouncementForm recipientCount={announcementRecipients.length} />
         </CardContent>
       </Card>
     </div>

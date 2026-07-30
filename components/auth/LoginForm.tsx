@@ -210,7 +210,17 @@ export function LoginForm() {
         )}
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="password">Contraseña</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Contraseña</Label>
+            {mode === "owner" && (
+              <Link
+                href="/forgot-password"
+                className="text-xs text-muted-foreground underline underline-offset-4"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            )}
+          </div>
           <Input id="password" name="password" type="password" required />
         </div>
 

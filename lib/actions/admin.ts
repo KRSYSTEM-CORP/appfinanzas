@@ -6,7 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { withSuperAdmin } from "@/lib/tenant-db";
 import { PLATFORM_SETTINGS_ID } from "@/lib/billing";
+import { sendAnnouncementEmail } from "@/lib/email";
 import {
+  AnnouncementSchema,
   BillingCycleSchema,
   MaintenancePaymentSchema,
   RejectPaymentReportSchema,
@@ -296,6 +298,48 @@ export async function getPlatformSettings(): Promise<{
     paymentInstructions: settings?.paymentInstructions ?? null,
     billingExchangeRate: settings?.billingExchangeRate != null ? Number(settings.billingExchangeRate) : null,
   };
+}
+
+// One row per company owner (GERENTE, real email) — excludes employee
+// accounts, which get an auto-generated @kyra.local placeholder email at
+// creation (see createEmployee, lib/actions/employees.ts) that nobody reads.
+export async function listAnnouncementRecipients(): Promise<{ email: string; companyName: string }[]> {
+  await requireSuperAdmin();
+  const owners = await withSuperAdmin((tx) =>
+    tx.user.findMany({
+      where: { role: "GERENTE", status: "ACTIVE" },
+      select: { email: true, company: { select: { name: true } } },
+    })
+  );
+  return owners.map((o) => ({ email: o.email, companyName: o.company.name }));
+}
+
+export type SendAnnouncementResult =
+  | { success: true; sent: number; total: number }
+  | { success: false; error: string };
+
+// Sends the same announcement to every active company's owner — used for
+// product news/updates, not scoped to any one tenant. Individual send
+// failures don't fail the whole batch (Promise.allSettled): the admin sees
+// how many of the total actually went out.
+export async function sendAnnouncement(input: unknown): Promise<SendAnnouncementResult> {
+  await requireSuperAdmin();
+  const parsed = AnnouncementSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  }
+
+  const recipients = await listAnnouncementRecipients();
+  if (recipients.length === 0) {
+    return { success: false, error: "No hay empresas activas para notificar" };
+  }
+
+  const results = await Promise.allSettled(
+    recipients.map((r) => sendAnnouncementEmail(r.email, parsed.data.subject, parsed.data.message))
+  );
+  const sent = results.filter((r) => r.status === "fulfilled" && r.value).length;
+
+  return { success: true, sent, total: recipients.length };
 }
 
 export async function updatePlatformSettings(input: unknown): Promise<ActionResult> {
