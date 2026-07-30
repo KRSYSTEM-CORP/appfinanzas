@@ -85,9 +85,10 @@ export function NavBar({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logoDataUrl} alt="" className="h-7 w-7 shrink-0 rounded-md object-cover" />
           ) : (
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary font-mono text-sm font-bold text-primary-foreground">
-              K
-            </span>
+            <div className="h-7 w-7 shrink-0 rounded-md bg-primary flex items-center justify-center p-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icons/icon-192.png" alt="" className="w-full h-full object-contain" />
+            </div>
           )}
           <div className="flex items-baseline gap-2 min-w-0">
             <span className="font-semibold shrink-0">App Finanzas</span>

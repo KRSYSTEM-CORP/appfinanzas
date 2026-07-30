@@ -52,7 +52,8 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* KYRA's default theme: light background, blue accent — the fallback for any
+/* KR System's default theme: light background, brand indigo accent (sampled
+   from the KR System logo's blue-to-pink gradient) — the fallback for any
    company that hasn't customized its own colors (see Settings' "Apariencia"
    section). A company's chosen background/accent overrides these via
    lib/theme-color.ts's deriveBrandVars(): applied as an inline style on
@@ -71,14 +72,14 @@
   --card-foreground: #0b0b0b;
   --popover: #fcfcfb;
   --popover-foreground: #0b0b0b;
-  --primary: #2a78d6;
+  --primary: #4f3ddb;
   --primary-foreground: #ffffff;
-  --secondary: #e8f0fb;
-  --secondary-foreground: #184f95;
+  --secondary: #eeecfb;
+  --secondary-foreground: #3b2e8c;
   --muted: #f0efec;
   --muted-foreground: #52514e;
-  --accent: #e8f0fb;
-  --accent-foreground: #184f95;
+  --accent: #eeecfb;
+  --accent-foreground: #3b2e8c;
   --destructive: #d03b3b;
   --success: #0ca30c;
   --success-foreground: #ffffff;
@@ -86,7 +87,7 @@
   --warning-foreground: #ffffff;
   --border: #e1e0d9;
   --input: #e1e0d9;
-  --ring: #2a78d6;
+  --ring: #4f3ddb;
   --chart-1: #2a78d6;
   --chart-2: #1baf7a;
   --chart-3: #eda100;
@@ -95,12 +96,12 @@
   --radius: 0.625rem;
   --sidebar: #fcfcfb;
   --sidebar-foreground: #0b0b0b;
-  --sidebar-primary: #2a78d6;
+  --sidebar-primary: #4f3ddb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e8f0fb;
-  --sidebar-accent-foreground: #184f95;
+  --sidebar-accent: #eeecfb;
+  --sidebar-accent-foreground: #3b2e8c;
   --sidebar-border: #e1e0d9;
-  --sidebar-ring: #2a78d6;
+  --sidebar-ring: #4f3ddb;
 }
 
 @layer base {
