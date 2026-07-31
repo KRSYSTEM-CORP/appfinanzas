@@ -206,7 +206,7 @@ export function PrintableSaleDocument({
           {referenceNote(currencyCode, referenceCurrency)}: {formatCurrencyCents(referenceCurrency, sale.totalCents)}
         </p>
       )}
-      <p className="mt-3 text-center text-[10px]">App Finanzas — Ventas e Inventario</p>
+      <p className="mt-3 text-center text-[10px]">KR POS — Ventas e Inventario</p>
     </div>
   );
 }

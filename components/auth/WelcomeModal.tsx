@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 // Bump the suffix (v1 -> v2) if the content changes enough that returning
 // users should see it again — otherwise this only ever shows once per
 // browser, the first time someone lands on the login screen.
-const DISMISS_KEY = "app-finanzas-welcome-dismissed-v1";
+const DISMISS_KEY = "kr-pos-welcome-dismissed-v1";
 
 const STEPS = [
   "Crea tu cuenta o inicia sesión con el correo de tu empresa.",
@@ -42,7 +42,7 @@ export function WelcomeModal() {
           <XIcon className="size-5" />
         </button>
 
-        <h2 className="text-lg font-semibold mb-2">¿Qué es App Finanzas?</h2>
+        <h2 className="text-lg font-semibold mb-2">¿Qué es KR POS?</h2>
         <p className="text-sm text-muted-foreground mb-4">
           Punto de venta, inventario, finanzas y facturación en un solo sistema — pensado para
           pymes que venden en múltiples monedas y necesitan control real de su negocio.

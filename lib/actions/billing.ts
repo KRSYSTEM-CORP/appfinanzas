@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { withTenant } from "@/lib/tenant-db";
+import { withTenant, withSuperAdmin } from "@/lib/tenant-db";
 import { isCompanyBlocked, PLATFORM_SETTINGS_ID } from "@/lib/billing";
 import { createBinancePayOrder } from "@/lib/binance-pay";
 import { PaymentReportSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
-import type { BinancePayOrderStatus } from "@prisma/client";
+import type { BinancePayOrderStatus, PagoMovilOrderStatus } from "@prisma/client";
 
 // This whole file deliberately uses getSession() instead of requireSession():
 // /billing is exactly the page a billing-blocked company needs to reach to
@@ -185,4 +185,100 @@ export async function getBinancePayOrderStatus(orderId: string): Promise<Binance
     tx.binancePayOrder.findFirst({ where: { id: orderId, companyId }, select: { status: true } })
   );
   return order?.status ?? null;
+}
+
+export type PagoMovilOrderResult =
+  | { success: true; orderId: string; amountBs: string; expiresAt: Date }
+  | { success: false; error: string };
+
+const PAGO_MOVIL_ORDER_TTL_MINUTES = 60;
+
+// Reserves a specific Bs amount (the real fee plus a few random bolívar
+// cents) for the company to transfer via Pago Móvil — there's no merchant
+// API to create a "checkout" the way Binance Pay has, so this is the closest
+// equivalent: a unique-enough amount that app/api/webhooks/banesco-email/
+// route.ts can match a forwarded bank notification email back to, without
+// needing the payer to type in any reference code. Expires after
+// PAGO_MOVIL_ORDER_TTL_MINUTES so a stale unpaid reservation can't keep
+// colliding with new ones asking for the same bumped amount.
+export async function createPagoMovilOrder(plan: BillingPlan = "MONTHLY"): Promise<PagoMovilOrderResult> {
+  const { companyId } = await requireCompanyUser();
+
+  const [company, settings] = await Promise.all([
+    withTenant(companyId, (tx) =>
+      tx.company.findUnique({ where: { id: companyId }, select: { monthlyFeeUsdCents: true } })
+    ),
+    prisma.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } }),
+  ]);
+  if (!company?.monthlyFeeUsdCents) {
+    return { success: false, error: "Todavía no tienes un ciclo de cobro configurado." };
+  }
+  if (settings?.billingExchangeRate == null) {
+    return { success: false, error: "El pago automático por Pago Móvil todavía no está habilitado." };
+  }
+
+  const amountUsdCents = plan === "ANNUAL" ? company.monthlyFeeUsdCents * 12 : company.monthlyFeeUsdCents;
+  const rate = Number(settings.billingExchangeRate);
+  const baseAmountBsCents = Math.round((amountUsdCents / 100) * rate * 100);
+
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + PAGO_MOVIL_ORDER_TTL_MINUTES);
+
+  // The random offset (+0.01 to +0.99 Bs) is what disambiguates this order
+  // from any other company's pending request for the same base fee — the
+  // collision check has to look across every company, not just this one,
+  // hence withSuperAdmin instead of withTenant here.
+  let expectedAmountBsCents: number | null = null;
+  for (let attempt = 0; attempt < 10 && expectedAmountBsCents == null; attempt++) {
+    const candidate = baseAmountBsCents + 1 + Math.floor(Math.random() * 98);
+    const collision = await withSuperAdmin((tx) =>
+      tx.pagoMovilOrder.findFirst({
+        where: { expectedAmountBsCents: candidate, status: "PENDING", expiresAt: { gt: new Date() } },
+        select: { id: true },
+      })
+    );
+    if (!collision) expectedAmountBsCents = candidate;
+  }
+  if (expectedAmountBsCents == null) {
+    return {
+      success: false,
+      error: "Hay demasiadas solicitudes de pago activas ahora mismo — intenta de nuevo en unos minutos.",
+    };
+  }
+
+  const order = await withTenant(companyId, (tx) =>
+    tx.pagoMovilOrder.create({
+      data: {
+        companyId,
+        amountUsdCents,
+        exchangeRate: settings.billingExchangeRate!,
+        expectedAmountBsCents: expectedAmountBsCents!,
+        expiresAt,
+      },
+    })
+  );
+
+  return {
+    success: true,
+    orderId: order.id,
+    amountBs: (expectedAmountBsCents / 100).toFixed(2),
+    expiresAt,
+  };
+}
+
+// Polled by the client while a Pago Móvil order is open — once the webhook
+// at app/api/webhooks/banesco-email/route.ts matches a forwarded
+// notification email to this order, the UI can refresh to show the new due
+// date without the customer or an admin doing anything else. Nothing ever
+// writes an EXPIRED status to the row itself (there's no cron sweeping
+// these) — a still-PENDING order past its expiresAt is reported as EXPIRED
+// here instead, purely derived, so the polling UI knows to stop waiting.
+export async function getPagoMovilOrderStatus(orderId: string): Promise<PagoMovilOrderStatus | null> {
+  const { companyId } = await requireCompanyUser();
+  const order = await withTenant(companyId, (tx) =>
+    tx.pagoMovilOrder.findFirst({ where: { id: orderId, companyId }, select: { status: true, expiresAt: true } })
+  );
+  if (!order) return null;
+  if (order.status === "PENDING" && order.expiresAt < new Date()) return "EXPIRED";
+  return order.status;
 }

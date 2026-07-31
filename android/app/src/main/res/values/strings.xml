@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">App Finanzas</string>
-    <string name="title_activity_main">App Finanzas</string>
+    <string name="app_name">KR POS</string>
+    <string name="title_activity_main">KR POS</string>
     <string name="package_name">com.kyrasystem.app</string>
     <string name="custom_url_scheme">com.kyrasystem.app</string>
 </resources>

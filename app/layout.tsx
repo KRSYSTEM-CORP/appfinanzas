@@ -21,12 +21,12 @@ const geistMono = Geist_Mono({
 export async function generateMetadata(): Promise<Metadata> {
   const session = await getSession();
   return {
-    title: session ? `${session.companyName} · App Finanzas` : "App Finanzas - By KR System",
-    description: "Ventas y control de inventario — App Finanzas, by KR System",
+    title: session ? `${session.companyName} · KR POS` : "KR POS - By KR System",
+    description: "Ventas y control de inventario — KR POS, by KR System",
     appleWebApp: {
       capable: true,
       statusBarStyle: "default",
-      title: "App Finanzas",
+      title: "KR POS",
     },
   };
 }

@@ -9,11 +9,11 @@ export default function LoginPage() {
       <WelcomeModal />
       <div className="text-center flex flex-col items-center gap-3">
         <div className="rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),black_20%)] p-2 shadow-lg shadow-primary/20">
-          <Image src="/icons/icon-512.png" alt="App Finanzas" width={64} height={64} className="rounded-xl" />
+          <Image src="/icons/icon-512.png" alt="KR POS" width={64} height={64} className="rounded-xl" />
         </div>
         <div>
           <h1 className="text-2xl font-semibold">Inicia sesión</h1>
-          <p className="text-sm text-muted-foreground mt-1">App Finanzas — Ventas e Inventario</p>
+          <p className="text-sm text-muted-foreground mt-1">KR POS — Ventas e Inventario</p>
         </div>
       </div>
       <LoginForm />

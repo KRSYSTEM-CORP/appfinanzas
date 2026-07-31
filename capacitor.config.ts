@@ -8,10 +8,10 @@ import type { CapacitorConfig } from "@capacitor/cli";
 // identically inside the native app with zero duplicated logic.
 const config: CapacitorConfig = {
   appId: "com.kyrasystem.app",
-  appName: "App Finanzas",
+  appName: "KR POS",
   webDir: "public",
   server: {
-    url: "https://ventas-inventario-dun.vercel.app",
+    url: "https://krpos.krsystem-corp.com",
     cleartext: false,
   },
 };

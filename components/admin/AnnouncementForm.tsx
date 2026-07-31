@@ -41,7 +41,7 @@ export function AnnouncementForm({ recipientCount }: { recipientCount: number })
           id="announcement-subject"
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
-          placeholder="Ej. Nueva función disponible en App Finanzas"
+          placeholder="Ej. Nueva función disponible en KR POS"
         />
       </div>
 

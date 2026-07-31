@@ -46,6 +46,12 @@ enum BinancePayOrderStatus {
   FAILED
 }
 
+enum PagoMovilOrderStatus {
+  PENDING
+  PAID
+  EXPIRED
+}
+
 // The currency that Product.priceCents/Sale.totalCents/etc. are canonically
 // denominated in. Same stored cents value either way — this app has always
 // treated USD and EUR as 1:1 equivalent (no real forex tracked between them),
@@ -184,6 +190,7 @@ model Company {
   payments              Payment[]
   paymentReports        PaymentReport[]
   binancePayOrders      BinancePayOrder[]
+  pagoMovilOrders       PagoMovilOrder[]
   expenses              Expense[]
   cashClosings          CashClosing[]
   branches              Branch[]
@@ -703,6 +710,40 @@ model BinancePayOrder {
   paidAt          DateTime?
 
   @@index([companyId, status])
+}
+
+// An expected Pago Móvil (Banesco) payment for a company's maintenance-fee
+// cycle — same idea as BinancePayOrder, but there's no merchant API to
+// create/confirm a Pago Móvil transfer, so the "order" is really a
+// reservation of a specific Bs amount the company is asked to transfer.
+// expectedAmountBsCents gets a few random bolívar-cents added on top of the
+// real fee (see createPagoMovilOrder in lib/actions/billing.ts) so a
+// forwarded bank notification email can be matched back to exactly one
+// pending order by amount alone — Pago Móvil references aren't something we
+// can pre-assign the way merchantTradeNo works for Binance. See
+// app/api/webhooks/banesco-email/route.ts for the other half: parsing the
+// forwarded notification email and marking the matching order PAID.
+model PagoMovilOrder {
+  id                    String               @id @default(cuid())
+  companyId             String
+  company               Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  amountUsdCents        Int
+  // Platform Bs/USD rate used to compute expectedAmountBsCents — snapshotted
+  // here so the Payment record created on confirmation uses the exact rate
+  // that was quoted, even if the platform rate changes before the transfer
+  // actually arrives.
+  exchangeRate          Decimal              @db.Decimal(12, 4)
+  expectedAmountBsCents Int
+  status                PagoMovilOrderStatus @default(PENDING)
+  // Pending orders older than this stop being eligible to match an incoming
+  // email — without an expiry, a stale unpaid reservation could collide
+  // with a brand-new one asking for the same bumped amount.
+  expiresAt             DateTime
+  createdAt             DateTime             @default(now())
+  paidAt                DateTime?
+
+  @@index([companyId, status])
+  @@index([expectedAmountBsCents, status])
 }
 
 // A manually logged business expense (Finanzas), used together with revenue

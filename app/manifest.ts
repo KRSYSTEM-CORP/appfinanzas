@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "App Finanzas - By KR System",
-    short_name: "App Finanzas",
+    name: "KR POS - By KR System",
+    short_name: "KR POS",
     description: "Ventas y control de inventario",
     start_url: "/",
     display: "standalone",

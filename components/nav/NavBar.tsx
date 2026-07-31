@@ -102,7 +102,7 @@ export function NavBar({
             </div>
           )}
           <div className="flex items-baseline gap-2 min-w-0">
-            <span className="font-semibold shrink-0">App Finanzas</span>
+            <span className="font-semibold shrink-0">KR POS</span>
             <span className="text-sm text-muted-foreground truncate max-w-[120px] md:max-w-[180px]">
               {companyName}
             </span>
