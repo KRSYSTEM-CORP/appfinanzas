@@ -117,7 +117,7 @@ export default async function BillingPage() {
                 Paga con Binance Pay y tu suscripción se renueva sola — no necesitas esperar a que
                 nadie apruebe nada.
               </p>
-              <BinancePayCheckout />
+              <BinancePayCheckout monthlyFeeUsdCents={info.monthlyFeeUsdCents} />
             </CardContent>
           </Card>
 

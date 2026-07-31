@@ -4,15 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
-import { createBinancePayCheckout, getBinancePayOrderStatus } from "@/lib/actions/billing";
+import { createBinancePayCheckout, getBinancePayOrderStatus, type BillingPlan } from "@/lib/actions/billing";
+import { formatUSD } from "@/lib/format";
 
 // Lets a company pay its maintenance fee with Binance Pay and get unblocked
 // automatically — no proof-of-payment screenshot, no admin review. Once the
 // order is created, this polls its status every few seconds; the webhook at
 // app/api/webhooks/binance-pay/route.ts is what actually flips it to PAID
 // as soon as Binance confirms the transfer.
-export function BinancePayCheckout() {
+export function BinancePayCheckout({ monthlyFeeUsdCents }: { monthlyFeeUsdCents: number | null }) {
   const router = useRouter();
+  const [plan, setPlan] = useState<BillingPlan>("MONTHLY");
   const [state, setState] = useState<"idle" | "loading" | "open" | "paid" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export function BinancePayCheckout() {
   async function start() {
     setState("loading");
     setError(null);
-    const result = await createBinancePayCheckout();
+    const result = await createBinancePayCheckout(plan);
     if (!result.success) {
       setError(result.error);
       setState("error");
@@ -69,8 +71,30 @@ export function BinancePayCheckout() {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <Button type="button" onClick={start} disabled={state === "loading"}>
+    <div className="flex flex-col gap-3">
+      {monthlyFeeUsdCents != null && (
+        <div className="flex gap-1 rounded-lg border p-1 w-fit">
+          <button
+            type="button"
+            onClick={() => setPlan("MONTHLY")}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              plan === "MONTHLY" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+            }`}
+          >
+            Mensual — {formatUSD(monthlyFeeUsdCents)}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPlan("ANNUAL")}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              plan === "ANNUAL" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+            }`}
+          >
+            Anual — {formatUSD(monthlyFeeUsdCents * 12)} (2 meses de regalo)
+          </button>
+        </div>
+      )}
+      <Button type="button" onClick={start} disabled={state === "loading"} className="w-fit">
         {state === "loading" ? "Generando..." : "Pagar con Binance Pay"}
       </Button>
       {error && <p className="text-sm text-destructive">{error}</p>}

@@ -5,7 +5,13 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { withSuperAdmin } from "@/lib/tenant-db";
-import { PLATFORM_SETTINGS_ID } from "@/lib/billing";
+import {
+  PLATFORM_SETTINGS_ID,
+  TRIAL_DAYS,
+  FALLBACK_MONTHLY_FEE_USD_CENTS,
+  monthsCoveredWithBonus,
+  extendDueDateByMonths,
+} from "@/lib/billing";
 import { sendAnnouncementEmail } from "@/lib/email";
 import {
   AnnouncementSchema,
@@ -41,11 +47,13 @@ export async function listAllCompanies() {
   );
 }
 
-// Approving a pending company also sets up its first maintenance-billing
-// cycle in the same step — the activation fee itself is collected by the
-// super admin outside the app, so no Payment record is created here. The
-// Bs/USD rate isn't set here anymore — it's platform-wide (see
-// PlatformSettings), not chosen per company.
+// Approving a pending company also sets up its first billing cycle in the
+// same step: a monthlyFee/nextPaymentDueDate left blank in the form falls
+// back to the platform's default fee and a free TRIAL_DAYS-day trial
+// starting today, so the common case (a brand-new signup on the standard
+// plan) needs no manual input at all — the fields only exist for an admin
+// to override them for a specific company (e.g. a custom price or a longer
+// trial). No Payment record is created here since a trial isn't a payment.
 export async function approveUser(userId: string, billing: unknown): Promise<ActionResult> {
   await requireSuperAdmin();
   const parsed = BillingCycleSchema.safeParse(billing);
@@ -57,12 +65,17 @@ export async function approveUser(userId: string, billing: unknown): Promise<Act
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user || user.status !== "PENDING") return false;
 
+    const settings = await tx.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } });
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
+
     await tx.user.update({ where: { id: userId }, data: { status: "ACTIVE" } });
     await tx.company.update({
       where: { id: user.companyId },
       data: {
-        monthlyFeeUsdCents: parsed.data.monthlyFee,
-        nextPaymentDueDate: parsed.data.nextPaymentDueDate,
+        monthlyFeeUsdCents:
+          parsed.data.monthlyFee ?? settings?.defaultMonthlyFeeUsdCents ?? FALLBACK_MONTHLY_FEE_USD_CENTS,
+        nextPaymentDueDate: parsed.data.nextPaymentDueDate ?? trialEnd,
       },
     });
     return true;
@@ -202,8 +215,12 @@ export async function listPendingPaymentReports() {
 // company user entered (their claim of what they actually paid) rather than
 // assuming it matches the configured monthly fee exactly — it creates the
 // same kind of Payment record recordMaintenancePayment does, using the
-// platform-wide rate, and pushes the due date out 30 days, which unblocks
-// the company.
+// platform-wide rate, and pushes the due date out by however many months
+// that amount covers (see monthsCoveredWithBonus — a full year prepaid
+// earns 2 bonus months), which unblocks the company. Falls back to a flat
+// single month if the company somehow has no monthlyFeeUsdCents configured
+// (shouldn't happen for anything approved after the trial-defaults change,
+// but a pre-existing company could still be in that state).
 export async function approvePaymentReport(reportId: string): Promise<ActionResult> {
   const session = await requireSuperAdmin();
 
@@ -230,8 +247,10 @@ export async function approvePaymentReport(reportId: string): Promise<ActionResu
     }
 
     const totalUsdCents = report.lines.reduce((sum, line) => sum + line.amountUsdCents, 0);
-    const periodEnd = new Date(company.nextPaymentDueDate ?? new Date());
-    periodEnd.setDate(periodEnd.getDate() + 30);
+    const months = company.monthlyFeeUsdCents
+      ? monthsCoveredWithBonus(totalUsdCents, company.monthlyFeeUsdCents)
+      : 1;
+    const periodEnd = extendDueDateByMonths(company.nextPaymentDueDate, months || 1);
 
     await tx.payment.create({
       data: {
@@ -291,12 +310,14 @@ export async function rejectPaymentReport(reportId: string, input: unknown): Pro
 export async function getPlatformSettings(): Promise<{
   paymentInstructions: string | null;
   billingExchangeRate: number | null;
+  defaultMonthlyFeeUsdCents: number | null;
 }> {
   await requireSuperAdmin();
   const settings = await prisma.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } });
   return {
     paymentInstructions: settings?.paymentInstructions ?? null,
     billingExchangeRate: settings?.billingExchangeRate != null ? Number(settings.billingExchangeRate) : null,
+    defaultMonthlyFeeUsdCents: settings?.defaultMonthlyFeeUsdCents ?? null,
   };
 }
 
@@ -355,10 +376,12 @@ export async function updatePlatformSettings(input: unknown): Promise<ActionResu
       id: PLATFORM_SETTINGS_ID,
       paymentInstructions: parsed.data.paymentInstructions,
       billingExchangeRate: parsed.data.billingExchangeRate,
+      defaultMonthlyFeeUsdCents: parsed.data.defaultMonthlyFee,
     },
     update: {
       paymentInstructions: parsed.data.paymentInstructions,
       billingExchangeRate: parsed.data.billingExchangeRate,
+      defaultMonthlyFeeUsdCents: parsed.data.defaultMonthlyFee,
     },
   });
 

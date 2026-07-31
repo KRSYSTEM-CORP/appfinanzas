@@ -55,6 +55,7 @@ export default async function AdminPage() {
           <PlatformSettingsForm
             initialInstructions={platformSettings.paymentInstructions}
             initialBillingExchangeRate={platformSettings.billingExchangeRate}
+            initialDefaultMonthlyFeeUsdCents={platformSettings.defaultMonthlyFeeUsdCents}
           />
         </CardContent>
       </Card>

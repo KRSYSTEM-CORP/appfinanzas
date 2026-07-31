@@ -51,14 +51,19 @@ type PendingReport = {
 export function PlatformSettingsForm({
   initialInstructions,
   initialBillingExchangeRate,
+  initialDefaultMonthlyFeeUsdCents,
 }: {
   initialInstructions: string | null;
   initialBillingExchangeRate: number | null;
+  initialDefaultMonthlyFeeUsdCents: number | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [instructions, setInstructions] = useState(initialInstructions ?? "");
   const [rate, setRate] = useState(initialBillingExchangeRate != null ? String(initialBillingExchangeRate) : "");
+  const [defaultFee, setDefaultFee] = useState(
+    initialDefaultMonthlyFeeUsdCents != null ? String(initialDefaultMonthlyFeeUsdCents / 100) : ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -67,7 +72,11 @@ export function PlatformSettingsForm({
     setError(null);
     setSaved(false);
     startTransition(async () => {
-      const result = await updatePlatformSettings({ paymentInstructions: instructions, billingExchangeRate: rate });
+      const result = await updatePlatformSettings({
+        paymentInstructions: instructions,
+        billingExchangeRate: rate,
+        defaultMonthlyFee: defaultFee,
+      });
       if (!result.success) {
         setError(result.error);
         return;
@@ -79,6 +88,25 @@ export function PlatformSettingsForm({
 
   return (
     <form onSubmit={handleSave} className="flex flex-col gap-3 max-w-lg">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="platform-default-fee">Precio mensual estándar (USD)</Label>
+        <Input
+          id="platform-default-fee"
+          type="number"
+          step="0.01"
+          min="0"
+          value={defaultFee}
+          onChange={(e) => {
+            setDefaultFee(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="Ej. 25.00"
+        />
+        <p className="text-xs text-muted-foreground">
+          Se aplica automáticamente a toda empresa nueva al aprobarla, salvo que le pongas un
+          precio distinto en ese momento.
+        </p>
+      </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="platform-rate">Tasa de cambio de la plataforma (Bs/USD)</Label>
         <Input

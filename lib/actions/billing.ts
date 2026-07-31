@@ -120,12 +120,17 @@ export type BinancePayCheckoutResult =
   | { success: true; orderId: string; checkoutUrl: string; qrcodeLink: string }
   | { success: false; error: string };
 
+export type BillingPlan = "MONTHLY" | "ANNUAL";
+
 // Creates a Binance Pay checkout for the company's current maintenance-fee
-// cycle. Unlike submitPaymentReport, this needs no admin review — once the
-// customer actually pays, Binance calls
-// app/api/webhooks/binance-pay/route.ts, which marks the order PAID and
-// advances nextPaymentDueDate on its own.
-export async function createBinancePayCheckout(): Promise<BinancePayCheckoutResult> {
+// cycle — ANNUAL charges 12× the monthly fee up front; the extra 2 free
+// months from prepaying a full year aren't charged for, they're just extra
+// time credited once the webhook sees this amount (see
+// monthsCoveredWithBonus in lib/billing.ts). Unlike submitPaymentReport,
+// this needs no admin review — once the customer actually pays, Binance
+// calls app/api/webhooks/binance-pay/route.ts, which marks the order PAID
+// and advances nextPaymentDueDate on its own.
+export async function createBinancePayCheckout(plan: BillingPlan = "MONTHLY"): Promise<BinancePayCheckoutResult> {
   const { companyId } = await requireCompanyUser();
 
   const company = await withTenant(companyId, (tx) =>
@@ -135,14 +140,18 @@ export async function createBinancePayCheckout(): Promise<BinancePayCheckoutResu
     return { success: false, error: "Todavía no tienes un ciclo de cobro configurado." };
   }
 
+  const amountUsdCents = plan === "ANNUAL" ? company.monthlyFeeUsdCents * 12 : company.monthlyFeeUsdCents;
   const merchantTradeNo = `KYRA-${companyId}-${Date.now()}`;
 
   let order;
   try {
     order = await createBinancePayOrder({
       merchantTradeNo,
-      amountUsdCents: company.monthlyFeeUsdCents,
-      description: `Suscripción mensual KR System — ${company.name}`,
+      amountUsdCents,
+      description:
+        plan === "ANNUAL"
+          ? `Suscripción anual (12 meses + 2 de regalo) KR System — ${company.name}`
+          : `Suscripción mensual KR System — ${company.name}`,
     });
   } catch (err) {
     if (err instanceof Error && err.message === "BINANCE_PAY_NOT_CONFIGURED") {
@@ -157,7 +166,7 @@ export async function createBinancePayCheckout(): Promise<BinancePayCheckoutResu
         companyId,
         merchantTradeNo,
         prepayId: order.prepayId,
-        amountUsdCents: company.monthlyFeeUsdCents!,
+        amountUsdCents,
         checkoutUrl: order.checkoutUrl,
         qrcodeLink: order.qrcodeLink,
       },

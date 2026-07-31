@@ -346,9 +346,15 @@ export const PrintPaperSizeSchema = z.object({
   printPaperSize: z.enum(["THERMAL_58", "THERMAL_80", "LETTER", "A4"]),
 });
 
+// Both fields are optional: leaving them blank lets approveUser apply the
+// automatic defaults (platform default fee, 14-day trial) — an admin only
+// needs to fill these in to override that default for a specific company.
 export const BillingCycleSchema = z.object({
-  monthlyFee: z.coerce.number().positive("El monto debe ser mayor a 0").transform(toCents),
-  nextPaymentDueDate: z.coerce.date(),
+  monthlyFee: z.preprocess(
+    blankToUndefined,
+    z.coerce.number().positive("El monto debe ser mayor a 0").transform(toCents).optional()
+  ),
+  nextPaymentDueDate: z.preprocess(blankToUndefined, z.coerce.date().optional()),
 });
 
 export type BillingCycleInput = z.infer<typeof BillingCycleSchema>;
@@ -428,6 +434,10 @@ export const PlatformSettingsSchema = z.object({
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
   billingExchangeRate: z.coerce.number().positive("La tasa debe ser mayor a 0").optional(),
+  defaultMonthlyFee: z.preprocess(
+    blankToUndefined,
+    z.coerce.number().positive("El monto debe ser mayor a 0").transform(toCents).optional()
+  ),
 });
 
 export const FiscalDataSchema = z.object({

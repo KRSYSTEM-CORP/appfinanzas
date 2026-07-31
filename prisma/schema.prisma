@@ -216,36 +216,36 @@ model Branch {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  passwordHash String
-  companyId    String
-  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  passwordHash        String
+  companyId           String
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Which branch this employee is fixed to — null for GERENTE/the owner
   // account (they can access/switch between every branch, see
   // switchBranch() in lib/actions/branches.ts), set for every VENDEDOR at
   // creation time (see createEmployee, lib/actions/employees.ts).
-  branchId     String?
-  branch       Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  branchId            String?
+  branch              Branch?              @relation(fields: [branchId], references: [id], onDelete: SetNull)
   // Existing accounts default to ACTIVE so this migration never locks out a
   // user who could already log in; only new signups start at PENDING.
-  status       UserStatus @default(ACTIVE)
+  status              UserStatus           @default(ACTIVE)
   // Platform-wide admin (KYRA System itself), not scoped to a company —
   // can see and manage every tenant's users from /admin.
-  isSuperAdmin Boolean    @default(false)
+  isSuperAdmin        Boolean              @default(false)
   // Null for the original owner account created via signup() (which still
   // logs in with email). Set for employee profiles created from
   // /employees, who log in with companyCode + firstName + lastName instead.
-  firstName    String?
-  lastName     String?
+  firstName           String?
+  lastName            String?
   // Existing rows default to GERENTE so every pre-existing owner account
   // keeps its current full access after this migration.
-  role         Role       @default(GERENTE)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  sales        Sale[]     @relation("SaleSeller")
-  quotes       Quote[]    @relation("QuoteSeller")
-  expenses     Expense[]
+  role                Role                 @default(GERENTE)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  sales               Sale[]               @relation("SaleSeller")
+  quotes              Quote[]              @relation("QuoteSeller")
+  expenses            Expense[]
   passwordResetTokens PasswordResetToken[]
 
   @@unique([companyId, firstName, lastName])
@@ -750,11 +750,17 @@ model CashClosing {
 // (e.g. Pago Móvil/transfer details). Not scoped by company, so it's
 // deliberately outside Row-Level Security, like User/Company.
 model PlatformSettings {
-  id                  String   @id
-  paymentInstructions String?  @db.Text
+  id                        String   @id
+  paymentInstructions       String?  @db.Text
   // Platform-wide Bs/USD rate, used only to preview the bolívar equivalent
   // for VES companies (who typically pay via Pago Móvil); every other
   // company just pays the USD amount directly via Zelle/Binance/PayPal.
-  billingExchangeRate Decimal? @db.Decimal(12, 4)
-  updatedAt           DateTime @updatedAt
+  billingExchangeRate       Decimal? @db.Decimal(12, 4)
+  // Applied to Company.monthlyFeeUsdCents automatically when a super admin
+  // approves a new signup and leaves the fee field blank (see approveUser
+  // in lib/actions/admin.ts) — a single platform-wide price for every new
+  // company, editable here without touching already-onboarded companies'
+  // own (possibly custom) monthlyFeeUsdCents.
+  defaultMonthlyFeeUsdCents Int?
+  updatedAt                 DateTime @updatedAt
 }

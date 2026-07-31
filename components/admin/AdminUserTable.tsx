@@ -26,7 +26,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/format";
-import { isCompanyBlocked } from "@/lib/billing";
+import { isCompanyBlocked, TRIAL_DAYS } from "@/lib/billing";
 import {
   approveUser,
   denyUser,
@@ -111,8 +111,12 @@ function AdminCompanyRow({
   const owner = company.users[0];
   const employees = company.users.slice(1);
 
+  // Both left blank by default — approveUser fills them in with the
+  // platform's default fee and a 14-day free trial when submitted empty;
+  // an admin only needs to type something here to override that for this
+  // one company.
   const [feeUsd, setFeeUsd] = useState("");
-  const [approveDueDate, setApproveDueDate] = useState(() => addDaysISO(new Date(), 30));
+  const [approveDueDate, setApproveDueDate] = useState("");
   const [approveError, setApproveError] = useState<string | null>(null);
 
   const [payAmount, setPayAmount] = useState(
@@ -245,13 +249,15 @@ function AdminCompanyRow({
                     <DialogHeader>
                       <DialogTitle>Aprobar a {company.name}</DialogTitle>
                       <DialogDescription>
-                        Define el ciclo de cobro de suscripción mensual. La activación se cobra por
-                        fuera de la app; esto solo configura la suscripción mensual recurrente.
+                        Al aprobar, la empresa queda activa de inmediato con {TRIAL_DAYS} días de
+                        prueba gratis. Deja los campos en blanco para usar el precio mensual
+                        estándar de la plataforma — solo complétalos si esta empresa necesita un
+                        trato distinto (precio o fecha de vencimiento personalizados).
                       </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col gap-3">
                       <div className="flex flex-col gap-1.5">
-                        <Label htmlFor={`fee-${owner.id}`}>Monto mensual (USD)</Label>
+                        <Label htmlFor={`fee-${owner.id}`}>Monto mensual (USD) — opcional</Label>
                         <Input
                           id={`fee-${owner.id}`}
                           type="number"
@@ -259,17 +265,20 @@ function AdminCompanyRow({
                           min="0"
                           value={feeUsd}
                           onChange={(e) => setFeeUsd(e.target.value)}
-                          placeholder="Ej. 25.00"
+                          placeholder="Precio estándar de la plataforma"
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <Label htmlFor={`due-${owner.id}`}>Primera fecha de vencimiento</Label>
+                        <Label htmlFor={`due-${owner.id}`}>Fecha de vencimiento — opcional</Label>
                         <Input
                           id={`due-${owner.id}`}
                           type="date"
                           value={approveDueDate}
                           onChange={(e) => setApproveDueDate(e.target.value)}
                         />
+                        <p className="text-xs text-muted-foreground">
+                          En blanco = {TRIAL_DAYS} días de prueba gratis a partir de hoy.
+                        </p>
                       </div>
                       {approveError && <p className="text-sm text-destructive">{approveError}</p>}
                     </div>

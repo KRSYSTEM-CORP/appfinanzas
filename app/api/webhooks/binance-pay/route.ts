@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyBinancePayWebhookSignature } from "@/lib/binance-pay";
 import { withSuperAdmin } from "@/lib/tenant-db";
-import { PLATFORM_SETTINGS_ID } from "@/lib/billing";
+import { PLATFORM_SETTINGS_ID, monthsCoveredWithBonus, extendDueDateByMonths } from "@/lib/billing";
 
 // Binance calls this after a checkout order (see
 // createBinancePayCheckout in lib/actions/billing.ts) is actually paid —
@@ -58,8 +58,15 @@ export async function POST(request: NextRequest) {
     const company = await tx.company.findUnique({ where: { id: order.companyId } });
     if (!settings?.billingExchangeRate || !company) return;
 
-    const periodEnd = new Date(company.nextPaymentDueDate ?? new Date());
-    periodEnd.setDate(periodEnd.getDate() + 30);
+    // order.amountUsdCents already reflects whatever plan (monthly or
+    // annual) the checkout was created for — see createBinancePayCheckout
+    // in lib/actions/billing.ts — so the months this order actually covers,
+    // annual-prepay bonus included, is derived from the amount itself
+    // rather than assumed to always be exactly one month.
+    const months = company.monthlyFeeUsdCents
+      ? monthsCoveredWithBonus(order.amountUsdCents, company.monthlyFeeUsdCents)
+      : 1;
+    const periodEnd = extendDueDateByMonths(company.nextPaymentDueDate, months || 1);
 
     await tx.payment.create({
       data: {
