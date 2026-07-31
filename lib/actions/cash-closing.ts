@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManager } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { dayBoundsUtc } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
@@ -27,7 +27,7 @@ export type CashClosingSummary = {
 // lib/actions/sales.ts), but the frozen CashClosing.totalCents is always the
 // source of truth for a closed day once one exists.
 export async function getDailyClosingSummary(dateStr: string): Promise<CashClosingSummary> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireSession();
   const { start, end } = dayBoundsUtc(dateStr);
   const closingDate = closingDateFromString(dateStr);
 
@@ -84,7 +84,7 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
 }
 
 export async function closeCashRegister(dateStr: string, note?: string): Promise<ActionResult> {
-  const session = await requireManager();
+  const session = await requireSession();
   const { companyId, userId } = session;
   if (!session.branchId) {
     return {
@@ -131,7 +131,7 @@ export async function closeCashRegister(dateStr: string, note?: string): Promise
 }
 
 export async function listCashClosings() {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireSession();
   return withTenant(companyId, (tx) =>
     tx.cashClosing.findMany({
       where: { companyId, ...(branchId ? { branchId } : {}) },

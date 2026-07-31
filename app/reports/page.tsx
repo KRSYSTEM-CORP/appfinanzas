@@ -25,7 +25,6 @@ export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
   const session = await requireSession();
-  const canManage = session.role === "GERENTE" || session.isSuperAdmin;
   const todayStr = todayDateString();
 
   const [
@@ -39,7 +38,7 @@ export default async function ReportsPage() {
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
-    canManage ? getDailyClosingSummary(todayStr) : Promise.resolve(null),
+    getDailyClosingSummary(todayStr),
   ]);
   const company = { name: session.companyName, logoDataUrl, ...fiscalData };
   const localCurrencyName = getCurrency(localCurrencyCode).name.split(" (")[0];
@@ -62,7 +61,7 @@ export default async function ReportsPage() {
         </p>
       </div>
 
-      {canManage && todaySummary && (
+      {todaySummary && (
         <Card className="max-w-2xl">
           <CardHeader>
             <CardTitle>Cierre de caja</CardTitle>
