@@ -9,7 +9,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PaymentReportForm } from "@/components/billing/PaymentReportForm";
-import { BinancePayCheckout } from "@/components/billing/BinancePayCheckout";
 import { PagoMovilCheckout } from "@/components/billing/PagoMovilCheckout";
 import { getBillingInfo, listMyPaymentReports } from "@/lib/actions/billing";
 import { formatDate, formatUSD, PAYMENT_METHOD_LABELS } from "@/lib/format";
@@ -108,7 +107,7 @@ export default async function BillingPage() {
       )}
 
       {!info.isExempt && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
           <Card>
             <CardHeader>
               <CardTitle>Pago Móvil automático</CardTitle>
@@ -119,19 +118,6 @@ export default async function BillingPage() {
                 necesitas esperar a que nadie apruebe nada.
               </p>
               <PagoMovilCheckout paymentInstructions={info.paymentInstructions} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Pago automático con Binance</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">
-                Paga con Binance Pay y tu suscripción se renueva sola — no necesitas esperar a que
-                nadie apruebe nada.
-              </p>
-              <BinancePayCheckout monthlyFeeUsdCents={info.monthlyFeeUsdCents} />
             </CardContent>
           </Card>
 
