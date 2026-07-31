@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { WelcomeModal } from "@/components/auth/WelcomeModal";
-import { COPYRIGHT_LINE } from "@/lib/legal";
+import { COPYRIGHT_LINE, WHATSAPP_URL } from "@/lib/legal";
 
 export default function LoginPage() {
   return (
@@ -17,6 +17,17 @@ export default function LoginPage() {
         </div>
       </div>
       <LoginForm />
+      <p className="text-center text-sm text-muted-foreground">
+        ¿Quieres este sistema para tu negocio o más información?{" "}
+        <a
+          href={WHATSAPP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-primary hover:underline"
+        >
+          Escríbenos por WhatsApp
+        </a>
+      </p>
       <p className="mt-auto pt-10 text-center text-xs text-muted-foreground">{COPYRIGHT_LINE}</p>
     </div>
   );

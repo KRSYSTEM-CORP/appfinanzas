@@ -4,3 +4,7 @@
 // for the document builders that print it on generated PDFs.
 export const COPYRIGHT_LINE =
   '© 2026 KR SYSTEM. Todos los derechos reservados. Empresa de Sistemas Automatizados "KR SYSTEM" Teléfono: +1 (904) 579-6156.';
+
+export const WHATSAPP_URL = `https://wa.me/19045796156?text=${encodeURIComponent(
+  "Hola, quiero obtener este sistema para mi negocio / más información."
+)}`;

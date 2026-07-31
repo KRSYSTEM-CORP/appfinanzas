@@ -11,25 +11,8 @@ import {
   assertPaymentsWithinRemaining,
 } from "@/lib/payment-currency";
 import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
-import { zonedDateParts, SHOP_TIME_ZONE } from "@/lib/report-types";
 import { decomposeTax, rateForCategory } from "@/lib/tax";
 import type { ActionResult } from "@/lib/types";
-
-// Blocks voiding/deleting a sale from a business day that's already been
-// formally closed out (see lib/actions/cash-closing.ts) — the whole point
-// of a cierre de caja is that the day's numbers stop moving afterward.
-// Cash closings are per-branch, so this always checks the SALE's own
-// branch, regardless of which branch the acting session is currently on.
-async function assertDayNotClosed(tx: Prisma.TransactionClient, branchId: string, saleCreatedAt: Date) {
-  const { year, month, day } = zonedDateParts(saleCreatedAt, SHOP_TIME_ZONE);
-  const closingDate = new Date(Date.UTC(year, month - 1, day));
-  const closed = await tx.cashClosing.findUnique({
-    where: { branchId_closingDate: { branchId, closingDate } },
-  });
-  if (closed) {
-    throw new Error("Ese día ya tiene un cierre de caja — no se puede modificar esta venta.");
-  }
-}
 
 export type CompleteSaleResult =
   | { success: true; saleId: string }
@@ -250,7 +233,6 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       });
       if (!sale) throw new Error("Venta no encontrada");
       if (sale.voided) throw new Error("La venta ya está anulada");
-      await assertDayNotClosed(tx, sale.branchId, sale.createdAt);
 
       await restoreStock(tx, saleId, companyId, sale.branchId);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
@@ -275,7 +257,6 @@ export async function deleteSale(saleId: string): Promise<ActionResult> {
         where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
       });
       if (!sale) throw new Error("Venta no encontrada");
-      await assertDayNotClosed(tx, sale.branchId, sale.createdAt);
 
       if (!sale.voided) {
         await restoreStock(tx, saleId, companyId, sale.branchId);

@@ -24,18 +24,29 @@ const links = [
 const settingsLink = { href: "/settings", label: "Configuración" };
 const subscriptionLink = { href: "/billing", label: "Suscripción mensual" };
 
-// Finanzas and Administración de perfiles are only for GERENTE (or a
-// platform super admin, who already sees everything else too). Proveedores,
-// Compras and Libro IVA join them here since they're all financial/tax data
-// (cuentas por pagar, retenciones, declaración de IVA), not day-to-day
+// Only for GERENTE (or a platform super admin, who already sees everything
+// else too). Finanzas, Proveedores, Compras and Libro IVA live inside the
+// single "Contabilidad" hub (app/accounting) instead of each getting their
+// own top-level nav slot, since they're all financial/tax data (cuentas por
+// pagar, retenciones, declaración de IVA) rather than day-to-day
 // operational tools like Inventario.
 const managerOnlyLinks = [
-  { href: "/finance", label: "Finanzas" },
-  { href: "/suppliers", label: "Proveedores" },
-  { href: "/purchases", label: "Compras" },
-  { href: "/tax-book", label: "Libro IVA" },
+  { href: "/accounting", label: "Contabilidad" },
   { href: "/employees", label: "Administración de perfiles" },
 ];
+
+// The nav collapses Finanzas/Proveedores/Compras/Libro IVA into one
+// "Contabilidad" link, but a user can still land on any of those routes
+// directly (e.g. from a bookmark) — this keeps the nav item highlighted
+// while on any of them, not just on /accounting itself.
+const ACCOUNTING_SUBPATHS = ["/accounting", "/finance", "/suppliers", "/purchases", "/tax-book"];
+
+function isLinkActive(pathname: string, href: string) {
+  if (href === "/accounting") {
+    return ACCOUNTING_SUBPATHS.some((p) => pathname.startsWith(p));
+  }
+  return pathname.startsWith(href);
+}
 
 export function NavBar({
   companyName,
@@ -103,7 +114,7 @@ export function NavBar({
             horizontally scroll. */}
         <div className="hidden md:flex items-center gap-1 overflow-x-auto min-w-0">
           {navLinks.map((link) => {
-            const active = pathname.startsWith(link.href);
+            const active = isLinkActive(pathname, link.href);
             return (
               <Link
                 key={link.href}
@@ -148,7 +159,7 @@ export function NavBar({
       {menuOpen && (
         <div className="md:hidden absolute inset-x-0 top-14 z-40 flex flex-col gap-1 border-b bg-card p-3 shadow-lg max-h-[calc(100vh-3.5rem)] overflow-y-auto">
           {navLinks.map((link) => {
-            const active = pathname.startsWith(link.href);
+            const active = isLinkActive(pathname, link.href);
             return (
               <Link
                 key={link.href}
