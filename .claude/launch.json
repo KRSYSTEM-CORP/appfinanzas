@@ -13,7 +13,7 @@
       "runtimeArgs": [
         "/Users/ar/.nvm/versions/node/v24.18.0/bin/npm",
         "--prefix",
-        "/Users/ar/Desktop/KYRA SYSTEM/KYRA CITAS",
+        "/Users/ar/Desktop/KR SYSTEM/KYRA CITAS",
         "run",
         "dev",
         "--",
@@ -28,7 +28,7 @@
       "runtimeArgs": [
         "/Users/ar/.nvm/versions/node/v24.18.0/bin/npm",
         "--prefix",
-        "/Users/ar/Desktop/KYRA SYSTEM/kr-corp-site",
+        "/Users/ar/Desktop/KR SYSTEM/kr-corp-site",
         "run",
         "dev",
         "--",
