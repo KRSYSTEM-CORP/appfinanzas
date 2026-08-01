@@ -5,24 +5,55 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { login, loginEmployee, getCompanyBrandingByEmail, getCompanyBrandingByCode, type CompanyBranding } from "@/lib/actions/auth";
+import {
+  login,
+  loginEmployee,
+  getCompanyBrandingByEmail,
+  getCompanyBrandingByCode,
+  forgetDeviceCompany,
+  type CompanyBranding,
+  type RememberedCompany,
+} from "@/lib/actions/auth";
 import { deriveBrandVars, BRAND_VAR_NAMES } from "@/lib/theme-color";
+import { splitFullName } from "@/lib/name";
 
 const NO_BRANDING: CompanyBranding = { logoDataUrl: null, brandColor: null, brandBackground: null };
 
 type BranchOption = { id: string; name: string };
 
-export function LoginForm() {
+export function LoginForm({ rememberedCompany }: { rememberedCompany: RememberedCompany | null }) {
   const [mode, setMode] = useState<"owner" | "employee">("owner");
   const [error, setError] = useState<string | null>(null);
   const [branding, setBranding] = useState<CompanyBranding>(NO_BRANDING);
   const [isPending, startTransition] = useTransition();
+  // Whether we're still trusting the device's remembered company code —
+  // starts true whenever one exists, so a returning employee skips typing
+  // it; "Usar otro código" below flips this off for the rest of the session.
+  const [useRemembered, setUseRemembered] = useState(!!rememberedCompany);
   // Only ever populated for the owner flow (loginEmployee never needs a
   // picker — an employee's branch is fixed, see lib/actions/auth.ts). Kept
   // alongside the credentials so re-submitting with a chosen branchId
   // doesn't require the user to retype anything.
   const [branchChoices, setBranchChoices] = useState<BranchOption[] | null>(null);
   const [pendingCredentials, setPendingCredentials] = useState<{ email: string; password: string } | null>(null);
+
+  // Preview the remembered company's branding right away, same as if the
+  // employee had just typed its code themselves.
+  useEffect(() => {
+    if (!rememberedCompany || !useRemembered) return;
+    let cancelled = false;
+    getCompanyBrandingByCode(rememberedCompany.code)
+      .then((b) => {
+        if (!cancelled) setBranding(b);
+      })
+      .catch(() => {
+        if (!cancelled) setBranding(NO_BRANDING);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Live-preview a company's own colors/logo on the login screen itself, as
   // soon as it's identified (by email for owners, by company code for
@@ -43,6 +74,12 @@ export function LoginForm() {
     setError(null);
     startTransition(async () => {
       if (mode === "employee") {
+        // A single "nombre y apellido" input reads as one username field to
+        // a password manager (two side-by-side inputs don't) — split it back
+        // into what loginEmployee() actually expects server-side.
+        const { firstName, lastName } = splitFullName(String(formData.get("fullName") ?? ""));
+        formData.set("firstName", firstName);
+        formData.set("lastName", lastName);
         const result = await loginEmployee(formData);
         if (!result.success) setError(result.error);
         return;
@@ -125,6 +162,9 @@ export function LoginForm() {
             setMode("employee");
             setError(null);
             setBranding(NO_BRANDING);
+            if (rememberedCompany && useRemembered) {
+              getCompanyBrandingByCode(rememberedCompany.code).then(setBranding).catch(() => {});
+            }
             setBranchChoices(null);
             setPendingCredentials(null);
           }}
@@ -188,23 +228,60 @@ export function LoginForm() {
         {mode === "owner" ? (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="email">Correo</Label>
-            <Input id="email" name="email" type="email" onBlur={handleEmailBlur} required />
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="username"
+              onBlur={handleEmailBlur}
+              required
+            />
           </div>
+        ) : rememberedCompany && useRemembered ? (
+          <>
+            <input type="hidden" name="companyCode" value={rememberedCompany.code} />
+            <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+              <span className="text-muted-foreground">
+                Negocio: <span className="text-foreground font-medium">{rememberedCompany.companyName ?? "recordado en este dispositivo"}</span>
+              </span>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline underline-offset-4 shrink-0"
+                onClick={() => {
+                  setUseRemembered(false);
+                  setBranding(NO_BRANDING);
+                  forgetDeviceCompany().catch(() => {});
+                }}
+              >
+                Usar otro código
+              </button>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="fullName">Nombre de usuario</Label>
+              <Input
+                id="fullName"
+                name="fullName"
+                placeholder="Nombre y apellido"
+                autoComplete="username"
+                required
+              />
+            </div>
+          </>
         ) : (
           <>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="companyCode">Código de empresa</Label>
               <Input id="companyCode" name="companyCode" onBlur={handleCompanyCodeBlur} required />
             </div>
-            <div className="flex gap-3">
-              <div className="flex flex-col gap-1.5 flex-1">
-                <Label htmlFor="firstName">Nombre</Label>
-                <Input id="firstName" name="firstName" required />
-              </div>
-              <div className="flex flex-col gap-1.5 flex-1">
-                <Label htmlFor="lastName">Apellido</Label>
-                <Input id="lastName" name="lastName" required />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="fullName">Nombre de usuario</Label>
+              <Input
+                id="fullName"
+                name="fullName"
+                placeholder="Nombre y apellido"
+                autoComplete="username"
+                required
+              />
             </div>
           </>
         )}
@@ -221,7 +298,7 @@ export function LoginForm() {
               </Link>
             )}
           </div>
-          <Input id="password" name="password" type="password" required />
+          <Input id="password" name="password" type="password" autoComplete="current-password" required />
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

@@ -1,6 +1,7 @@
 "use server";
 
 import { randomInt, randomBytes, createHash } from "crypto";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -32,6 +33,48 @@ function generateLoginCode(): string {
     code += LOGIN_CODE_ALPHABET[randomInt(LOGIN_CODE_ALPHABET.length)];
   }
   return code;
+}
+
+// A shared POS terminal only ever belongs to one company in practice — once
+// anyone (owner or employee) logs in successfully from a device, remember
+// that company's code on it for a year so the "Soy empleado" tab can skip
+// asking for it again next time (see /login reading this cookie, and
+// forgetDeviceCompany() below for switching a device to a different
+// company). Not a credential by itself — just a UX shortcut for a field the
+// employee login already requires — so it doesn't need to be secret, only
+// tamper-resistant enough that a client can't silently log in as a
+// different company without still passing a real name+password.
+const DEVICE_COMPANY_COOKIE = "device_company";
+const DEVICE_COMPANY_MAX_AGE = 60 * 60 * 24 * 365;
+
+async function rememberDeviceCompany(loginCode: string) {
+  const store = await cookies();
+  store.set(DEVICE_COMPANY_COOKIE, loginCode, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: DEVICE_COMPANY_MAX_AGE,
+  });
+}
+
+export async function forgetDeviceCompany(): Promise<void> {
+  const store = await cookies();
+  store.delete(DEVICE_COMPANY_COOKIE);
+}
+
+export type RememberedCompany = { code: string; companyName: string | null };
+
+export async function getRememberedCompany(): Promise<RememberedCompany | null> {
+  const store = await cookies();
+  const code = store.get(DEVICE_COMPANY_COOKIE)?.value;
+  if (!code) return null;
+  const company = await prisma.company.findUnique({ where: { loginCode: code }, select: { name: true } });
+  // A stale cookie pointing at a company that no longer exists (deleted
+  // account) still lets the code itself prefill — getCompanyBrandingByCode
+  // and loginEmployee() both re-validate it for real, this is just a UX
+  // shortcut, not a trust boundary.
+  return { code, companyName: company?.name ?? null };
 }
 
 export async function signup(formData: FormData): Promise<ActionResult> {
@@ -129,6 +172,8 @@ export async function login(formData: FormData): Promise<LoginResult> {
     };
   }
 
+  await rememberDeviceCompany(user.company.loginCode);
+
   // The owner/GERENTE account itself has no fixed branch (User.branchId is
   // null for them, see prisma/schema.prisma) — if their company has more
   // than one, they pick which one to enter as before the cookie is set.
@@ -218,6 +263,8 @@ export async function loginEmployee(formData: FormData): Promise<ActionResult> {
       error: "Tu acceso ha sido suspendido. Contacta al gerente de tu empresa.",
     };
   }
+
+  await rememberDeviceCompany(company.loginCode);
 
   await setSessionCookie({
     uid: user.id,

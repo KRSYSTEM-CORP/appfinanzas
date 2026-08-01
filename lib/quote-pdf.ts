@@ -3,10 +3,8 @@ import autoTable from "jspdf-autotable";
 import { formatDate } from "@/lib/format";
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, referenceNote } from "@/lib/currencies";
 import {
-  dataUrlImageFormat,
   itemDescription,
-  loadImageSize,
-  renderFiscalHeader,
+  renderCompanyHeader,
   renderNote,
   type DeliveryNoteCompany,
 } from "@/lib/delivery-note";
@@ -55,24 +53,7 @@ export async function buildQuotePDF(
   let y = 40;
   const showLocal = exchangeRateEnabled && rate != null;
 
-  let logoWidth = 0;
-  if (company.logoDataUrl) {
-    try {
-      const { width, height } = await loadImageSize(company.logoDataUrl);
-      const maxBox = 50;
-      const scale = Math.min(1, maxBox / Math.max(width, height));
-      logoWidth = width * scale;
-      const logoHeight = height * scale;
-      doc.addImage(company.logoDataUrl, dataUrlImageFormat(company.logoDataUrl), margin, y, logoWidth, logoHeight);
-    } catch {
-      logoWidth = 0;
-    }
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text(company.name, margin + (logoWidth > 0 ? logoWidth + 12 : 0), y + 20);
-  const fiscalEndY = renderFiscalHeader(doc, company, margin + (logoWidth > 0 ? logoWidth + 12 : 0), y + 32);
+  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);

@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, TaxCategory } from "@prisma/client";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { PurchaseSchema } from "@/lib/validations";
+import { BulkPurchaseRowSchema, PurchaseSchema } from "@/lib/validations";
 import { decomposeTax, rateForCategory } from "@/lib/tax";
 import type { ActionResult } from "@/lib/types";
 
@@ -209,6 +209,189 @@ export async function deletePurchase(purchaseId: string): Promise<ActionResult> 
   revalidatePath("/inventory");
   revalidatePath("/purchases");
   return { success: true };
+}
+
+export type BulkPurchaseRow = {
+  supplierName: unknown;
+  supplierInvoiceNo?: unknown;
+  productSku?: unknown;
+  productName?: unknown;
+  quantity: unknown;
+  unitCost: unknown;
+  taxCategory?: unknown;
+  paymentStatus?: unknown;
+  note?: unknown;
+};
+
+export type BulkPurchaseResult = {
+  created: number;
+  failed: { row: number; error: string }[];
+};
+
+// Each Excel row is one product line. Rows sharing the same supplier +
+// invoice number are grouped into a single Purchase with several items —
+// mirroring how one paper invoice usually lists several products — while a
+// blank invoice number means that row becomes its own single-item purchase,
+// since there's nothing to group it with. Reuses the same tax-decomposition
+// and stock/cost-bump logic as createPurchase, just driven by rows parsed
+// from a spreadsheet instead of a single form submission.
+export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<BulkPurchaseResult> {
+  const session = await requireManager();
+  const { companyId } = session;
+  if (!session.branchId) {
+    return {
+      created: 0,
+      failed: [{ row: 0, error: 'Selecciona una sucursal antes de importar — no se puede con "Todas las sucursales".' }],
+    };
+  }
+  const branchId = session.branchId;
+
+  type ParsedRow = { row: number; data: import("@/lib/validations").BulkPurchaseRowInput };
+  const parsedRows: ParsedRow[] = [];
+  const failed: { row: number; error: string }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const parsed = BulkPurchaseRowSchema.safeParse(rows[i]);
+    if (!parsed.success) {
+      failed.push({ row: i + 1, error: parsed.error.issues[0]?.message ?? "Datos inválidos" });
+      continue;
+    }
+    parsedRows.push({ row: i + 1, data: parsed.data });
+  }
+
+  const groups = new Map<string, ParsedRow[]>();
+  for (const entry of parsedRows) {
+    const key = entry.data.supplierInvoiceNo
+      ? `${entry.data.supplierName.toLowerCase()}|${entry.data.supplierInvoiceNo.toLowerCase()}`
+      : `__row__${entry.row}`;
+    const arr = groups.get(key) ?? [];
+    arr.push(entry);
+    groups.set(key, arr);
+  }
+
+  let created = 0;
+
+  await withTenant(companyId, async (tx) => {
+    const company = await tx.company.findUnique({
+      where: { id: companyId },
+      select: {
+        ivaGeneralRatePercent: true,
+        ivaReducedRatePercent: true,
+        isIvaWithholdingAgent: true,
+        ivaWithholdingPercent: true,
+      },
+    });
+    const ivaGeneralRatePercent = company?.ivaGeneralRatePercent ?? 16;
+    const ivaReducedRatePercent = company?.ivaReducedRatePercent ?? 8;
+
+    for (const entries of groups.values()) {
+      try {
+        const supplierName = entries[0].data.supplierName;
+        const supplier = await tx.supplier.findFirst({
+          where: { companyId, name: { equals: supplierName, mode: "insensitive" } },
+        });
+        if (!supplier) throw new Error(`Proveedor "${supplierName}" no encontrado`);
+
+        type ItemRow = {
+          productId: string;
+          productName: string;
+          taxCategory: TaxCategory;
+          taxRatePercent: number;
+          unitCostCents: number;
+          quantity: number;
+          baseCents: number;
+          taxCents: number;
+          subtotalCents: number;
+        };
+        const itemsData: ItemRow[] = [];
+        let totalCents = 0;
+        let baseImponibleCents = 0;
+        let taxTotalCents = 0;
+
+        for (const entry of entries) {
+          const { productSku, productName, quantity, unitCost, taxCategory } = entry.data;
+          const product = productSku
+            ? await tx.product.findFirst({ where: { branchId, sku: productSku } })
+            : await tx.product.findFirst({
+                where: { branchId, name: { equals: productName, mode: "insensitive" } },
+              });
+          if (!product) {
+            throw new Error(`Producto "${productSku || productName}" no encontrado en esta sucursal`);
+          }
+
+          const resolvedTaxCategory = taxCategory ?? product.taxCategory;
+          const subtotalCents = unitCost * quantity;
+          totalCents += subtotalCents;
+          const taxRatePercent = rateForCategory(resolvedTaxCategory, ivaGeneralRatePercent, ivaReducedRatePercent);
+          const { baseCents, taxCents } = decomposeTax(subtotalCents, resolvedTaxCategory, taxRatePercent);
+          baseImponibleCents += baseCents;
+          taxTotalCents += taxCents;
+
+          itemsData.push({
+            productId: product.id,
+            productName: product.name,
+            taxCategory: resolvedTaxCategory,
+            taxRatePercent,
+            unitCostCents: unitCost,
+            quantity,
+            baseCents,
+            taxCents,
+            subtotalCents,
+          });
+        }
+
+        const ivaRetainedCents = company?.isIvaWithholdingAgent
+          ? Math.round((taxTotalCents * (company.ivaWithholdingPercent ?? 75)) / 100)
+          : 0;
+
+        const previousCount = await tx.purchase.count({ where: { branchId } });
+        const paymentStatus = entries[0].data.paymentStatus ?? "PENDING";
+
+        await tx.purchase.create({
+          data: {
+            companyId,
+            branchId,
+            supplierId: supplier.id,
+            supplierInvoiceNo: entries[0].data.supplierInvoiceNo ?? null,
+            controlNumber: previousCount + 1,
+            totalCents,
+            baseImponibleCents,
+            taxCents: taxTotalCents,
+            ivaRetainedCents,
+            paymentStatus,
+            paidAt: paymentStatus === "PAID" ? new Date() : null,
+            note: entries[0].data.note ?? null,
+            items: { create: itemsData },
+          },
+        });
+
+        for (const item of itemsData) {
+          const product = await tx.product.findFirst({ where: { id: item.productId, companyId, branchId } });
+          if (!product) continue;
+          const newStock = product.stock + item.quantity;
+          await tx.product.updateMany({
+            where: { id: item.productId, companyId, branchId },
+            data: {
+              stock: newStock,
+              costCents: item.unitCostCents,
+              ...(product.stock === 0 && newStock > 0 ? { isActive: true } : {}),
+            },
+          });
+        }
+
+        created++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "No se pudo crear la compra";
+        for (const entry of entries) {
+          failed.push({ row: entry.row, error: message });
+        }
+      }
+    }
+  });
+
+  revalidatePath("/inventory");
+  revalidatePath("/purchases");
+  return { created, failed: failed.sort((a, b) => a.row - b.row) };
 }
 
 export async function listRecentPurchases(limit = 100) {

@@ -27,6 +27,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/format";
+import { joinFullName, splitFullName } from "@/lib/name";
 import {
   createEmployee,
   updateEmployee,
@@ -58,8 +59,7 @@ export function EmployeeTable({
   const [createOpen, setCreateOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("VENDEDOR");
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
@@ -68,6 +68,7 @@ export function EmployeeTable({
   function handleCreate(e: React.MouseEvent) {
     e.preventDefault();
     setCreateError(null);
+    const { firstName, lastName } = splitFullName(fullName);
     const formData = new FormData();
     formData.set("firstName", firstName);
     formData.set("lastName", lastName);
@@ -80,8 +81,7 @@ export function EmployeeTable({
         setCreateError(result.error);
         return;
       }
-      setFirstName("");
-      setLastName("");
+      setFullName("");
       setPassword("");
       setRole("VENDEDOR");
       setBranchId(branches[0]?.id ?? "");
@@ -99,25 +99,26 @@ export function EmployeeTable({
             <DialogHeader>
               <DialogTitle>Nuevo empleado</DialogTitle>
               <DialogDescription>
-                Entrará con el código de empresa, su nombre, apellido y esta contraseña.
+                Entrará con el código de empresa, su nombre de usuario y esta contraseña.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3">
-              <div className="flex gap-3">
-                <div className="flex flex-col gap-1.5 flex-1">
-                  <Label htmlFor="new-firstName">Nombre</Label>
-                  <Input id="new-firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-                </div>
-                <div className="flex flex-col gap-1.5 flex-1">
-                  <Label htmlFor="new-lastName">Apellido</Label>
-                  <Input id="new-lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-                </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="new-fullName">Nombre de usuario</Label>
+                <Input
+                  id="new-fullName"
+                  placeholder="Nombre y apellido"
+                  autoComplete="off"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-password">Contraseña</Label>
                 <Input
                   id="new-password"
                   type="password"
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -208,8 +209,7 @@ function EmployeeRow({
   const [isPending, startTransition] = useTransition();
   const [editOpen, setEditOpen] = useState(false);
 
-  const [firstName, setFirstName] = useState(u.firstName ?? "");
-  const [lastName, setLastName] = useState(u.lastName ?? "");
+  const [fullName, setFullName] = useState(joinFullName(u.firstName ?? "", u.lastName ?? ""));
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>(u.role);
   const [branchId, setBranchId] = useState(u.branchId ?? branches[0]?.id ?? "");
@@ -232,6 +232,7 @@ function EmployeeRow({
   function handleEdit(e: React.MouseEvent) {
     e.preventDefault();
     setEditError(null);
+    const { firstName, lastName } = splitFullName(fullName);
     const formData = new FormData();
     formData.set("firstName", firstName);
     formData.set("lastName", lastName);
@@ -285,29 +286,22 @@ function EmployeeRow({
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-3">
-                <div className="flex gap-3">
-                  <div className="flex flex-col gap-1.5 flex-1">
-                    <Label htmlFor={`edit-firstName-${u.id}`}>Nombre</Label>
-                    <Input
-                      id={`edit-firstName-${u.id}`}
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5 flex-1">
-                    <Label htmlFor={`edit-lastName-${u.id}`}>Apellido</Label>
-                    <Input
-                      id={`edit-lastName-${u.id}`}
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                    />
-                  </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={`edit-fullName-${u.id}`}>Nombre de usuario</Label>
+                  <Input
+                    id={`edit-fullName-${u.id}`}
+                    placeholder="Nombre y apellido"
+                    autoComplete="off"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`edit-password-${u.id}`}>Nueva contraseña (opcional)</Label>
                   <Input
                     id={`edit-password-${u.id}`}
                     type="password"
+                    autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />

@@ -74,6 +74,9 @@ export default async function ReportsPage() {
               currencyCode={localCurrencyCode}
               exchangeRateEnabled={exchangeRateEnabled}
               referenceCurrency={referenceCurrency}
+              company={company}
+              branchName={session.branchName}
+              printPaperSize={printPaperSize}
             />
           </CardContent>
         </Card>

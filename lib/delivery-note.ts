@@ -147,6 +147,57 @@ export function renderFiscalHeader(doc: jsPDF, company: DeliveryNoteCompany, x: 
   return y;
 }
 
+// Renders the logo + company name + fiscal lines block that opens every
+// generated document. The company name is capped to roughly the left half
+// of the page and wraps onto extra lines instead of running unbounded to the
+// right — without this, a long company name collided with the centered
+// document title (FACTURA/NOTA DE ENTREGA/PRESUPUESTO/RECIBO DE PAGO/CIERRE
+// DE CAJA) drawn on the same baseline, making both illegible. Shared by
+// every PDF builder (delivery note, receipt, quote, cash closing) so the fix
+// — and the logo-loading logic — only exists in one place.
+export async function renderCompanyHeader(
+  doc: jsPDF,
+  company: DeliveryNoteCompany,
+  margin: number,
+  y: number,
+  pageWidth: number
+): Promise<number> {
+  let logoWidth = 0;
+  if (company.logoDataUrl) {
+    try {
+      const { width, height } = await loadImageSize(company.logoDataUrl);
+      const maxBox = 50;
+      const scale = Math.min(1, maxBox / Math.max(width, height));
+      logoWidth = width * scale;
+      const logoHeight = height * scale;
+      doc.addImage(company.logoDataUrl, dataUrlImageFormat(company.logoDataUrl), margin, y, logoWidth, logoHeight);
+    } catch {
+      logoWidth = 0;
+    }
+  }
+
+  const textX = margin + (logoWidth > 0 ? logoWidth + 12 : 0);
+
+  // Measure the actual widest document title ("NOTA DE ENTREGA" — longer
+  // than FACTURA/PRESUPUESTO/RECIBO DE PAGO/CIERRE DE CAJA) at the real
+  // font/size it's drawn with, rather than guessing a fixed pixel budget —
+  // that's what let a long company name creep far enough right to collide
+  // with the title in the first place, even after adding a width cap.
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  const titleHalfWidth = doc.getTextWidth("NOTA DE ENTREGA") / 2;
+  const titleLeftEdge = pageWidth / 2 - titleHalfWidth - 16;
+
+  const nameMaxWidth = Math.max(100, titleLeftEdge - textX);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  const nameLines = doc.splitTextToSize(company.name, nameMaxWidth) as string[];
+  doc.text(nameLines, textX, y + 20);
+  const nameBottomY = y + 20 + (nameLines.length - 1) * 15;
+
+  return renderFiscalHeader(doc, company, textX, nameBottomY + 12);
+}
+
 // Optional free-text note (Sale.note / Quote.note) — rendered between the
 // customer info block and the items table, wrapping across lines as needed.
 // Shared by buildDeliveryNotePDF and lib/quote-pdf.ts's buildQuotePDF.
@@ -321,24 +372,7 @@ export async function buildDeliveryNotePDF(
   let y = 40;
   const showLocal = exchangeRateEnabled && rate != null;
 
-  let logoWidth = 0;
-  if (company.logoDataUrl) {
-    try {
-      const { width, height } = await loadImageSize(company.logoDataUrl);
-      const maxBox = 50;
-      const scale = Math.min(1, maxBox / Math.max(width, height));
-      logoWidth = width * scale;
-      const logoHeight = height * scale;
-      doc.addImage(company.logoDataUrl, dataUrlImageFormat(company.logoDataUrl), margin, y, logoWidth, logoHeight);
-    } catch {
-      logoWidth = 0;
-    }
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text(company.name, margin + (logoWidth > 0 ? logoWidth + 12 : 0), y + 20);
-  const fiscalEndY = renderFiscalHeader(doc, company, margin + (logoWidth > 0 ? logoWidth + 12 : 0), y + 32);
+  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
   const isInvoice = variant === "invoice";
   doc.setFont("helvetica", "bold");
@@ -458,24 +492,7 @@ export async function buildPaymentReceiptPDF(
   let y = 40;
   const showLocal = exchangeRateEnabled && rate != null;
 
-  let logoWidth = 0;
-  if (company.logoDataUrl) {
-    try {
-      const { width, height } = await loadImageSize(company.logoDataUrl);
-      const maxBox = 50;
-      const scale = Math.min(1, maxBox / Math.max(width, height));
-      logoWidth = width * scale;
-      const logoHeight = height * scale;
-      doc.addImage(company.logoDataUrl, dataUrlImageFormat(company.logoDataUrl), margin, y, logoWidth, logoHeight);
-    } catch {
-      logoWidth = 0;
-    }
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text(company.name, margin + (logoWidth > 0 ? logoWidth + 12 : 0), y + 20);
-  const fiscalEndY = renderFiscalHeader(doc, company, margin + (logoWidth > 0 ? logoWidth + 12 : 0), y + 32);
+  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);

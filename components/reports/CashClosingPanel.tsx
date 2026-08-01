@@ -8,7 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Price } from "@/components/money/Price";
 import { PAYMENT_METHOD_LABELS, formatDate } from "@/lib/format";
 import { getDailyClosingSummary, closeCashRegister, type CashClosingSummary } from "@/lib/actions/cash-closing";
-import type { ReferenceCurrency } from "@prisma/client";
+import { buildCashClosingPDF } from "@/lib/cash-closing-pdf";
+import { pdfFormatForPaperSize } from "@/lib/print-paper-sizes";
+import { PrintDialog } from "@/components/print/PrintDialog";
+import { PrintableCashClosing } from "@/components/print/PrintableCashClosing";
+import type { DeliveryNoteCompany } from "@/lib/delivery-note";
+import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 
 export function CashClosingPanel({
   initialSummary,
@@ -17,6 +22,9 @@ export function CashClosingPanel({
   currencyCode,
   exchangeRateEnabled,
   referenceCurrency,
+  company,
+  branchName,
+  printPaperSize,
 }: {
   initialSummary: CashClosingSummary;
   todayStr: string;
@@ -24,6 +32,9 @@ export function CashClosingPanel({
   currencyCode: string;
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
+  company: DeliveryNoteCompany;
+  branchName: string | null;
+  printPaperSize: PrintPaperSize;
 }) {
   const router = useRouter();
   const [date, setDate] = useState(todayStr);
@@ -31,6 +42,7 @@ export function CashClosingPanel({
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (date === initialSummary.date) {
@@ -44,6 +56,29 @@ export function CashClosingPanel({
     // freshly fetched summary for the same date (e.g. after switching branch
     // in the NavBar) must resync local state, not just a `date` change.
   }, [date, initialSummary]);
+
+  async function buildPdf(paperSize?: PrintPaperSize) {
+    return buildCashClosingPDF(
+      summary,
+      company,
+      branchName,
+      rate,
+      currencyCode,
+      exchangeRateEnabled,
+      referenceCurrency,
+      paperSize ? pdfFormatForPaperSize(paperSize) : "letter"
+    );
+  }
+
+  async function downloadPdf() {
+    setBusy(true);
+    try {
+      const doc = await buildPdf();
+      doc.save(`cierre-de-caja-${summary.date}.pdf`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function handleClose() {
     setError(null);
@@ -61,7 +96,7 @@ export function CashClosingPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Input
           type="date"
           value={date}
@@ -70,6 +105,30 @@ export function CashClosingPanel({
           className="max-w-[180px]"
         />
         {summary.closed && <Badge variant="secondary">Cerrada</Badge>}
+        <div className="ml-auto flex gap-2">
+          <Button size="sm" variant="outline" disabled={busy} onClick={downloadPdf}>
+            Descargar PDF
+          </Button>
+          <PrintDialog
+            triggerLabel="Imprimir"
+            title="Imprimir cierre de caja"
+            defaultPaperSize={printPaperSize}
+            buildPdfBlob={async (paperSize) => (await buildPdf(paperSize)).output("blob") as Blob}
+          >
+            {(paperSize) => (
+              <PrintableCashClosing
+                summary={summary}
+                company={company}
+                branchName={branchName}
+                rate={rate}
+                currencyCode={currencyCode}
+                exchangeRateEnabled={exchangeRateEnabled}
+                referenceCurrency={referenceCurrency}
+                paperSize={paperSize}
+              />
+            )}
+          </PrintDialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 max-w-sm">

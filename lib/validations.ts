@@ -523,3 +523,44 @@ export const PurchaseSchema = z.object({
 });
 
 export type PurchaseInput = z.infer<typeof PurchaseSchema>;
+
+// One Excel row per product line. Rows sharing the same supplier + invoice
+// number are grouped into a single Purchase with several line items (see
+// bulkImportPurchases, lib/actions/purchases.ts) — taxCategory is optional
+// here (unlike the manual-form PurchaseItemSchema above) since a bulk import
+// falls back to the product's own existing tax category when the column is
+// left blank.
+const PAYMENT_STATUS_WORD_MAP: Record<string, "PAID" | "PENDING"> = {
+  contado: "PAID",
+  pagada: "PAID",
+  pagado: "PAID",
+  paid: "PAID",
+  credito: "PENDING",
+  "crédito": "PENDING",
+  pending: "PENDING",
+  "por pagar": "PENDING",
+};
+export const BulkPurchaseRowSchema = z
+  .object({
+    supplierName: z.string().trim().min(1, "El proveedor es obligatorio"),
+    supplierInvoiceNo: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    productSku: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    productName: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    quantity: z.coerce.number().int().positive("La cantidad debe ser mayor a 0"),
+    unitCost: z.coerce.number().min(0, "El costo no puede ser negativo").transform(toCents),
+    taxCategory: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      TaxCategoryEnum.optional()
+    ),
+    paymentStatus: z.preprocess((v) => {
+      if (typeof v !== "string" || v.trim() === "") return undefined;
+      return PAYMENT_STATUS_WORD_MAP[v.trim().toLowerCase()] ?? v.trim().toUpperCase();
+    }, z.enum(["PAID", "PENDING"]).optional()),
+    note: z.preprocess(blankToUndefined, z.string().trim().optional()),
+  })
+  .refine((data) => data.productSku || data.productName, {
+    message: "Indica el SKU o el nombre del producto",
+    path: ["productSku"],
+  });
+
+export type BulkPurchaseRowInput = z.infer<typeof BulkPurchaseRowSchema>;
