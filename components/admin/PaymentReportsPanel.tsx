@@ -165,7 +165,7 @@ export function PlatformSettingsForm({
             setSaved(false);
           }}
           rows={4}
-          placeholder="Ej. Pago Móvil: Banco XXX, Teléfono 0412-1234567, RIF J-12345678-9, Titular: KR System C.A."
+          placeholder="Ej. Transferencia: Banco XXX, Cuenta 0134-1234-56-1234567890, RIF J-12345678-9, Titular: KR System C.A."
         />
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}

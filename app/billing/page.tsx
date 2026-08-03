@@ -9,10 +9,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PaymentReportForm } from "@/components/billing/PaymentReportForm";
-import { PagoMovilCheckout } from "@/components/billing/PagoMovilCheckout";
 import { getBillingInfo, listMyPaymentReports } from "@/lib/actions/billing";
 import { formatDate, formatUSD, PAYMENT_METHOD_LABELS } from "@/lib/format";
 import { formatLocalCurrency } from "@/lib/currencies";
+import { WHATSAPP_PHONE } from "@/lib/legal";
 import type { PaymentReportStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -107,23 +107,10 @@ export default async function BillingPage() {
       )}
 
       {!info.isExempt && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+        <div className="max-w-3xl">
           <Card>
             <CardHeader>
-              <CardTitle>Pago Móvil automático</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">
-                Transfiere el monto exacto que te indiquemos y tu suscripción se renueva sola — no
-                necesitas esperar a que nadie apruebe nada.
-              </p>
-              <PagoMovilCheckout paymentInstructions={info.paymentInstructions} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Reportar pago manual</CardTitle>
+              <CardTitle>Reportar pago</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {previewBs != null && (
@@ -132,6 +119,29 @@ export default async function BillingPage() {
                   <span className="font-medium">{formatLocalCurrency(previewBs, info.localCurrencyCode)}</span>
                 </p>
               )}
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex flex-col gap-2">
+                <p className="text-sm font-medium">
+                  Pasos obligatorios para activar tu suscripción:
+                </p>
+                <ol className="text-sm text-muted-foreground list-decimal list-inside flex flex-col gap-1">
+                  <li>Paga por Transferencia Bancaria o Pago Móvil, con los datos de arriba.</li>
+                  <li>Sube tu comprobante de pago aquí abajo (obligatorio).</li>
+                  <li>
+                    Envía el mismo comprobante también por WhatsApp (obligatorio) — así te
+                    confirmamos más rápido.
+                  </li>
+                </ol>
+                <a
+                  href={`https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
+                    `Hola, les envío el comprobante de pago de la suscripción de ${info.companyName}.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-primary underline underline-offset-4 w-fit"
+                >
+                  Enviar comprobante por WhatsApp →
+                </a>
+              </div>
               <PaymentReportForm />
             </CardContent>
           </Card>

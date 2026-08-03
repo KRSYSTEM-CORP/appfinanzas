@@ -357,7 +357,7 @@ function AdminCompanyRow({
                         id={`pay-note-${owner.id}`}
                         value={payNote}
                         onChange={(e) => setPayNote(e.target.value)}
-                        placeholder="Ej. Pago Móvil ref. 001234567"
+                        placeholder="Ej. Transferencia ref. 001234567"
                       />
                     </div>
                     {payError && <p className="text-sm text-destructive">{payError}</p>}

@@ -10,6 +10,12 @@ import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_REQUIRING_REFERENCE } from "@/li
 import { resizeImageToDataUrl } from "@/lib/image-utils";
 import type { PaymentMethod } from "@prisma/client";
 
+// The subscription only accepts these two rails now — no more Zelle,
+// Binance, PayPal, cash, etc. for paying KR System itself (that restriction
+// is specific to this billing report, not the general PAYMENT_METHOD_LABELS
+// used elsewhere for a company's own retail sales).
+const BILLING_PAYMENT_METHODS: PaymentMethod[] = ["TRANSFER", "CARD"];
+
 type ReportLine = { paymentMethod: PaymentMethod; amount: string; reference: string };
 
 const MAX_DIMENSION = 1400;
@@ -17,7 +23,7 @@ const MAX_DIMENSION = 1400;
 export function PaymentReportForm() {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
-  const [lines, setLines] = useState<ReportLine[]>([{ paymentMethod: "CARD", amount: "", reference: "" }]);
+  const [lines, setLines] = useState<ReportLine[]>([{ paymentMethod: "TRANSFER", amount: "", reference: "" }]);
   const [proofImageDataUrl, setProofImageDataUrl] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +36,7 @@ export function PaymentReportForm() {
   }
 
   function addLine() {
-    setLines((prev) => [...prev, { paymentMethod: "CARD", amount: "", reference: "" }]);
+    setLines((prev) => [...prev, { paymentMethod: "TRANSFER", amount: "", reference: "" }]);
   }
 
   function removeLine(i: number) {
@@ -70,7 +76,7 @@ export function PaymentReportForm() {
         setError(result.error);
         return;
       }
-      setLines([{ paymentMethod: "CARD", amount: "", reference: "" }]);
+      setLines([{ paymentMethod: "TRANSFER", amount: "", reference: "" }]);
       setProofImageDataUrl("");
       setNote("");
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -84,7 +90,7 @@ export function PaymentReportForm() {
       {lines.map((line, i) => (
         <div key={i} className="flex flex-col gap-2 rounded-lg border p-3">
           <div className="flex gap-2 flex-wrap">
-            {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
+            {BILLING_PAYMENT_METHODS.map((m) => (
               <Button
                 key={m}
                 type="button"
@@ -133,7 +139,7 @@ export function PaymentReportForm() {
       </Button>
 
       <div className="flex flex-col gap-1.5">
-        <Label>Comprobante de pago</Label>
+        <Label>Comprobante de pago (obligatorio)</Label>
         <div className="flex items-center gap-3">
           {proofImageDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -148,6 +154,7 @@ export function PaymentReportForm() {
             type="file"
             accept="image/*"
             onChange={handleFileChange}
+            required
             className="text-sm"
           />
         </div>
@@ -162,7 +169,7 @@ export function PaymentReportForm() {
             setNote(e.target.value);
             setSubmitted(false);
           }}
-          placeholder="Ej. Pagué el 15 de julio por Pago Móvil"
+          placeholder="Ej. Pagué el 15 de julio por Transferencia Bancaria"
         />
       </div>
 
