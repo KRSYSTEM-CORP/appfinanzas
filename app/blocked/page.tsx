@@ -10,7 +10,10 @@ export const dynamic = "force-dynamic";
 
 export default async function BlockedPage() {
   const session = await getSession();
-  if (!session) redirect("/login");
+  // See app/api/auth/clear-session/route.ts — this is a plain page render,
+  // so a stale-but-signed cookie (deleted/suspended user) must be cleared
+  // through the Route Handler rather than by redirecting straight to /login.
+  if (!session) redirect("/api/auth/clear-session");
   if (!session.billingBlocked) redirect("/pos");
 
   // The Bs preview only makes sense for VES companies, who typically pay via

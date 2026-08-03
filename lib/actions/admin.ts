@@ -25,7 +25,11 @@ import type { ActionResult } from "@/lib/types";
 
 async function requireSuperAdmin() {
   const session = await getSession();
-  if (!session) redirect("/login");
+  // See app/api/auth/clear-session/route.ts — a stale-but-signed cookie
+  // (deleted/suspended user) can't have its cookie cleared here if this is
+  // reached during a plain page render, so route through the Route Handler
+  // instead of redirecting straight to /login.
+  if (!session) redirect("/api/auth/clear-session");
   if (!session.isSuperAdmin) redirect("/pos");
   return session;
 }

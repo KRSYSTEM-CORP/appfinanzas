@@ -126,7 +126,13 @@ export async function getSession(): Promise<Session | null> {
 
 export async function requireSession(): Promise<Session> {
   const session = await getSession();
-  if (!session) redirect("/login");
+  // A null session here means the signed cookie is still cryptographically
+  // valid but failed the DB check above (deleted user/company, or a
+  // suspended user) — redirect through the clear-session Route Handler
+  // instead of straight to /login so the stale cookie actually gets wiped.
+  // Otherwise proxy.ts would see it as valid on the next request and bounce
+  // back to /pos, looping forever (see app/api/auth/clear-session/route.ts).
+  if (!session) redirect("/api/auth/clear-session");
   if (session.billingBlocked) redirect("/blocked");
   return session;
 }

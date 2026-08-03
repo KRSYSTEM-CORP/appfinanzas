@@ -15,7 +15,11 @@ import type { ActionResult } from "@/lib/types";
 // trigger the /blocked redirect the way most other actions do.
 async function requireCompanyUser() {
   const session = await getSession();
-  if (!session) redirect("/login");
+  // See app/api/auth/clear-session/route.ts — this is called directly from
+  // /billing's page render, so a stale-but-signed cookie (deleted/suspended
+  // user) must be cleared through the Route Handler rather than by
+  // redirecting straight to /login.
+  if (!session) redirect("/api/auth/clear-session");
   return session;
 }
 

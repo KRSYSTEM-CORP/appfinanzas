@@ -16,7 +16,10 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const session = await getSession();
-  if (!session) redirect("/login");
+  // See app/api/auth/clear-session/route.ts — this is a plain page render,
+  // so a stale-but-signed cookie (deleted/suspended user) must be cleared
+  // through the Route Handler rather than by redirecting straight to /login.
+  if (!session) redirect("/api/auth/clear-session");
   if (!session.isSuperAdmin) redirect("/pos");
 
   const [companies, pendingReports, platformSettings, announcementRecipients] = await Promise.all([
