@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
@@ -8,6 +9,7 @@ import { Price } from "@/components/money/Price";
 import { PaymentSplitBuilder, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { PAYMENT_STATUS_LABELS } from "@/lib/format";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { computeItemDiscountCents } from "@/lib/discount";
 import type { PaymentStatus, ReferenceCurrency } from "@prisma/client";
 
 export type CartLine = {
@@ -33,6 +35,8 @@ export function Cart({
   onRemove,
   note,
   onNoteChange,
+  discountPercent,
+  onDiscountPercentChange,
   onCheckout,
   isPending,
   error,
@@ -51,11 +55,21 @@ export function Cart({
   onRemove: (productId: string) => void;
   note: string;
   onNoteChange: (note: string) => void;
+  discountPercent: string;
+  onDiscountPercentChange: (value: string) => void;
   onCheckout: () => void;
   isPending: boolean;
   error: string | null;
 }) {
-  const total = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+  const rawTotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+  // Same per-line rounding the server applies in completeSale, so this
+  // preview always matches the total that's actually validated at checkout.
+  const discountValue = Math.min(100, Math.max(0, Number(discountPercent) || 0));
+  const discountCents = lines.reduce(
+    (sum, l) => sum + computeItemDiscountCents(l.unitPriceCents * l.quantity, discountValue),
+    0
+  );
+  const total = rawTotal - discountCents;
 
   return (
     <div className="flex flex-col h-full gap-3">
@@ -122,6 +136,62 @@ export function Cart({
       </div>
 
       <Separator />
+
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor="sale-discount" className="text-sm text-muted-foreground shrink-0">
+          Descuento (%)
+        </Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id="sale-discount"
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            value={discountPercent}
+            onChange={(e) => onDiscountPercentChange(e.target.value)}
+            className="w-20 h-8 text-sm text-right"
+            placeholder="0"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onDiscountPercentChange("100")}
+          >
+            Exonerar
+          </Button>
+        </div>
+      </div>
+
+      {discountValue > 0 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>Subtotal</span>
+          <Price
+            eurCents={rawTotal}
+            rate={rate}
+            currencyCode={currencyCode}
+            exchangeRateEnabled={exchangeRateEnabled}
+            referenceCurrency={referenceCurrency}
+          />
+        </div>
+      )}
+      {discountValue > 0 && (
+        <div className="flex items-center justify-between text-sm text-destructive">
+          <span>Descuento ({discountValue}%)</span>
+          <span>
+            −
+            <Price
+              eurCents={discountCents}
+              rate={rate}
+              currencyCode={currencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+              className="inline-flex"
+            />
+          </span>
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <span className="text-lg font-semibold">Total</span>

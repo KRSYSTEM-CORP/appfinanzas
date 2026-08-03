@@ -33,6 +33,10 @@ export type DeliveryNoteSale = {
   // won't equal totalCents; the breakdown is only rendered when taxCents > 0.
   baseImponibleCents?: number;
   taxCents?: number;
+  // Total discount actually applied to this sale (see Sale.discountCents) —
+  // purely informational on the printed document; totalCents/baseImponibleCents/
+  // taxCents above are already computed on the post-discount amount.
+  discountCents?: number;
   paymentMethod: PaymentMethod | null;
   paymentStatus: PaymentStatus;
   paymentReference: string | null;
@@ -341,6 +345,18 @@ function renderTotalsSection(
   } else {
     doc.text("Subtotal:", margin, y);
     doc.text(money(sale.totalCents), pageWidth - margin, y, { align: "right" });
+    y += 20;
+  }
+
+  // Purely informational — base imponible/IVA/subtotal above are already
+  // computed on the discounted amount (see completeSale in
+  // lib/actions/sales.ts), so this line doesn't change the total; it just
+  // shows the customer how much was knocked off.
+  if ((sale.discountCents ?? 0) > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Descuento aplicado:", margin, y);
+    doc.text(`-${money(sale.discountCents!)}`, pageWidth - margin, y, { align: "right" });
     y += 20;
   }
 

@@ -12,6 +12,7 @@ import {
 } from "@/lib/payment-currency";
 import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
 import { decomposeTax, rateForCategory } from "@/lib/tax";
+import { computeItemDiscountCents } from "@/lib/discount";
 import type { ActionResult } from "@/lib/types";
 
 export type CompleteSaleResult =
@@ -36,6 +37,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     items,
     paymentStatus,
     payments,
+    discountPercent,
     customerFirstName,
     customerLastName,
     customerPhone,
@@ -75,6 +77,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       let totalCents = 0;
       let baseImponibleCents = 0;
       let taxTotalCents = 0;
+      let discountTotalCents = 0;
       const itemsData = items.map((item) => {
         const product = productById.get(item.productId);
         if (!product) {
@@ -85,8 +88,15 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
             `Stock insuficiente para "${product.name}" (disponible: ${product.stock})`
           );
         }
-        const subtotalCents = product.priceCents * item.quantity;
+        // The discount is applied to each line's own subtotal BEFORE tax is
+        // decomposed below — the fiscally correct order in Venezuela, since
+        // it means the IVA on the factura is computed on the already-
+        // discounted base, not just subtracted from an already-taxed total.
+        const rawSubtotalCents = product.priceCents * item.quantity;
+        const itemDiscountCents = computeItemDiscountCents(rawSubtotalCents, discountPercent);
+        const subtotalCents = rawSubtotalCents - itemDiscountCents;
         totalCents += subtotalCents;
+        discountTotalCents += itemDiscountCents;
         const taxRatePercent = rateForCategory(product.taxCategory, ivaGeneralRatePercent, ivaReducedRatePercent);
         const { baseCents, taxCents } = decomposeTax(subtotalCents, product.taxCategory, taxRatePercent);
         baseImponibleCents += baseCents;
@@ -98,6 +108,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           unitPriceCents: product.priceCents,
           quantity: item.quantity,
           subtotalCents,
+          discountCents: itemDiscountCents,
           taxCategory: product.taxCategory,
           taxRatePercent,
           baseCents,
@@ -146,6 +157,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           totalCents,
           baseImponibleCents,
           taxCents: taxTotalCents,
+          discountCents: discountTotalCents,
           paymentMethod: firstPayment?.paymentMethod ?? null,
           paymentStatus,
           paidAt: isPaid ? new Date() : null,

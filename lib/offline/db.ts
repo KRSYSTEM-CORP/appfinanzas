@@ -17,6 +17,7 @@ export type PendingSaleInput = {
     paidInForeignCurrency: boolean;
     reference: string;
   }[];
+  discountPercent: number;
   customerFirstName: string;
   customerLastName: string;
   customerPhone: string;

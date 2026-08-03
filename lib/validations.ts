@@ -199,6 +199,11 @@ export const SaleSchema = z
     // Credit sales aren't paid at checkout, so no payment split applies yet —
     // it's captured later when the customer actually pays (see registerPayment).
     payments: z.array(PaymentSplitSchema).default([]),
+    // 0-100 — applied proportionally to every item's subtotal BEFORE tax is
+    // decomposed (see completeSale), so the IVA on the printed factura is
+    // correctly computed on the discounted base, not just subtracted from an
+    // already-taxed total.
+    discountPercent: z.coerce.number().min(0, "El descuento no puede ser negativo").max(100, "Máximo 100%").default(0),
     // Free-text, optional — printed on the Nota de Entrega/Factura PDF and
     // print view when present (see itemDescription's sibling, renderNote,
     // in lib/delivery-note.ts).

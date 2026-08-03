@@ -349,6 +349,13 @@ model Sale {
   // feature existed (their true breakdown was never tracked).
   baseImponibleCents    Int            @default(0)
   taxCents              Int            @default(0)
+  // Total discount actually applied (sum of every SaleItem's own
+  // discountCents) — already subtracted out of totalCents/baseImponibleCents/
+  // taxCents above; kept here only so receipts/facturas can print an
+  // explicit "Descuento" line instead of the discount silently disappearing
+  // into a lower total. 0 for every sale completed before this feature
+  // existed.
+  discountCents         Int            @default(0)
   // Null for CREDIT sales until the customer actually pays (see paymentStatus).
   paymentMethod         PaymentMethod?
   note                  String?
@@ -475,15 +482,23 @@ model SaleItem {
   category       String?
   unitPriceCents Int
   quantity       Int
+  // Tax-inclusive subtotal AFTER discount (unitPriceCents * quantity -
+  // discountCents) — see discountCents below for the pre-discount figure.
   subtotalCents  Int
+  // How much of this line's original (unitPriceCents * quantity) amount was
+  // knocked off by the sale's discount — 0 for a non-discounted sale. Kept
+  // per item (not just once on Sale) so a printed factura can show each
+  // line's own discounted subtotal next to its original price.
+  discountCents  Int         @default(0)
   // IVA breakdown snapshot (see lib/tax.ts) — taxCategory/taxRatePercent
   // capture the product's tax treatment AT SALE TIME (a product's category
   // or the company's rate can change later without altering past documents),
-  // and baseCents/taxCents decompose subtotalCents (unchanged, still
-  // tax-inclusive) into base imponible + IVA. baseCents + taxCents always
-  // equals subtotalCents. Default GENERAL/16/subtotal/0 for rows created
-  // before this feature existed — an approximation, not a real historical
-  // record, since the true rate/category in effect back then isn't known.
+  // and baseCents/taxCents decompose subtotalCents (the discounted,
+  // tax-inclusive amount) into base imponible + IVA. baseCents + taxCents
+  // always equals subtotalCents. Default GENERAL/16/subtotal/0 for rows
+  // created before this feature existed — an approximation, not a real
+  // historical record, since the true rate/category in effect back then
+  // isn't known.
   taxCategory    TaxCategory @default(GENERAL)
   taxRatePercent Int         @default(16)
   baseCents      Int         @default(0)

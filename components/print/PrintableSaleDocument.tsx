@@ -197,6 +197,12 @@ export function PrintableSaleDocument({
           </div>
         </>
       )}
+      {(sale.discountCents ?? 0) > 0 && (
+        <div className="flex justify-between mb-1">
+          <span>Descuento aplicado:</span>
+          <span>-{money(sale.discountCents!)}</span>
+        </div>
+      )}
       <div className="flex justify-between font-bold">
         <span>{variant === "receipt" ? "TOTAL PAGADO:" : "TOTAL A CANCELAR:"}</span>
         <span>{money(sale.totalCents)}</span>

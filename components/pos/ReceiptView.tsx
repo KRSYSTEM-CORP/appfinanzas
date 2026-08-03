@@ -32,6 +32,7 @@ type ReceiptSale = {
   receiptControlNumber: number | null;
   createdAt: Date;
   totalCents: number;
+  discountCents: number;
   paymentMethod: PaymentMethod | null;
   paymentStatus: PaymentStatus;
   paidInForeignCurrency: boolean;
@@ -203,6 +204,35 @@ export function ReceiptView({
       </div>
 
       <Separator />
+
+      {sale.discountCents > 0 && (
+        <>
+          <div className="flex justify-between items-center text-sm text-muted-foreground">
+            <span>Subtotal</span>
+            <Price
+              eurCents={sale.totalCents + sale.discountCents}
+              rate={effectiveRate}
+              currencyCode={currencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+            />
+          </div>
+          <div className="flex justify-between items-center text-sm text-destructive">
+            <span>Descuento</span>
+            <span>
+              −
+              <Price
+                eurCents={sale.discountCents}
+                rate={effectiveRate}
+                currencyCode={currencyCode}
+                exchangeRateEnabled={exchangeRateEnabled}
+                referenceCurrency={referenceCurrency}
+                className="inline-flex"
+              />
+            </span>
+          </div>
+        </>
+      )}
 
       <div className="flex justify-between items-center">
         <span className="font-semibold text-lg">Total</span>

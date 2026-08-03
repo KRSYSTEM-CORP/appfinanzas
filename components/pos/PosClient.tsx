@@ -11,6 +11,7 @@ import { ReceiptView } from "@/components/pos/ReceiptView";
 import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { completeSale, getSaleReceipt } from "@/lib/actions/sales";
 import { resolveSalePayments } from "@/lib/payment-currency";
+import { computeItemDiscountCents } from "@/lib/discount";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { queueSale, type PendingSaleInput } from "@/lib/offline/sync";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
@@ -50,6 +51,7 @@ export function PosClient({
     defaultPaymentSplitRows(0, rate, exchangeRateEnabled)
   );
   const [note, setNote] = useState("");
+  const [discountPercent, setDiscountPercent] = useState("0");
   const [error, setError] = useState<string | null>(null);
   // Either a real, server-confirmed sale, or a locally-built stand-in for one
   // queued while offline (see queueOfflineSale below) — both render fine in
@@ -59,7 +61,16 @@ export function PosClient({
   const [isPending, startTransition] = useTransition();
 
   const productById = new Map(products.map((p) => [p.id, p]));
-  const total = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+  const rawTotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+  const discountValue = Math.min(100, Math.max(0, Number(discountPercent) || 0));
+  // Same per-line rounding completeSale applies server-side, so the payment
+  // split this drives always matches the total that's actually validated at
+  // checkout (see assertPaymentsMatchTotal in lib/payment-currency.ts).
+  const discountCentsTotal = lines.reduce(
+    (sum, l) => sum + computeItemDiscountCents(l.unitPriceCents * l.quantity, discountValue),
+    0
+  );
+  const total = rawTotal - discountCentsTotal;
 
   // Keep the single default payment row in sync with the cart total as
   // products are added/removed, so the common single-method case never
@@ -145,7 +156,9 @@ export function PosClient({
         : [];
 
     const items: SaleItem[] = lines.map((l) => {
-      const subtotalCents = l.unitPriceCents * l.quantity;
+      const rawSubtotalCents = l.unitPriceCents * l.quantity;
+      const itemDiscountCents = computeItemDiscountCents(rawSubtotalCents, discountValue);
+      const subtotalCents = rawSubtotalCents - itemDiscountCents;
       return {
         id: crypto.randomUUID(),
         saleId: localId,
@@ -155,6 +168,7 @@ export function PosClient({
         unitPriceCents: l.unitPriceCents,
         quantity: l.quantity,
         subtotalCents,
+        discountCents: itemDiscountCents,
         // The real IVA breakdown is computed server-side once this offline
         // sale actually syncs (see completeSale) — this optimistic preview
         // never shows a tax breakdown, so these are placeholders only.
@@ -185,6 +199,7 @@ export function PosClient({
       id: localId,
       createdAt: now,
       totalCents: total,
+      discountCents: discountCentsTotal,
       paymentMethod: payments[0]?.paymentMethod ?? null,
       note: note.trim() || null,
       exchangeRate: rate,
@@ -227,6 +242,7 @@ export function PosClient({
               reference: r.reference,
             }))
           : [],
+      discountPercent: discountValue,
       customerFirstName: customer.firstName,
       customerLastName: customer.lastName,
       customerPhone: customer.phone,
@@ -243,7 +259,7 @@ export function PosClient({
           category: productById.get(l.productId)?.category ?? null,
           quantity: l.quantity,
           unitPriceCents: l.unitPriceCents,
-          subtotalCents: l.unitPriceCents * l.quantity,
+          subtotalCents: l.unitPriceCents * l.quantity - computeItemDiscountCents(l.unitPriceCents * l.quantity, discountValue),
         })),
         sellerName,
         note: note.trim() || null,
@@ -285,6 +301,7 @@ export function PosClient({
     setPaymentStatus("PAID");
     setPaymentRows(defaultPaymentSplitRows(0, rate, exchangeRateEnabled));
     setNote("");
+    setDiscountPercent("0");
     setCompletedSale(null);
     setPendingSync(false);
     setStep("customer");
@@ -352,6 +369,8 @@ export function PosClient({
           onRemove={remove}
           note={note}
           onNoteChange={setNote}
+          discountPercent={discountPercent}
+          onDiscountPercentChange={setDiscountPercent}
           onCheckout={checkout}
           isPending={isPending}
           error={error}

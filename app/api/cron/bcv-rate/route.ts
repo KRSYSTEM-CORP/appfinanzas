@@ -4,7 +4,8 @@ import { fetchBcvRate } from "@/lib/bcv-rate";
 import { prisma } from "@/lib/prisma";
 import { PLATFORM_SETTINGS_ID } from "@/lib/billing";
 
-// Runs once a day (see vercel.json's "crons" entry) and refreshes
+// Runs once a day at 00:00 Venezuela time (04:00 UTC — Vercel cron schedules
+// always run in UTC, see vercel.json's "crons" entry) and refreshes
 // Company.exchangeRate for every VES company automatically — this is what
 // makes the BCV rate "just update itself" instead of requiring someone to
 // open Settings and click a button every morning. Also refreshes
