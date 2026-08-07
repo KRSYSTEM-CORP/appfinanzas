@@ -52,7 +52,17 @@ function displayName(u: Pick<User, "firstName" | "lastName" | "email">): string 
   return u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email;
 }
 
-type AdminCompany = Company & { users: User[] };
+// Mirrors the `select` in listAllCompanies() (lib/actions/admin.ts) exactly —
+// narrower than the full Prisma Company/User (no Decimal exchangeRate, no
+// passwordHash) since this crosses into a Client Component.
+type AdminCompanyUser = Pick<
+  User,
+  "id" | "email" | "firstName" | "lastName" | "role" | "status" | "isSuperAdmin"
+>;
+type AdminCompany = Pick<
+  Company,
+  "id" | "name" | "isExempt" | "nextPaymentDueDate" | "monthlyFeeUsdCents" | "createdAt"
+> & { users: AdminCompanyUser[] };
 
 function addDaysISO(from: Date, days: number): string {
   const d = new Date(from);

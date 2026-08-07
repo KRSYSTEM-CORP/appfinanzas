@@ -38,14 +38,35 @@ async function requireSuperAdmin() {
 // account together with any employees it has registered — the users array
 // is ordered owner-first (GERENTE, oldest first) so `users[0]` is always the
 // account created by signup(), the one every company-level action targets.
+// select (not include) on purpose: this feeds straight into a Client
+// Component (AdminUserTable) — Company.exchangeRate is a Prisma Decimal,
+// which isn't a plain serializable object, and every User row carries
+// passwordHash. Selecting only what the table actually renders avoids both
+// the Decimal-across-the-client-boundary React error and shipping a
+// password hash to the browser for no reason.
 export async function listAllCompanies() {
   await requireSuperAdmin();
   return withSuperAdmin((tx) =>
     tx.company.findMany({
       orderBy: { createdAt: "desc" },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        isExempt: true,
+        nextPaymentDueDate: true,
+        monthlyFeeUsdCents: true,
+        createdAt: true,
         users: {
           orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            status: true,
+            isSuperAdmin: true,
+          },
         },
       },
     })
