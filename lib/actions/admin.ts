@@ -52,13 +52,15 @@ export async function listAllCompanies() {
   );
 }
 
-// Approving a pending company also sets up its first billing cycle in the
-// same step: a monthlyFee/nextPaymentDueDate left blank in the form falls
-// back to the platform's default fee and a free TRIAL_DAYS-day trial
-// starting today, so the common case (a brand-new signup on the standard
-// plan) needs no manual input at all — the fields only exist for an admin
-// to override them for a specific company (e.g. a custom price or a longer
-// trial). No Payment record is created here since a trial isn't a payment.
+// Signup is self-serve now (see createCompanyWithOwner in
+// lib/company-provisioning.ts) — a new company is ACTIVE with its trial
+// running from the moment it's created, no approval needed. This stays only
+// to let a super admin manually reactivate/re-price a PENDING account from
+// before that change (or any created directly in the DB). Approving also
+// sets up the billing cycle in the same step: a monthlyFee/nextPaymentDueDate
+// left blank in the form falls back to the platform's default fee and a free
+// TRIAL_DAYS-day trial starting today. No Payment record is created here
+// since a trial isn't a payment.
 export async function approveUser(userId: string, billing: unknown): Promise<ActionResult> {
   await requireSuperAdmin();
   const parsed = BillingCycleSchema.safeParse(billing);

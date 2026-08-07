@@ -1,13 +1,13 @@
 "use server";
 
-import { randomInt, randomBytes, createHash } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { setSessionCookie, clearSessionCookie } from "@/lib/session";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { createCompanyWithOwner } from "@/lib/company-provisioning";
 import {
   EmployeeLoginSchema,
   LoginSchema,
@@ -21,18 +21,6 @@ const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 function hashResetToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
-}
-
-// Excludes visually ambiguous characters (0/O, 1/I) since employees will be
-// reading this off a screen or a note to type it in themselves.
-const LOGIN_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function generateLoginCode(): string {
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += LOGIN_CODE_ALPHABET[randomInt(LOGIN_CODE_ALPHABET.length)];
-  }
-  return code;
 }
 
 // A shared POS terminal only ever belongs to one company in practice — once
@@ -77,6 +65,10 @@ export async function getRememberedCompany(): Promise<RememberedCompany | null> 
   return { code, companyName: company?.name ?? null };
 }
 
+// Self-serve: the company is active immediately, with a free trial (see
+// createCompanyWithOwner/lib/billing.ts) — no super admin approval step.
+// Auto-logs in and lands straight on /pos, the same way the Google signup
+// path (app/api/auth/google/callback) does.
 export async function signup(formData: FormData): Promise<ActionResult> {
   const parsed = SignupSchema.safeParse({
     companyName: formData.get("companyName"),
@@ -96,40 +88,10 @@ export async function signup(formData: FormData): Promise<ActionResult> {
   }
 
   const passwordHash = hashPassword(password);
+  const { company, branch, user } = await createCompanyWithOwner(companyName, { email, passwordHash });
 
-  // New accounts start PENDING and can't log in until a KR System platform
-  // admin approves them from /admin — no session is created here. loginCode
-  // is the short code employees will later use (with their name+password) to
-  // log in without an email; collisions are astronomically unlikely (33^6
-  // possibilities) but retried a few times just in case.
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      await prisma.$transaction(async (tx) => {
-        const company = await tx.company.create({
-          data: { name: companyName, loginCode: generateLoginCode() },
-        });
-        // Every company needs at least one branch to operate (products,
-        // sales, etc. all require a concrete branchId) — this one plays the
-        // same "Sucursal Principal" role the migration backfilled onto
-        // pre-existing companies (see prisma/migrations/20260719160000_add_branches).
-        await tx.branch.create({
-          data: { companyId: company.id, name: "Sucursal Principal" },
-        });
-        return tx.user.create({
-          data: { email, passwordHash, companyId: company.id, status: "PENDING" },
-        });
-      });
-      return { success: true };
-    } catch (err) {
-      const isLoginCodeCollision =
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === "P2002" &&
-        (err.meta?.target as string[] | undefined)?.includes("loginCode");
-      if (!isLoginCodeCollision) throw err;
-    }
-  }
-
-  return { success: false, error: "No se pudo crear la empresa, intenta de nuevo" };
+  await setSessionCookie({ uid: user.id, cid: company.id, companyName: company.name, bid: branch.id });
+  redirect("/pos");
 }
 
 export type LoginResult =
@@ -154,7 +116,10 @@ export async function login(formData: FormData): Promise<LoginResult> {
     where: { email },
     include: { company: true },
   });
-  if (!user || !verifyPassword(password, user.passwordHash)) {
+  // user.passwordHash is null on an account that only ever signed up with
+  // Google (see app/api/auth/google/callback) — a password attempt against
+  // it must fail the same generic way as a non-existent email, not throw.
+  if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
     return { success: false, error: genericError };
   }
 
@@ -246,7 +211,7 @@ export async function loginEmployee(formData: FormData): Promise<ActionResult> {
       lastName: { equals: lastName, mode: "insensitive" },
     },
   });
-  if (!user || !verifyPassword(password, user.passwordHash)) {
+  if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
     return { success: false, error: genericError };
   }
 

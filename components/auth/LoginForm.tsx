@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -16,12 +16,30 @@ import {
 } from "@/lib/actions/auth";
 import { deriveBrandVars, BRAND_VAR_NAMES } from "@/lib/theme-color";
 import { splitFullName } from "@/lib/name";
+import { GoogleIcon } from "@/components/auth/GoogleIcon";
 
 const NO_BRANDING: CompanyBranding = { logoDataUrl: null, brandColor: null, brandBackground: null };
 
+const GOOGLE_ERRORS: Record<string, string> = {
+  google_no_configurado: "El inicio de sesión con Google no está configurado todavía.",
+  google_cancelado: "Cancelaste el inicio de sesión con Google.",
+  google_estado_invalido: "El enlace de Google expiró o no es válido. Intenta de nuevo.",
+  google_fallo: "Google no pudo confirmar tu cuenta. Intenta de nuevo.",
+  cuenta_pendiente: "Tu cuenta está pendiente de aprobación por un administrador de KR System.",
+  cuenta_suspendida: "Tu acceso está suspendido.",
+};
+
 type BranchOption = { id: string; name: string };
 
-export function LoginForm({ rememberedCompany }: { rememberedCompany: RememberedCompany | null }) {
+export function LoginForm({
+  rememberedCompany,
+  googleConfigured = false,
+  authError,
+}: {
+  rememberedCompany: RememberedCompany | null;
+  googleConfigured?: boolean;
+  authError?: string;
+}) {
   const [mode, setMode] = useState<"owner" | "employee">("owner");
   const [error, setError] = useState<string | null>(null);
   const [branding, setBranding] = useState<CompanyBranding>(NO_BRANDING);
@@ -175,6 +193,22 @@ export function LoginForm({ rememberedCompany }: { rememberedCompany: Remembered
           Soy empleado
         </button>
       </div>
+
+      {authError && GOOGLE_ERRORS[authError] && (
+        <p className="text-sm text-destructive text-center">{GOOGLE_ERRORS[authError]}</p>
+      )}
+
+      {mode === "owner" && googleConfigured && !branchChoices && (
+        <>
+          <a href="/api/auth/google/start" className={buttonVariants({ variant: "outline", size: "lg" })}>
+            <GoogleIcon />
+            Continuar con Google
+          </a>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="h-px flex-1 bg-border" />o<div className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      )}
 
       {branchChoices ? (
         <div className="flex flex-col gap-4">

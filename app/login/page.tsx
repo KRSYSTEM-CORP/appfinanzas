@@ -3,11 +3,16 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import { WelcomeModal } from "@/components/auth/WelcomeModal";
 import { COPYRIGHT_LINE, WHATSAPP_URL } from "@/lib/legal";
 import { getRememberedCompany } from "@/lib/actions/auth";
+import { googleOAuthConfigured } from "@/lib/google-oauth";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
-  const rememberedCompany = await getRememberedCompany();
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const [rememberedCompany, { error }] = await Promise.all([getRememberedCompany(), searchParams]);
   return (
     <div className="flex flex-col gap-6 p-6 py-16 bg-gradient-to-b from-secondary/50 via-background to-background min-h-full">
       <WelcomeModal />
@@ -20,7 +25,7 @@ export default async function LoginPage() {
           <p className="text-sm text-muted-foreground mt-1">KR POS — Ventas e Inventario</p>
         </div>
       </div>
-      <LoginForm rememberedCompany={rememberedCompany} />
+      <LoginForm rememberedCompany={rememberedCompany} googleConfigured={googleOAuthConfigured()} authError={error} />
       <p className="text-center text-sm text-muted-foreground">
         ¿Quieres este sistema para tu negocio o más información?{" "}
         <a

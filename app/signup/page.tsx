@@ -1,8 +1,14 @@
 import Image from "next/image";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { WHATSAPP_URL } from "@/lib/legal";
+import { googleOAuthConfigured } from "@/lib/google-oauth";
 
-export default function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
   return (
     <div className="flex flex-col gap-6 p-6 py-16">
       <div className="text-center flex flex-col items-center gap-3">
@@ -14,7 +20,7 @@ export default function SignupPage() {
           </p>
         </div>
       </div>
-      <SignupForm />
+      <SignupForm googleConfigured={googleOAuthConfigured()} authError={error} />
       <p className="text-center text-sm text-muted-foreground">
         ¿Quieres este sistema para tu negocio o más información?{" "}
         <a

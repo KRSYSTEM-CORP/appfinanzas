@@ -359,7 +359,10 @@ export async function changeMyPassword(formData: FormData): Promise<ActionResult
   }
 
   const user = await withTenant(companyId, (tx) => tx.user.findFirst({ where: { id: userId, companyId } }));
-  if (!user || !verifyPassword(parsed.data.currentPassword, user.passwordHash)) {
+  // user.passwordHash is null for an account that only ever signed up with
+  // Google — there's no current password to check, so this form isn't a way
+  // for them to set an initial one (they can keep using Google to log in).
+  if (!user || !user.passwordHash || !verifyPassword(parsed.data.currentPassword, user.passwordHash)) {
     return { success: false, error: "La contraseña actual es incorrecta" };
   }
 

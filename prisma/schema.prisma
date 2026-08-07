@@ -225,7 +225,13 @@ model Branch {
 model User {
   id                  String               @id @default(cuid())
   email               String               @unique
-  passwordHash        String
+  // Null for an account that only ever signed up/logged in with Google (see
+  // app/api/auth/google/callback) — nothing to verify a password against.
+  passwordHash        String?
+  // Google's stable per-account id ("sub" claim) — set the first time this
+  // person uses "Continuar con Google", whether that creates a brand-new
+  // company or links onto an existing email/password account.
+  googleId            String?              @unique
   companyId           String
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Which branch this employee is fixed to — null for GERENTE/the owner
