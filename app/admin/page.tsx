@@ -57,6 +57,8 @@ export default async function AdminPage() {
         <CardContent>
           <PlatformSettingsForm
             initialInstructions={platformSettings.paymentInstructions}
+            initialBinanceQrDataUrl={platformSettings.binanceQrDataUrl}
+            initialBinanceId={platformSettings.binanceId}
             initialBillingExchangeRate={platformSettings.billingExchangeRate}
             initialDefaultMonthlyFeeUsdCents={platformSettings.defaultMonthlyFeeUsdCents}
           />

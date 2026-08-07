@@ -316,6 +316,8 @@ export async function rejectPaymentReport(reportId: string, input: unknown): Pro
 
 export async function getPlatformSettings(): Promise<{
   paymentInstructions: string | null;
+  binanceQrDataUrl: string | null;
+  binanceId: string | null;
   billingExchangeRate: number | null;
   defaultMonthlyFeeUsdCents: number | null;
 }> {
@@ -323,6 +325,8 @@ export async function getPlatformSettings(): Promise<{
   const settings = await prisma.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } });
   return {
     paymentInstructions: settings?.paymentInstructions ?? null,
+    binanceQrDataUrl: settings?.binanceQrDataUrl ?? null,
+    binanceId: settings?.binanceId ?? null,
     billingExchangeRate: settings?.billingExchangeRate != null ? Number(settings.billingExchangeRate) : null,
     defaultMonthlyFeeUsdCents: settings?.defaultMonthlyFeeUsdCents ?? null,
   };
@@ -382,11 +386,15 @@ export async function updatePlatformSettings(input: unknown): Promise<ActionResu
     create: {
       id: PLATFORM_SETTINGS_ID,
       paymentInstructions: parsed.data.paymentInstructions,
+      binanceQrDataUrl: parsed.data.binanceQrDataUrl,
+      binanceId: parsed.data.binanceId,
       billingExchangeRate: parsed.data.billingExchangeRate,
       defaultMonthlyFeeUsdCents: parsed.data.defaultMonthlyFee,
     },
     update: {
       paymentInstructions: parsed.data.paymentInstructions,
+      binanceQrDataUrl: parsed.data.binanceQrDataUrl,
+      binanceId: parsed.data.binanceId,
       billingExchangeRate: parsed.data.billingExchangeRate,
       defaultMonthlyFeeUsdCents: parsed.data.defaultMonthlyFee,
     },

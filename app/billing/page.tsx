@@ -26,11 +26,11 @@ const STATUS_LABELS: Record<PaymentReportStatus, string> = {
 export default async function BillingPage() {
   const [info, reports] = await Promise.all([getBillingInfo(), listMyPaymentReports()]);
 
-  // The Bs equivalent is only shown here as a heads-up for VES companies
-  // (who typically pay via Pago Móvil) while reporting a payment — the
-  // headline "cost" is always the USD amount; the actual Bs amount used
-  // when a report is approved is computed from whatever the platform rate
-  // is at that moment, not frozen here.
+  // The Bs equivalent is only shown here as a heads-up for VES companies —
+  // the subscription is only ever paid in USDT via Binance, so this is just
+  // informational; the headline "cost" is always the USD amount, and the
+  // actual Bs figure used when a report is approved is computed from
+  // whatever the platform rate is at that moment, not frozen here.
   const previewBs =
     info.localCurrencyCode === "VES" && info.monthlyFeeUsdCents != null && info.billingExchangeRate != null
       ? (info.monthlyFeeUsdCents / 100) * info.billingExchangeRate
@@ -91,15 +91,33 @@ export default async function BillingPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Cómo pagar</CardTitle>
+              <CardTitle>Cómo pagar — Binance (USDT)</CardTitle>
             </CardHeader>
-            <CardContent>
-              {info.paymentInstructions ? (
-                <p className="text-sm whitespace-pre-line">{info.paymentInstructions}</p>
+            <CardContent className="flex flex-col gap-3">
+              {info.binanceQrDataUrl || info.binanceId ? (
+                <>
+                  {info.binanceQrDataUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={info.binanceQrDataUrl}
+                      alt="QR de Binance Pay"
+                      className="h-40 w-40 rounded-lg border object-cover"
+                    />
+                  )}
+                  {info.binanceId && (
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">ID de Binance: </span>
+                      <span className="font-medium">{info.binanceId}</span>
+                    </p>
+                  )}
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  El super admin todavía no ha configurado el método de pago.
+                  El super admin todavía no ha configurado los datos de Binance.
                 </p>
+              )}
+              {info.paymentInstructions && (
+                <p className="text-sm text-muted-foreground whitespace-pre-line">{info.paymentInstructions}</p>
               )}
             </CardContent>
           </Card>
@@ -124,7 +142,7 @@ export default async function BillingPage() {
                   Pasos obligatorios para activar tu suscripción:
                 </p>
                 <ol className="text-sm text-muted-foreground list-decimal list-inside flex flex-col gap-1">
-                  <li>Paga por Transferencia Bancaria o Pago Móvil, con los datos de arriba.</li>
+                  <li>Paga por Binance (USDT), escaneando el QR o con el ID de arriba.</li>
                   <li>Sube tu comprobante de pago aquí abajo (obligatorio).</li>
                   <li>
                     Envía el mismo comprobante también por WhatsApp (obligatorio) — así te

@@ -438,6 +438,16 @@ export const PlatformSettingsSchema = z.object({
     .trim()
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
+  binanceQrDataUrl: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
+  binanceId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
   billingExchangeRate: z.coerce.number().positive("La tasa debe ser mayor a 0").optional(),
   defaultMonthlyFee: z.preprocess(
     blankToUndefined,
