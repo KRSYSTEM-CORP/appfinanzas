@@ -27,13 +27,8 @@ export type BillingInfo = {
   companyName: string;
   isExempt: boolean;
   monthlyFeeUsdCents: number | null;
-  // Platform-wide rate (not per-company) — only meaningful for VES
-  // companies previewing what a report would come out to in bolívares
-  // (Transferencia Bancaria / Pago Móvil); the headline "cost" shown is
-  // always the USD amount.
-  billingExchangeRate: number | null;
-  // The company's own retail currency (Settings → Moneda) — used here just
-  // to decide whether the Bs preview above is relevant at all.
+  // The company's own retail currency (Settings → Moneda) — informational,
+  // unrelated to platform billing (which is always USDT via Binance now).
   localCurrencyCode: string;
   nextPaymentDueDate: Date | null;
   blocked: boolean;
@@ -69,7 +64,6 @@ export async function getBillingInfo(): Promise<BillingInfo> {
     companyName,
     isExempt,
     monthlyFeeUsdCents: company?.monthlyFeeUsdCents ?? null,
-    billingExchangeRate: settings?.billingExchangeRate != null ? Number(settings.billingExchangeRate) : null,
     localCurrencyCode: company?.localCurrencyCode ?? "VES",
     nextPaymentDueDate,
     blocked: isCompanyBlocked({ isExempt, nextPaymentDueDate }),

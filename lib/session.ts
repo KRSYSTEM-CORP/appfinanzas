@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import type { Role } from "@prisma/client";
-import { isCompanyBlocked, PLATFORM_SETTINGS_ID } from "@/lib/billing";
+import { isCompanyBlocked } from "@/lib/billing";
 import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
@@ -37,7 +37,6 @@ export type Session = {
   billingBlocked: boolean;
   isExempt: boolean;
   monthlyFeeUsdCents: number | null;
-  billingExchangeRate: number | null;
   localCurrencyCode: string;
   nextPaymentDueDate: Date | null;
   role: Role;
@@ -65,22 +64,19 @@ export async function getSession(): Promise<Session | null> {
   // Re-validate against the DB on every call so a deleted user/company, or a
   // user suspended by a platform admin mid-session, is caught immediately
   // instead of trusting a still-valid signed cookie until it expires.
-  const [user, platformSettings] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: payload.uid },
-      include: {
-        company: {
-          select: {
-            isExempt: true,
-            monthlyFeeUsdCents: true,
-            nextPaymentDueDate: true,
-            localCurrencyCode: true,
-          },
+  const user = await prisma.user.findUnique({
+    where: { id: payload.uid },
+    include: {
+      company: {
+        select: {
+          isExempt: true,
+          monthlyFeeUsdCents: true,
+          nextPaymentDueDate: true,
+          localCurrencyCode: true,
         },
       },
-    }),
-    prisma.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } }),
-  ]);
+    },
+  });
   if (!user || user.companyId !== payload.cid || user.status !== "ACTIVE") return null;
 
   const isExempt = user.company.isExempt;
@@ -112,9 +108,6 @@ export async function getSession(): Promise<Session | null> {
     billingBlocked: user.isSuperAdmin ? false : isCompanyBlocked({ isExempt, nextPaymentDueDate }),
     isExempt,
     monthlyFeeUsdCents: user.company.monthlyFeeUsdCents,
-    // Platform-wide rate (not per-company) — see PlatformSettings.
-    billingExchangeRate:
-      platformSettings?.billingExchangeRate != null ? Number(platformSettings.billingExchangeRate) : null,
     localCurrencyCode: user.company.localCurrencyCode,
     nextPaymentDueDate,
     role: user.role,

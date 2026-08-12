@@ -658,10 +658,11 @@ model Payment {
   companyId      String
   company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   amountUsdCents Int
-  // Platform Bs/USD rate in effect for this payment (snapshot, independent
-  // of the company's own retail exchangeRate) — only meaningful for VES
-  // companies previewing the bolívar equivalent.
-  exchangeRate   Decimal  @db.Decimal(12, 4)
+  // Historical: platform Bs/USD rate in effect for this payment, back when
+  // subscriptions could be paid in bolívares. Now that payment is exclusively
+  // USDT via Binance, this is always null for anything recorded going
+  // forward — kept nullable instead of dropped so old records stay intact.
+  exchangeRate   Decimal? @db.Decimal(12, 4)
   periodEnd      DateTime
   note           String?
   verifiedById   String
@@ -824,10 +825,6 @@ model PlatformSettings {
   // Binance Pay ID / UID, shown alongside the QR as a manual fallback for
   // whoever can't scan it.
   binanceId                 String?
-  // Platform-wide Bs/USD rate, used only to preview the bolívar equivalent
-  // for VES companies — the subscription itself is only ever paid in USDT
-  // via Binance, this is just a heads-up of what that comes out to in Bs.
-  billingExchangeRate       Decimal? @db.Decimal(12, 4)
   // Applied to Company.monthlyFeeUsdCents automatically when a super admin
   // approves a new signup and leaves the fee field blank (see approveUser
   // in lib/actions/admin.ts) — a single platform-wide price for every new

@@ -11,7 +11,6 @@ import {
 import { PaymentReportForm } from "@/components/billing/PaymentReportForm";
 import { getBillingInfo, listMyPaymentReports } from "@/lib/actions/billing";
 import { formatDate, formatUSD, PAYMENT_METHOD_LABELS } from "@/lib/format";
-import { formatLocalCurrency } from "@/lib/currencies";
 import { WHATSAPP_PHONE } from "@/lib/legal";
 import type { PaymentReportStatus } from "@prisma/client";
 
@@ -25,16 +24,6 @@ const STATUS_LABELS: Record<PaymentReportStatus, string> = {
 
 export default async function BillingPage() {
   const [info, reports] = await Promise.all([getBillingInfo(), listMyPaymentReports()]);
-
-  // The Bs equivalent is only shown here as a heads-up for VES companies —
-  // the subscription is only ever paid in USDT via Binance, so this is just
-  // informational; the headline "cost" is always the USD amount, and the
-  // actual Bs figure used when a report is approved is computed from
-  // whatever the platform rate is at that moment, not frozen here.
-  const previewBs =
-    info.localCurrencyCode === "VES" && info.monthlyFeeUsdCents != null && info.billingExchangeRate != null
-      ? (info.monthlyFeeUsdCents / 100) * info.billingExchangeRate
-      : null;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -65,11 +54,6 @@ export default async function BillingPage() {
               {info.monthlyFeeUsdCents != null ? (
                 <>
                   <span className="text-2xl font-semibold">{formatUSD(info.monthlyFeeUsdCents)}</span>
-                  {previewBs != null && (
-                    <span className="text-xs text-muted-foreground">
-                      ≈ {formatLocalCurrency(previewBs, info.localCurrencyCode)} a la tasa vigente
-                    </span>
-                  )}
                 </>
               ) : (
                 <span className="text-sm text-muted-foreground">
@@ -131,12 +115,6 @@ export default async function BillingPage() {
               <CardTitle>Reportar pago</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {previewBs != null && (
-                <p className="text-sm text-muted-foreground">
-                  Monto aproximado en bolívares a la tasa vigente:{" "}
-                  <span className="font-medium">{formatLocalCurrency(previewBs, info.localCurrencyCode)}</span>
-                </p>
-              )}
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex flex-col gap-2">
                 <p className="text-sm font-medium">
                   Pasos obligatorios para activar tu suscripción:

@@ -13,7 +13,6 @@ import {
   extendDueDateByMonths,
 } from "@/lib/billing";
 import { sendAnnouncementEmail } from "@/lib/email";
-import { fetchBcvRate } from "@/lib/bcv-rate";
 import {
   AnnouncementSchema,
   BillingCycleSchema,
@@ -149,9 +148,10 @@ export async function reactivateUser(userId: string): Promise<ActionResult> {
 }
 
 // Records a confirmed maintenance payment and pushes out the due date — this
-// is the only way to unblock a company past its grace period. The rate
-// snapshotted into the Payment record always comes from the platform-wide
-// PlatformSettings.billingExchangeRate, never a value typed in here.
+// is the only way to unblock a company past its grace period. The subscription
+// is always paid in USDT via Binance, so there's no exchange rate to snapshot
+// here anymore — Payment.exchangeRate stays null for anything recorded from
+// this point on (see the historical note on that column).
 export async function recordMaintenancePayment(companyId: string, input: unknown): Promise<ActionResult> {
   const session = await requireSuperAdmin();
   const parsed = MaintenancePaymentSchema.safeParse(input);
@@ -159,17 +159,11 @@ export async function recordMaintenancePayment(companyId: string, input: unknown
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos de pago inválidos" };
   }
 
-  const result = await withSuperAdmin(async (tx) => {
-    const settings = await tx.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } });
-    if (settings?.billingExchangeRate == null) {
-      return { ok: false as const, error: "Configura la tasa de cambio de la plataforma primero" };
-    }
-
+  await withSuperAdmin(async (tx) => {
     await tx.payment.create({
       data: {
         companyId,
         amountUsdCents: parsed.data.amount,
-        exchangeRate: settings.billingExchangeRate,
         periodEnd: parsed.data.periodEnd,
         note: parsed.data.note,
         verifiedById: session.userId,
@@ -182,12 +176,8 @@ export async function recordMaintenancePayment(companyId: string, input: unknown
         nextPaymentDueDate: parsed.data.periodEnd,
       },
     });
-    return { ok: true as const };
   });
 
-  if (!result.ok) {
-    return { success: false, error: result.error };
-  }
   revalidatePath("/admin");
   revalidatePath("/settings");
   revalidatePath("/billing");
@@ -264,11 +254,6 @@ export async function approvePaymentReport(reportId: string): Promise<ActionResu
       return { ok: false as const, error: "El reporte no tiene métodos de pago" };
     }
 
-    const settings = await tx.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } });
-    if (settings?.billingExchangeRate == null) {
-      return { ok: false as const, error: "Configura la tasa de cambio de la plataforma primero" };
-    }
-
     const company = await tx.company.findUnique({ where: { id: report.companyId } });
     if (!company) {
       return { ok: false as const, error: "Empresa no encontrada" };
@@ -284,7 +269,6 @@ export async function approvePaymentReport(reportId: string): Promise<ActionResu
       data: {
         companyId: report.companyId,
         amountUsdCents: totalUsdCents,
-        exchangeRate: settings.billingExchangeRate,
         periodEnd,
         note: report.note ? `Reportado por el usuario: ${report.note}` : "Reportado por el usuario",
         verifiedById: session.userId,
@@ -339,7 +323,6 @@ export async function getPlatformSettings(): Promise<{
   paymentInstructions: string | null;
   binanceQrDataUrl: string | null;
   binanceId: string | null;
-  billingExchangeRate: number | null;
   defaultMonthlyFeeUsdCents: number | null;
 }> {
   await requireSuperAdmin();
@@ -348,7 +331,6 @@ export async function getPlatformSettings(): Promise<{
     paymentInstructions: settings?.paymentInstructions ?? null,
     binanceQrDataUrl: settings?.binanceQrDataUrl ?? null,
     binanceId: settings?.binanceId ?? null,
-    billingExchangeRate: settings?.billingExchangeRate != null ? Number(settings.billingExchangeRate) : null,
     defaultMonthlyFeeUsdCents: settings?.defaultMonthlyFeeUsdCents ?? null,
   };
 }
@@ -409,14 +391,12 @@ export async function updatePlatformSettings(input: unknown): Promise<ActionResu
       paymentInstructions: parsed.data.paymentInstructions,
       binanceQrDataUrl: parsed.data.binanceQrDataUrl,
       binanceId: parsed.data.binanceId,
-      billingExchangeRate: parsed.data.billingExchangeRate,
       defaultMonthlyFeeUsdCents: parsed.data.defaultMonthlyFee,
     },
     update: {
       paymentInstructions: parsed.data.paymentInstructions,
       binanceQrDataUrl: parsed.data.binanceQrDataUrl,
       binanceId: parsed.data.binanceId,
-      billingExchangeRate: parsed.data.billingExchangeRate,
       defaultMonthlyFeeUsdCents: parsed.data.defaultMonthlyFee,
     },
   });
@@ -425,31 +405,4 @@ export async function updatePlatformSettings(input: unknown): Promise<ActionResu
   revalidatePath("/billing");
   revalidatePath("/settings");
   return { success: true };
-}
-
-// Same BCV source the per-company "Actualizar con tasa BCV" button uses
-// (lib/actions/settings.ts), but for the platform's own USD/VES billing
-// rate — subscriptions are always priced in USD regardless of each
-// company's own reference currency, so this always fetches the USD leg.
-export async function fetchAndUpdatePlatformBcvRate(): Promise<
-  { success: true; rate: number } | { success: false; error: string }
-> {
-  await requireSuperAdmin();
-
-  let rate: number;
-  try {
-    rate = await fetchBcvRate("USD");
-  } catch {
-    return { success: false, error: "No se pudo consultar la tasa del BCV. Intenta de nuevo." };
-  }
-
-  await prisma.platformSettings.upsert({
-    where: { id: PLATFORM_SETTINGS_ID },
-    create: { id: PLATFORM_SETTINGS_ID, billingExchangeRate: rate },
-    update: { billingExchangeRate: rate },
-  });
-
-  revalidatePath("/admin");
-  revalidatePath("/billing");
-  return { success: true, rate };
 }

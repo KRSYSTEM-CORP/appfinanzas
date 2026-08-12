@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatUSD } from "@/lib/format";
-import { formatLocalCurrency } from "@/lib/currencies";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -15,16 +14,6 @@ export default async function BlockedPage() {
   // through the Route Handler rather than by redirecting straight to /login.
   if (!session) redirect("/api/auth/clear-session");
   if (!session.billingBlocked) redirect("/pos");
-
-  // The Bs preview only makes sense for VES companies, who typically pay via
-  // Pago Móvil at the platform's own Bs/USD rate — everyone else just pays
-  // the USD amount directly via Zelle/Binance/PayPal.
-  const pendingBs =
-    session.localCurrencyCode === "VES" &&
-    session.monthlyFeeUsdCents != null &&
-    session.billingExchangeRate != null
-      ? (session.monthlyFeeUsdCents / 100) * session.billingExchangeRate
-      : null;
 
   return (
     <div className="flex flex-col items-center justify-center gap-6 p-6 py-16">
@@ -44,7 +33,6 @@ export default async function BlockedPage() {
           {session.monthlyFeeUsdCents != null && (
             <p>
               Monto pendiente: <span className="font-medium">{formatUSD(session.monthlyFeeUsdCents)}</span>
-              {pendingBs != null && ` (${formatLocalCurrency(pendingBs, session.localCurrencyCode)})`}
             </p>
           )}
           <p className="text-muted-foreground">
