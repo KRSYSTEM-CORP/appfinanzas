@@ -28,6 +28,14 @@ export type ExchangeRateInfo = {
   printPaperSize: PrintPaperSize;
 };
 
+// The daily Vercel cron (app/api/cron/bcv-rate/route.ts) is the primary way
+// this refreshes, but Vercel's own scheduler has occasionally failed to fire
+// it without any app-level cause. As a self-healing backstop, any page load
+// that reads the rate for a VES company also refreshes it here if it's gone
+// stale — so the rate corrects itself the next time someone opens the app,
+// regardless of whether the cron actually ran that day.
+const STALE_RATE_MS = 20 * 60 * 60 * 1000;
+
 export async function getExchangeRateInfo(): Promise<ExchangeRateInfo> {
   const { companyId } = await requireSession();
   const company = await withTenant(companyId, (tx) =>
@@ -43,9 +51,34 @@ export async function getExchangeRateInfo(): Promise<ExchangeRateInfo> {
       },
     })
   );
+
+  let rate = company?.exchangeRate != null ? Number(company.exchangeRate) : null;
+  let updatedAt = company?.exchangeRateUpdatedAt ?? null;
+
+  const isStale =
+    company?.localCurrencyCode === "VES" &&
+    company.exchangeRateEnabled &&
+    (updatedAt == null || Date.now() - updatedAt.getTime() > STALE_RATE_MS);
+
+  if (isStale && company) {
+    try {
+      const freshRate = await fetchBcvRate(company.referenceCurrency);
+      updatedAt = new Date();
+      await withTenant(companyId, (tx) =>
+        tx.company.update({
+          where: { id: companyId },
+          data: { exchangeRate: freshRate, exchangeRateUpdatedAt: updatedAt as Date },
+        })
+      );
+      rate = freshRate;
+    } catch {
+      // Keep serving the last known rate; the next page load or the cron retries.
+    }
+  }
+
   return {
-    rate: company?.exchangeRate != null ? Number(company.exchangeRate) : null,
-    updatedAt: company?.exchangeRateUpdatedAt ?? null,
+    rate,
+    updatedAt,
     localCurrencyCode: company?.localCurrencyCode ?? DEFAULT_CURRENCY_CODE,
     exchangeRateEnabled: company?.exchangeRateEnabled ?? true,
     referenceCurrency: company?.referenceCurrency ?? "EUR",
