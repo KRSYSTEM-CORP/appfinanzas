@@ -21,6 +21,7 @@ export function PrintableQuote({
   currencyCode = DEFAULT_CURRENCY_CODE,
   exchangeRateEnabled = true,
   referenceCurrency = "EUR",
+  useLocalCurrency = true,
   paperSize,
 }: {
   quote: QuoteForPdf;
@@ -29,10 +30,11 @@ export function PrintableQuote({
   currencyCode?: string;
   exchangeRateEnabled?: boolean;
   referenceCurrency?: ReferenceCurrency;
+  useLocalCurrency?: boolean;
   paperSize: PrintPaperSize;
 }) {
   const thermal = isThermal(paperSize);
-  const showLocal = exchangeRateEnabled && rate != null;
+  const showLocal = useLocalCurrency && exchangeRateEnabled && rate != null;
   const customerName = `${quote.customerFirstName ?? ""} ${quote.customerLastName ?? ""}`.trim();
 
   const money = (cents: number) =>

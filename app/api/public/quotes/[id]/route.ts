@@ -38,7 +38,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     rate,
     quote.company.localCurrencyCode,
     quote.company.exchangeRateEnabled,
-    quote.company.referenceCurrency
+    quote.company.referenceCurrency,
+    "letter",
+    quote.useLocalCurrency
   );
 
   const pdfBytes = doc.output("arraybuffer");

@@ -1,0 +1,1 @@
+ALTER TABLE "Quote" ADD COLUMN "useLocalCurrency" BOOLEAN NOT NULL DEFAULT true;

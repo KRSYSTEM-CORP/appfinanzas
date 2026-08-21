@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { Price } from "@/components/money/Price";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import type { ReferenceCurrency } from "@prisma/client";
 
@@ -22,6 +21,8 @@ export function QuoteCart({
   currencyCode,
   exchangeRateEnabled,
   referenceCurrency,
+  useLocalCurrency,
+  onToggleCurrency,
   onIncrement,
   onDecrement,
   onRemove,
@@ -36,6 +37,8 @@ export function QuoteCart({
   currencyCode: string;
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
+  useLocalCurrency: boolean;
+  onToggleCurrency: (useLocalCurrency: boolean) => void;
   onIncrement: (productId: string) => void;
   onDecrement: (productId: string) => void;
   onRemove: (productId: string) => void;
@@ -46,10 +49,36 @@ export function QuoteCart({
   error: string | null;
 }) {
   const total = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+  const showLocal = exchangeRateEnabled && useLocalCurrency && rate != null;
+  const money = (cents: number) =>
+    showLocal ? formatLocalCurrency(eurCentsToLocal(cents, rate!), currencyCode) : formatCurrencyCents(referenceCurrency, cents);
 
   return (
     <div className="flex flex-col h-full gap-3">
       <h2 className="font-semibold">Presupuesto</h2>
+
+      {exchangeRateEnabled && (
+        <div className="flex items-center gap-2 rounded-lg border p-1 text-sm">
+          <button
+            type="button"
+            onClick={() => onToggleCurrency(true)}
+            className={`flex-1 rounded-md px-2 py-1 transition-colors ${
+              useLocalCurrency ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+            }`}
+          >
+            {currencyCode}
+          </button>
+          <button
+            type="button"
+            onClick={() => onToggleCurrency(false)}
+            className={`flex-1 rounded-md px-2 py-1 transition-colors ${
+              !useLocalCurrency ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+            }`}
+          >
+            {referenceCurrency}
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto flex flex-col gap-2">
         {lines.length === 0 && (
@@ -61,11 +90,7 @@ export function QuoteCart({
           <div key={line.productId} className="flex items-center justify-between gap-2 rounded-lg border p-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{line.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {exchangeRateEnabled && rate != null
-                  ? `${formatLocalCurrency(eurCentsToLocal(line.unitPriceCents, rate), currencyCode)} / ${formatCurrencyCents(referenceCurrency, line.unitPriceCents)} c/u`
-                  : `${formatCurrencyCents(referenceCurrency, line.unitPriceCents)} c/u`}
-              </p>
+              <p className="text-xs text-muted-foreground">{money(line.unitPriceCents)} c/u</p>
             </div>
             <div className="flex items-center gap-1">
               <Button
@@ -87,14 +112,8 @@ export function QuoteCart({
                 +
               </Button>
             </div>
-            <div className="w-28 text-right">
-              <Price
-                eurCents={line.unitPriceCents * line.quantity}
-                rate={rate}
-                currencyCode={currencyCode}
-                exchangeRateEnabled={exchangeRateEnabled}
-                referenceCurrency={referenceCurrency}
-              />
+            <div className="w-28 text-right font-mono tabular-nums text-sm font-medium">
+              {money(line.unitPriceCents * line.quantity)}
             </div>
             <Button
               type="button"
@@ -112,15 +131,7 @@ export function QuoteCart({
 
       <div className="flex items-center justify-between">
         <span className="text-lg font-semibold">Total</span>
-        <Price
-          eurCents={total}
-          rate={rate}
-          currencyCode={currencyCode}
-          exchangeRateEnabled={exchangeRateEnabled}
-          referenceCurrency={referenceCurrency}
-          size="lg"
-          className="items-end"
-        />
+        <span className="font-mono tabular-nums text-lg font-semibold">{money(total)}</span>
       </div>
 
       <div className="flex flex-col gap-1.5">

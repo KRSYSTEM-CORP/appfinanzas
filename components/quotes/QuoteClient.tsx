@@ -39,6 +39,7 @@ export function QuoteClient({
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
   const [lines, setLines] = useState<QuoteCartLine[]>([]);
   const [note, setNote] = useState("");
+  const [useLocalCurrency, setUseLocalCurrency] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completedQuote, setCompletedQuote] = useState<QuoteWithItems | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -101,6 +102,7 @@ export function QuoteClient({
         customerPhone: customer.phone,
         customerAddress: customer.address,
         note: note.trim() || undefined,
+        useLocalCurrency,
       });
       if (!result.success) {
         setError(result.error);
@@ -173,6 +175,8 @@ export function QuoteClient({
           currencyCode={currencyCode}
           exchangeRateEnabled={exchangeRateEnabled}
           referenceCurrency={referenceCurrency}
+          useLocalCurrency={useLocalCurrency}
+          onToggleCurrency={setUseLocalCurrency}
           onIncrement={increment}
           onDecrement={decrement}
           onRemove={remove}

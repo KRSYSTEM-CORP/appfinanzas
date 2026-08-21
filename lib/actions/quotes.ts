@@ -32,14 +32,18 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
     customerPhone,
     customerAddress,
     note,
+    useLocalCurrency,
   } = parsed.data;
 
   try {
     const quoteId = await withTenant(companyId, async (tx) => {
       const company = await tx.company.findUnique({
         where: { id: companyId },
-        select: { exchangeRate: true },
+        select: { exchangeRate: true, exchangeRateEnabled: true },
       });
+      // A quote can only be in local currency if the company even has that
+      // feature on — otherwise there's nothing to choose between.
+      const resolvedUseLocalCurrency = useLocalCurrency && (company?.exchangeRateEnabled ?? false);
 
       const products = await tx.product.findMany({
         where: { id: { in: items.map((i) => i.productId) }, companyId, branchId },
@@ -94,6 +98,7 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
           companyId,
           branchId,
           exchangeRate: company?.exchangeRate ?? null,
+          useLocalCurrency: resolvedUseLocalCurrency,
           controlNumber: previousCount + 1,
           sellerId: userId,
           sellerName,

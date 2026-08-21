@@ -3,9 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Price } from "@/components/money/Price";
 import { formatDate } from "@/lib/format";
-import { formatLocalCurrency } from "@/lib/currencies";
+import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import { buildQuotePDF, quoteControlNumberLabel, type QuoteForPdf } from "@/lib/quote-pdf";
 import { itemDescription, type DeliveryNoteCompany } from "@/lib/delivery-note";
 import { pdfFormatForPaperSize } from "@/lib/print-paper-sizes";
@@ -13,6 +12,8 @@ import { PrintDialog } from "@/components/print/PrintDialog";
 import { PrintableQuote } from "@/components/print/PrintableQuote";
 import { ShareDialog } from "@/components/print/ShareDialog";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
+
+type QuoteWithCurrency = QuoteForPdf & { useLocalCurrency: boolean };
 
 export function QuoteReceiptView({
   quote,
@@ -24,7 +25,7 @@ export function QuoteReceiptView({
   company,
   onNewQuote,
 }: {
-  quote: QuoteForPdf;
+  quote: QuoteWithCurrency;
   rate: number | null;
   currencyCode: string;
   exchangeRateEnabled: boolean;
@@ -34,6 +35,11 @@ export function QuoteReceiptView({
   onNewQuote: () => void;
 }) {
   const effectiveRate = rate;
+  const showLocal = quote.useLocalCurrency && exchangeRateEnabled && effectiveRate != null;
+  const money = (cents: number) =>
+    showLocal
+      ? formatLocalCurrency(eurCentsToLocal(cents, effectiveRate!), currencyCode)
+      : formatCurrencyCents(referenceCurrency, cents);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -46,7 +52,8 @@ export function QuoteReceiptView({
       currencyCode,
       exchangeRateEnabled,
       referenceCurrency,
-      paperSize ? pdfFormatForPaperSize(paperSize) : "letter"
+      paperSize ? pdfFormatForPaperSize(paperSize) : "letter",
+      quote.useLocalCurrency
     );
     return doc.output("blob") as Blob;
   }
@@ -140,13 +147,7 @@ export function QuoteReceiptView({
             <span>
               {item.quantity} × {itemDescription(item)}
             </span>
-            <Price
-              eurCents={item.subtotalCents}
-              rate={effectiveRate}
-              currencyCode={currencyCode}
-              exchangeRateEnabled={exchangeRateEnabled}
-              referenceCurrency={referenceCurrency}
-            />
+            <span className="font-mono tabular-nums font-medium">{money(item.subtotalCents)}</span>
           </div>
         ))}
       </div>
@@ -155,21 +156,13 @@ export function QuoteReceiptView({
 
       <div className="flex justify-between items-center">
         <span className="font-semibold text-lg">Total</span>
-        <Price
-          eurCents={quote.totalCents}
-          rate={effectiveRate}
-          currencyCode={currencyCode}
-          exchangeRateEnabled={exchangeRateEnabled}
-          referenceCurrency={referenceCurrency}
-          size="lg"
-          className="items-end"
-        />
+        <span className="font-mono tabular-nums text-lg font-semibold">{money(quote.totalCents)}</span>
       </div>
-      {exchangeRateEnabled && effectiveRate != null && (
+      {showLocal && (
         <div className="flex justify-between text-sm text-muted-foreground">
           <span>Tasa del día</span>
           <span>
-            {formatLocalCurrency(effectiveRate, currencyCode)} por 1{referenceCurrency === "USD" ? "$" : "€"}
+            {formatLocalCurrency(effectiveRate!, currencyCode)} por 1{referenceCurrency === "USD" ? "$" : "€"}
           </span>
         </div>
       )}
@@ -199,6 +192,7 @@ export function QuoteReceiptView({
             currencyCode={currencyCode}
             exchangeRateEnabled={exchangeRateEnabled}
             referenceCurrency={referenceCurrency}
+            useLocalCurrency={quote.useLocalCurrency}
             paperSize={paperSize}
           />
         )}

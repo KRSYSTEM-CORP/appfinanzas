@@ -44,14 +44,15 @@ export async function buildQuotePDF(
   currencyCode: string = DEFAULT_CURRENCY_CODE,
   exchangeRateEnabled: boolean = true,
   referenceCurrency: ReferenceCurrency = "EUR",
-  format: "letter" | "a4" = "letter"
+  format: "letter" | "a4" = "letter",
+  useLocalCurrency: boolean = true
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "pt", format });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 40;
   let y = 40;
-  const showLocal = exchangeRateEnabled && rate != null;
+  const showLocal = useLocalCurrency && exchangeRateEnabled && rate != null;
 
   const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
@@ -96,10 +97,12 @@ export async function buildQuotePDF(
       : formatCurrencyCents(referenceCurrency, item.subtotalCents),
   ]);
 
+  const unitPriceHeader = showLocal ? `Precio unit. (${currencyCode})` : `Precio unit. (${referenceCurrency})`;
+
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [["Cant.", "Descripción", `Precio unit. (${referenceCurrency} ref.)`, "Subtotal"]],
+    head: [["Cant.", "Descripción", unitPriceHeader, "Subtotal"]],
     body: rows,
     theme: "grid",
     headStyles: { fillColor: [30, 41, 59] },
@@ -113,11 +116,11 @@ export async function buildQuotePDF(
 
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
 
-  if (exchangeRateEnabled) {
+  if (showLocal) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.text(
-      `Tasa del día: ${rate != null ? `${formatLocalCurrency(rate, currencyCode)} por 1${referenceCurrency === "USD" ? "$" : "€"}` : "No disponible"}`,
+      `Tasa del día: ${formatLocalCurrency(rate!, currencyCode)} por 1${referenceCurrency === "USD" ? "$" : "€"}`,
       margin,
       y
     );
@@ -135,9 +138,9 @@ export async function buildQuotePDF(
   doc.line(margin, y, pageWidth - margin, y);
   y += 20;
 
-  const totalLocal = showLocal ? formatLocalCurrency(eurCentsToLocal(quote.totalCents, rate!), currencyCode) : null;
-  const totalReference = formatCurrencyCents(referenceCurrency, quote.totalCents);
-  const totalLabel = totalLocal ? `${totalLocal} (${totalReference})` : totalReference;
+  const totalLabel = showLocal
+    ? formatLocalCurrency(eurCentsToLocal(quote.totalCents, rate!), currencyCode)
+    : formatCurrencyCents(referenceCurrency, quote.totalCents);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);

@@ -523,6 +523,11 @@ model Quote {
   controlNumber     Int?
   totalCents        Int
   exchangeRate      Decimal?    @db.Decimal(12, 4)
+  // Which currency this specific quote was issued in — chosen by the seller
+  // at generation time, independent of the company's own display defaults.
+  // Only meaningful when the company has exchangeRateEnabled; otherwise the
+  // quote is always in the reference currency regardless of this flag.
+  useLocalCurrency  Boolean     @default(true)
   customerFirstName String?
   customerLastName  String?
   customerPhone     String?

@@ -227,6 +227,7 @@ export type RegisterPaymentInput = z.infer<typeof RegisterPaymentSchema>;
 export const QuoteSchema = z.object({
   items: z.array(CartItemSchema).min(1, "El carrito está vacío"),
   note: z.preprocess(blankToUndefined, z.string().trim().optional()),
+  useLocalCurrency: z.boolean().default(true),
 }).merge(CustomerSchema);
 
 export type QuoteInput = z.infer<typeof QuoteSchema>;
