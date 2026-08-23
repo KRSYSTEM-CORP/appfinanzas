@@ -62,7 +62,7 @@ function PriceTierPicker({
           type="button"
           onClick={() => onChange(tier === auto.tier ? null : tier)}
           title={tier === auto.tier && !override ? "Automático según la cantidad" : undefined}
-          className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+          className={`whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
             active === tier
               ? "bg-primary text-primary-foreground"
               : "bg-muted text-muted-foreground hover:bg-muted/70"
