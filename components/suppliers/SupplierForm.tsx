@@ -32,30 +32,28 @@ export function SupplierForm({ supplier, action }: Props) {
   }
 
   return (
-    <form action={handleSubmit} className="flex flex-col gap-4 max-w-md">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="name">Nombre / razón social</Label>
-        <Input id="name" name="name" defaultValue={supplier?.name} required />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="rif">RIF (opcional)</Label>
-        <Input id="rif" name="rif" defaultValue={supplier?.rif ?? ""} placeholder="Ej. J-12345678-9" />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="phone">Teléfono (opcional)</Label>
-        <Input id="phone" name="phone" type="tel" defaultValue={supplier?.phone ?? ""} />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="address">Dirección (opcional)</Label>
-        <Input id="address" name="address" defaultValue={supplier?.address ?? ""} />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="email">Correo (opcional)</Label>
-        <Input id="email" name="email" type="email" defaultValue={supplier?.email ?? ""} />
+    <form action={handleSubmit} className="flex flex-col gap-4 max-w-4xl rounded-lg border p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="name">Nombre / razón social</Label>
+          <Input id="name" name="name" defaultValue={supplier?.name} required />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="rif">RIF (opcional)</Label>
+          <Input id="rif" name="rif" defaultValue={supplier?.rif ?? ""} placeholder="Ej. J-12345678-9" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="phone">Teléfono (opcional)</Label>
+          <Input id="phone" name="phone" type="tel" defaultValue={supplier?.phone ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="address">Dirección (opcional)</Label>
+          <Input id="address" name="address" defaultValue={supplier?.address ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="email">Correo (opcional)</Label>
+          <Input id="email" name="email" type="email" defaultValue={supplier?.email ?? ""} />
+        </div>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

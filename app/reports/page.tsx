@@ -41,7 +41,7 @@ export default async function ReportsPage() {
       </div>
 
       {todaySummary && (
-        <Card className="max-w-2xl">
+        <Card className="max-w-3xl">
           <CardHeader>
             <CardTitle>Cierre de caja</CardTitle>
           </CardHeader>

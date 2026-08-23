@@ -55,15 +55,19 @@ export default async function SettingsPage() {
       id: "moneda",
       label: "Moneda y tasa de cambio",
       content: (
-        <div className="flex flex-col gap-4">
-          <ReferenceCurrencyForm currentEnabled={exchangeRateEnabled} currentReferenceCurrency={referenceCurrency} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="flex flex-col gap-4">
+            <ReferenceCurrencyForm currentEnabled={exchangeRateEnabled} currentReferenceCurrency={referenceCurrency} />
+            {exchangeRateEnabled && (
+              <>
+                <Separator />
+                <CurrencySelectForm currentCurrencyCode={localCurrencyCode} referenceCurrency={referenceCurrency} />
+              </>
+            )}
+          </div>
 
           {exchangeRateEnabled && (
-            <>
-              <Separator />
-
-              <CurrencySelectForm currentCurrencyCode={localCurrencyCode} referenceCurrency={referenceCurrency} />
-
+            <div className="flex flex-col gap-4">
               <div className="rounded-lg border p-4 flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">Tasa actual</span>
                 <span className="text-2xl font-semibold">
@@ -94,7 +98,7 @@ export default async function SettingsPage() {
               {localCurrencyCode === "VES" && <BcvRateButton />}
 
               <ExchangeRateForm currentRate={rate} currencyCode={localCurrencyCode} referenceCurrency={referenceCurrency} />
-            </>
+            </div>
           )}
         </div>
       ),
@@ -103,7 +107,7 @@ export default async function SettingsPage() {
       id: "apariencia",
       label: "Apariencia",
       content: (
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
           <p className="text-sm text-muted-foreground">
             Sube el logo de tu empresa y elige sus colores. Se aplican en toda la app para ti y
             para tus empleados, y también en la pantalla de inicio de sesión apenas se identifica
@@ -117,7 +121,7 @@ export default async function SettingsPage() {
       id: "impresion",
       label: "Impresión",
       content: (
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
           <p className="text-sm text-muted-foreground">
             Elige el tamaño de papel que usa tu impresora para las notas de entrega, presupuestos y
             recibos de pago.
@@ -130,7 +134,7 @@ export default async function SettingsPage() {
       id: "fiscales",
       label: "Datos fiscales",
       content: (
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
           <p className="text-sm text-muted-foreground">
             Se muestran en las notas de entrega, presupuestos y recibos de pago que generes.
           </p>
@@ -144,7 +148,7 @@ export default async function SettingsPage() {
             id: "iva",
             label: "IVA",
             content: (
-              <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
                 <p className="text-sm text-muted-foreground">
                   Configura las tasas de IVA y si tu empresa debe retener IVA a proveedores (ver{" "}
                   <Link href="/tax-book" className="text-primary underline underline-offset-2">
@@ -160,7 +164,7 @@ export default async function SettingsPage() {
             id: "sucursales",
             label: "Sucursales",
             content: (
-              <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
                 <p className="text-sm text-muted-foreground">
                   Cada sucursal tiene su propio catálogo de inventario y su propia caja. Los
                   vendedores entran directo a la suya; tú puedes elegir a cuál entrar o ver todas
@@ -176,7 +180,7 @@ export default async function SettingsPage() {
       id: "clave",
       label: "Cambio de clave",
       content: (
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
           <p className="text-sm text-muted-foreground">Cambia la contraseña de tu propia cuenta.</p>
           <ChangePasswordForm />
         </div>
@@ -186,24 +190,29 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-8 p-6">
-      {(session.role === "GERENTE" || session.isSuperAdmin) && (
-        <div className="rounded-lg border p-4 flex items-center justify-between max-w-sm text-sm">
-          <span>Código de empresa y empleados</span>
-          <Link href="/employees" className="text-primary underline underline-offset-2 shrink-0 ml-3">
-            Administrar
-          </Link>
-        </div>
-      )}
+      {((session.role === "GERENTE" || session.isSuperAdmin) ||
+        (!session.isExempt && session.nextPaymentDueDate)) && (
+        <div className="flex flex-wrap gap-4">
+          {(session.role === "GERENTE" || session.isSuperAdmin) && (
+            <div className="rounded-lg border p-4 flex items-center justify-between gap-3 w-full sm:w-auto sm:min-w-sm text-sm">
+              <span>Código de empresa y empleados</span>
+              <Link href="/employees" className="text-primary underline underline-offset-2 shrink-0">
+                Administrar
+              </Link>
+            </div>
+          )}
 
-      {!session.isExempt && session.nextPaymentDueDate && (
-        <div className="rounded-lg border p-4 flex items-center justify-between max-w-sm text-sm">
-          <span>
-            Suscripción mensual vence el{" "}
-            <span className="font-medium">{formatDate(session.nextPaymentDueDate)}</span>
-          </span>
-          <Link href="/billing" className="text-primary underline underline-offset-2 shrink-0 ml-3">
-            Ver detalles
-          </Link>
+          {!session.isExempt && session.nextPaymentDueDate && (
+            <div className="rounded-lg border p-4 flex items-center justify-between gap-3 w-full sm:w-auto sm:min-w-sm text-sm">
+              <span>
+                Suscripción mensual vence el{" "}
+                <span className="font-medium">{formatDate(session.nextPaymentDueDate)}</span>
+              </span>
+              <Link href="/billing" className="text-primary underline underline-offset-2 shrink-0">
+                Ver detalles
+              </Link>
+            </div>
+          )}
         </div>
       )}
 

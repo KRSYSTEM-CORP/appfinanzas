@@ -131,41 +131,43 @@ export function CashClosingPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 max-w-sm">
-        <div className="rounded-lg border p-3 flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Total vendido</span>
-          <Price
-            eurCents={summary.totalCents}
-            rate={rate}
-            currencyCode={currencyCode}
-            exchangeRateEnabled={exchangeRateEnabled}
-            referenceCurrency={referenceCurrency}
-            size="lg"
-          />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-lg border p-3 flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Total vendido</span>
+            <Price
+              eurCents={summary.totalCents}
+              rate={rate}
+              currencyCode={currencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+              size="lg"
+            />
+          </div>
+          <div className="rounded-lg border p-3 flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Ventas</span>
+            <span className="text-lg font-semibold">{summary.salesCount}</span>
+          </div>
         </div>
-        <div className="rounded-lg border p-3 flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Ventas</span>
-          <span className="text-lg font-semibold">{summary.salesCount}</span>
-        </div>
-      </div>
 
-      {summary.byMethod.length > 0 && (
-        <div className="flex flex-col gap-1.5 max-w-sm">
-          <span className="text-sm text-muted-foreground">Por método de pago</span>
-          {summary.byMethod.map((m) => (
-            <div key={m.paymentMethod} className="flex items-center justify-between text-sm">
-              <span>{PAYMENT_METHOD_LABELS[m.paymentMethod]}</span>
-              <Price
-                eurCents={m.totalCents}
-                rate={rate}
-                currencyCode={currencyCode}
-                exchangeRateEnabled={exchangeRateEnabled}
-                referenceCurrency={referenceCurrency}
-              />
-            </div>
-          ))}
-        </div>
-      )}
+        {summary.byMethod.length > 0 && (
+          <div className="flex flex-col gap-1.5 rounded-lg border p-3">
+            <span className="text-sm text-muted-foreground">Por método de pago</span>
+            {summary.byMethod.map((m) => (
+              <div key={m.paymentMethod} className="flex items-center justify-between text-sm">
+                <span>{PAYMENT_METHOD_LABELS[m.paymentMethod]}</span>
+                <Price
+                  eurCents={m.totalCents}
+                  rate={rate}
+                  currencyCode={currencyCode}
+                  exchangeRateEnabled={exchangeRateEnabled}
+                  referenceCurrency={referenceCurrency}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {summary.closed ? (
         <p className="text-sm text-muted-foreground">

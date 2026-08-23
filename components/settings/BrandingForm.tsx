@@ -56,16 +56,16 @@ export function BrandingForm({
     <form action={handleSubmit} className="flex flex-col gap-4 max-w-sm">
       <div className="flex flex-col gap-1.5">
         <Label>Logo de la empresa</Label>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           {logoDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={logoDataUrl}
               alt="Logo"
-              className="h-12 w-12 rounded object-cover border"
+              className="h-12 w-12 shrink-0 rounded object-cover border"
             />
           ) : (
-            <div className="h-12 w-12 rounded border flex items-center justify-center text-xs text-muted-foreground">
+            <div className="h-12 w-12 shrink-0 rounded border flex items-center justify-center text-xs text-muted-foreground">
               Sin logo
             </div>
           )}
@@ -74,7 +74,7 @@ export function BrandingForm({
             type="file"
             accept="image/*"
             onChange={handleFileChange}
-            className="text-sm"
+            className="text-sm min-w-0 max-w-full"
           />
         </div>
       </div>

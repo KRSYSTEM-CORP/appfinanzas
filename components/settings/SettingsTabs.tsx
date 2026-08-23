@@ -30,7 +30,7 @@ export function SettingsTabs({ sections }: { sections: SettingsSection[] }) {
           </button>
         ))}
       </div>
-      <div className="max-w-sm">{active?.content}</div>
+      <div className="max-w-5xl">{active?.content}</div>
     </div>
   );
 }

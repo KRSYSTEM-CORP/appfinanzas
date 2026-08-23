@@ -35,7 +35,7 @@ export function CustomerCrmForm({ customer }: { customer: Customer }) {
   }
 
   return (
-    <form action={handleSubmit} className="flex flex-col gap-4 max-w-md">
+    <form action={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="nextContactDate">Próximo contacto (opcional)</Label>
         <Input

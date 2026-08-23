@@ -180,7 +180,7 @@ export function ImportProductsForm() {
   }
 
   return (
-    <div className="flex flex-col gap-4 max-w-3xl">
+    <div className="flex flex-col gap-4 max-w-5xl">
       <div className="flex flex-col gap-1.5 rounded-lg border p-4">
         <p className="text-sm text-muted-foreground">
           Sube un archivo Excel (.xlsx) con tus productos. Las columnas esperadas son:{" "}

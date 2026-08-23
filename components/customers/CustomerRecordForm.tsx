@@ -32,8 +32,8 @@ export function CustomerRecordForm({ customer, action }: Props) {
   }
 
   return (
-    <form action={handleSubmit} className="flex flex-col gap-4 max-w-md">
-      <div className="grid grid-cols-2 gap-4">
+    <form action={handleSubmit} className="flex flex-col gap-4 max-w-4xl rounded-lg border p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="firstName">Nombre</Label>
           <Input id="firstName" name="firstName" defaultValue={customer?.firstName} required />
@@ -42,21 +42,24 @@ export function CustomerRecordForm({ customer, action }: Props) {
           <Label htmlFor="lastName">Apellido</Label>
           <Input id="lastName" name="lastName" defaultValue={customer?.lastName} required />
         </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="phone">Número de teléfono</Label>
-        <Input id="phone" name="phone" type="tel" defaultValue={customer?.phone} required />
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="phone">Número de teléfono</Label>
+          <Input id="phone" name="phone" type="tel" defaultValue={customer?.phone} required />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="rif">Cédula/RIF (opcional)</Label>
+          <Input
+            id="rif"
+            name="rif"
+            defaultValue={customer?.rif ?? ""}
+            placeholder="Ej. V-12345678 o J-12345678-9"
+          />
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="address">Dirección</Label>
         <Input id="address" name="address" defaultValue={customer?.address ?? ""} />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="rif">Cédula/RIF (opcional)</Label>
-        <Input id="rif" name="rif" defaultValue={customer?.rif ?? ""} placeholder="Ej. V-12345678 o J-12345678-9" />
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
