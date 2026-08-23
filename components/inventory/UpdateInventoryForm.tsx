@@ -29,6 +29,8 @@ const HEADER_MAP: Record<string, string> = {
   price: "price",
   costo: "cost",
   cost: "cost",
+  "controlar stock": "trackStock",
+  trackstock: "trackStock",
   stock: "stock",
   "umbral de stock bajo": "lowStockThreshold",
   umbral: "lowStockThreshold",
@@ -36,6 +38,16 @@ const HEADER_MAP: Record<string, string> = {
   iva: "taxCategory",
   "categoria de iva": "taxCategory",
   taxcategory: "taxCategory",
+  "precios por cantidad": "priceTiersEnabled",
+  pricetiersenabled: "priceTiersEnabled",
+  "precio mayor": "wholesalePrice",
+  wholesaleprice: "wholesalePrice",
+  "cantidad minima mayor": "wholesaleMinQty",
+  wholesaleminqty: "wholesaleMinQty",
+  "precio gran mayor": "bulkPrice",
+  bulkprice: "bulkPrice",
+  "cantidad minima gran mayor": "bulkMinQty",
+  bulkminqty: "bulkMinQty",
 };
 
 function normalizeHeader(header: string): string {
@@ -54,9 +66,15 @@ type ParsedRow = {
   category?: unknown;
   price?: unknown;
   cost?: unknown;
+  trackStock?: unknown;
   stock?: unknown;
   lowStockThreshold?: unknown;
   taxCategory?: unknown;
+  priceTiersEnabled?: unknown;
+  wholesalePrice?: unknown;
+  wholesaleMinQty?: unknown;
+  bulkPrice?: unknown;
+  bulkMinQty?: unknown;
   error: string | null;
 };
 
@@ -95,7 +113,23 @@ export function UpdateInventoryForm() {
       const products = await listAllProducts();
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([
-        ["ID", "SKU", "Nombre", "Categoría", "Precio", "Costo", "Stock", "Umbral de stock bajo", "IVA"],
+        [
+          "ID",
+          "SKU",
+          "Nombre",
+          "Categoría",
+          "Precio",
+          "Costo",
+          "Controlar stock",
+          "Stock",
+          "Umbral de stock bajo",
+          "IVA",
+          "Precios por cantidad",
+          "Precio mayor",
+          "Cantidad mínima mayor",
+          "Precio gran mayor",
+          "Cantidad mínima gran mayor",
+        ],
         ...products.map((p) => [
           p.id,
           p.sku ?? "",
@@ -103,9 +137,15 @@ export function UpdateInventoryForm() {
           p.category ?? "",
           p.priceCents / 100,
           p.costCents != null ? p.costCents / 100 : "",
+          p.trackStock ? "Sí" : "No",
           p.stock,
           p.lowStockThreshold,
           TAX_CATEGORY_EXPORT_LABELS[p.taxCategory],
+          p.priceTiersEnabled ? "Sí" : "No",
+          p.wholesalePriceCents != null ? p.wholesalePriceCents / 100 : "",
+          p.wholesaleMinQty ?? "",
+          p.bulkPriceCents != null ? p.bulkPriceCents / 100 : "",
+          p.bulkMinQty ?? "",
         ]),
       ]);
       XLSX.utils.book_append_sheet(wb, ws, "Inventario");
@@ -149,9 +189,15 @@ export function UpdateInventoryForm() {
           category: r.category,
           price: r.price,
           cost: r.cost,
+          trackStock: r.trackStock,
           stock: r.stock,
           lowStockThreshold: r.lowStockThreshold,
           taxCategory: r.taxCategory,
+          priceTiersEnabled: r.priceTiersEnabled,
+          wholesalePrice: r.wholesalePrice,
+          wholesaleMinQty: r.wholesaleMinQty,
+          bulkPrice: r.bulkPrice,
+          bulkMinQty: r.bulkMinQty,
         }))
       );
       setResult(res);

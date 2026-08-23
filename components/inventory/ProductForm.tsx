@@ -28,6 +28,8 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
   const [image, setImage] = useState(product?.imageDataUrl ?? "");
   const [taxCategory, setTaxCategory] = useState<TaxCategory>(product?.taxCategory ?? "GENERAL");
   const [imageError, setImageError] = useState<string | null>(null);
+  const [trackStock, setTrackStock] = useState(product?.trackStock ?? true);
+  const [priceTiersEnabled, setPriceTiersEnabled] = useState(product?.priceTiersEnabled ?? false);
   const [isPending, startTransition] = useTransition();
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,6 +54,8 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
     setError(null);
     formData.set("image", image);
     formData.set("taxCategory", taxCategory);
+    formData.set("trackStock", String(trackStock));
+    formData.set("priceTiersEnabled", String(priceTiersEnabled));
     startTransition(async () => {
       const result = await action(formData);
       if (result.success) {
@@ -171,31 +175,138 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="stock">Stock actual</Label>
-          <Input
-            id="stock"
-            name="stock"
-            type="number"
-            min={0}
-            step={1}
-            defaultValue={product?.stock ?? 0}
-            required
-          />
+      <div className="flex flex-col gap-1.5">
+        <Label>Control de stock</Label>
+        <div className="flex w-fit rounded-md border overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setTrackStock(true)}
+            className={`px-3 py-1.5 text-sm ${trackStock ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+          >
+            Activado
+          </button>
+          <button
+            type="button"
+            onClick={() => setTrackStock(false)}
+            className={`px-3 py-1.5 text-sm ${!trackStock ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+          >
+            Desactivado
+          </button>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="lowStockThreshold">Umbral de stock bajo</Label>
-          <Input
-            id="lowStockThreshold"
-            name="lowStockThreshold"
-            type="number"
-            min={0}
-            step={1}
-            defaultValue={product?.lowStockThreshold ?? 5}
-            required
-          />
+        <p className="text-xs text-muted-foreground">
+          Desactívalo para productos sin un conteo real (servicios, artículos por encargo) — el punto
+          de venta nunca lo mostrará como agotado.
+        </p>
+      </div>
+
+      {trackStock && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="stock">Stock actual</Label>
+            <Input
+              id="stock"
+              name="stock"
+              type="number"
+              min={0}
+              step={1}
+              defaultValue={product?.stock ?? 0}
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="lowStockThreshold">Umbral de stock bajo</Label>
+            <Input
+              id="lowStockThreshold"
+              name="lowStockThreshold"
+              type="number"
+              min={0}
+              step={1}
+              defaultValue={product?.lowStockThreshold ?? 5}
+              required
+            />
+          </div>
         </div>
+      )}
+
+      <div className="flex flex-col gap-3 rounded-md border p-3">
+        <div className="flex flex-col gap-1.5">
+          <Label>Precios por cantidad</Label>
+          <div className="flex w-fit rounded-md border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setPriceTiersEnabled(false)}
+              className={`px-3 py-1.5 text-sm ${!priceTiersEnabled ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            >
+              Desactivado
+            </button>
+            <button
+              type="button"
+              onClick={() => setPriceTiersEnabled(true)}
+              className={`px-3 py-1.5 text-sm ${priceTiersEnabled ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            >
+              Activado
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Precios distintos al mayor y al gran mayor, aplicados automáticamente según la cantidad
+            que se venda (el precio de venta de arriba sigue siendo el precio al detal).
+          </p>
+        </div>
+
+        {priceTiersEnabled && (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="wholesalePrice">Precio al mayor ({referenceCurrency}, opcional)</Label>
+                <Input
+                  id="wholesalePrice"
+                  name="wholesalePrice"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  defaultValue={product?.wholesalePriceCents != null ? product.wholesalePriceCents / 100 : ""}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="wholesaleMinQty">Cantidad mínima al mayor</Label>
+                <Input
+                  id="wholesaleMinQty"
+                  name="wholesaleMinQty"
+                  type="number"
+                  min={1}
+                  step={1}
+                  defaultValue={product?.wholesaleMinQty ?? ""}
+                  placeholder="Ej. 51"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="bulkPrice">Precio al gran mayor ({referenceCurrency}, opcional)</Label>
+                <Input
+                  id="bulkPrice"
+                  name="bulkPrice"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  defaultValue={product?.bulkPriceCents != null ? product.bulkPriceCents / 100 : ""}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="bulkMinQty">Cantidad mínima al gran mayor</Label>
+                <Input
+                  id="bulkMinQty"
+                  name="bulkMinQty"
+                  type="number"
+                  min={1}
+                  step={1}
+                  defaultValue={product?.bulkMinQty ?? ""}
+                  placeholder="Ej. 100"
+                />
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

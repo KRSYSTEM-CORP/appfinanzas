@@ -13,6 +13,7 @@ import {
 import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
 import { decomposeTax, rateForCategory } from "@/lib/tax";
 import { computeItemDiscountCents } from "@/lib/discount";
+import { resolveTierPrice, tierPriceCents } from "@/lib/pricing";
 import type { ActionResult } from "@/lib/types";
 
 export type CompleteSaleResult =
@@ -83,16 +84,25 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         if (!product) {
           throw new Error("Uno de los productos ya no existe");
         }
-        if (product.stock < item.quantity) {
+        if (product.trackStock && product.stock < item.quantity) {
           throw new Error(
             `Stock insuficiente para "${product.name}" (disponible: ${product.stock})`
           );
         }
+        // Price is always resolved server-side from the product's own
+        // configured tiers — the client only ever picks WHICH tier
+        // (item.priceTier), never an amount, so this can't be used to
+        // tamper with what a sale actually charges. An override tier that
+        // isn't actually configured on this product (or absent) falls back
+        // to the quantity-based auto-detection.
+        const autoTier = resolveTierPrice(product, item.quantity);
+        const overridePriceCents = item.priceTier ? tierPriceCents(product, item.priceTier) : null;
+        const unitPriceCents = overridePriceCents ?? autoTier.priceCents;
         // The discount is applied to each line's own subtotal BEFORE tax is
         // decomposed below — the fiscally correct order in Venezuela, since
         // it means the IVA on the factura is computed on the already-
         // discounted base, not just subtracted from an already-taxed total.
-        const rawSubtotalCents = product.priceCents * item.quantity;
+        const rawSubtotalCents = unitPriceCents * item.quantity;
         const itemDiscountCents = computeItemDiscountCents(rawSubtotalCents, discountPercent);
         const subtotalCents = rawSubtotalCents - itemDiscountCents;
         totalCents += subtotalCents;
@@ -105,7 +115,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           productId: product.id,
           productName: product.name,
           category: product.category,
-          unitPriceCents: product.priceCents,
+          unitPriceCents,
           quantity: item.quantity,
           subtotalCents,
           discountCents: itemDiscountCents,
@@ -200,6 +210,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
 
       for (const item of itemsData) {
         const product = productById.get(item.productId)!;
+        if (!product.trackStock) continue;
         const newStock = product.stock - item.quantity;
         await tx.product.updateMany({
           where: { id: item.productId, companyId, branchId },
@@ -226,7 +237,7 @@ async function restoreStock(tx: Prisma.TransactionClient, saleId: string, compan
   for (const item of items) {
     if (!item.productId) continue;
     const product = await tx.product.findFirst({ where: { id: item.productId, companyId, branchId } });
-    if (!product) continue;
+    if (!product || !product.trackStock) continue;
     const newStock = product.stock + item.quantity;
     await tx.product.updateMany({
       where: { id: item.productId, companyId, branchId },

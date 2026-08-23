@@ -12,6 +12,7 @@ import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/paym
 import { completeSale, getSaleReceipt } from "@/lib/actions/sales";
 import { resolveSalePayments } from "@/lib/payment-currency";
 import { computeItemDiscountCents } from "@/lib/discount";
+import { resolveTierPrice, tierPriceCents, type PriceTier, type TieredProduct } from "@/lib/pricing";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { queueSale, type PendingSaleInput } from "@/lib/offline/sync";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
@@ -80,14 +81,35 @@ export function PosClient({
     setPaymentRows((prev) => (prev.length === 1 ? defaultPaymentSplitRows(total, rate, exchangeRateEnabled) : prev));
   }, [total, rate, exchangeRateEnabled]);
 
+  // Unlimited for a product that doesn't track stock — there's no count to
+  // cap against.
+  function maxStockFor(product: Product): number {
+    return product.trackStock ? product.stock : Infinity;
+  }
+
+  // The price a line should show for its current quantity: the seller's
+  // manual tier pick if they made one (and the product actually has that
+  // tier configured), otherwise whatever quantity-based tier applies.
+  function linePriceCents(product: TieredProduct, quantity: number, override: PriceTier | null): number {
+    if (override) {
+      const overridePrice = tierPriceCents(product, override);
+      if (overridePrice != null) return overridePrice;
+    }
+    return resolveTierPrice(product, quantity).priceCents;
+  }
+
   function addProduct(product: Product) {
     setError(null);
     setLines((prev) => {
+      const maxStock = maxStockFor(product);
       const existing = prev.find((l) => l.productId === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock) return prev;
+        if (existing.quantity >= maxStock) return prev;
+        const quantity = existing.quantity + 1;
         return prev.map((l) =>
-          l.productId === product.id ? { ...l, quantity: l.quantity + 1 } : l
+          l.productId === product.id
+            ? { ...l, quantity, unitPriceCents: linePriceCents(l.product, quantity, l.priceTierOverride) }
+            : l
         );
       }
       return [
@@ -95,9 +117,11 @@ export function PosClient({
         {
           productId: product.id,
           name: product.name,
-          unitPriceCents: product.priceCents,
+          unitPriceCents: linePriceCents(product, 1, null),
           quantity: 1,
-          maxStock: product.stock,
+          maxStock,
+          product,
+          priceTierOverride: null,
         },
       ];
     });
@@ -105,19 +129,48 @@ export function PosClient({
 
   function increment(productId: string) {
     setLines((prev) =>
-      prev.map((l) =>
-        l.productId === productId && l.quantity < l.maxStock
-          ? { ...l, quantity: l.quantity + 1 }
-          : l
-      )
+      prev.map((l) => {
+        if (l.productId !== productId || l.quantity >= l.maxStock) return l;
+        const quantity = l.quantity + 1;
+        return { ...l, quantity, unitPriceCents: linePriceCents(l.product, quantity, l.priceTierOverride) };
+      })
     );
   }
 
   function decrement(productId: string) {
     setLines((prev) =>
       prev
-        .map((l) => (l.productId === productId ? { ...l, quantity: l.quantity - 1 } : l))
+        .map((l) => {
+          if (l.productId !== productId) return l;
+          const quantity = l.quantity - 1;
+          return { ...l, quantity, unitPriceCents: linePriceCents(l.product, quantity, l.priceTierOverride) };
+        })
         .filter((l) => l.quantity > 0)
+    );
+  }
+
+  // Typed directly into the cart's quantity field (see components/pos/Cart.tsx's
+  // QuantityInput) — already clamped to [1, maxStock] there, clamped again here
+  // as a second line of defense against a stale maxStock.
+  function setQuantity(productId: string, quantity: number) {
+    setLines((prev) =>
+      prev.map((l) => {
+        if (l.productId !== productId) return l;
+        const clamped = Math.min(Math.max(1, quantity), l.maxStock);
+        return { ...l, quantity: clamped, unitPriceCents: linePriceCents(l.product, clamped, l.priceTierOverride) };
+      })
+    );
+  }
+
+  // Manual tier pick from the cart's Detal/Mayor/Gran mayor selector — null
+  // clears the override and goes back to auto-detecting from quantity.
+  function setPriceTier(productId: string, tier: PriceTier | null) {
+    setLines((prev) =>
+      prev.map((l) =>
+        l.productId === productId
+          ? { ...l, priceTierOverride: tier, unitPriceCents: linePriceCents(l.product, l.quantity, tier) }
+          : l
+      )
     );
   }
 
@@ -231,7 +284,11 @@ export function PosClient({
     if (!customer) return;
     setError(null);
     const saleInput: PendingSaleInput = {
-      items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+      items: lines.map((l) => ({
+        productId: l.productId,
+        quantity: l.quantity,
+        priceTier: l.priceTierOverride ?? undefined,
+      })),
       paymentStatus,
       payments:
         paymentStatus === "PAID"
@@ -352,10 +409,14 @@ export function PosClient({
           onAdd={addProduct}
         />
         <Cart
-          lines={lines.map((l) => ({
-            ...l,
-            maxStock: productById.get(l.productId)?.stock ?? l.maxStock,
-          }))}
+          lines={lines.map((l) => {
+            const current = productById.get(l.productId);
+            return {
+              ...l,
+              maxStock: current ? maxStockFor(current) : l.maxStock,
+              product: current ?? l.product,
+            };
+          })}
           rate={rate}
           currencyCode={currencyCode}
           exchangeRateEnabled={exchangeRateEnabled}
@@ -366,6 +427,8 @@ export function PosClient({
           onPaymentRowsChange={setPaymentRows}
           onIncrement={increment}
           onDecrement={decrement}
+          onSetQuantity={setQuantity}
+          onSetPriceTier={setPriceTier}
           onRemove={remove}
           note={note}
           onNoteChange={setNote}

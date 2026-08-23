@@ -27,6 +27,8 @@ const HEADER_MAP: Record<string, string> = {
   price: "price",
   costo: "cost",
   cost: "cost",
+  "controlar stock": "trackStock",
+  trackstock: "trackStock",
   stock: "stock",
   "umbral de stock bajo": "lowStockThreshold",
   umbral: "lowStockThreshold",
@@ -34,6 +36,16 @@ const HEADER_MAP: Record<string, string> = {
   iva: "taxCategory",
   "categoria de iva": "taxCategory",
   taxcategory: "taxCategory",
+  "precios por cantidad": "priceTiersEnabled",
+  pricetiersenabled: "priceTiersEnabled",
+  "precio mayor": "wholesalePrice",
+  wholesaleprice: "wholesalePrice",
+  "cantidad minima mayor": "wholesaleMinQty",
+  wholesaleminqty: "wholesaleMinQty",
+  "precio gran mayor": "bulkPrice",
+  bulkprice: "bulkPrice",
+  "cantidad minima gran mayor": "bulkMinQty",
+  bulkminqty: "bulkMinQty",
 };
 
 function normalizeHeader(header: string): string {
@@ -51,9 +63,15 @@ type ParsedRow = {
   category?: unknown;
   price?: unknown;
   cost?: unknown;
+  trackStock?: unknown;
   stock?: unknown;
   lowStockThreshold?: unknown;
   taxCategory?: unknown;
+  priceTiersEnabled?: unknown;
+  wholesalePrice?: unknown;
+  wholesaleMinQty?: unknown;
+  bulkPrice?: unknown;
+  bulkMinQty?: unknown;
   error: string | null;
 };
 
@@ -80,8 +98,24 @@ function parseWorkbook(buffer: ArrayBuffer): ParsedRow[] {
 function downloadTemplate() {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
-    ["Nombre", "SKU", "Categoría", "Precio", "Costo", "Stock", "Umbral de stock bajo", "IVA"],
-    ["Camisa azul", "CAM-001", "Ropa", 12.5, 7, 20, 5, "General"],
+    [
+      "Nombre",
+      "SKU",
+      "Categoría",
+      "Precio",
+      "Costo",
+      "Controlar stock",
+      "Stock",
+      "Umbral de stock bajo",
+      "IVA",
+      "Precios por cantidad",
+      "Precio mayor",
+      "Cantidad mínima mayor",
+      "Precio gran mayor",
+      "Cantidad mínima gran mayor",
+    ],
+    ["Camisa azul", "CAM-001", "Ropa", 12.5, 7, "Sí", 20, 5, "General", "No", "", "", "", ""],
+    ["Camisa azul (al mayor)", "CAM-002", "Ropa", 12.5, 7, "Sí", 500, 20, "General", "Sí", 10, 51, 8, 100],
   ]);
   XLSX.utils.book_append_sheet(wb, ws, "Productos");
   XLSX.writeFile(wb, "plantilla-productos.xlsx");
@@ -128,9 +162,15 @@ export function ImportProductsForm() {
           category: r.category,
           price: r.price,
           cost: r.cost,
+          trackStock: r.trackStock,
           stock: r.stock,
           lowStockThreshold: r.lowStockThreshold,
           taxCategory: r.taxCategory,
+          priceTiersEnabled: r.priceTiersEnabled,
+          wholesalePrice: r.wholesalePrice,
+          wholesaleMinQty: r.wholesaleMinQty,
+          bulkPrice: r.bulkPrice,
+          bulkMinQty: r.bulkMinQty,
         }))
       );
       setResult(res);
@@ -144,8 +184,14 @@ export function ImportProductsForm() {
       <div className="flex flex-col gap-1.5 rounded-lg border p-4">
         <p className="text-sm text-muted-foreground">
           Sube un archivo Excel (.xlsx) con tus productos. Las columnas esperadas son:{" "}
-          <strong>Nombre, SKU, Categoría, Precio, Costo, Stock, Umbral de stock bajo</strong>{" "}
-          (Nombre, Precio y Stock son obligatorios). Si un SKU ya existe en tu inventario, ese
+          <strong>Nombre, SKU, Categoría, Precio, Costo, Controlar stock, Stock, Umbral de stock bajo, IVA</strong>{" "}
+          (Nombre y Precio son obligatorios; Stock solo si &quot;Controlar stock&quot; es &quot;Sí&quot;, que es el
+          valor por defecto si dejas la columna en blanco). Opcionalmente,{" "}
+          <strong>
+            Precios por cantidad, Precio mayor, Cantidad mínima mayor, Precio gran mayor, Cantidad
+            mínima gran mayor
+          </strong>{" "}
+          para activar precios al mayor/gran mayor. Si un SKU ya existe en tu inventario, ese
           producto se actualizará en vez de duplicarse.
         </p>
         <div className="flex gap-2 mt-2">

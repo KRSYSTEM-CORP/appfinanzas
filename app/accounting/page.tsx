@@ -7,6 +7,11 @@ const sections = [
     description: "Ingresos, gastos, ganancia neta y desglose por moneda.",
   },
   {
+    href: "/accounting/sellers",
+    title: "Ventas por vendedor",
+    description: "Cuánto vendió cada vendedor, sus documentos y su comisión.",
+  },
+  {
     href: "/suppliers",
     title: "Proveedores",
     description: "Directorio de proveedores y sus datos de contacto.",

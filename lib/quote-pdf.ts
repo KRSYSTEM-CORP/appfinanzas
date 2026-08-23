@@ -8,7 +8,6 @@ import {
   renderNote,
   type DeliveryNoteCompany,
 } from "@/lib/delivery-note";
-import { COPYRIGHT_LINE } from "@/lib/legal";
 import type { ReferenceCurrency } from "@prisma/client";
 
 export type QuoteForPdf = {
@@ -49,7 +48,6 @@ export async function buildQuotePDF(
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "pt", format });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 40;
   let y = 40;
   const showLocal = useLocalCurrency && exchangeRateEnabled && rate != null;
@@ -152,11 +150,6 @@ export async function buildQuotePDF(
   doc.setFontSize(12);
   doc.text("TOTAL ESTIMADO:", margin, y);
   doc.text(totalLabel, pageWidth - margin, y, { align: "right" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(110);
-  doc.text(COPYRIGHT_LINE, pageWidth / 2, pageHeight - 30, { align: "center" });
 
   return doc;
 }

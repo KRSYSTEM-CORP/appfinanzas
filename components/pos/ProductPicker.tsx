@@ -91,7 +91,7 @@ export function ProductPicker({
       )}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto pr-1">
         {filtered.map((p) => {
-          const outOfStock = p.stock <= 0;
+          const outOfStock = p.trackStock && p.stock <= 0;
           return (
             <button
               key={p.id}
@@ -112,14 +112,16 @@ export function ProductPicker({
                 exchangeRateEnabled={exchangeRateEnabled}
                 referenceCurrency={referenceCurrency}
               />
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">Stock: {p.stock}</span>
-                {isLowStock(p) && (
-                  <Badge variant="warning" className="text-[10px] h-4">
-                    bajo
-                  </Badge>
-                )}
-              </div>
+              {p.trackStock && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Stock: {p.stock}</span>
+                  {isLowStock(p) && (
+                    <Badge variant="warning" className="text-[10px] h-4">
+                      bajo
+                    </Badge>
+                  )}
+                </div>
+              )}
             </button>
           );
         })}

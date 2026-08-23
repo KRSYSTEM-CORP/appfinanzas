@@ -41,10 +41,16 @@ function readProductForm(formData: FormData) {
     category: formData.get("category"),
     price: formData.get("price"),
     cost: formData.get("cost") || undefined,
-    stock: formData.get("stock"),
+    trackStock: formData.get("trackStock") ?? undefined,
+    stock: formData.get("stock") || undefined,
     lowStockThreshold: formData.get("lowStockThreshold"),
     taxCategory: formData.get("taxCategory") || undefined,
     image: formData.get("image") || undefined,
+    priceTiersEnabled: formData.get("priceTiersEnabled") ?? undefined,
+    wholesalePrice: formData.get("wholesalePrice") || undefined,
+    wholesaleMinQty: formData.get("wholesaleMinQty") || undefined,
+    bulkPrice: formData.get("bulkPrice") || undefined,
+    bulkMinQty: formData.get("bulkMinQty") || undefined,
   });
 }
 
@@ -74,7 +80,8 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const { price, cost, image, ...rest } = parsed.data;
+  const { price, cost, image, stock, trackStock, wholesalePrice, bulkPrice, ...rest } = parsed.data;
+  const resolvedStock = trackStock ? (stock ?? 0) : 0;
   try {
     await withTenant(companyId, (tx) =>
       tx.product.create({
@@ -85,7 +92,13 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
           imageDataUrl: image ?? null,
           companyId,
           branchId,
-          isActive: rest.stock > 0,
+          trackStock,
+          stock: resolvedStock,
+          wholesalePriceCents: wholesalePrice,
+          bulkPriceCents: bulkPrice,
+          // Without stock tracking there's no zero-stock signal to gate on —
+          // the product is simply always available.
+          isActive: trackStock ? resolvedStock > 0 : true,
         },
       })
     );
@@ -111,24 +124,41 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const { price, cost, image, ...rest } = parsed.data;
+  const { price, cost, image, stock, trackStock, wholesalePrice, bulkPrice, ...rest } = parsed.data;
 
   try {
     const result = await withTenant(companyId, async (tx) => {
       const existing = await tx.product.findFirst({ where: { id, companyId, branchId } });
       if (!existing) return null;
 
+      const resolvedStock = trackStock ? (stock ?? 0) : existing.stock;
       // Stock is the source of truth for availability: reaching 0 always
       // deactivates, and manually entering stock for a previously
       // out-of-stock product reactivates it. An unrelated edit that leaves
       // stock untouched (and > 0) doesn't override a deliberate manual
-      // deactivation.
-      const isActive =
-        rest.stock === 0 ? false : existing.stock === 0 ? true : existing.isActive;
+      // deactivation. None of this applies once stock tracking is off — the
+      // product just stays whatever isActive it already was.
+      const isActive = !trackStock
+        ? existing.isActive
+        : resolvedStock === 0
+          ? false
+          : existing.stock === 0
+            ? true
+            : existing.isActive;
 
       return tx.product.updateMany({
         where: { id, companyId, branchId },
-        data: { ...rest, priceCents: price, costCents: cost, imageDataUrl: image ?? null, isActive },
+        data: {
+          ...rest,
+          priceCents: price,
+          costCents: cost,
+          imageDataUrl: image ?? null,
+          trackStock,
+          stock: resolvedStock,
+          wholesalePriceCents: wholesalePrice,
+          bulkPriceCents: bulkPrice,
+          isActive,
+        },
       });
     });
     if (!result || result.count === 0) {
@@ -177,9 +207,15 @@ export type BulkImportRow = {
   category?: unknown;
   price: unknown;
   cost?: unknown;
-  stock: unknown;
+  trackStock?: unknown;
+  stock?: unknown;
   lowStockThreshold?: unknown;
   taxCategory?: unknown;
+  priceTiersEnabled?: unknown;
+  wholesalePrice?: unknown;
+  wholesaleMinQty?: unknown;
+  bulkPrice?: unknown;
+  bulkMinQty?: unknown;
 };
 
 export type BulkImportResult = {
@@ -215,8 +251,18 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
         continue;
       }
 
-      const { price, cost, ...rest } = parsed.data;
-      const isActive = rest.stock > 0;
+      const { price, cost, stock, trackStock, wholesalePrice, bulkPrice, ...rest } = parsed.data;
+      const resolvedStock = trackStock ? (stock ?? 0) : 0;
+      const isActive = trackStock ? resolvedStock > 0 : true;
+      const priceFields = {
+        priceCents: price,
+        costCents: cost,
+        trackStock,
+        stock: resolvedStock,
+        wholesalePriceCents: wholesalePrice,
+        bulkPriceCents: bulkPrice,
+        isActive,
+      };
 
       try {
         const existing = rest.sku
@@ -228,12 +274,12 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
         if (existing) {
           await tx.product.update({
             where: { id: existing.id },
-            data: { ...rest, priceCents: price, costCents: cost, isActive },
+            data: { ...rest, ...priceFields },
           });
           updated++;
         } else {
           await tx.product.create({
-            data: { ...rest, priceCents: price, costCents: cost, companyId, branchId, isActive },
+            data: { ...rest, ...priceFields, companyId, branchId },
           });
           created++;
         }
@@ -255,9 +301,15 @@ export type BulkUpdateRow = {
   category?: unknown;
   price?: unknown;
   cost?: unknown;
+  trackStock?: unknown;
   stock?: unknown;
   lowStockThreshold?: unknown;
   taxCategory?: unknown;
+  priceTiersEnabled?: unknown;
+  wholesalePrice?: unknown;
+  wholesaleMinQty?: unknown;
+  bulkPrice?: unknown;
+  bulkMinQty?: unknown;
 };
 
 export type BulkUpdateResult = {
@@ -295,7 +347,23 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
         continue;
       }
 
-      const { id, sku, name, category, price, cost, stock, lowStockThreshold, taxCategory } = parsed.data;
+      const {
+        id,
+        sku,
+        name,
+        category,
+        price,
+        cost,
+        trackStock,
+        stock,
+        lowStockThreshold,
+        taxCategory,
+        priceTiersEnabled,
+        wholesalePrice,
+        wholesaleMinQty,
+        bulkPrice,
+        bulkMinQty,
+      } = parsed.data;
       const existing = await tx.product.findFirst({ where: { id, companyId, branchId } });
       if (!existing) {
         notFound.push({ row: i + 1, label: name ?? sku ?? id });
@@ -308,12 +376,22 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
       if (category !== undefined) data.category = category;
       if (price !== undefined) data.priceCents = price;
       if (cost !== undefined) data.costCents = cost;
+      if (trackStock !== undefined) data.trackStock = trackStock;
       if (stock !== undefined) {
         data.stock = stock;
-        data.isActive = stock > 0;
+        // Only auto-toggle from the stock count when this product actually
+        // tracks stock (using whatever trackStock ends up being after this
+        // same row's own edit, if it also changed it).
+        const effectiveTrackStock = trackStock ?? existing.trackStock;
+        if (effectiveTrackStock) data.isActive = stock > 0;
       }
       if (lowStockThreshold !== undefined) data.lowStockThreshold = lowStockThreshold;
       if (taxCategory !== undefined) data.taxCategory = taxCategory;
+      if (priceTiersEnabled !== undefined) data.priceTiersEnabled = priceTiersEnabled;
+      if (wholesalePrice !== undefined) data.wholesalePriceCents = wholesalePrice;
+      if (wholesaleMinQty !== undefined) data.wholesaleMinQty = wholesaleMinQty;
+      if (bulkPrice !== undefined) data.bulkPriceCents = bulkPrice;
+      if (bulkMinQty !== undefined) data.bulkMinQty = bulkMinQty;
 
       try {
         await tx.product.update({ where: { id: existing.id }, data });

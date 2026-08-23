@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PAYMENT_METHOD_LABELS, formatDate, formatDateOnly } from "@/lib/format";
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, referenceNote } from "@/lib/currencies";
-import { renderCompanyHeader, COPYRIGHT_LINE, type DeliveryNoteCompany } from "@/lib/delivery-note";
+import { renderCompanyHeader, type DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { CashClosingSummary } from "@/lib/actions/cash-closing";
 import type { ReferenceCurrency } from "@prisma/client";
 
@@ -18,7 +18,6 @@ export async function buildCashClosingPDF(
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "pt", format });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 40;
   let y = 40;
   const showLocal = exchangeRateEnabled && rate != null;
@@ -109,11 +108,6 @@ export async function buildCashClosingPDF(
     doc.text(referenceNote(currencyCode, referenceCurrency), margin, y);
     doc.setTextColor(0, 0, 0);
   }
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(110);
-  doc.text(COPYRIGHT_LINE, pageWidth / 2, pageHeight - 30, { align: "center" });
 
   return doc;
 }

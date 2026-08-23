@@ -254,6 +254,11 @@ model User {
   // Existing rows default to GERENTE so every pre-existing owner account
   // keeps its current full access after this migration.
   role                Role                 @default(GERENTE)
+  // Optional commission rate this seller earns on their own sales — set from
+  // Contabilidad → Ventas por vendedor, purely informational/for payroll
+  // (doesn't affect pricing or Sale totals). Null means no commission
+  // configured yet.
+  commissionPercent   Decimal?             @db.Decimal(5, 2)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   sales               Sale[]               @relation("SaleSeller")
@@ -283,32 +288,50 @@ model PasswordResetToken {
 }
 
 model Product {
-  id                String         @id @default(cuid())
-  name              String
-  sku               String?
-  category          String?
-  priceCents        Int
-  costCents         Int?
-  stock             Int            @default(0)
-  lowStockThreshold Int            @default(5)
-  isActive          Boolean        @default(true)
-  imageDataUrl      String?
+  id                  String         @id @default(cuid())
+  name                String
+  sku                 String?
+  category            String?
+  // "Al detal" price — the base/default price, unchanged by this field's
+  // introduction. Used whenever priceTiersEnabled is off, and as the
+  // fallback tier below wholesaleMinQty when it's on.
+  priceCents          Int
+  costCents           Int?
+  stock               Int            @default(0)
+  lowStockThreshold   Int            @default(5)
+  // Off by default so every existing product keeps requiring/tracking a real
+  // stock count exactly as before. When off, stock/lowStockThreshold are
+  // ignored everywhere (checkout, ProductPicker, isActive-on-zero-stock) —
+  // see resolveTierPrice's sibling in lib/pricing.ts for the analogous
+  // "off means ignore" pattern used by priceTiersEnabled below.
+  trackStock          Boolean        @default(true)
+  isActive            Boolean        @default(true)
+  imageDataUrl        String?
+  // Quantity-based pricing (detal/mayor/gran mayor) — off by default. Each
+  // tier only applies once BOTH its price and its minimum quantity are set;
+  // a business can configure just "mayor" without "gran mayor". See
+  // resolveTierPrice in lib/pricing.ts for the exact resolution rule.
+  priceTiersEnabled   Boolean        @default(false)
+  wholesalePriceCents Int?
+  wholesaleMinQty     Int?
+  bulkPriceCents      Int?
+  bulkMinQty          Int?
   // IVA treatment for this product — see TaxCategory. Defaults to GENERAL
   // (the standard rate) so every product created before this feature existed
   // is treated the same way checkout already implicitly assumed.
-  taxCategory       TaxCategory    @default(GENERAL)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  companyId         String
-  company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taxCategory         TaxCategory    @default(GENERAL)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  companyId           String
+  company             Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Each branch has its own independent catalog — a product belongs to
   // exactly one branch, not shared/counted across the company's other
   // branches (see the plan doc for why: confirmed with the user).
-  branchId          String
-  branch            Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  saleItems         SaleItem[]
-  quoteItems        QuoteItem[]
-  purchaseItems     PurchaseItem[]
+  branchId            String
+  branch              Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  saleItems           SaleItem[]
+  quoteItems          QuoteItem[]
+  purchaseItems       PurchaseItem[]
 
   @@unique([branchId, sku])
   @@index([companyId, isActive])

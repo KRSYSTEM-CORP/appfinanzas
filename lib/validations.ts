@@ -90,39 +90,102 @@ function validatePaymentSplits(
   });
 }
 
-export const ProductSchema = z.object({
-  name: z.string().trim().min(1, "El nombre es obligatorio"),
-  sku: z
-    .string()
-    .trim()
-    .optional()
-    .transform((v) => (v === "" ? undefined : v)),
-  category: z
-    .string()
-    .trim()
-    .optional()
-    .transform((v) => (v === "" ? undefined : v)),
-  price: z.coerce
-    .number()
-    .min(0, "El precio no puede ser negativo")
-    .transform(toCents),
-  cost: z.coerce
-    .number()
-    .min(0)
-    .optional()
-    .nullable()
-    .transform((v) => (v == null ? v : toCents(v))),
-  stock: z.coerce.number().int().min(0, "El stock no puede ser negativo"),
-  lowStockThreshold: z.coerce.number().int().min(0),
-  taxCategory: TaxCategoryEnum.default("GENERAL"),
-  image: z
-    .string()
-    .trim()
-    .optional()
-    .transform((v) => (v === "" ? undefined : v))
-    .refine((v) => v == null || v.startsWith("data:image/"), "Imagen inválida")
-    .refine((v) => v == null || v.length < 700_000, "La imagen es demasiado grande"),
-});
+// Accepts the words a shop owner would actually type into an Excel cell or
+// toggle in the form ("Sí"/"No", "true"/"false", "1"/"0") for the two
+// optional-feature toggles below (trackStock, priceTiersEnabled).
+const YES_WORDS = new Set(["true", "si", "sí", "yes", "1"]);
+const NO_WORDS = new Set(["false", "no", "0"]);
+function coerceBoolean(v: unknown): boolean | undefined {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (YES_WORDS.has(s)) return true;
+    if (NO_WORDS.has(s)) return false;
+  }
+  return undefined;
+}
+// defaultValue only applies when the cell/field is genuinely absent — an
+// unrecognized non-empty value is left as-is so z.boolean() rejects it with
+// a normal validation error instead of silently defaulting.
+function booleanFieldWithDefault(defaultValue: boolean) {
+  return z.preprocess((v) => {
+    if (v === undefined || v === "") return defaultValue;
+    return coerceBoolean(v) ?? v;
+  }, z.boolean());
+}
+
+export const ProductSchema = z
+  .object({
+    name: z.string().trim().min(1, "El nombre es obligatorio"),
+    sku: z
+      .string()
+      .trim()
+      .optional()
+      .transform((v) => (v === "" ? undefined : v)),
+    category: z
+      .string()
+      .trim()
+      .optional()
+      .transform((v) => (v === "" ? undefined : v)),
+    price: z.coerce
+      .number()
+      .min(0, "El precio no puede ser negativo")
+      .transform(toCents),
+    cost: z.coerce
+      .number()
+      .min(0)
+      .optional()
+      .nullable()
+      .transform((v) => (v == null ? v : toCents(v))),
+    // Required only when trackStock is on — see the .refine below.
+    trackStock: booleanFieldWithDefault(true),
+    stock: z.coerce.number().int().min(0, "El stock no puede ser negativo").optional(),
+    lowStockThreshold: z.coerce.number().int().min(0).default(5),
+    taxCategory: TaxCategoryEnum.default("GENERAL"),
+    image: z
+      .string()
+      .trim()
+      .optional()
+      .transform((v) => (v === "" ? undefined : v))
+      .refine((v) => v == null || v.startsWith("data:image/"), "Imagen inválida")
+      .refine((v) => v == null || v.length < 700_000, "La imagen es demasiado grande"),
+    // Quantity-based pricing — off by default; each tier (mayor/gran mayor)
+    // is only meaningful once both its price and minimum quantity are set
+    // together. See lib/pricing.ts's resolveTierPrice for how these combine
+    // with priceCents at checkout.
+    priceTiersEnabled: booleanFieldWithDefault(false),
+    wholesalePrice: z.coerce
+      .number()
+      .min(0)
+      .optional()
+      .nullable()
+      .transform((v) => (v == null ? v : toCents(v))),
+    wholesaleMinQty: z.coerce.number().int().min(1).optional().nullable(),
+    bulkPrice: z.coerce
+      .number()
+      .min(0)
+      .optional()
+      .nullable()
+      .transform((v) => (v == null ? v : toCents(v))),
+    bulkMinQty: z.coerce.number().int().min(1).optional().nullable(),
+  })
+  .refine((d) => !d.trackStock || d.stock != null, {
+    message: "El stock es obligatorio cuando controlas el stock de este producto",
+    path: ["stock"],
+  })
+  .refine((d) => (d.wholesalePrice == null) === (d.wholesaleMinQty == null), {
+    message: "Indica el precio y la cantidad mínima al mayor juntos, o deja ambos vacíos",
+    path: ["wholesaleMinQty"],
+  })
+  .refine((d) => (d.bulkPrice == null) === (d.bulkMinQty == null), {
+    message: "Indica el precio y la cantidad mínima al gran mayor juntos, o deja ambos vacíos",
+    path: ["bulkMinQty"],
+  })
+  .refine((d) => d.wholesaleMinQty == null || d.bulkMinQty == null || d.bulkMinQty > d.wholesaleMinQty, {
+    message: "La cantidad mínima al gran mayor debe ser mayor que la del mayor",
+    path: ["bulkMinQty"],
+  });
 
 export type ProductInput = z.infer<typeof ProductSchema>;
 
@@ -149,6 +212,19 @@ export const ProductUpdateRowSchema = z.object({
   stock: z.preprocess(blankToUndefined, z.coerce.number().int().min(0, "El stock no puede ser negativo").optional()),
   lowStockThreshold: z.preprocess(blankToUndefined, z.coerce.number().int().min(0).optional()),
   taxCategory: z.preprocess(blankToUndefined, TaxCategoryEnum.optional()),
+  trackStock: z.preprocess((v) => (v === "" || v == null ? undefined : (coerceBoolean(v) ?? v)), z.boolean().optional()),
+  priceTiersEnabled: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : (coerceBoolean(v) ?? v)),
+    z.boolean().optional()
+  ),
+  wholesalePrice: z
+    .preprocess(blankToUndefined, z.coerce.number().min(0).optional())
+    .transform((v) => (v == null ? v : toCents(v))),
+  wholesaleMinQty: z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional()),
+  bulkPrice: z
+    .preprocess(blankToUndefined, z.coerce.number().min(0).optional())
+    .transform((v) => (v == null ? v : toCents(v))),
+  bulkMinQty: z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional()),
 });
 
 export type ProductUpdateRowInput = z.infer<typeof ProductUpdateRowSchema>;
@@ -156,6 +232,10 @@ export type ProductUpdateRowInput = z.infer<typeof ProductUpdateRowSchema>;
 export const CartItemSchema = z.object({
   productId: z.string(),
   quantity: z.number().int().min(1),
+  // Seller's manual override of which price tier to charge (see
+  // lib/pricing.ts) — omitted means auto-detect from quantity. Only POS
+  // checkout (completeSale) reads this; Quote items ignore it.
+  priceTier: z.enum(["RETAIL", "WHOLESALE", "BULK"]).optional(),
 });
 
 export const CustomerSchema = z.object({

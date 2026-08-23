@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +11,7 @@ import { PaymentSplitBuilder, type PaymentSplitRow } from "@/components/payments
 import { PAYMENT_STATUS_LABELS } from "@/lib/format";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import { computeItemDiscountCents } from "@/lib/discount";
+import { resolveTierPrice, PRICE_TIER_LABELS, type PriceTier, type TieredProduct } from "@/lib/pricing";
 import type { PaymentStatus, ReferenceCurrency } from "@prisma/client";
 
 export type CartLine = {
@@ -18,7 +20,108 @@ export type CartLine = {
   unitPriceCents: number;
   quantity: number;
   maxStock: number;
+  // Only present (and only meaningful) when the product has quantity-based
+  // pricing configured — see lib/pricing.ts. priceTierOverride is the
+  // seller's manual pick; null means auto-detect from quantity.
+  product: TieredProduct;
+  priceTierOverride: PriceTier | null;
 };
+
+const PRICE_TIER_ORDER: PriceTier[] = ["RETAIL", "WHOLESALE", "BULK"];
+
+// Segmented Detal/Mayor/Gran mayor picker shown under a line when its
+// product has price tiers enabled — only lists tiers the product actually
+// has configured. Highlights whichever tier is actually in effect right now
+// (the auto-detected one when there's no override) so the seller can see at
+// a glance why the price is what it is.
+function PriceTierPicker({
+  product,
+  quantity,
+  override,
+  onChange,
+}: {
+  product: TieredProduct;
+  quantity: number;
+  override: PriceTier | null;
+  onChange: (tier: PriceTier | null) => void;
+}) {
+  const auto = resolveTierPrice(product, quantity);
+  const active = override ?? auto.tier;
+  const available = PRICE_TIER_ORDER.filter((tier) => {
+    if (tier === "RETAIL") return true;
+    if (tier === "WHOLESALE") return product.wholesalePriceCents != null;
+    return product.bulkPriceCents != null;
+  });
+  if (available.length <= 1) return null;
+
+  return (
+    <div className="flex items-center gap-1">
+      {available.map((tier) => (
+        <button
+          key={tier}
+          type="button"
+          onClick={() => onChange(tier === auto.tier ? null : tier)}
+          title={tier === auto.tier && !override ? "Automático según la cantidad" : undefined}
+          className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+            active === tier
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:bg-muted/70"
+          }`}
+        >
+          {PRICE_TIER_LABELS[tier]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Lets the cashier type a quantity directly instead of only tapping −/+ —
+// much faster for a bulk sale. Keeps its own draft string so the field can
+// be freely edited (including briefly empty) while typing; only commits
+// (clamped to [1, maxStock]) on blur/Enter, reverting to the last valid
+// quantity if what's typed doesn't parse.
+function QuantityInput({
+  quantity,
+  maxStock,
+  onCommit,
+}: {
+  quantity: number;
+  maxStock: number;
+  onCommit: (quantity: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(quantity));
+
+  useEffect(() => {
+    setDraft(String(quantity));
+  }, [quantity]);
+
+  function commit() {
+    const parsed = Math.floor(Number(draft));
+    if (Number.isFinite(parsed) && parsed > 0) {
+      const clamped = Math.min(parsed, maxStock);
+      setDraft(String(clamped));
+      if (clamped !== quantity) onCommit(clamped);
+    } else {
+      setDraft(String(quantity));
+    }
+  }
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={1}
+      max={maxStock}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+      className="w-12 rounded border border-input bg-background px-1 py-0.5 text-center text-sm tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+    />
+  );
+}
 
 export function Cart({
   lines,
@@ -32,6 +135,8 @@ export function Cart({
   onPaymentRowsChange,
   onIncrement,
   onDecrement,
+  onSetQuantity,
+  onSetPriceTier,
   onRemove,
   note,
   onNoteChange,
@@ -52,6 +157,8 @@ export function Cart({
   onPaymentRowsChange: (rows: PaymentSplitRow[]) => void;
   onIncrement: (productId: string) => void;
   onDecrement: (productId: string) => void;
+  onSetQuantity: (productId: string, quantity: number) => void;
+  onSetPriceTier: (productId: string, tier: PriceTier | null) => void;
   onRemove: (productId: string) => void;
   note: string;
   onNoteChange: (note: string) => void;
@@ -93,6 +200,16 @@ export function Cart({
                   ? `${formatLocalCurrency(eurCentsToLocal(line.unitPriceCents, rate), currencyCode)} / ${formatCurrencyCents(referenceCurrency, line.unitPriceCents)} c/u`
                   : `${formatCurrencyCents(referenceCurrency, line.unitPriceCents)} c/u`}
               </p>
+              {line.product.priceTiersEnabled && (
+                <div className="mt-1">
+                  <PriceTierPicker
+                    product={line.product}
+                    quantity={line.quantity}
+                    override={line.priceTierOverride}
+                    onChange={(tier) => onSetPriceTier(line.productId, tier)}
+                  />
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <Button
@@ -103,7 +220,11 @@ export function Cart({
               >
                 −
               </Button>
-              <span className="w-6 text-center text-sm">{line.quantity}</span>
+              <QuantityInput
+                quantity={line.quantity}
+                maxStock={line.maxStock}
+                onCommit={(quantity) => onSetQuantity(line.productId, quantity)}
+              />
               <Button
                 type="button"
                 size="icon-sm"

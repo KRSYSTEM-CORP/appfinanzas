@@ -3,10 +3,7 @@ import autoTable from "jspdf-autotable";
 import { PAYMENT_METHOD_LABELS, formatDate } from "@/lib/format";
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, referenceNote } from "@/lib/currencies";
 import { legacyCurrencyForPayment } from "@/lib/payment-currency";
-import { COPYRIGHT_LINE } from "@/lib/legal";
 import type { PaymentMethod, PaymentStatus, ReferenceCurrency } from "@prisma/client";
-
-export { COPYRIGHT_LINE };
 
 export type SalePaymentLine = {
   paymentMethod: PaymentMethod;
@@ -383,7 +380,6 @@ export async function buildDeliveryNotePDF(
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "pt", format });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 40;
   let y = 40;
   const showLocal = exchangeRateEnabled && rate != null;
@@ -480,11 +476,6 @@ export async function buildDeliveryNotePDF(
 
   y = renderTotalsSection(doc, sale, margin, pageWidth, y, showLocal, rate, currencyCode, referenceCurrency, "TOTAL A CANCELAR:");
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(110);
-  doc.text(COPYRIGHT_LINE, pageWidth / 2, pageHeight - 30, { align: "center" });
-
   return doc;
 }
 
@@ -503,7 +494,6 @@ export async function buildPaymentReceiptPDF(
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "pt", format });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 40;
   let y = 40;
   const showLocal = exchangeRateEnabled && rate != null;
@@ -605,11 +595,6 @@ export async function buildPaymentReceiptPDF(
   y += 20;
 
   y = renderTotalsSection(doc, sale, margin, pageWidth, y, showLocal, rate, currencyCode, referenceCurrency, "TOTAL PAGADO:");
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(110);
-  doc.text(COPYRIGHT_LINE, pageWidth / 2, pageHeight - 30, { align: "center" });
 
   return doc;
 }
