@@ -6,6 +6,8 @@ import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { BulkPurchaseRowSchema, PurchaseSchema } from "@/lib/validations";
 import { decomposeTax, rateForCategory } from "@/lib/tax";
+import { resolveSalePayments, assertPaymentsMatchTotal } from "@/lib/payment-currency";
+import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
 import type { ActionResult } from "@/lib/types";
 
 export type CompletePurchaseResult =
@@ -30,7 +32,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
-  const { supplierId, supplierInvoiceNo, items, paymentStatus, note } = parsed.data;
+  const { supplierId, supplierInvoiceNo, items, paymentStatus, payments, note } = parsed.data;
 
   try {
     const purchaseId = await withTenant(companyId, async (tx) => {
@@ -39,10 +41,27 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
 
       const company = await tx.company.findUnique({
         where: { id: companyId },
-        select: { ivaGeneralRatePercent: true, ivaReducedRatePercent: true, isIvaWithholdingAgent: true, ivaWithholdingPercent: true },
+        select: {
+          ivaGeneralRatePercent: true,
+          ivaReducedRatePercent: true,
+          isIvaWithholdingAgent: true,
+          ivaWithholdingPercent: true,
+          exchangeRate: true,
+          localCurrencyCode: true,
+          exchangeRateEnabled: true,
+          referenceCurrency: true,
+        },
       });
       const ivaGeneralRatePercent = company?.ivaGeneralRatePercent ?? 16;
       const ivaReducedRatePercent = company?.ivaReducedRatePercent ?? 8;
+      const exchangeRateEnabled = company?.exchangeRateEnabled ?? true;
+      if (paymentStatus === "PAID" && exchangeRateEnabled && company?.exchangeRate == null) {
+        throw new Error("Configura la tasa de cambio antes de registrar una compra pagada.");
+      }
+      const exchangeRate = company?.exchangeRate ?? null;
+      const rate = exchangeRate != null ? Number(exchangeRate) : null;
+      const referenceCurrency = company?.referenceCurrency ?? "EUR";
+      const localCurrencyCode = company?.localCurrencyCode ?? DEFAULT_CURRENCY_CODE;
 
       const products = await tx.product.findMany({
         where: { id: { in: items.map((i) => i.productId) }, companyId, branchId },
@@ -84,6 +103,19 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         ? Math.round((taxTotalCents * (company.ivaWithholdingPercent ?? 75)) / 100)
         : 0;
 
+      // What actually leaves the register: the full total, minus whatever
+      // IVA was withheld and goes to SENIAT instead of the supplier (see
+      // Purchase.ivaRetainedCents above) — the payment split must match
+      // THIS, not totalCents.
+      const isPaid = paymentStatus === "PAID";
+      const amountOwedCents = totalCents - ivaRetainedCents;
+      const resolvedPayments = isPaid
+        ? resolveSalePayments(payments, localCurrencyCode, rate, exchangeRateEnabled, referenceCurrency)
+        : [];
+      if (isPaid) {
+        assertPaymentsMatchTotal(resolvedPayments, amountOwedCents, referenceCurrency);
+      }
+
       const previousCount = await tx.purchase.count({ where: { branchId } });
 
       const purchase = await tx.purchase.create({
@@ -98,9 +130,22 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
           taxCents: taxTotalCents,
           ivaRetainedCents,
           paymentStatus,
-          paidAt: paymentStatus === "PAID" ? new Date() : null,
+          paidAt: isPaid ? new Date() : null,
           note: note ?? null,
           items: { create: itemsData },
+          payments: isPaid
+            ? {
+                create: resolvedPayments.map((p) => ({
+                  paymentMethod: p.paymentMethod,
+                  amountEurCents: p.amountEurCents,
+                  currencyCode: p.currencyCode,
+                  amountCurrencyCents: p.amountCurrencyCents,
+                  paidInForeignCurrency: p.paidInForeignCurrency,
+                  reference: p.reference,
+                  exchangeRate,
+                })),
+              }
+            : undefined,
         },
       });
 
@@ -402,12 +447,20 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
 
 export async function listRecentPurchases(limit = 100) {
   const { companyId, branchId } = await requireManager();
-  return withTenant(companyId, (tx) =>
+  const purchases = await withTenant(companyId, (tx) =>
     tx.purchase.findMany({
       where: { companyId, ...(branchId ? { branchId } : {}) },
       orderBy: { createdAt: "desc" },
       take: limit,
-      include: { items: true, supplier: true },
+      include: { items: true, supplier: true, payments: true },
     })
   );
+  // Decimal can't cross the Server->Client Component boundary.
+  return purchases.map((p) => ({
+    ...p,
+    payments: p.payments.map((pay) => ({
+      ...pay,
+      exchangeRate: pay.exchangeRate != null ? Number(pay.exchangeRate) : null,
+    })),
+  }));
 }

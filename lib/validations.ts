@@ -628,13 +628,25 @@ const PurchaseItemSchema = z.object({
   affectsStock: booleanFieldWithDefault(true),
 });
 
-export const PurchaseSchema = z.object({
-  supplierId: z.string().trim().min(1, "Selecciona un proveedor"),
-  supplierInvoiceNo: z.preprocess(blankToUndefined, z.string().trim().optional()),
-  items: z.array(PurchaseItemSchema).min(1, "Agrega al menos un producto"),
-  paymentStatus: z.enum(["PAID", "PENDING"]).default("PENDING"),
-  note: z.preprocess(blankToUndefined, z.string().trim().optional()),
-});
+export const PurchaseSchema = z
+  .object({
+    supplierId: z.string().trim().min(1, "Selecciona un proveedor"),
+    supplierInvoiceNo: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    items: z.array(PurchaseItemSchema).min(1, "Agrega al menos un producto"),
+    paymentStatus: z.enum(["PAID", "PENDING"]).default("PENDING"),
+    // Same split-by-method/currency model as a POS sale (see SaleSchema's
+    // own `payments` + PaymentSplitBuilder) — only required/validated when
+    // the purchase is paid up front; a credit purchase has nothing to
+    // record here yet (see registerPurchasePayment-style abono, mirrors
+    // registerPayment for sales, if that's ever added).
+    payments: z.array(PaymentSplitSchema).default([]),
+    note: z.preprocess(blankToUndefined, z.string().trim().optional()),
+  })
+  .superRefine((data, ctx) => {
+    if (data.paymentStatus === "PAID") {
+      validatePaymentSplits(data.payments, ctx);
+    }
+  });
 
 export type PurchaseInput = z.infer<typeof PurchaseSchema>;
 

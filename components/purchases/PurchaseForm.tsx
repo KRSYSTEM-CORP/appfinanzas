@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, Supplier, TaxCategory } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PaymentSplitBuilder, defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { createPurchase } from "@/lib/actions/purchases";
-import { TAX_CATEGORY_LABELS } from "@/lib/tax";
+import { TAX_CATEGORY_LABELS, decomposeTax, rateForCategory } from "@/lib/tax";
 import { formatCurrencyCents } from "@/lib/currencies";
+import type { IvaSettingsInfo } from "@/lib/actions/settings";
 import type { ReferenceCurrency } from "@prisma/client";
 
 type PurchaseItemRow = {
@@ -33,16 +35,27 @@ function emptyRow(defaultProductId: string, defaultTaxCategory: TaxCategory = "G
 export function PurchaseForm({
   suppliers,
   products,
+  rate,
+  currencyCode,
+  exchangeRateEnabled,
   referenceCurrency,
+  ivaSettings,
 }: {
   suppliers: Supplier[];
   products: Product[];
+  rate: number | null;
+  currencyCode: string;
+  exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
+  ivaSettings: IvaSettingsInfo;
 }) {
   const router = useRouter();
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
   const [paymentStatus, setPaymentStatus] = useState<"PAID" | "PENDING">("PENDING");
+  const [paymentRows, setPaymentRows] = useState<PaymentSplitRow[]>(() =>
+    defaultPaymentSplitRows(0, rate, exchangeRateEnabled)
+  );
   const [note, setNote] = useState("");
   const [rows, setRows] = useState<PurchaseItemRow[]>([emptyRow(products[0]?.id ?? "")]);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +90,29 @@ export function PurchaseForm({
     return sum + qty * cost;
   }, 0);
 
+  // Same decomposition createPurchase runs server-side, so the payment
+  // split below always targets what actually leaves the register — for a
+  // "contribuyente especial" company, that's less than totalCents, since
+  // the withheld IVA goes to SENIAT, not the supplier.
+  const taxTotalCents = rows.reduce((sum, r) => {
+    const qty = Number(r.quantity) || 0;
+    const cost = Math.round((Number(r.unitCost) || 0) * 100);
+    const taxRatePercent = rateForCategory(r.taxCategory, ivaSettings.ivaGeneralRatePercent, ivaSettings.ivaReducedRatePercent);
+    return sum + decomposeTax(qty * cost, r.taxCategory, taxRatePercent).taxCents;
+  }, 0);
+  const ivaRetainedCents = ivaSettings.isIvaWithholdingAgent
+    ? Math.round((taxTotalCents * ivaSettings.ivaWithholdingPercent) / 100)
+    : 0;
+  const amountOwedCents = totalCents - ivaRetainedCents;
+
+  // Keep the single default payment row in sync with the purchase total as
+  // rows/costs are edited, same pattern as the POS cart.
+  useEffect(() => {
+    setPaymentRows((prev) =>
+      prev.length === 1 ? defaultPaymentSplitRows(amountOwedCents, rate, exchangeRateEnabled) : prev
+    );
+  }, [amountOwedCents, rate, exchangeRateEnabled]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -89,6 +125,15 @@ export function PurchaseForm({
         supplierId,
         supplierInvoiceNo: supplierInvoiceNo || undefined,
         paymentStatus,
+        payments:
+          paymentStatus === "PAID"
+            ? paymentRows.map((r) => ({
+                paymentMethod: r.paymentMethod,
+                amount: r.amount,
+                paidInForeignCurrency: r.paidInForeignCurrency,
+                reference: r.reference,
+              }))
+            : [],
         note: note || undefined,
         items: rows.map((r) => ({
           productId: r.productId,
@@ -252,6 +297,30 @@ export function PurchaseForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor="note">Nota (opcional)</Label>
+        <Input id="note" value={note} onChange={(e) => setNote(e.target.value)} />
+      </div>
+
+      <div className="flex flex-col gap-1 rounded-lg border p-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Total de la compra</span>
+          <span className="font-semibold">{formatCurrencyCents(referenceCurrency, totalCents)}</span>
+        </div>
+        {ivaRetainedCents > 0 && (
+          <>
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>IVA retenido</span>
+              <span>−{formatCurrencyCents(referenceCurrency, ivaRetainedCents)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm font-medium">
+              <span>Monto a pagar al proveedor</span>
+              <span>{formatCurrencyCents(referenceCurrency, amountOwedCents)}</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
         <Label>¿Cómo se pagó?</Label>
         <div className="flex gap-2">
           <Button
@@ -271,16 +340,24 @@ export function PurchaseForm({
             A crédito (cuenta por pagar)
           </Button>
         </div>
-      </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="note">Nota (opcional)</Label>
-        <Input id="note" value={note} onChange={(e) => setNote(e.target.value)} />
-      </div>
-
-      <div className="flex items-center justify-between rounded-lg border p-3">
-        <span className="text-sm text-muted-foreground">Total de la compra</span>
-        <span className="font-semibold">{formatCurrencyCents(referenceCurrency, totalCents)}</span>
+        {paymentStatus === "PAID" ? (
+          <PaymentSplitBuilder
+            rows={paymentRows}
+            onChange={setPaymentRows}
+            totalCents={amountOwedCents}
+            rate={rate}
+            currencyCode={currencyCode}
+            exchangeRateEnabled={exchangeRateEnabled}
+            referenceCurrency={referenceCurrency}
+            idPrefix="purchase"
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
+            Esta compra quedará pendiente de pago (cuenta por pagar). Márcala como pagada desde el
+            historial de Compras cuando le pagues al proveedor.
+          </p>
+        )}
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

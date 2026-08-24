@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PurchaseActions } from "@/components/purchases/PurchaseActions";
 import { formatCurrencyCents } from "@/lib/currencies";
-import { formatDate, PURCHASE_PAYMENT_STATUS_LABELS } from "@/lib/format";
+import { formatDate, PAYMENT_METHOD_LABELS, PURCHASE_PAYMENT_STATUS_LABELS } from "@/lib/format";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { listRecentPurchases } from "@/lib/actions/purchases";
 
@@ -96,6 +96,11 @@ export default async function PurchasesPage() {
                       <Badge variant={p.paymentStatus === "PAID" ? "success" : "destructive"}>
                         {PURCHASE_PAYMENT_STATUS_LABELS[p.paymentStatus]}
                       </Badge>
+                      {p.payments.length > 0 && (
+                        <span className="block text-xs text-muted-foreground mt-1">
+                          {p.payments.map((pay) => PAYMENT_METHOD_LABELS[pay.paymentMethod]).join(", ")}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <PurchaseActions purchaseId={p.id} paymentStatus={p.paymentStatus} voided={p.voided} />
