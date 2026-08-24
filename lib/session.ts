@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import type { Role } from "@prisma/client";
 import { isCompanyBlocked } from "@/lib/billing";
+import type { AppSection } from "@/lib/sections";
 import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
@@ -43,6 +44,9 @@ export type Session = {
   // Display name used to attribute sales/quotes — the employee's own name if
   // they have one, otherwise the owner account's email.
   sellerName: string;
+  // Which sections a VENDEDOR can access — see lib/sections.ts. Empty means
+  // unrestricted (see requireSectionAccess below); irrelevant for GERENTE.
+  allowedSections: string[];
   // The branch this session is currently scoped to — null means "every
   // branch" (a GERENTE/owner viewing consolidated data, see switchBranch()
   // in lib/actions/branches.ts). A VENDEDOR is always pinned to their own
@@ -112,6 +116,7 @@ export async function getSession(): Promise<Session | null> {
     nextPaymentDueDate,
     role: user.role,
     sellerName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email,
+    allowedSections: user.allowedSections,
     branchId,
     branchName: branch?.name ?? null,
   };
@@ -137,6 +142,19 @@ export async function requireManager(): Promise<Session> {
   const session = await requireSession();
   if (session.role !== "GERENTE" && !session.isSuperAdmin) redirect("/pos");
   return session;
+}
+
+// Gates a section for a VENDEDOR whose allowedSections was explicitly
+// restricted by a manager (see EmployeeTable.tsx) — GERENTE and a platform
+// super admin always pass, same as requireManager() above. An empty
+// allowedSections array means "no restriction configured," so this only
+// ever narrows access down from "everything," never locks out a seller who
+// was never touched by this feature.
+export async function requireSectionAccess(section: AppSection): Promise<Session> {
+  const session = await requireSession();
+  if (session.role === "GERENTE" || session.isSuperAdmin) return session;
+  if (session.allowedSections.length === 0 || session.allowedSections.includes(section)) return session;
+  redirect("/pos");
 }
 
 // Used by actions that operate on ONE concrete branch (creating a product,

@@ -62,6 +62,7 @@ export default async function RootLayout({
             logoDataUrl={branding.logoDataUrl}
             isSuperAdmin={session.isSuperAdmin}
             role={session.role}
+            allowedSections={session.allowedSections}
             branches={branches.map((b) => ({ id: b.id, name: b.name }))}
             currentBranchId={session.branchId}
             currentBranchName={session.branchName}

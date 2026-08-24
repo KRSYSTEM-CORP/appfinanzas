@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireSession } from "@/lib/session";
+import { requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { CustomerRecordSchema, CustomerCrmSchema } from "@/lib/validations";
 import { dayBoundsUtc, todayDateString } from "@/lib/report-types";
@@ -158,7 +158,7 @@ export async function createCustomer(formData: FormData): Promise<ActionResult> 
 }
 
 export async function updateCustomer(id: string, formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
   const parsed = readCustomerForm(formData);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
@@ -186,7 +186,7 @@ export async function updateCustomer(id: string, formData: FormData): Promise<Ac
 // "CRM" screen only ever touches notes/nextContactDate, never the general
 // record (name/phone/address/rif), which has its own "Editar" screen.
 export async function updateCustomerCrm(id: string, formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
   const parsed = CustomerCrmSchema.safeParse({
     notes: formData.get("notes"),
     nextContactDate: formData.get("nextContactDate"),
@@ -210,7 +210,7 @@ export async function updateCustomerCrm(id: string, formData: FormData): Promise
 }
 
 export async function deleteCustomer(id: string): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
   await withTenant(companyId, (tx) => tx.customer.deleteMany({ where: { id, companyId } }));
   revalidatePath("/customers");
   return { success: true };

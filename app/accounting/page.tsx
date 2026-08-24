@@ -23,7 +23,7 @@ const sections = [
   },
   {
     href: "/tax-book",
-    title: "Libro IVA",
+    title: "Libro de Contabilidad",
     description: "Libro de compras y ventas para la declaración de IVA.",
   },
 ];

@@ -40,12 +40,13 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
     password: formData.get("password"),
     role: formData.get("role"),
     branchId: formData.get("branchId"),
+    allowedSections: formData.getAll("allowedSections"),
   });
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const { firstName, lastName, password, role, branchId } = parsed.data;
+  const { firstName, lastName, password, role, branchId, allowedSections } = parsed.data;
 
   const existing = await withTenant(companyId, (tx) =>
     tx.user.findFirst({
@@ -86,6 +87,7 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
         role,
         branchId: resolvedBranchId,
         status: "ACTIVE",
+        allowedSections: role === "VENDEDOR" ? allowedSections : [],
       },
     })
   );
@@ -102,11 +104,12 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
     role: formData.get("role"),
     password: formData.get("password"),
     branchId: formData.get("branchId"),
+    allowedSections: formData.getAll("allowedSections"),
   });
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
-  const { firstName, lastName, role, password, branchId } = parsed.data;
+  const { firstName, lastName, role, password, branchId, allowedSections } = parsed.data;
 
   let resolvedBranchId: string | null = null;
   if (role === "VENDEDOR") {
@@ -147,6 +150,7 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
         lastName,
         role,
         branchId: resolvedBranchId,
+        allowedSections: role === "VENDEDOR" ? allowedSections : [],
         ...(password ? { passwordHash: hashPassword(password) } : {}),
       },
     });

@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { deleteCustomer } from "@/lib/actions/customers";
 
-export function CustomerTable({ customers }: { customers: Customer[] }) {
+export function CustomerTable({ customers, canManage }: { customers: Customer[]; canManage: boolean }) {
   const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -85,40 +85,44 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
                     >
                       CRM
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      nativeButton={false}
-                      render={<Link href={`/customers/${c.id}`} />}
-                    >
-                      Editar
-                    </Button>
-                    <Dialog>
-                      <DialogTrigger render={<Button size="sm" variant="destructive" />}>
-                        Eliminar
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>¿Eliminar cliente?</DialogTitle>
-                          <DialogDescription>
-                            Se eliminará {c.firstName} {c.lastName} de tu lista de clientes. Las
-                            ventas ya realizadas conservarán sus datos, pero no podrás
-                            autocompletarlos en una próxima compra.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                          <DialogClose render={<Button variant="outline" />}>
-                            Cancelar
-                          </DialogClose>
-                          <DialogClose
-                            render={<Button variant="destructive" disabled={isPending} />}
-                            onClick={() => handleDelete(c.id)}
-                          >
-                            Eliminar
-                          </DialogClose>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
+                    {canManage && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        nativeButton={false}
+                        render={<Link href={`/customers/${c.id}`} />}
+                      >
+                        Editar
+                      </Button>
+                    )}
+                    {canManage && (
+                      <Dialog>
+                        <DialogTrigger render={<Button size="sm" variant="destructive" />}>
+                          Eliminar
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>¿Eliminar cliente?</DialogTitle>
+                            <DialogDescription>
+                              Se eliminará {c.firstName} {c.lastName} de tu lista de clientes. Las
+                              ventas ya realizadas conservarán sus datos, pero no podrás
+                              autocompletarlos en una próxima compra.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <DialogFooter>
+                            <DialogClose render={<Button variant="outline" />}>
+                              Cancelar
+                            </DialogClose>
+                            <DialogClose
+                              render={<Button variant="destructive" disabled={isPending} />}
+                              onClick={() => handleDelete(c.id)}
+                            >
+                              Eliminar
+                            </DialogClose>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

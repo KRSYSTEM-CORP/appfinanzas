@@ -45,6 +45,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     customerAddress,
     customerRif,
     note,
+    quoteId,
   } = parsed.data;
 
   try {
@@ -218,6 +219,20 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         });
       }
 
+      // Links this sale back to the quote it was "Facturar"-ed from (see
+      // getQuoteForConversion in lib/actions/quotes.ts and the ?fromQuote=
+      // prefill in app/pos/page.tsx) and flips the quote to CONVERTED in the
+      // same transaction — Sale.quoteId is @unique, so trying to invoice the
+      // same quote twice (e.g. two tabs open) throws here instead of
+      // silently double-linking it.
+      if (quoteId) {
+        await tx.sale.update({ where: { id: sale.id }, data: { quoteId } });
+        await tx.quote.updateMany({
+          where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) },
+          data: { status: "CONVERTED" },
+        });
+      }
+
       return sale.id;
     });
 
@@ -225,9 +240,16 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     revalidatePath("/pos");
     revalidatePath("/reports");
     revalidatePath("/customers");
+    revalidatePath("/quotes/history");
     return { success: true, saleId };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo completar la venta";
+    const isDuplicateQuoteLink =
+      err instanceof Error && "code" in err && (err as { code?: string }).code === "P2002";
+    const message = isDuplicateQuoteLink
+      ? "Este presupuesto ya fue facturado"
+      : err instanceof Error
+        ? err.message
+        : "No se pudo completar la venta";
     return { success: false, error: message };
   }
 }
@@ -458,11 +480,19 @@ export async function getSaleReceipt(saleId: string) {
   };
 }
 
-export async function listRecentSales(limit = 10) {
+// `windows`, when given, restricts to sales created inside any of the given
+// [start,end) ranges (see selectionToWindows, lib/report-types.ts) — used by
+// Reportes' date filter. Omitted entirely for callers that want the plain
+// "last N sales" behavior (e.g. Documentos, which does its own filtering).
+export async function listRecentSales(limit = 10, windows?: { start: Date; end: Date }[]) {
   const { companyId, branchId } = await requireSession();
   return withTenant(companyId, (tx) =>
     tx.sale.findMany({
-      where: { companyId, ...(branchId ? { branchId } : {}) },
+      where: {
+        companyId,
+        ...(branchId ? { branchId } : {}),
+        ...(windows ? { OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })) } : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: limit,
       include: { items: true, payments: true },

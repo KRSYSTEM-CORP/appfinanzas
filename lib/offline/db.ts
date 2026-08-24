@@ -24,6 +24,7 @@ export type PendingSaleInput = {
   customerAddress: string;
   customerRif?: string;
   note?: string;
+  quoteId?: string;
 };
 
 // Enough to render a "pending" receipt immediately, before the real Sale

@@ -73,6 +73,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
           baseCents,
           taxCents,
           subtotalCents,
+          affectsStock: item.affectsStock,
         };
       });
 
@@ -104,6 +105,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
       });
 
       for (const item of itemsData) {
+        if (!item.affectsStock) continue;
         const product = productById.get(item.productId)!;
         const newStock = product.stock + item.quantity;
         await tx.product.updateMany({
@@ -131,7 +133,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
 async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, companyId: string, branchId: string) {
   const items = await tx.purchaseItem.findMany({ where: { purchaseId } });
   for (const item of items) {
-    if (!item.productId) continue;
+    if (!item.productId || !item.affectsStock) continue;
     const product = await tx.product.findFirst({ where: { id: item.productId, companyId, branchId } });
     if (!product) continue;
     const newStock = Math.max(0, product.stock - item.quantity);
@@ -220,6 +222,7 @@ export type BulkPurchaseRow = {
   unitCost: unknown;
   taxCategory?: unknown;
   paymentStatus?: unknown;
+  affectsStock?: unknown;
   note?: unknown;
 };
 
@@ -302,6 +305,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           baseCents: number;
           taxCents: number;
           subtotalCents: number;
+          affectsStock: boolean;
         };
         const itemsData: ItemRow[] = [];
         let totalCents = 0;
@@ -309,7 +313,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
         let taxTotalCents = 0;
 
         for (const entry of entries) {
-          const { productSku, productName, quantity, unitCost, taxCategory } = entry.data;
+          const { productSku, productName, quantity, unitCost, taxCategory, affectsStock } = entry.data;
           const product = productSku
             ? await tx.product.findFirst({ where: { branchId, sku: productSku } })
             : await tx.product.findFirst({
@@ -337,6 +341,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
             baseCents,
             taxCents,
             subtotalCents,
+            affectsStock,
           });
         }
 
@@ -366,6 +371,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
         });
 
         for (const item of itemsData) {
+          if (!item.affectsStock) continue;
           const product = await tx.product.findFirst({ where: { id: item.productId, companyId, branchId } });
           if (!product) continue;
           const newStock = product.stock + item.quantity;

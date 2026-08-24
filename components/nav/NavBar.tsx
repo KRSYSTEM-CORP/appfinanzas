@@ -10,17 +10,17 @@ import { BranchSwitcher } from "@/components/nav/BranchSwitcher";
 import type { Role } from "@prisma/client";
 
 const links = [
-  { href: "/pos", label: "Punto de venta" },
-  { href: "/quotes", label: "Presupuestos" },
-  { href: "/inventory", label: "Inventario" },
-  { href: "/customers", label: "Clientes" },
-  { href: "/reports", label: "Reportes" },
-  { href: "/documents", label: "Documentos" },
+  { href: "/pos", label: "Punto de venta", section: "pos" as const },
+  { href: "/quotes", label: "Presupuestos", section: "quotes" as const },
+  { href: "/inventory", label: "Inventario", section: "inventory" as const },
+  { href: "/customers", label: "Clientes", section: "customers" as const },
+  { href: "/reports", label: "Reportes", section: "reports" as const },
+  { href: "/documents", label: "Documentos", section: "documents" as const },
 ];
 
-// Always the second-to-last and last items in the nav, regardless of role —
-// appended after the manager/super-admin links below, not part of the base
-// list, so their position never shifts as role-conditional links come and go.
+// GERENTE-only, same as managerOnlyLinks below — kept as separate named
+// constants (rather than merged into that array) so they always render
+// last, after Contabilidad/Administración de perfiles, regardless of role.
 const settingsLink = { href: "/settings", label: "Configuración" };
 const subscriptionLink = { href: "/billing", label: "Suscripción mensual" };
 
@@ -53,6 +53,7 @@ export function NavBar({
   logoDataUrl,
   isSuperAdmin,
   role,
+  allowedSections,
   branches,
   currentBranchId,
   currentBranchName,
@@ -61,6 +62,7 @@ export function NavBar({
   logoDataUrl: string | null;
   isSuperAdmin?: boolean;
   role: Role;
+  allowedSections: string[];
   branches: { id: string; name: string }[];
   currentBranchId: string | null;
   currentBranchName: string | null;
@@ -68,12 +70,20 @@ export function NavBar({
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const canManage = role === "GERENTE" || isSuperAdmin;
+  // Empty allowedSections means "unrestricted" (see requireSectionAccess,
+  // lib/session.ts) — same rule here so the nav never hides a link a
+  // never-configured VENDEDOR could actually still open.
+  const visibleLinks =
+    canManage || allowedSections.length === 0
+      ? links
+      : links.filter((l) => allowedSections.includes(l.section));
   const navLinks = [
-    ...links,
+    ...visibleLinks,
     ...(canManage ? managerOnlyLinks : []),
     ...(isSuperAdmin ? [{ href: "/admin", label: "Administración" }] : []),
-    settingsLink,
-    subscriptionLink,
+    // Configuración and Suscripción mensual are GERENTE-only too — a
+    // VENDEDOR has nothing to configure there and can't manage billing.
+    ...(canManage ? [settingsLink, subscriptionLink] : []),
   ];
 
   // Close the mobile menu automatically whenever the route actually changes

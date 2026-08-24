@@ -17,10 +17,17 @@ type PurchaseItemRow = {
   quantity: string;
   unitCost: string;
   taxCategory: TaxCategory;
+  affectsStock: boolean;
 };
 
 function emptyRow(defaultProductId: string, defaultTaxCategory: TaxCategory = "GENERAL"): PurchaseItemRow {
-  return { productId: defaultProductId, quantity: "1", unitCost: "", taxCategory: defaultTaxCategory };
+  return {
+    productId: defaultProductId,
+    quantity: "1",
+    unitCost: "",
+    taxCategory: defaultTaxCategory,
+    affectsStock: true,
+  };
 }
 
 export function PurchaseForm({
@@ -88,6 +95,7 @@ export function PurchaseForm({
           quantity: r.quantity,
           unitCost: r.unitCost,
           taxCategory: r.taxCategory,
+          affectsStock: r.affectsStock,
         })),
       });
       if (result.success) {
@@ -210,6 +218,30 @@ export function PurchaseForm({
                     </Button>
                   )}
                 </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Vincular al inventario</Label>
+                <div className="flex w-fit rounded-md border overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => updateRow(i, { affectsStock: true })}
+                    className={`px-3 py-1.5 text-sm ${row.affectsStock ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                  >
+                    Activado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateRow(i, { affectsStock: false })}
+                    className={`px-3 py-1.5 text-sm ${!row.affectsStock ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                  >
+                    Desactivado
+                  </button>
+                </div>
+                {!row.affectsStock && (
+                  <p className="text-xs text-muted-foreground">
+                    Esta línea quedará en el libro de compras pero no sumará al stock del producto.
+                  </p>
+                )}
               </div>
             </div>
           );

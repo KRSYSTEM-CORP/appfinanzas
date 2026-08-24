@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -10,30 +9,22 @@ import {
 } from "@/components/ui/table";
 import { StatCard } from "@/components/reports/StatCard";
 import { TaxBookExportButton } from "@/components/finance/TaxBookExportButton";
+import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { formatDate } from "@/lib/format";
 import { getSalesTaxBook, getPurchasesTaxBook } from "@/lib/actions/tax-book";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
-import type { DateRangePreset } from "@/lib/report-types";
+import { parseDateRangeSelection } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
-
-const presets: { key: DateRangePreset; label: string }[] = [
-  { key: "today", label: "Hoy" },
-  { key: "7d", label: "7 días" },
-  { key: "30d", label: "30 días" },
-  { key: "month", label: "Este mes" },
-];
 
 export default async function TaxBookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; year?: string; months?: string }>;
 }) {
-  const { range: rawRange } = await searchParams;
-  const range: DateRangePreset = presets.some((p) => p.key === rawRange)
-    ? (rawRange as DateRangePreset)
-    : "month";
+  const params = await searchParams;
+  const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
 
   const [sales, purchases, { referenceCurrency }] = await Promise.all([
     getSalesTaxBook(range),
@@ -63,27 +54,21 @@ export default async function TaxBookPage({
     <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Libro de Compras y Ventas</h1>
+          <h1 className="text-2xl font-semibold">Libro de Contabilidad</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Formato de referencia para tu declaración de IVA ante el SENIAT — verifica los montos
             con tu contador antes de declarar.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex gap-1 rounded-lg border p-1">
-            {presets.map((p) => (
-              <Link
-                key={p.key}
-                href={`/tax-book?range=${p.key}`}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  range === p.key ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                }`}
-              >
-                {p.label}
-              </Link>
-            ))}
-          </div>
-          <TaxBookExportButton sales={sales} purchases={purchases} rangeLabel={range} />
+          <DateRangeSwitcher selection={range} />
+          <TaxBookExportButton
+            sales={sales}
+            purchases={purchases}
+            rangeLabel={
+              range.kind === "preset" ? range.preset : `meses-${range.year}-${range.months.join("-")}`
+            }
+          />
         </div>
       </div>
 

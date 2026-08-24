@@ -2,21 +2,21 @@
 
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { rangeToDates, type DateRangePreset } from "@/lib/report-types";
+import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 
 // Libro de Ventas — one row per non-voided sale in the period, with the IVA
 // breakdown already snapshotted on Sale (see lib/tax.ts/completeSale). Sales
 // completed before the IVA feature existed show baseImponibleCents=0/
 // taxCents=0 (an approximation, not a real historical record).
-export async function getSalesTaxBook(range: DateRangePreset) {
+export async function getSalesTaxBook(range: DateRangeSelection) {
   const { companyId, branchId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
   return withTenant(companyId, (tx) =>
     tx.sale.findMany({
       where: {
         companyId,
         ...(branchId ? { branchId } : {}),
-        createdAt: { gte: start, lte: end },
+        OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
         voided: false,
       },
       orderBy: { createdAt: "asc" },
@@ -38,15 +38,15 @@ export async function getSalesTaxBook(range: DateRangePreset) {
 
 // Libro de Compras — one row per non-voided purchase in the period, with the
 // supplier's RIF and any IVA withheld (see Company.isIvaWithholdingAgent).
-export async function getPurchasesTaxBook(range: DateRangePreset) {
+export async function getPurchasesTaxBook(range: DateRangeSelection) {
   const { companyId, branchId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
   return withTenant(companyId, (tx) =>
     tx.purchase.findMany({
       where: {
         companyId,
         ...(branchId ? { branchId } : {}),
-        createdAt: { gte: start, lte: end },
+        OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
         voided: false,
       },
       orderBy: { createdAt: "asc" },

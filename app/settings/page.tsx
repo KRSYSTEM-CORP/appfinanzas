@@ -15,7 +15,7 @@ import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from 
 import { listBranches } from "@/lib/actions/branches";
 import { formatDate } from "@/lib/format";
 import { formatLocalCurrency } from "@/lib/currencies";
-import { requireSession } from "@/lib/session";
+import { requireManager } from "@/lib/session";
 import { SHOP_TIME_ZONE, zonedDateParts } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,11 @@ function isStale(updatedAt: Date | null): boolean {
 }
 
 export default async function SettingsPage() {
-  const session = await requireSession();
+  const session = await requireManager();
+  // Settings is now fully manager-gated (see requireManager above) — every
+  // tab below is reachable, so this is always true. Kept as a named
+  // constant rather than deleted since the IVA/Sucursales tabs below still
+  // read it and it costs nothing to leave self-documenting.
   const canManage = session.role === "GERENTE" || session.isSuperAdmin;
   const [
     { rate, updatedAt, localCurrencyCode, exchangeRateEnabled, referenceCurrency, printPaperSize },
@@ -152,7 +156,7 @@ export default async function SettingsPage() {
                 <p className="text-sm text-muted-foreground">
                   Configura las tasas de IVA y si tu empresa debe retener IVA a proveedores (ver{" "}
                   <Link href="/tax-book" className="text-primary underline underline-offset-2">
-                    Libro de Compras y Ventas
+                    Libro de Contabilidad
                   </Link>
                   ).
                 </p>

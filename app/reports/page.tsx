@@ -1,17 +1,24 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CashClosingPanel } from "@/components/reports/CashClosingPanel";
 import { SalesTable } from "@/components/reports/SalesTable";
+import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { getCurrency } from "@/lib/currencies";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
-import { requireSession } from "@/lib/session";
+import { requireSectionAccess } from "@/lib/session";
 import { listRecentSales } from "@/lib/actions/sales";
 import { getDailyClosingSummary } from "@/lib/actions/cash-closing";
-import { todayDateString } from "@/lib/report-types";
+import { parseDateRangeSelection, selectionToWindows, todayDateString } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReportsPage() {
-  const session = await requireSession();
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string; year?: string; months?: string }>;
+}) {
+  const session = await requireSectionAccess("reports");
+  const params = await searchParams;
+  const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const todayStr = todayDateString();
 
   const [
@@ -21,7 +28,7 @@ export default async function ReportsPage() {
     fiscalData,
     todaySummary,
   ] = await Promise.all([
-    listRecentSales(500),
+    listRecentSales(500, selectionToWindows(range)),
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
@@ -62,8 +69,9 @@ export default async function ReportsPage() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
           <CardTitle>Ventas</CardTitle>
+          <DateRangeSwitcher selection={range} />
         </CardHeader>
         <CardContent>
           <SalesTable

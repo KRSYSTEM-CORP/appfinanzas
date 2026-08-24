@@ -2,7 +2,7 @@ import Link from "next/link";
 import { QuoteClient } from "@/components/quotes/QuoteClient";
 import { listActiveProducts, listCategories } from "@/lib/actions/products";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
-import { requireSession } from "@/lib/session";
+import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export default async function QuotesPage() {
     { logoDataUrl },
     fiscalData,
   ] = await Promise.all([
-    requireSession(),
+    requireSectionAccess("quotes"),
     listActiveProducts(),
     getExchangeRateInfo(),
     listCategories(),

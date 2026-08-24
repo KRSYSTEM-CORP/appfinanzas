@@ -259,6 +259,13 @@ model User {
   // (doesn't affect pricing or Sale totals). Null means no commission
   // configured yet.
   commissionPercent   Decimal?             @db.Decimal(5, 2)
+  // Which top-level sections this VENDEDOR can access (see lib/sections.ts
+  // for the fixed list of togglable ids) — irrelevant for GERENTE, who
+  // always sees everything. An empty array means "no restriction configured
+  // yet," not "no access" — see requireSectionAccess in lib/session.ts —
+  // so activating this feature never locks out an existing seller until a
+  // manager explicitly restricts them.
+  allowedSections     String[]             @default([])
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   sales               Sale[]               @relation("SaleSeller")
@@ -457,6 +464,13 @@ model Sale {
   sellerId              String?
   seller                User?          @relation("SaleSeller", fields: [sellerId], references: [id], onDelete: SetNull)
   sellerName            String?
+  // Set when this sale was created via the "Facturar" flow from an existing
+  // Quote (see completeSale, lib/actions/sales.ts) rather than typed up from
+  // scratch in the POS — @unique so a single quote can never be linked to
+  // more than one sale. Null for the vast majority of sales, which were
+  // never quoted first.
+  quoteId               String?        @unique
+  quote                 Quote?         @relation(fields: [quoteId], references: [id], onDelete: SetNull)
 
   @@unique([branchId, controlNumber])
   @@unique([branchId, receiptControlNumber])
@@ -565,11 +579,16 @@ model Quote {
   sellerName        String?
   // Free-text, optional — printed on the generated PDF/print view when set.
   note              String?
-  // Manually set by the seller once they know the outcome — there's no
-  // automatic link to a Sale (a converted quote's actual sale is a separate,
-  // independently-entered Sale row), so this is a follow-up flag, not a
-  // derived fact. Drives the "seguimiento de presupuestos" list.
+  // Set automatically by completeSale() the moment this quote is invoiced
+  // via the "Facturar" flow (see app/pos/page.tsx's ?fromQuote= prefill) —
+  // status flips to CONVERTED in the same transaction. Still settable by
+  // hand for a quote that was invoiced some other way, in which case `sale`
+  // stays null; the presence of `sale` is what "seguimiento de presupuestos"
+  // uses to link straight to the resulting document.
   status            QuoteStatus @default(PENDING)
+  // Virtual back-relation — no column here, see Sale.quoteId (the actual FK,
+  // unique so a quote can never be linked to more than one sale).
+  sale              Sale?
 
   @@unique([branchId, controlNumber])
   @@index([companyId, createdAt])
@@ -674,6 +693,11 @@ model PurchaseItem {
   baseCents      Int
   taxCents       Int
   subtotalCents  Int
+  // Off means this line still counts toward the libro de compras (base
+  // imponible, IVA, totals) but never touches Product.stock/costCents —
+  // for a purchase of something that isn't tracked inventory. On by default
+  // so every purchase behaves exactly as before this field existed.
+  affectsStock   Boolean     @default(true)
 
   @@index([purchaseId])
   @@index([productId])

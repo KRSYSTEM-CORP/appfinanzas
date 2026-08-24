@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { QuantityInput } from "@/components/shared/QuantityInput";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import type { ReferenceCurrency } from "@prisma/client";
 
@@ -25,6 +26,7 @@ export function QuoteCart({
   onToggleCurrency,
   onIncrement,
   onDecrement,
+  onSetQuantity,
   onRemove,
   note,
   onNoteChange,
@@ -41,6 +43,7 @@ export function QuoteCart({
   onToggleCurrency: (useLocalCurrency: boolean) => void;
   onIncrement: (productId: string) => void;
   onDecrement: (productId: string) => void;
+  onSetQuantity: (productId: string, quantity: number) => void;
   onRemove: (productId: string) => void;
   note: string;
   onNoteChange: (note: string) => void;
@@ -101,7 +104,11 @@ export function QuoteCart({
               >
                 −
               </Button>
-              <span className="w-6 text-center text-sm">{line.quantity}</span>
+              <QuantityInput
+                quantity={line.quantity}
+                maxStock={line.maxStock}
+                onCommit={(quantity) => onSetQuantity(line.productId, quantity)}
+              />
               <Button
                 type="button"
                 size="icon-sm"

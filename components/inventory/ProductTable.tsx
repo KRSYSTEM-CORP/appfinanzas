@@ -56,6 +56,7 @@ export function ProductTable({
   exchangeRateEnabled,
   referenceCurrency,
   categories,
+  canManage,
 }: {
   products: Product[];
   rate: number | null;
@@ -63,6 +64,7 @@ export function ProductTable({
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
   categories: string[];
+  canManage: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
@@ -232,48 +234,52 @@ export function ProductTable({
                 </TableCell>
                 <TableCell>{p.isActive ? "Activo" : "Inactivo"}</TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      nativeButton={false}
-                      render={<Link href={`/inventory/${p.id}`} />}
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={p.isActive ? "destructive" : "secondary"}
-                      disabled={isPending}
-                      onClick={() => toggleActive(p.id, p.isActive)}
-                    >
-                      {p.isActive ? "Desactivar" : "Activar"}
-                    </Button>
-                    <Dialog>
-                      <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
-                        Eliminar
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>¿Eliminar &quot;{p.name}&quot;?</DialogTitle>
-                          <DialogDescription>
-                            Esta acción es irreversible. El producto desaparecerá del inventario y
-                            del punto de venta. Las ventas y presupuestos ya generados con este
-                            producto no se ven afectados.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                          <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                          <DialogClose
-                            render={<Button variant="destructive" disabled={isPending} />}
-                            onClick={() => handleDelete(p.id)}
-                          >
-                            Eliminar
-                          </DialogClose>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
+                  {canManage ? (
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        nativeButton={false}
+                        render={<Link href={`/inventory/${p.id}`} />}
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={p.isActive ? "destructive" : "secondary"}
+                        disabled={isPending}
+                        onClick={() => toggleActive(p.id, p.isActive)}
+                      >
+                        {p.isActive ? "Desactivar" : "Activar"}
+                      </Button>
+                      <Dialog>
+                        <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
+                          Eliminar
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>¿Eliminar &quot;{p.name}&quot;?</DialogTitle>
+                            <DialogDescription>
+                              Esta acción es irreversible. El producto desaparecerá del inventario y
+                              del punto de venta. Las ventas y presupuestos ya generados con este
+                              producto no se ven afectados.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <DialogFooter>
+                            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                            <DialogClose
+                              render={<Button variant="destructive" disabled={isPending} />}
+                              onClick={() => handleDelete(p.id)}
+                            >
+                              Eliminar
+                            </DialogClose>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

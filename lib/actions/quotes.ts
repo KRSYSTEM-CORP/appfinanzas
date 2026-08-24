@@ -129,6 +129,90 @@ export async function getQuote(quoteId: string) {
   return { ...quote, exchangeRate: quote.exchangeRate != null ? Number(quote.exchangeRate) : null };
 }
 
+export type QuoteConversionLine = {
+  productId: string;
+  name: string;
+  unitPriceCents: number;
+  quantity: number;
+  maxStock: number;
+};
+
+export type QuoteForConversion = {
+  quoteId: string;
+  customerFirstName: string;
+  customerLastName: string;
+  customerPhone: string;
+  customerAddress: string;
+  lines: QuoteConversionLine[];
+  // Names of quoted items that got dropped from `lines` because the product
+  // no longer exists or was deactivated since the quote was made — shown to
+  // the cashier so they know to double check before completing the sale.
+  droppedItemNames: string[];
+};
+
+// Powers the "Facturar" flow from /quotes/history — prefills the POS cart
+// from an existing quote (see app/pos/page.tsx's ?fromQuote= handling)
+// instead of making the cashier retype everything. Deliberately re-resolves
+// every line against the product's CURRENT price/stock rather than trusting
+// the quote's frozen snapshot — same "never trust a stale price" principle
+// completeSale already applies to every checkout, quoted or not.
+export async function getQuoteForConversion(quoteId: string): Promise<
+  { success: true; quote: QuoteForConversion } | { success: false; error: string }
+> {
+  const { companyId, branchId } = await requireSession();
+  if (!branchId) {
+    return { success: false, error: 'Selecciona una sucursal antes de facturar un presupuesto — no se puede con "Todas las sucursales".' };
+  }
+
+  const quote = await withTenant(companyId, (tx) =>
+    tx.quote.findFirst({
+      where: { id: quoteId, companyId, branchId },
+      include: { items: true, sale: { select: { id: true } } },
+    })
+  );
+  if (!quote) return { success: false, error: "Presupuesto no encontrado" };
+  if (quote.sale) return { success: false, error: "Este presupuesto ya fue facturado" };
+  if (!quote.customerFirstName || !quote.customerLastName || !quote.customerPhone || !quote.customerAddress) {
+    return { success: false, error: "A este presupuesto le faltan datos del cliente" };
+  }
+
+  const productIds = quote.items.map((i) => i.productId).filter((id): id is string => id != null);
+  const products = await withTenant(companyId, (tx) =>
+    tx.product.findMany({ where: { id: { in: productIds }, companyId, branchId } })
+  );
+  const productById = new Map(products.map((p) => [p.id, p]));
+
+  const lines: QuoteConversionLine[] = [];
+  const droppedItemNames: string[] = [];
+  for (const item of quote.items) {
+    const product = item.productId ? productById.get(item.productId) : undefined;
+    if (!product || !product.isActive) {
+      droppedItemNames.push(item.productName);
+      continue;
+    }
+    lines.push({
+      productId: product.id,
+      name: product.name,
+      unitPriceCents: product.priceCents,
+      quantity: Math.max(1, Math.min(item.quantity, product.trackStock ? Math.max(product.stock, 1) : item.quantity)),
+      maxStock: product.trackStock ? product.stock : Infinity,
+    });
+  }
+
+  return {
+    success: true,
+    quote: {
+      quoteId: quote.id,
+      customerFirstName: quote.customerFirstName,
+      customerLastName: quote.customerLastName,
+      customerPhone: quote.customerPhone,
+      customerAddress: quote.customerAddress,
+      lines,
+      droppedItemNames,
+    },
+  };
+}
+
 // Seguimiento de presupuestos: every quote for the current branch (or every
 // branch, for a GERENTE viewing "Todas las sucursales"), most recent first.
 // The list page itself sorts PENDING ones to the top so the oldest
@@ -136,13 +220,18 @@ export async function getQuote(quoteId: string) {
 // first, without needing a separate "reminder date" field on Quote.
 export async function listQuotes(limit = 200) {
   const { companyId, branchId } = await requireSession();
-  return withTenant(companyId, (tx) =>
+  const quotes = await withTenant(companyId, (tx) =>
     tx.quote.findMany({
       where: { companyId, ...(branchId ? { branchId } : {}) },
       orderBy: { createdAt: "desc" },
       take: limit,
+      include: { sale: { select: { id: true, controlNumber: true } } },
     })
   );
+  // Prisma's Decimal can't cross the Server->Client Component boundary
+  // (every caller of listQuotes renders into a "use client" table) — same
+  // conversion getQuote() already does for the single-quote case.
+  return quotes.map((q) => ({ ...q, exchangeRate: q.exchangeRate != null ? Number(q.exchangeRate) : null }));
 }
 
 export async function updateQuoteStatus(quoteId: string, status: QuoteStatus): Promise<ActionResult> {

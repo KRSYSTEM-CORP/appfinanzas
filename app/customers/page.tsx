@@ -5,11 +5,17 @@ import { Badge } from "@/components/ui/badge";
 import { CustomerTable } from "@/components/customers/CustomerTable";
 import { listCustomers, listCustomersToContact } from "@/lib/actions/customers";
 import { formatDateOnly } from "@/lib/format";
+import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
-  const [customers, toContact] = await Promise.all([listCustomers(), listCustomersToContact()]);
+  const [session, customers, toContact] = await Promise.all([
+    requireSectionAccess("customers"),
+    listCustomers(),
+    listCustomersToContact(),
+  ]);
+  const canManage = session.role === "GERENTE" || session.isSuperAdmin;
 
   return (
     <div className="flex flex-col gap-4 p-6">
@@ -49,7 +55,7 @@ export default async function CustomersPage() {
         </Card>
       )}
 
-      <CustomerTable customers={customers} />
+      <CustomerTable customers={customers} canManage={canManage} />
     </div>
   );
 }

@@ -12,7 +12,8 @@ import type { ActionResult } from "@/lib/types";
 // This whole file deliberately uses getSession() instead of requireSession():
 // /billing is exactly the page a billing-blocked company needs to reach to
 // report a payment and get itself unblocked, so these actions must never
-// trigger the /blocked redirect the way most other actions do.
+// trigger the /blocked redirect the way most other actions (including
+// requireManager()) do.
 async function requireCompanyUser() {
   const session = await getSession();
   // See app/api/auth/clear-session/route.ts — this is called directly from
@@ -20,6 +21,11 @@ async function requireCompanyUser() {
   // user) must be cleared through the Route Handler rather than by
   // redirecting straight to /login.
   if (!session) redirect("/api/auth/clear-session");
+  // Subscription/billing is a GERENTE concern — a VENDEDOR is bounced to
+  // /pos same as Contabilidad/Administración de perfiles, WITHOUT going
+  // through requireSession()'s billing-blocked check above (this route must
+  // stay reachable for a blocked company's own manager to unblock it).
+  if (session.role !== "GERENTE" && !session.isSuperAdmin) redirect("/pos");
   return session;
 }
 

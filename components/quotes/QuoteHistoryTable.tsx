@@ -2,8 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { Quote, QuoteStatus, ReferenceCurrency } from "@prisma/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -15,6 +17,11 @@ import {
 import { formatCurrencyCents } from "@/lib/currencies";
 import { formatDate, QUOTE_STATUS_LABELS } from "@/lib/format";
 import { updateQuoteStatus, updateQuoteStatusBulk } from "@/lib/actions/quotes";
+
+type QuoteWithSale = Omit<Quote, "exchangeRate"> & {
+  exchangeRate: number | null;
+  sale: { id: string; controlNumber: number | null } | null;
+};
 
 const STATUSES: QuoteStatus[] = ["PENDING", "CONVERTED", "LOST"];
 
@@ -51,7 +58,7 @@ export function QuoteHistoryTable({
   quotes,
   referenceCurrency,
 }: {
-  quotes: Quote[];
+  quotes: QuoteWithSale[];
   referenceCurrency: ReferenceCurrency;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -134,6 +141,7 @@ export function QuoteHistoryTable({
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Días pendiente</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Facturación</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -162,11 +170,31 @@ export function QuoteHistoryTable({
                     onChange={handleStatusChange}
                   />
                 </TableCell>
+                <TableCell>
+                  {q.sale ? (
+                    <Link href="/documents" className="inline-flex">
+                      <Badge variant="success">
+                        Facturado{q.sale.controlNumber != null ? ` · Nº ${q.sale.controlNumber}` : ""}
+                      </Badge>
+                    </Link>
+                  ) : q.status === "PENDING" ? (
+                    <Button
+                      type="button"
+                      size="xs"
+                      nativeButton={false}
+                      render={<Link href={`/pos?fromQuote=${q.id}`} />}
+                    >
+                      Facturar
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
             {sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   Aún no hay presupuestos.
                 </TableCell>
               </TableRow>

@@ -82,6 +82,20 @@ export function QuoteClient({
     );
   }
 
+  // Typed directly into the cart's quantity field (see
+  // components/shared/QuantityInput.tsx) — already clamped to [1, maxStock]
+  // there, clamped again here as a second line of defense against a stale
+  // maxStock.
+  function setQuantity(productId: string, quantity: number) {
+    setLines((prev) =>
+      prev.map((l) => {
+        if (l.productId !== productId) return l;
+        const clamped = Math.min(Math.max(1, quantity), l.maxStock);
+        return { ...l, quantity: clamped };
+      })
+    );
+  }
+
   function remove(productId: string) {
     setLines((prev) => prev.filter((l) => l.productId !== productId));
   }
@@ -179,6 +193,7 @@ export function QuoteClient({
           onToggleCurrency={setUseLocalCurrency}
           onIncrement={increment}
           onDecrement={decrement}
+          onSetQuantity={setQuantity}
           onRemove={remove}
           note={note}
           onNoteChange={setNote}

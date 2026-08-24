@@ -1,16 +1,36 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ProductTable } from "@/components/inventory/ProductTable";
+import { PriceListButton } from "@/components/inventory/PriceListButton";
 import { listAllProducts, listCategories } from "@/lib/actions/products";
-import { getExchangeRateInfo } from "@/lib/actions/settings";
+import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
 import { isLowStock } from "@/lib/inventory";
+import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
-  const [products, { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, categories] =
-    await Promise.all([listAllProducts(), getExchangeRateInfo(), listCategories()]);
+  const [
+    session,
+    products,
+    { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency },
+    categories,
+    { logoDataUrl },
+    fiscalData,
+  ] = await Promise.all([
+    requireSectionAccess("inventory"),
+    listAllProducts(),
+    getExchangeRateInfo(),
+    listCategories(),
+    getBranding(),
+    getFiscalData(),
+  ]);
   const lowStockCount = products.filter((p) => p.isActive && isLowStock(p)).length;
+  const priceListProducts = products
+    .filter((p) => p.isActive)
+    .map((p) => ({ name: p.name, category: p.category, priceCents: p.priceCents }));
+  const priceListCompany = { name: session.companyName, logoDataUrl, ...fiscalData };
+  const canManage = session.role === "GERENTE" || session.isSuperAdmin;
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
@@ -24,15 +44,24 @@ export default async function InventoryPage() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" nativeButton={false} render={<Link href="/inventory/update" />}>
-            Actualizar desde Excel
-          </Button>
-          <Button variant="outline" nativeButton={false} render={<Link href="/inventory/import" />}>
-            Importar desde Excel
-          </Button>
-          <Button nativeButton={false} render={<Link href="/inventory/new" />}>
-            Nuevo producto
-          </Button>
+          <PriceListButton
+            products={priceListProducts}
+            company={priceListCompany}
+            referenceCurrency={referenceCurrency}
+          />
+          {canManage && (
+            <>
+              <Button variant="outline" nativeButton={false} render={<Link href="/inventory/update" />}>
+                Actualizar desde Excel
+              </Button>
+              <Button variant="outline" nativeButton={false} render={<Link href="/inventory/import" />}>
+                Importar desde Excel
+              </Button>
+              <Button nativeButton={false} render={<Link href="/inventory/new" />}>
+                Nuevo producto
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -53,6 +82,7 @@ export default async function InventoryPage() {
         exchangeRateEnabled={exchangeRateEnabled}
         referenceCurrency={referenceCurrency}
         categories={categories}
+        canManage={canManage}
       />
     </div>
   );

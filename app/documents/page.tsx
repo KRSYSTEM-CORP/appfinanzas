@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DocumentsTable } from "@/components/documents/DocumentsTable";
 import { listRecentSales } from "@/lib/actions/sales";
+import { listQuotes } from "@/lib/actions/quotes";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
-import { requireSession } from "@/lib/session";
+import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +11,14 @@ export default async function DocumentsPage() {
   const [
     { companyName },
     sales,
+    quotes,
     { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency, printPaperSize },
     { logoDataUrl },
     fiscalData,
   ] = await Promise.all([
-    requireSession(),
+    requireSectionAccess("documents"),
     listRecentSales(500),
+    listQuotes(500),
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
@@ -37,18 +40,19 @@ export default async function DocumentsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Documentos</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Historial de notas de entrega y recibos de pago de todas las ventas, para control
-          administrativo.
+          Notas de entrega, facturas, recibos de pago y presupuestos — filtra por tipo de documento
+          para ver solo lo que se generó de cada uno.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Ventas ({documentSales.length})</CardTitle>
+          <CardTitle>Documentos</CardTitle>
         </CardHeader>
         <CardContent>
           <DocumentsTable
             sales={documentSales}
+            quotes={quotes}
             company={company}
             currentRate={rate}
             currencyCode={localCurrencyCode}

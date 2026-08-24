@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/format";
 import { joinFullName, splitFullName } from "@/lib/name";
+import { APP_SECTIONS } from "@/lib/sections";
 import {
   createEmployee,
   updateEmployee,
@@ -44,6 +45,49 @@ const STATUS_LABELS: Record<UserStatus, string> = {
 
 function displayName(u: Pick<User, "firstName" | "lastName" | "email">): string {
   return u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email;
+}
+
+// Only shown for VENDEDOR — a GERENTE always has full access, so there's
+// nothing to restrict. An empty selection means "sin restricción" (todo
+// permitido), not "sin acceso" — see requireSectionAccess, lib/session.ts.
+function SectionAccessPicker({
+  idPrefix,
+  selected,
+  onChange,
+}: {
+  idPrefix: string;
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  function toggle(id: string) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(next);
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Acceso a secciones</Label>
+      <div className="grid grid-cols-2 gap-1.5 rounded-md border p-2">
+        {APP_SECTIONS.map((s) => (
+          <label key={s.id} htmlFor={`${idPrefix}-section-${s.id}`} className="flex items-center gap-2 text-sm">
+            <input
+              id={`${idPrefix}-section-${s.id}`}
+              type="checkbox"
+              checked={selected.has(s.id)}
+              onChange={() => toggle(s.id)}
+            />
+            {s.label}
+          </label>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Deja todo sin marcar para que tenga acceso a todo. Marca solo las secciones a las que sí
+        debe entrar para restringir el resto.
+      </p>
+    </div>
+  );
 }
 
 export function EmployeeTable({
@@ -63,6 +107,7 @@ export function EmployeeTable({
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("VENDEDOR");
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
+  const [allowedSections, setAllowedSections] = useState<Set<string>>(new Set());
   const [createError, setCreateError] = useState<string | null>(null);
 
   function handleCreate(e: React.MouseEvent) {
@@ -75,6 +120,7 @@ export function EmployeeTable({
     formData.set("password", password);
     formData.set("role", role);
     formData.set("branchId", branchId);
+    for (const s of allowedSections) formData.append("allowedSections", s);
     startTransition(async () => {
       const result = await createEmployee(formData);
       if (!result.success) {
@@ -85,6 +131,7 @@ export function EmployeeTable({
       setPassword("");
       setRole("VENDEDOR");
       setBranchId(branches[0]?.id ?? "");
+      setAllowedSections(new Set());
       setCreateOpen(false);
       router.refresh();
     });
@@ -154,6 +201,9 @@ export function EmployeeTable({
                   </Select>
                 </div>
               )}
+              {role === "VENDEDOR" && (
+                <SectionAccessPicker idPrefix="new" selected={allowedSections} onChange={setAllowedSections} />
+              )}
               {createError && <p className="text-sm text-destructive">{createError}</p>}
             </div>
             <DialogFooter>
@@ -213,6 +263,7 @@ function EmployeeRow({
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>(u.role);
   const [branchId, setBranchId] = useState(u.branchId ?? branches[0]?.id ?? "");
+  const [allowedSections, setAllowedSections] = useState<Set<string>>(new Set(u.allowedSections));
   const [editError, setEditError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -239,6 +290,7 @@ function EmployeeRow({
     formData.set("role", role);
     formData.set("password", password);
     formData.set("branchId", branchId);
+    for (const s of allowedSections) formData.append("allowedSections", s);
     startTransition(async () => {
       const result = await updateEmployee(u.id, formData);
       if (!result.success) {
@@ -336,6 +388,13 @@ function EmployeeRow({
                       </SelectContent>
                     </Select>
                   </div>
+                )}
+                {role === "VENDEDOR" && (
+                  <SectionAccessPicker
+                    idPrefix={`edit-${u.id}`}
+                    selected={allowedSections}
+                    onChange={setAllowedSections}
+                  />
                 )}
                 {editError && <p className="text-sm text-destructive">{editError}</p>}
               </div>

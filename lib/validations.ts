@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PaymentMethod, TaxCategory } from "@prisma/client";
 import { CURRENCIES } from "@/lib/currencies";
+import { zonedDateStringToUtc } from "@/lib/report-types";
 
 const toCents = (v: number) => Math.round(v * 100);
 
@@ -290,6 +291,11 @@ export const SaleSchema = z
     // print view when present (see itemDescription's sibling, renderNote,
     // in lib/delivery-note.ts).
     note: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    // Present only when this sale was created via the "Facturar" flow from
+    // an existing Quote (see getQuoteForConversion, lib/actions/quotes.ts,
+    // and completeSale, lib/actions/sales.ts) — links Sale.quoteId and
+    // flips the quote's status to CONVERTED in the same transaction.
+    quoteId: z.preprocess(blankToUndefined, z.string().trim().optional()),
   })
   .merge(CustomerSchema)
   .superRefine((data, ctx) => {
@@ -375,6 +381,9 @@ export const EmployeeSchema = z
     password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
     role: RoleSchema,
     branchId: branchIdField,
+    // Which sections this employee can access (see lib/sections.ts) —
+    // irrelevant for GERENTE. Empty means unrestricted.
+    allowedSections: z.array(z.string()).default([]),
   })
   .refine((data) => data.role !== "VENDEDOR" || data.branchId, {
     message: "Selecciona la sucursal del vendedor",
@@ -389,7 +398,10 @@ export const ExpenseSchema = z.object({
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
   amount: z.coerce.number().positive("El monto debe ser mayor a 0").transform(toCents),
-  spentAt: z.coerce.date(),
+  spentAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida")
+    .transform((v) => zonedDateStringToUtc(v)),
 });
 
 export const EmployeeUpdateSchema = z
@@ -405,6 +417,7 @@ export const EmployeeUpdateSchema = z
       .optional()
       .transform((v) => (v === "" ? undefined : v))
       .refine((v) => v === undefined || v.length >= 8, "La contraseña debe tener al menos 8 caracteres"),
+    allowedSections: z.array(z.string()).default([]),
   })
   .refine((data) => data.role !== "VENDEDOR" || data.branchId, {
     message: "Selecciona la sucursal del vendedor",
@@ -609,6 +622,10 @@ const PurchaseItemSchema = z.object({
   quantity: z.coerce.number().int().positive("La cantidad debe ser mayor a 0"),
   unitCost: z.coerce.number().min(0, "El costo no puede ser negativo").transform(toCents),
   taxCategory: TaxCategoryEnum,
+  // Off means this line still lands in the libro de compras but never
+  // touches Product.stock/costCents — for a purchase that isn't tracked
+  // inventory. On by default.
+  affectsStock: booleanFieldWithDefault(true),
 });
 
 export const PurchaseSchema = z.object({
@@ -653,6 +670,7 @@ export const BulkPurchaseRowSchema = z
       if (typeof v !== "string" || v.trim() === "") return undefined;
       return PAYMENT_STATUS_WORD_MAP[v.trim().toLowerCase()] ?? v.trim().toUpperCase();
     }, z.enum(["PAID", "PENDING"]).optional()),
+    affectsStock: booleanFieldWithDefault(true),
     note: z.preprocess(blankToUndefined, z.string().trim().optional()),
   })
   .refine((data) => data.productSku || data.productName, {

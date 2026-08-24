@@ -10,6 +10,7 @@ import { Cart, type CartLine } from "@/components/pos/Cart";
 import { ReceiptView } from "@/components/pos/ReceiptView";
 import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { completeSale, getSaleReceipt } from "@/lib/actions/sales";
+import type { QuoteForConversion } from "@/lib/actions/quotes";
 import { resolveSalePayments } from "@/lib/payment-currency";
 import { computeItemDiscountCents } from "@/lib/discount";
 import { resolveTierPrice, tierPriceCents, type PriceTier, type TieredProduct } from "@/lib/pricing";
@@ -31,6 +32,7 @@ export function PosClient({
   categories,
   company,
   sellerName,
+  initialQuote,
 }: {
   products: Product[];
   rate: number | null;
@@ -41,12 +43,47 @@ export function PosClient({
   categories: string[];
   company: DeliveryNoteCompany;
   sellerName: string;
+  // Prefills customer + cart from an existing Quote (see the "Facturar"
+  // button in QuoteHistoryTable and ?fromQuote= in app/pos/page.tsx) —
+  // resolved server-side against CURRENT product prices/stock, not the
+  // quote's frozen snapshot. Lines whose product no longer exists in
+  // `products` (deleted/deactivated since the quote was made) are silently
+  // dropped here too, as a second line of defense on top of the filtering
+  // already done in getQuoteForConversion.
+  initialQuote?: QuoteForConversion | null;
 }) {
   const router = useRouter();
   const online = useOnlineStatus();
-  const [step, setStep] = useState<Step>("customer");
-  const [customer, setCustomer] = useState<CustomerInfo | null>(null);
-  const [lines, setLines] = useState<CartLine[]>([]);
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const initialLines: CartLine[] = (initialQuote?.lines ?? [])
+    .map((l): CartLine | null => {
+      const product = productById.get(l.productId);
+      if (!product) return null;
+      return {
+        productId: product.id,
+        name: product.name,
+        unitPriceCents: l.unitPriceCents,
+        quantity: l.quantity,
+        maxStock: product.trackStock ? product.stock : Infinity,
+        product,
+        priceTierOverride: null,
+      };
+    })
+    .filter((l): l is CartLine => l != null);
+  const [step, setStep] = useState<Step>(initialQuote ? "cart" : "customer");
+  const [customer, setCustomer] = useState<CustomerInfo | null>(
+    initialQuote
+      ? {
+          firstName: initialQuote.customerFirstName,
+          lastName: initialQuote.customerLastName,
+          phone: initialQuote.customerPhone,
+          address: initialQuote.customerAddress,
+          rif: "",
+        }
+      : null
+  );
+  const [lines, setLines] = useState<CartLine[]>(initialLines);
+  const [quoteId] = useState<string | null>(initialQuote?.quoteId ?? null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("PAID");
   const [paymentRows, setPaymentRows] = useState<PaymentSplitRow[]>(() =>
     defaultPaymentSplitRows(0, rate, exchangeRateEnabled)
@@ -61,7 +98,6 @@ export function PosClient({
   const [pendingSync, setPendingSync] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const productById = new Map(products.map((p) => [p.id, p]));
   const rawTotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
   const discountValue = Math.min(100, Math.max(0, Number(discountPercent) || 0));
   // Same per-line rounding completeSale applies server-side, so the payment
@@ -306,6 +342,7 @@ export function PosClient({
       customerAddress: customer.address,
       customerRif: customer.rif || undefined,
       note: note.trim() || undefined,
+      quoteId: quoteId ?? undefined,
     };
 
     async function queueOfflineSale(customerInfo: CustomerInfo) {
@@ -341,7 +378,13 @@ export function PosClient({
         if (sale) setCompletedSale(sale);
         setPendingSync(false);
         setStep("receipt");
-        router.refresh();
+        // Plain refresh() would re-render this route with whatever query
+        // string is still in the address bar — for a sale completed via
+        // ?fromQuote=<id>, that would re-run getQuoteForConversion and show
+        // its "ya fue facturado" error on top of the receipt that just
+        // succeeded. replace() drops the query string too, so the receipt
+        // is the only thing on screen.
+        router.replace("/pos");
       } catch {
         // A network-shaped failure mid-submit — queue it rather than risk
         // losing the sale; if it turns out the server had actually received

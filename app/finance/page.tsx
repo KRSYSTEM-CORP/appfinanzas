@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/reports/StatCard";
 import { SalesByDayChart } from "@/components/reports/SalesByDayChart";
 import { TopProductsChart } from "@/components/reports/TopProductsChart";
 import { BottomProductsChart } from "@/components/reports/BottomProductsChart";
 import { ExpensesPanel } from "@/components/finance/ExpensesPanel";
+import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import {
   revenueTotals,
@@ -16,26 +16,17 @@ import {
 } from "@/lib/actions/reports";
 import { costOfGoodsSold, expensesTotal, listExpenses } from "@/lib/actions/finance";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
-import type { DateRangePreset } from "@/lib/report-types";
+import { parseDateRangeSelection } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
-
-const presets: { key: DateRangePreset; label: string }[] = [
-  { key: "today", label: "Hoy" },
-  { key: "7d", label: "7 días" },
-  { key: "30d", label: "30 días" },
-  { key: "month", label: "Este mes" },
-];
 
 export default async function FinancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; year?: string; months?: string }>;
 }) {
-  const { range: rawRange } = await searchParams;
-  const range: DateRangePreset = presets.some((p) => p.key === rawRange)
-    ? (rawRange as DateRangePreset)
-    : "7d";
+  const params = await searchParams;
+  const range = parseDateRangeSelection(params, { kind: "preset", preset: "7d" });
 
   const [
     totals,
@@ -72,21 +63,7 @@ export default async function FinancePage({
     <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-semibold">Finanzas</h1>
-        <div className="flex gap-1 rounded-lg border p-1">
-          {presets.map((p) => (
-            <Link
-              key={p.key}
-              href={`/finance?range=${p.key}`}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                range === p.key
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted"
-              }`}
-            >
-              {p.label}
-            </Link>
-          ))}
-        </div>
+        <DateRangeSwitcher selection={range} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

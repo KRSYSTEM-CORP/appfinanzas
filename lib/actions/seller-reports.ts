@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { rangeToDates, type DateRangePreset } from "@/lib/report-types";
+import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
 
 export type SellerSalesOverviewRow = {
@@ -26,9 +26,9 @@ function sellerDisplayName(u: { firstName: string | null; lastName: string | nul
 // Voided sales are excluded everywhere in this report, same as
 // revenueTotals() in lib/actions/reports.ts — a voided sale shouldn't count
 // toward anyone's commission.
-export async function sellersSalesOverview(range: DateRangePreset): Promise<SellerSalesOverviewRow[]> {
+export async function sellersSalesOverview(range: DateRangeSelection): Promise<SellerSalesOverviewRow[]> {
   const { companyId, branchId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
     const [employees, grouped] = await Promise.all([
@@ -38,7 +38,7 @@ export async function sellersSalesOverview(range: DateRangePreset): Promise<Sell
         where: {
           companyId,
           ...(branchId ? { branchId } : {}),
-          createdAt: { gte: start, lte: end },
+          OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
           voided: false,
           sellerId: { not: null },
         },
@@ -85,15 +85,14 @@ async function loadSellerSales(
   companyId: string,
   branchId: string | null,
   sellerId: string,
-  start: Date,
-  end: Date
+  windows: { start: Date; end: Date }[]
 ) {
   return tx.sale.findMany({
     where: {
       companyId,
       ...(branchId ? { branchId } : {}),
       sellerId,
-      createdAt: { gte: start, lte: end },
+      OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
       voided: false,
     },
     orderBy: { createdAt: "desc" },
@@ -101,15 +100,15 @@ async function loadSellerSales(
   });
 }
 
-export async function sellerSalesDetail(sellerId: string, range: DateRangePreset): Promise<SellerSalesDetail | null> {
+export async function sellerSalesDetail(sellerId: string, range: DateRangeSelection): Promise<SellerSalesDetail | null> {
   const { companyId, branchId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
     const seller = await tx.user.findFirst({ where: { id: sellerId, companyId } });
     if (!seller) return null;
 
-    const sales = await loadSellerSales(tx, companyId, branchId, sellerId, start, end);
+    const sales = await loadSellerSales(tx, companyId, branchId, sellerId, windows);
     const totalEurCents = sales.reduce((sum, s) => sum + s.totalCents, 0);
     const commissionPercent = seller.commissionPercent != null ? Number(seller.commissionPercent) : null;
     const commissionCents = commissionPercent != null ? Math.round((totalEurCents * commissionPercent) / 100) : 0;

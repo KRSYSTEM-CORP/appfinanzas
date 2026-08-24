@@ -38,6 +38,8 @@ const HEADER_MAP: Record<string, string> = {
   taxcategory: "taxCategory",
   "forma de pago": "paymentStatus",
   paymentstatus: "paymentStatus",
+  "vincular al inventario": "affectsStock",
+  affectsstock: "affectsStock",
   nota: "note",
   note: "note",
 };
@@ -60,6 +62,7 @@ type ParsedRow = {
   unitCost?: unknown;
   taxCategory?: unknown;
   paymentStatus?: unknown;
+  affectsStock?: unknown;
   note?: unknown;
   error: string | null;
 };
@@ -87,9 +90,19 @@ function parseWorkbook(buffer: ArrayBuffer): ParsedRow[] {
 function downloadTemplate() {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
-    ["Proveedor", "Nº factura proveedor", "SKU", "Cantidad", "Costo unitario", "IVA", "Forma de pago", "Nota"],
-    ["Distribuidora Central", "F-00123", "CAM-001", 20, 6.5, "General", "Contado", ""],
-    ["Distribuidora Central", "F-00123", "PAN-002", 10, 3.2, "General", "Contado", ""],
+    [
+      "Proveedor",
+      "Nº factura proveedor",
+      "SKU",
+      "Cantidad",
+      "Costo unitario",
+      "IVA",
+      "Forma de pago",
+      "Vincular al inventario",
+      "Nota",
+    ],
+    ["Distribuidora Central", "F-00123", "CAM-001", 20, 6.5, "General", "Contado", "Sí", ""],
+    ["Distribuidora Central", "F-00123", "PAN-002", 10, 3.2, "General", "Contado", "Sí", ""],
   ]);
   XLSX.utils.book_append_sheet(wb, ws, "Compras");
   XLSX.writeFile(wb, "plantilla-compras.xlsx");
@@ -139,6 +152,7 @@ export function ImportPurchasesForm() {
           unitCost: r.unitCost,
           taxCategory: r.taxCategory,
           paymentStatus: r.paymentStatus,
+          affectsStock: r.affectsStock,
           note: r.note,
         }))
       );
@@ -154,11 +168,13 @@ export function ImportPurchasesForm() {
         <p className="text-sm text-muted-foreground">
           Sube un archivo Excel (.xlsx) con tus compras. Las columnas esperadas son:{" "}
           <strong>Proveedor, Nº factura proveedor, SKU (o Producto), Cantidad, Costo unitario, IVA, Forma
-          de pago, Nota</strong>{" "}
+          de pago, Vincular al inventario, Nota</strong>{" "}
           (Proveedor, el producto, Cantidad y Costo unitario son obligatorios — el proveedor debe existir
           ya en <em>Proveedores</em>). Las filas con el mismo Proveedor y Nº de factura se agrupan en una
           sola compra con varios productos; si dejas la factura en blanco, cada fila se registra como una
-          compra independiente.
+          compra independiente. &quot;Vincular al inventario&quot; es &quot;Sí&quot; por defecto si dejas
+          la columna en blanco — colócale &quot;No&quot; para que la compra quede en el libro de compras
+          sin sumar al stock.
         </p>
         <div className="flex gap-2 mt-2">
           <Button type="button" variant="outline" onClick={downloadTemplate}>

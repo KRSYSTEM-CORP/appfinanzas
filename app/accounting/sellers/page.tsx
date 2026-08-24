@@ -11,28 +11,23 @@ import {
 import { StatCard } from "@/components/reports/StatCard";
 import { SalesTable } from "@/components/reports/SalesTable";
 import { SellerCommissionForm } from "@/components/accounting/SellerCommissionForm";
+import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { formatCurrencyCents, formatLocalCurrency, eurCentsToLocal, getCurrency } from "@/lib/currencies";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
 import { requireSession } from "@/lib/session";
 import { sellersSalesOverview, sellerSalesDetail } from "@/lib/actions/seller-reports";
-import type { DateRangePreset } from "@/lib/report-types";
+import { parseDateRangeSelection, dateRangeSelectionToQuery } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
-
-const presets: { key: DateRangePreset; label: string }[] = [
-  { key: "today", label: "Hoy" },
-  { key: "7d", label: "7 días" },
-  { key: "30d", label: "30 días" },
-  { key: "month", label: "Este mes" },
-];
 
 export default async function SellersReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; seller?: string }>;
+  searchParams: Promise<{ range?: string; year?: string; months?: string; seller?: string }>;
 }) {
-  const { range: rawRange, seller: sellerId } = await searchParams;
-  const range: DateRangePreset = presets.some((p) => p.key === rawRange) ? (rawRange as DateRangePreset) : "7d";
+  const params = await searchParams;
+  const sellerId = params.seller;
+  const range = parseDateRangeSelection(params, { kind: "preset", preset: "7d" });
 
   const [session, overview, { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency, printPaperSize }, { logoDataUrl }, fiscalData] =
     await Promise.all([
@@ -54,8 +49,8 @@ export default async function SellersReportPage({
   }
 
   const rangeQuery = (extra: Record<string, string>) => {
-    const params = new URLSearchParams({ range, ...extra });
-    return `/accounting/sellers?${params.toString()}`;
+    const query = new URLSearchParams({ ...dateRangeSelectionToQuery(range), ...extra });
+    return `/accounting/sellers?${query.toString()}`;
   };
 
   return (
@@ -67,19 +62,7 @@ export default async function SellersReportPage({
             Cuánto vendió cada vendedor y su comisión sobre esas ventas.
           </p>
         </div>
-        <div className="flex gap-1 rounded-lg border p-1">
-          {presets.map((p) => (
-            <Link
-              key={p.key}
-              href={rangeQuery({ range: p.key, ...(sellerId ? { seller: sellerId } : {}) })}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                range === p.key ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-              }`}
-            >
-              {p.label}
-            </Link>
-          ))}
-        </div>
+        <DateRangeSwitcher selection={range} extraParams={sellerId ? { seller: sellerId } : {}} />
       </div>
 
       <Card>

@@ -4,13 +4,23 @@ import { Prisma } from "@prisma/client";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import {
-  rangeToDates,
+  selectionToWindows,
   SHOP_TIME_ZONE,
   type BottomProductPoint,
-  type DateRangePreset,
+  type DateRangeSelection,
   type SalesByDayPoint,
   type TopProductPoint,
 } from "@/lib/report-types";
+
+// Builds a `(col >= a AND col < b) OR (col >= c AND col < d) OR ...` raw-SQL
+// fragment for one or more disjoint windows — the raw-query equivalent of
+// `OR: windows.map(w => ({ [field]: { gte: w.start, lt: w.end } }))` used by
+// the plain Prisma queries below. `column` is always a hardcoded string from
+// this file, never user input.
+function windowsSql(column: string, windows: { start: Date; end: Date }[]): Prisma.Sql {
+  const parts = windows.map((w) => Prisma.sql`(${Prisma.raw(column)} >= ${w.start} AND ${Prisma.raw(column)} < ${w.end})`);
+  return Prisma.sql`(${Prisma.join(parts, " OR ")})`;
+}
 
 async function getCurrentRate(tx: Prisma.TransactionClient, companyId: string): Promise<number> {
   const company = await tx.company.findUnique({
@@ -20,9 +30,9 @@ async function getCurrentRate(tx: Prisma.TransactionClient, companyId: string): 
   return company?.exchangeRate != null ? Number(company.exchangeRate) : 0;
 }
 
-export async function revenueTotals(range: DateRangePreset) {
+export async function revenueTotals(range: DateRangeSelection) {
   const { companyId, branchId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
     const currentRate = await getCurrentRate(tx, companyId);
@@ -30,7 +40,12 @@ export async function revenueTotals(range: DateRangePreset) {
     const result = await tx.sale.aggregate({
       _sum: { totalCents: true },
       _count: true,
-      where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: start, lte: end }, voided: false },
+      where: {
+        companyId,
+        ...(branchId ? { branchId } : {}),
+        OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
+        voided: false,
+      },
     });
     const totalEurCents = result._sum.totalCents ?? 0;
     const count = result._count;
@@ -46,7 +61,7 @@ export async function revenueTotals(range: DateRangePreset) {
       FROM "Sale"
       WHERE "companyId" = ${companyId}
         ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
-        AND "createdAt" >= ${start} AND "createdAt" <= ${end} AND "voided" = false
+        AND ${windowsSql('"createdAt"', windows)} AND "voided" = false
     `;
 
     return {
@@ -91,9 +106,9 @@ export async function receivablesTotals() {
   });
 }
 
-export async function salesByDay(range: DateRangePreset): Promise<SalesByDayPoint[]> {
+export async function salesByDay(range: DateRangeSelection): Promise<SalesByDayPoint[]> {
   const { companyId, branchId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
 
   const rows = await withTenant(companyId, async (tx) => {
     const currentRate = await getCurrentRate(tx, companyId);
@@ -110,7 +125,7 @@ export async function salesByDay(range: DateRangePreset): Promise<SalesByDayPoin
       FROM "Sale"
       WHERE "companyId" = ${companyId}
         ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
-        AND "createdAt" >= ${start} AND "createdAt" <= ${end} AND "voided" = false
+        AND ${windowsSql('"createdAt"', windows)} AND "voided" = false
       GROUP BY day
       ORDER BY day ASC
     `;
@@ -137,9 +152,9 @@ export type CurrencyIncomeRow = { currencyCode: string; totalCents: number };
 // money was actually collected (SalePayment.createdAt) rather than the
 // sale's own date, so a credit sale collected later counts as income on the
 // day it was actually paid, not the day it was sold.
-export async function incomeByCurrency(range: DateRangePreset): Promise<CurrencyIncomeRow[]> {
+export async function incomeByCurrency(range: DateRangeSelection): Promise<CurrencyIncomeRow[]> {
   const { companyId, branchId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
     const rows = await tx.$queryRaw<{ currency: string; total_cents: bigint }[]>`
@@ -152,7 +167,7 @@ export async function incomeByCurrency(range: DateRangePreset): Promise<Currency
       JOIN "Sale" s ON s.id = sp."saleId"
       WHERE s."companyId" = ${companyId}
         ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
-        AND sp."createdAt" >= ${start} AND sp."createdAt" <= ${end}
+        AND ${windowsSql('sp."createdAt"', windows)}
         AND s."voided" = false
       GROUP BY currency
       ORDER BY total_cents DESC
@@ -161,14 +176,19 @@ export async function incomeByCurrency(range: DateRangePreset): Promise<Currency
   });
 }
 
-export async function topProducts(range: DateRangePreset, limit = 10): Promise<TopProductPoint[]> {
+export async function topProducts(range: DateRangeSelection, limit = 10): Promise<TopProductPoint[]> {
   const { companyId, branchId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
   const grouped = await withTenant(companyId, (tx) =>
     tx.saleItem.groupBy({
       by: ["productId", "productName", "category"],
       where: {
-        sale: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: start, lte: end }, voided: false },
+        sale: {
+          companyId,
+          ...(branchId ? { branchId } : {}),
+          OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
+          voided: false,
+        },
       },
       _sum: { quantity: true, subtotalCents: true },
       orderBy: { _sum: { quantity: "desc" } },
@@ -189,9 +209,9 @@ export async function topProducts(range: DateRangePreset, limit = 10): Promise<T
 // sold at all in the range still shows up as "0 vendidos" instead of being
 // invisible. That's the useful signal here: dead stock, not just the
 // bottom of what happened to sell.
-export async function bottomProducts(range: DateRangePreset, limit = 10): Promise<BottomProductPoint[]> {
+export async function bottomProducts(range: DateRangeSelection, limit = 10): Promise<BottomProductPoint[]> {
   const { companyId, branchId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
 
   return withTenant(companyId, (tx) =>
     tx.$queryRaw<{ id: string; name: string; category: string | null; quantity: bigint }[]>`
@@ -203,7 +223,7 @@ export async function bottomProducts(range: DateRangePreset, limit = 10): Promis
           SELECT id FROM "Sale"
           WHERE "companyId" = ${companyId}
             ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
-            AND "createdAt" >= ${start} AND "createdAt" <= ${end} AND "voided" = false
+            AND ${windowsSql('"createdAt"', windows)} AND "voided" = false
         )
       WHERE p."companyId" = ${companyId} AND p."isActive" = true
         ${branchId ? Prisma.sql`AND p."branchId" = ${branchId}` : Prisma.empty}

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireSession } from "@/lib/session";
+import { requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { ProductSchema, ProductUpdateRowSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
@@ -68,7 +68,7 @@ export async function listCategories(): Promise<string[]> {
 }
 
 export async function createProduct(formData: FormData): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await requireManager();
   const { companyId } = session;
   if (!session.branchId) {
     return { success: false, error: 'Selecciona una sucursal antes de crear un producto — no se puede con "Todas las sucursales".' };
@@ -112,7 +112,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateProduct(id: string, formData: FormData): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await requireManager();
   const { companyId } = session;
   if (!session.branchId) {
     return { success: false, error: 'Selecciona una sucursal antes de editar un producto — no se puede con "Todas las sucursales".' };
@@ -174,7 +174,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
 }
 
 export async function setProductActive(id: string, isActive: boolean): Promise<ActionResult> {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireManager();
   await withTenant(companyId, (tx) =>
     tx.product.updateMany({ where: { id, companyId, ...(branchId ? { branchId } : {}) }, data: { isActive } })
   );
@@ -188,7 +188,7 @@ export async function setProductActive(id: string, isActive: boolean): Promise<A
 // so historical documents and reports are unaffected — only the catalog
 // entry itself and its availability in POS/Presupuestos disappear.
 export async function deleteProduct(id: string): Promise<ActionResult> {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireManager();
   const result = await withTenant(companyId, (tx) =>
     tx.product.deleteMany({ where: { id, companyId, ...(branchId ? { branchId } : {}) } })
   );
@@ -229,7 +229,7 @@ export type BulkImportResult = {
 // product form. A product whose SKU already exists in this company gets its
 // stock/price/etc. reconciled (updated) instead of creating a duplicate.
 export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImportResult> {
-  const session = await requireSession();
+  const session = await requireManager();
   const { companyId } = session;
   if (!session.branchId) {
     return {
@@ -325,7 +325,7 @@ export type BulkUpdateResult = {
 // mass-editing price/stock/etc. on an inventory export, not for adding new
 // products.
 export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpdateResult> {
-  const session = await requireSession();
+  const session = await requireManager();
   const { companyId } = session;
   if (!session.branchId) {
     return {

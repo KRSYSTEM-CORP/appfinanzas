@@ -4,16 +4,24 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { rangeToDates, type DateRangePreset } from "@/lib/report-types";
+import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { ExpenseSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
+
+// Same raw-SQL OR-of-windows builder as lib/actions/reports.ts — kept local
+// rather than shared since each file's Prisma import differs only in this
+// one helper's use of it.
+function windowsSql(column: string, windows: { start: Date; end: Date }[]): Prisma.Sql {
+  const parts = windows.map((w) => Prisma.sql`(${Prisma.raw(column)} >= ${w.start} AND ${Prisma.raw(column)} < ${w.end})`);
+  return Prisma.sql`(${Prisma.join(parts, " OR ")})`;
+}
 
 // Sum of quantity * product.costCents for non-voided sale items in range —
 // products deleted since the sale keep no cost snapshot on SaleItem, so
 // those lines are excluded (treated as $0 cost) rather than guessed at.
-export async function costOfGoodsSold(range: DateRangePreset): Promise<number> {
+export async function costOfGoodsSold(range: DateRangeSelection): Promise<number> {
   const { companyId, branchId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
     const [row] = await tx.$queryRaw<{ cogs_cents: bigint | null }[]>`
@@ -23,7 +31,7 @@ export async function costOfGoodsSold(range: DateRangePreset): Promise<number> {
       JOIN "Product" p ON p.id = si."productId"
       WHERE s."companyId" = ${companyId}
         ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
-        AND s."createdAt" >= ${start} AND s."createdAt" <= ${end}
+        AND ${windowsSql('s."createdAt"', windows)}
         AND s."voided" = false
         AND p."costCents" IS NOT NULL
     `;
@@ -31,12 +39,12 @@ export async function costOfGoodsSold(range: DateRangePreset): Promise<number> {
   });
 }
 
-export async function listExpenses(range: DateRangePreset) {
+export async function listExpenses(range: DateRangeSelection) {
   const { companyId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
   return withTenant(companyId, (tx) =>
     tx.expense.findMany({
-      where: { companyId, spentAt: { gte: start, lte: end } },
+      where: { companyId, OR: windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
       orderBy: { spentAt: "desc" },
     })
   );
@@ -83,13 +91,13 @@ export async function deleteExpense(expenseId: string): Promise<ActionResult> {
   return { success: true };
 }
 
-export async function expensesTotal(range: DateRangePreset): Promise<number> {
+export async function expensesTotal(range: DateRangeSelection): Promise<number> {
   const { companyId } = await requireManager();
-  const { start, end } = rangeToDates(range);
+  const windows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
     const result = await tx.expense.aggregate({
       _sum: { amountCents: true },
-      where: { companyId, spentAt: { gte: start, lte: end } },
+      where: { companyId, OR: windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
     });
     return result._sum.amountCents ?? 0;
   });
