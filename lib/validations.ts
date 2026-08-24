@@ -485,12 +485,10 @@ const PaymentReportLineSchema = z.object({
 export const PaymentReportSchema = z
   .object({
     lines: z.array(PaymentReportLineSchema),
-    proofImageDataUrl: z
-      .string()
-      .trim()
-      .min(1, "El comprobante de pago es obligatorio")
-      .refine((v) => v.startsWith("data:image/"), "Comprobante inválido")
-      .refine((v) => v.length < 3_000_000, "El comprobante es demasiado grande"),
+    // No longer collected in-app — the comprobante is sent by WhatsApp
+    // instead (see app/billing/page.tsx). Kept optional, not removed, so
+    // PaymentReport.proofImageDataUrl still displays for reports submitted
+    // before this change.
     note: z
       .string()
       .trim()
@@ -620,7 +618,17 @@ export type SupplierInput = z.infer<typeof SupplierSchema>;
 const PurchaseItemSchema = z.object({
   productId: z.string().trim().min(1, "Selecciona un producto"),
   quantity: z.coerce.number().int().positive("La cantidad debe ser mayor a 0"),
+  // Raw amount as typed, still in whatever currency unitCostInForeignCurrency
+  // selects — createPurchase resolves it to reference-currency cents server-
+  // side (same pattern as a payment-split row), so the exchange rate used is
+  // always the one on file at the moment the purchase is saved, never a
+  // value trusted from the client.
   unitCost: z.coerce.number().min(0, "El costo no puede ser negativo").transform(toCents),
+  // true = entered directly in the company's reference currency (Euro/Dólar
+  // BCV) — the only option that existed before this toggle, kept as the
+  // default so old behavior is unchanged when a caller omits this field
+  // (e.g. bulk import, which has no currency toggle of its own).
+  unitCostInForeignCurrency: z.boolean().default(true),
   taxCategory: TaxCategoryEnum,
   // Off means this line still lands in the libro de compras but never
   // touches Product.stock/costCents — for a purchase that isn't tracked
@@ -633,6 +641,15 @@ export const PurchaseSchema = z
     supplierId: z.string().trim().min(1, "Selecciona un proveedor"),
     supplierInvoiceNo: z.preprocess(blankToUndefined, z.string().trim().optional()),
     items: z.array(PurchaseItemSchema).min(1, "Agrega al menos un producto"),
+    // The real total on the supplier's paper invoice, entered manually —
+    // this becomes Purchase.totalCents (see createPurchase), overriding the
+    // sum of the line items above rather than just cross-checking it: the
+    // line items are each merchant's own per-product cost *estimate*, while
+    // this is the actual, legally-binding invoice total. createPurchase
+    // proportionally rescales each line's base/tax/cost to this real total
+    // once it's known.
+    invoiceAmount: z.coerce.number().positive("Ingresa el monto de la factura").transform(toCents),
+    invoiceAmountInForeignCurrency: z.boolean().default(true),
     paymentStatus: z.enum(["PAID", "PENDING"]).default("PENDING"),
     // Same split-by-method/currency model as a POS sale (see SaleSchema's
     // own `payments` + PaymentSplitBuilder) — only required/validated when

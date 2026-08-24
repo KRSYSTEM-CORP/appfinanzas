@@ -11,6 +11,7 @@ import { PaymentSplitBuilder, defaultPaymentSplitRows, type PaymentSplitRow } fr
 import { createPurchase } from "@/lib/actions/purchases";
 import { TAX_CATEGORY_LABELS, decomposeTax, rateForCategory } from "@/lib/tax";
 import { formatCurrencyCents } from "@/lib/currencies";
+import { tryToEurCents } from "@/lib/payment-currency";
 import type { IvaSettingsInfo } from "@/lib/actions/settings";
 import type { ReferenceCurrency } from "@prisma/client";
 
@@ -18,6 +19,9 @@ type PurchaseItemRow = {
   productId: string;
   quantity: string;
   unitCost: string;
+  // true = unitCost is typed directly in the reference currency (Euro/Dólar
+  // BCV) — the only option before this toggle existed, kept as the default.
+  unitCostInForeignCurrency: boolean;
   taxCategory: TaxCategory;
   affectsStock: boolean;
 };
@@ -27,9 +31,42 @@ function emptyRow(defaultProductId: string, defaultTaxCategory: TaxCategory = "G
     productId: defaultProductId,
     quantity: "1",
     unitCost: "",
+    unitCostInForeignCurrency: true,
     taxCategory: defaultTaxCategory,
     affectsStock: true,
   };
+}
+
+// Small Bolívares/Divisas toggle, shared visual pattern between the per-line
+// unit cost and the invoice amount below — only meaningful while the company
+// tracks a separate local currency at all (exchangeRateEnabled).
+function CurrencyToggle({
+  inForeignCurrency,
+  onChange,
+  referenceCurrency,
+}: {
+  inForeignCurrency: boolean;
+  onChange: (v: boolean) => void;
+  referenceCurrency: string;
+}) {
+  return (
+    <div className="flex w-fit rounded-md border overflow-hidden">
+      <button
+        type="button"
+        onClick={() => onChange(false)}
+        className={`px-3 py-1.5 text-sm ${!inForeignCurrency ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+      >
+        Bolívares
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(true)}
+        className={`px-3 py-1.5 text-sm ${inForeignCurrency ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+      >
+        Divisas ({referenceCurrency})
+      </button>
+    </div>
+  );
 }
 
 export function PurchaseForm({
@@ -58,6 +95,11 @@ export function PurchaseForm({
   );
   const [note, setNote] = useState("");
   const [rows, setRows] = useState<PurchaseItemRow[]>([emptyRow(products[0]?.id ?? "")]);
+  // The real total on the supplier's paper invoice — see PurchaseSchema's
+  // invoiceAmount doc-comment. Defaults to the reference currency, same as
+  // the per-line cost default.
+  const [invoiceAmount, setInvoiceAmount] = useState("");
+  const [invoiceAmountInForeignCurrency, setInvoiceAmountInForeignCurrency] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -81,29 +123,43 @@ export function PurchaseForm({
       productId,
       taxCategory: product?.taxCategory ?? "GENERAL",
       unitCost: product?.costCents != null ? (product.costCents / 100).toFixed(2) : rows[index].unitCost,
+      unitCostInForeignCurrency: true,
     });
   }
 
-  const totalCents = rows.reduce((sum, r) => {
-    const qty = Number(r.quantity) || 0;
-    const cost = Math.round((Number(r.unitCost) || 0) * 100);
-    return sum + qty * cost;
+  // Resolves one line's typed cost to reference-currency cents, mirroring
+  // createPurchase's own toEurCents call — an estimate for the live preview
+  // only; the server always redoes this with the exchange rate on file at
+  // save time.
+  function unitCostEurCents(row: PurchaseItemRow): number {
+    const raw = Math.round((Number(row.unitCost) || 0) * 100);
+    return tryToEurCents(raw, row.unitCostInForeignCurrency ? referenceCurrency : currencyCode, rate, referenceCurrency) ?? 0;
+  }
+
+  const estimatedTotalCents = rows.reduce((sum, r) => sum + unitCostEurCents(r) * (Number(r.quantity) || 0), 0);
+  const estimatedTaxTotalCents = rows.reduce((sum, r) => {
+    const subtotalCents = unitCostEurCents(r) * (Number(r.quantity) || 0);
+    const taxRatePercent = rateForCategory(r.taxCategory, ivaSettings.ivaGeneralRatePercent, ivaSettings.ivaReducedRatePercent);
+    return sum + decomposeTax(subtotalCents, r.taxCategory, taxRatePercent).taxCents;
   }, 0);
 
-  // Same decomposition createPurchase runs server-side, so the payment
-  // split below always targets what actually leaves the register — for a
-  // "contribuyente especial" company, that's less than totalCents, since
-  // the withheld IVA goes to SENIAT, not the supplier.
-  const taxTotalCents = rows.reduce((sum, r) => {
-    const qty = Number(r.quantity) || 0;
-    const cost = Math.round((Number(r.unitCost) || 0) * 100);
-    const taxRatePercent = rateForCategory(r.taxCategory, ivaSettings.ivaGeneralRatePercent, ivaSettings.ivaReducedRatePercent);
-    return sum + decomposeTax(qty * cost, r.taxCategory, taxRatePercent).taxCents;
-  }, 0);
+  // The invoice amount is what actually becomes Purchase.totalCents — same
+  // proportional rescale createPurchase applies server-side, so this preview
+  // (and the payment split it feeds) matches exactly what gets saved.
+  const invoiceTotalCents =
+    tryToEurCents(
+      Math.round((Number(invoiceAmount) || 0) * 100),
+      invoiceAmountInForeignCurrency ? referenceCurrency : currencyCode,
+      rate,
+      referenceCurrency
+    ) ?? 0;
+  const scale = estimatedTotalCents > 0 ? invoiceTotalCents / estimatedTotalCents : 1;
+  const taxTotalCents =
+    estimatedTotalCents > 0 ? Math.round(estimatedTaxTotalCents * scale) : estimatedTaxTotalCents;
   const ivaRetainedCents = ivaSettings.isIvaWithholdingAgent
     ? Math.round((taxTotalCents * ivaSettings.ivaWithholdingPercent) / 100)
     : 0;
-  const amountOwedCents = totalCents - ivaRetainedCents;
+  const amountOwedCents = invoiceTotalCents - ivaRetainedCents;
 
   // Keep the single default payment row in sync with the purchase total as
   // rows/costs are edited, same pattern as the POS cart.
@@ -120,10 +176,16 @@ export function PurchaseForm({
       setError("Selecciona un proveedor");
       return;
     }
+    if (!invoiceAmount || Number(invoiceAmount) <= 0) {
+      setError("Ingresa el monto de la factura");
+      return;
+    }
     startTransition(async () => {
       const result = await createPurchase({
         supplierId,
         supplierInvoiceNo: supplierInvoiceNo || undefined,
+        invoiceAmount,
+        invoiceAmountInForeignCurrency,
         paymentStatus,
         payments:
           paymentStatus === "PAID"
@@ -139,6 +201,7 @@ export function PurchaseForm({
           productId: r.productId,
           quantity: r.quantity,
           unitCost: r.unitCost,
+          unitCostInForeignCurrency: r.unitCostInForeignCurrency,
           taxCategory: r.taxCategory,
           affectsStock: r.affectsStock,
         })),
@@ -243,7 +306,9 @@ export function PurchaseForm({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`unitCost-${i}`}>Costo unitario ({referenceCurrency})</Label>
+                  <Label htmlFor={`unitCost-${i}`}>
+                    Costo unitario ({exchangeRateEnabled && !row.unitCostInForeignCurrency ? currencyCode : referenceCurrency})
+                  </Label>
                   <Input
                     id={`unitCost-${i}`}
                     type="number"
@@ -252,6 +317,21 @@ export function PurchaseForm({
                     value={row.unitCost}
                     onChange={(e) => updateRow(i, { unitCost: e.target.value })}
                   />
+                  {exchangeRateEnabled && (
+                    <>
+                      <CurrencyToggle
+                        inForeignCurrency={row.unitCostInForeignCurrency}
+                        onChange={(v) => updateRow(i, { unitCostInForeignCurrency: v })}
+                        referenceCurrency={referenceCurrency}
+                      />
+                      {!row.unitCostInForeignCurrency && row.unitCost && (
+                        <p className="text-xs text-muted-foreground">
+                          ≈ {formatCurrencyCents(referenceCurrency, unitCostEurCents(row))}
+                          {rate == null && " — configura la tasa de cambio para convertir"}
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   {product && (
@@ -301,10 +381,48 @@ export function PurchaseForm({
         <Input id="note" value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
 
-      <div className="flex flex-col gap-1 rounded-lg border p-3">
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 rounded-lg border p-3">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>Total estimado según productos</span>
+          <span>{formatCurrencyCents(referenceCurrency, estimatedTotalCents)}</span>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="invoiceAmount">
+            Monto de la factura ({exchangeRateEnabled && !invoiceAmountInForeignCurrency ? currencyCode : referenceCurrency})
+          </Label>
+          <Input
+            id="invoiceAmount"
+            type="number"
+            min="0"
+            step="0.01"
+            value={invoiceAmount}
+            onChange={(e) => setInvoiceAmount(e.target.value)}
+          />
+          {exchangeRateEnabled && (
+            <>
+              <CurrencyToggle
+                inForeignCurrency={invoiceAmountInForeignCurrency}
+                onChange={setInvoiceAmountInForeignCurrency}
+                referenceCurrency={referenceCurrency}
+              />
+              {!invoiceAmountInForeignCurrency && invoiceAmount && (
+                <p className="text-xs text-muted-foreground">
+                  ≈ {formatCurrencyCents(referenceCurrency, invoiceTotalCents)}
+                  {rate == null && " — configura la tasa de cambio para convertir"}
+                </p>
+              )}
+            </>
+          )}
+          <p className="text-xs text-muted-foreground">
+            El monto real de la factura del proveedor — este es el total que queda registrado en la compra,
+            no la suma de los productos de arriba (que solo estima el costo por producto).
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between border-t pt-3">
           <span className="text-sm text-muted-foreground">Total de la compra</span>
-          <span className="font-semibold">{formatCurrencyCents(referenceCurrency, totalCents)}</span>
+          <span className="font-semibold">{formatCurrencyCents(referenceCurrency, invoiceTotalCents)}</span>
         </div>
         {ivaRetainedCents > 0 && (
           <>

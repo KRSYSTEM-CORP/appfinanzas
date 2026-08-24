@@ -6,7 +6,7 @@ import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { BulkPurchaseRowSchema, PurchaseSchema } from "@/lib/validations";
 import { decomposeTax, rateForCategory } from "@/lib/tax";
-import { resolveSalePayments, assertPaymentsMatchTotal } from "@/lib/payment-currency";
+import { resolveSalePayments, assertPaymentsMatchTotal, toEurCents } from "@/lib/payment-currency";
 import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
 import type { ActionResult } from "@/lib/types";
 
@@ -32,7 +32,8 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
-  const { supplierId, supplierInvoiceNo, items, paymentStatus, payments, note } = parsed.data;
+  const { supplierId, supplierInvoiceNo, items, invoiceAmount, invoiceAmountInForeignCurrency, paymentStatus, payments, note } =
+    parsed.data;
 
   try {
     const purchaseId = await withTenant(companyId, async (tx) => {
@@ -68,33 +69,72 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
       });
       const productById = new Map(products.map((p) => [p.id, p]));
 
-      let totalCents = 0;
-      let baseImponibleCents = 0;
-      let taxTotalCents = 0;
-      const itemsData = items.map((item) => {
+      // Each line's unit cost is the merchant's own per-product cost
+      // *estimate*, entered in Bolívares or directly in the reference
+      // currency (see PurchaseItemSchema.unitCostInForeignCurrency) — resolve
+      // it to reference-currency cents now, using the exchange rate on file
+      // at this exact moment (never a rate trusted from the client).
+      let estimatedTotalCents = 0;
+      let estimatedBaseCents = 0;
+      let estimatedTaxCents = 0;
+      const estimatedItems = items.map((item) => {
         const product = productById.get(item.productId);
         if (!product) {
           throw new Error("Uno de los productos ya no existe en esta sucursal");
         }
-        const subtotalCents = item.unitCost * item.quantity;
-        totalCents += subtotalCents;
+        const unitCostCents = toEurCents(
+          item.unitCost,
+          item.unitCostInForeignCurrency ? referenceCurrency : localCurrencyCode,
+          rate,
+          referenceCurrency
+        );
+        const subtotalCents = unitCostCents * item.quantity;
+        estimatedTotalCents += subtotalCents;
         const taxRatePercent = rateForCategory(item.taxCategory, ivaGeneralRatePercent, ivaReducedRatePercent);
         const { baseCents, taxCents } = decomposeTax(subtotalCents, item.taxCategory, taxRatePercent);
-        baseImponibleCents += baseCents;
-        taxTotalCents += taxCents;
+        estimatedBaseCents += baseCents;
+        estimatedTaxCents += taxCents;
         return {
           productId: product.id,
           productName: product.name,
           taxCategory: item.taxCategory,
           taxRatePercent,
-          unitCostCents: item.unitCost,
           quantity: item.quantity,
+          unitCostCents,
           baseCents,
           taxCents,
           subtotalCents,
           affectsStock: item.affectsStock,
         };
       });
+
+      // The real total on the supplier's paper invoice — entered manually,
+      // it's the authoritative Purchase.totalCents, not the sum of the line
+      // estimates above. Rescale every line's base/tax/cost proportionally
+      // so the stored breakdown always adds up to exactly this real total
+      // (a legally-issued invoice's own IVA breakdown always does), while
+      // keeping the relative weight between lines/tax categories intact.
+      const totalCents = toEurCents(
+        invoiceAmount,
+        invoiceAmountInForeignCurrency ? referenceCurrency : localCurrencyCode,
+        rate,
+        referenceCurrency
+      );
+      const scale = estimatedTotalCents > 0 ? totalCents / estimatedTotalCents : 1;
+      const itemsData = estimatedItems.map((item) => ({
+        ...item,
+        unitCostCents: item.quantity > 0 ? Math.round((item.subtotalCents * scale) / item.quantity) : item.unitCostCents,
+        subtotalCents: Math.round(item.subtotalCents * scale),
+        baseCents: Math.round(item.baseCents * scale),
+        taxCents: Math.round(item.taxCents * scale),
+      }));
+      let baseImponibleCents = itemsData.reduce((sum, item) => sum + item.baseCents, 0);
+      // Absorb any rounding drift from the scaling above into the tax total
+      // rather than the base — the stored total must equal exactly what was
+      // typed in, and base + tax must equal that total.
+      const taxTotalCents =
+        estimatedTotalCents > 0 ? totalCents - baseImponibleCents : estimatedTaxCents;
+      if (estimatedTotalCents === 0) baseImponibleCents = estimatedBaseCents;
 
       // "Contribuyente especial" companies withhold a percentage of the IVA
       // from the supplier and remit it to SENIAT directly instead — see
