@@ -115,6 +115,14 @@ function booleanFieldWithDefault(defaultValue: boolean) {
   }, z.boolean());
 }
 
+// Runs before z.coerce.number() so a blank Excel cell (or an untouched
+// optional form field, which submits "") is treated as "not provided"
+// rather than being coerced into 0 — Number("") is 0, not NaN, so without
+// this a blank "Cantidad mínima al mayor" cell would silently become 0 and
+// fail its own .min(1) check with Zod's raw English default message instead
+// of just being left unset.
+const blankToUndefined = (v: unknown) => (v === "" || v == null ? undefined : v);
+
 export const ProductSchema = z
   .object({
     name: z.string().trim().min(1, "El nombre es obligatorio"),
@@ -132,16 +140,18 @@ export const ProductSchema = z
       .number()
       .min(0, "El precio no puede ser negativo")
       .transform(toCents),
-    cost: z.coerce
-      .number()
-      .min(0)
-      .optional()
-      .nullable()
-      .transform((v) => (v == null ? v : toCents(v))),
+    cost: z
+      .preprocess(blankToUndefined, z.coerce.number().min(0).optional().nullable())
+      .transform((v) => (v == null ? v : toCents(v as number))),
     // Required only when trackStock is on — see the .refine below.
     trackStock: booleanFieldWithDefault(true),
-    stock: z.coerce.number().int().min(0, "El stock no puede ser negativo").optional(),
-    lowStockThreshold: z.coerce.number().int().min(0).default(5),
+    stock: z.preprocess(
+      blankToUndefined,
+      z.coerce.number().int().min(0, "El stock no puede ser negativo").optional()
+    ),
+    lowStockThreshold: z
+      .preprocess(blankToUndefined, z.coerce.number().int().min(0).optional())
+      .transform((v) => v ?? 5),
     taxCategory: TaxCategoryEnum.default("GENERAL"),
     image: z
       .string()
@@ -155,20 +165,14 @@ export const ProductSchema = z
     // together. See lib/pricing.ts's resolveTierPrice for how these combine
     // with priceCents at checkout.
     priceTiersEnabled: booleanFieldWithDefault(false),
-    wholesalePrice: z.coerce
-      .number()
-      .min(0)
-      .optional()
-      .nullable()
-      .transform((v) => (v == null ? v : toCents(v))),
-    wholesaleMinQty: z.coerce.number().int().min(1).optional().nullable(),
-    bulkPrice: z.coerce
-      .number()
-      .min(0)
-      .optional()
-      .nullable()
-      .transform((v) => (v == null ? v : toCents(v))),
-    bulkMinQty: z.coerce.number().int().min(1).optional().nullable(),
+    wholesalePrice: z
+      .preprocess(blankToUndefined, z.coerce.number().min(0).optional().nullable())
+      .transform((v) => (v == null ? v : toCents(v as number))),
+    wholesaleMinQty: z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional().nullable()),
+    bulkPrice: z
+      .preprocess(blankToUndefined, z.coerce.number().min(0).optional().nullable())
+      .transform((v) => (v == null ? v : toCents(v as number))),
+    bulkMinQty: z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional().nullable()),
   })
   .refine((d) => !d.trackStock || d.stock != null, {
     message: "El stock es obligatorio cuando controlas el stock de este producto",
@@ -194,10 +198,8 @@ export type ProductInput = z.infer<typeof ProductSchema>;
 // products, so many rows may not have one. Every column besides id is
 // optional, and a blank cell means "leave this field unchanged" rather than
 // "clear it" (unlike ProductSchema above, which is also used for full
-// create/import rows where every field is meaningful). blankToUndefined runs
-// before z.coerce so an empty string never gets coerced into 0.
-const blankToUndefined = (v: unknown) => (v === "" || v == null ? undefined : v);
-
+// create/import rows where every field is meaningful). Reuses the same
+// blankToUndefined defined above ProductSchema.
 export const ProductUpdateRowSchema = z.object({
   id: z.string().trim().min(1, "Falta el identificador interno (no borres ni edites la columna ID)"),
   sku: z.preprocess(blankToUndefined, z.string().trim().optional()),
