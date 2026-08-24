@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { Button } from "@/components/ui/button";
 import { dateRangeSelectionToQuery, type DateRangeSelection } from "@/lib/report-types";
 
@@ -75,7 +76,7 @@ export function DateRangeSwitcher({
   }
 
   return (
-    <div className="relative flex items-center gap-1 flex-wrap">
+    <div className="flex items-center gap-1 flex-wrap">
       {PRESETS.map((p) => (
         <button
           key={p.key}
@@ -90,62 +91,68 @@ export function DateRangeSwitcher({
           {p.label}
         </button>
       ))}
-      <button
-        type="button"
-        onClick={() => setMonthsOpen((v) => !v)}
-        className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
-          selection.kind === "months"
-            ? "bg-primary text-primary-foreground border-primary"
-            : "border-input hover:bg-accent"
-        }`}
-      >
-        Meses{selection.kind === "months" ? ` (${selection.months.length})` : ""}
-      </button>
 
-      {monthsOpen && (
-        <div className="absolute top-full right-0 mt-2 z-20 w-72 rounded-lg border bg-card p-3 shadow-lg flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Elige año y meses</span>
-            <select
-              value={draftYear}
-              onChange={(e) => setDraftYear(Number(e.target.value))}
-              className="rounded-md border bg-background px-2 py-1 text-sm"
-            >
-              {Array.from({ length: 6 }, (_, i) => currentYear - i).map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            {MONTH_LABELS.map((label, i) => {
-              const m = i + 1;
-              const active = draftMonths.has(m);
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => toggleMonth(m)}
-                  className={`rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
-                    active ? "bg-primary text-primary-foreground border-primary" : "border-input hover:bg-accent"
-                  }`}
+      <PopoverPrimitive.Root open={monthsOpen} onOpenChange={setMonthsOpen}>
+        <PopoverPrimitive.Trigger
+          className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+            selection.kind === "months"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "border-input hover:bg-accent"
+          }`}
+        >
+          Meses{selection.kind === "months" ? ` (${selection.months.length})` : ""}
+        </PopoverPrimitive.Trigger>
+        {/* Portaled out of the trigger's ancestry — Card has overflow-hidden
+            (for its own rounded corners), which was silently clipping this
+            popover's bottom, hiding the Cancelar/Aplicar row, before this
+            switched from a hand-rolled absolute div to a real Popover. */}
+        <PopoverPrimitive.Portal>
+          <PopoverPrimitive.Positioner side="bottom" sideOffset={4} align="end" className="z-50">
+            <PopoverPrimitive.Popup className="w-72 rounded-lg bg-popover text-popover-foreground p-3 shadow-md ring-1 ring-foreground/10 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Elige año y meses</span>
+                <select
+                  value={draftYear}
+                  onChange={(e) => setDraftYear(Number(e.target.value))}
+                  className="rounded-md border bg-background px-2 py-1 text-sm"
                 >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => setMonthsOpen(false)}>
-              Cancelar
-            </Button>
-            <Button type="button" size="sm" disabled={draftMonths.size === 0} onClick={applyMonths}>
-              Aplicar
-            </Button>
-          </div>
-        </div>
-      )}
+                  {Array.from({ length: 6 }, (_, i) => currentYear - i).map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {MONTH_LABELS.map((label, i) => {
+                  const m = i + 1;
+                  const active = draftMonths.has(m);
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => toggleMonth(m)}
+                      className={`rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
+                        active ? "bg-primary text-primary-foreground border-primary" : "border-input hover:bg-accent"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => setMonthsOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="button" size="sm" disabled={draftMonths.size === 0} onClick={applyMonths}>
+                  Aplicar
+                </Button>
+              </div>
+            </PopoverPrimitive.Popup>
+          </PopoverPrimitive.Positioner>
+        </PopoverPrimitive.Portal>
+      </PopoverPrimitive.Root>
     </div>
   );
 }
