@@ -65,17 +65,9 @@ export function QuoteHistoryTable({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  // Oldest still-open quote first (most overdue for a follow-up call);
-  // resolved ones (approved/lost) trail behind, most recent first.
+  // Most recent quote first, regardless of status.
   const sorted = useMemo(() => {
-    return [...quotes].sort((a, b) => {
-      if (a.status === "PENDING" && b.status !== "PENDING") return -1;
-      if (a.status !== "PENDING" && b.status === "PENDING") return 1;
-      if (a.status === "PENDING" && b.status === "PENDING") {
-        return a.createdAt.getTime() - b.createdAt.getTime();
-      }
-      return b.createdAt.getTime() - a.createdAt.getTime();
-    });
+    return [...quotes].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }, [quotes]);
 
   const now = Date.now();

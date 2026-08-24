@@ -199,6 +199,41 @@ export async function renderCompanyHeader(
   return renderFiscalHeader(doc, company, textX, nameBottomY + 12);
 }
 
+// Renders the centered document title (FACTURA/PRESUPUESTO/etc.) and, below
+// it — never beside it — the right-aligned info block (Nº de control,
+// Fecha, ...). Both used to be drawn independently on nearly the same
+// vertical band (title centered on the full page width, info block
+// right-aligned at the same y), which visually collided whenever the title
+// or the info text was wide enough — worst on RECIBO DE PAGO's four stacked
+// lines and LISTA DE PRECIOS, where the date text's left edge landed inside
+// the title's own glyphs. Stacking the info block strictly below the title
+// removes the collision risk regardless of title/text width, the same
+// "shared fix, not a per-document patch" approach as renderCompanyHeader.
+// Returns the Y just below the info block, for the caller to combine with
+// fiscalEndY exactly as before.
+export function renderDocumentTitleBlock(
+  doc: jsPDF,
+  title: string,
+  infoLines: string[],
+  margin: number,
+  y: number,
+  pageWidth: number
+): number {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text(title, pageWidth / 2, y + 20, { align: "center" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  let infoY = y + 40;
+  for (const line of infoLines) {
+    doc.text(line, pageWidth - margin, infoY, { align: "right" });
+    infoY += 15;
+  }
+
+  return infoY - 15;
+}
+
 // Optional free-text note (Sale.note / Quote.note) — rendered between the
 // customer info block and the items table, wrapping across lines as needed.
 // Shared by buildDeliveryNotePDF and lib/quote-pdf.ts's buildQuotePDF.
@@ -387,21 +422,19 @@ export async function buildDeliveryNotePDF(
   const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
   const isInvoice = variant === "invoice";
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text(isInvoice ? "FACTURA" : "NOTA DE ENTREGA", pageWidth / 2, y + 20, { align: "center" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(
-    `Nº de control: ${isInvoice ? invoiceNumberLabel(sale) : controlNumberLabel(sale)}`,
-    pageWidth - margin,
-    y + 5,
-    { align: "right" }
+  const titleBottomY = renderDocumentTitleBlock(
+    doc,
+    isInvoice ? "FACTURA" : "NOTA DE ENTREGA",
+    [
+      `Nº de control: ${isInvoice ? invoiceNumberLabel(sale) : controlNumberLabel(sale)}`,
+      `Fecha: ${formatDate(sale.createdAt)}`,
+    ],
+    margin,
+    y,
+    pageWidth
   );
-  doc.text(`Fecha: ${formatDate(sale.createdAt)}`, pageWidth - margin, y + 20, { align: "right" });
 
-  y = Math.max(y + 70, fiscalEndY + 20);
+  y = Math.max(titleBottomY + 20, fiscalEndY + 20);
   doc.setDrawColor(200);
   doc.line(margin, y, pageWidth - margin, y);
   y += 20;
@@ -500,23 +533,21 @@ export async function buildPaymentReceiptPDF(
 
   const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("RECIBO DE PAGO", pageWidth / 2, y + 20, { align: "center" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Nº de control: ${receiptControlNumberLabel(sale)}`, pageWidth - margin, y - 8, { align: "right" });
-  doc.text(`Nota de entrega Nº: ${controlNumberLabel(sale)}`, pageWidth - margin, y + 7, { align: "right" });
-  doc.text(`Fecha de venta: ${formatDate(sale.createdAt)}`, pageWidth - margin, y + 22, { align: "right" });
-  doc.text(
-    `Fecha de pago: ${sale.paidAt ? formatDate(sale.paidAt) : "—"}`,
-    pageWidth - margin,
-    y + 37,
-    { align: "right" }
+  const titleBottomY = renderDocumentTitleBlock(
+    doc,
+    "RECIBO DE PAGO",
+    [
+      `Nº de control: ${receiptControlNumberLabel(sale)}`,
+      `Nota de entrega Nº: ${controlNumberLabel(sale)}`,
+      `Fecha de venta: ${formatDate(sale.createdAt)}`,
+      `Fecha de pago: ${sale.paidAt ? formatDate(sale.paidAt) : "—"}`,
+    ],
+    margin,
+    y,
+    pageWidth
   );
 
-  y = Math.max(y + 70, fiscalEndY + 20);
+  y = Math.max(titleBottomY + 20, fiscalEndY + 20);
   doc.setDrawColor(200);
   doc.line(margin, y, pageWidth - margin, y);
   y += 20;

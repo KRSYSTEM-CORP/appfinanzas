@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PAYMENT_METHOD_LABELS, formatDate, formatDateOnly } from "@/lib/format";
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, referenceNote } from "@/lib/currencies";
-import { renderCompanyHeader, type DeliveryNoteCompany } from "@/lib/delivery-note";
+import { renderCompanyHeader, renderDocumentTitleBlock, type DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { CashClosingSummary } from "@/lib/actions/cash-closing";
 import type { ReferenceCurrency } from "@prisma/client";
 
@@ -24,18 +24,16 @@ export async function buildCashClosingPDF(
 
   const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("CIERRE DE CAJA", pageWidth / 2, y + 20, { align: "center" });
+  const titleBottomY = renderDocumentTitleBlock(
+    doc,
+    "CIERRE DE CAJA",
+    [`Fecha: ${formatDateOnly(summary.date)}`, ...(branchName ? [`Sucursal: ${branchName}`] : [])],
+    margin,
+    y,
+    pageWidth
+  );
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Fecha: ${formatDateOnly(summary.date)}`, pageWidth - margin, y + 5, { align: "right" });
-  if (branchName) {
-    doc.text(`Sucursal: ${branchName}`, pageWidth - margin, y + 20, { align: "right" });
-  }
-
-  y = Math.max(y + 70, fiscalEndY + 20);
+  y = Math.max(titleBottomY + 20, fiscalEndY + 20);
   doc.setDrawColor(200);
   doc.line(margin, y, pageWidth - margin, y);
   y += 24;

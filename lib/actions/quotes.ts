@@ -215,14 +215,17 @@ export async function getQuoteForConversion(quoteId: string): Promise<
 
 // Seguimiento de presupuestos: every quote for the current branch (or every
 // branch, for a GERENTE viewing "Todas las sucursales"), most recent first.
-// The list page itself sorts PENDING ones to the top so the oldest
-// still-open quote — the one most overdue for a follow-up call — surfaces
-// first, without needing a separate "reminder date" field on Quote.
-export async function listQuotes(limit = 200) {
+// `windows` is optional (same pattern as listRecentSales) — omitted by
+// callers like the Documentos page that do their own client-side filtering.
+export async function listQuotes(limit = 200, windows?: { start: Date; end: Date }[]) {
   const { companyId, branchId } = await requireSession();
   const quotes = await withTenant(companyId, (tx) =>
     tx.quote.findMany({
-      where: { companyId, ...(branchId ? { branchId } : {}) },
+      where: {
+        companyId,
+        ...(branchId ? { branchId } : {}),
+        ...(windows ? { OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })) } : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: limit,
       include: { sale: { select: { id: true, controlNumber: true } } },

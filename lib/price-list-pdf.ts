@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDate } from "@/lib/format";
 import { formatCurrencyCents } from "@/lib/currencies";
-import { renderCompanyHeader, type DeliveryNoteCompany } from "@/lib/delivery-note";
+import { renderCompanyHeader, renderDocumentTitleBlock, type DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { ReferenceCurrency } from "@prisma/client";
 
 export type PriceListProduct = {
@@ -24,15 +24,16 @@ export async function buildPriceListPDF(
 
   const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("LISTA DE PRECIOS", pageWidth / 2, y + 20, { align: "center" });
+  const titleBottomY = renderDocumentTitleBlock(
+    doc,
+    "LISTA DE PRECIOS",
+    [`Fecha de emisión: ${formatDate(new Date())}`],
+    margin,
+    y,
+    pageWidth
+  );
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Fecha de emisión: ${formatDate(new Date())}`, pageWidth - margin, y + 5, { align: "right" });
-
-  y = Math.max(y + 50, fiscalEndY + 20);
+  y = Math.max(titleBottomY + 20, fiscalEndY + 20);
   doc.setDrawColor(200);
   doc.line(margin, y, pageWidth - margin, y);
   y += 20;

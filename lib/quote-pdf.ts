@@ -5,6 +5,7 @@ import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLoca
 import {
   itemDescription,
   renderCompanyHeader,
+  renderDocumentTitleBlock,
   renderNote,
   type DeliveryNoteCompany,
 } from "@/lib/delivery-note";
@@ -54,16 +55,16 @@ export async function buildQuotePDF(
 
   const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("PRESUPUESTO", pageWidth / 2, y + 20, { align: "center" });
+  const titleBottomY = renderDocumentTitleBlock(
+    doc,
+    "PRESUPUESTO",
+    [`Nº de control: ${quoteControlNumberLabel(quote)}`, `Fecha: ${formatDate(quote.createdAt)}`],
+    margin,
+    y,
+    pageWidth
+  );
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Nº de control: ${quoteControlNumberLabel(quote)}`, pageWidth - margin, y + 5, { align: "right" });
-  doc.text(`Fecha: ${formatDate(quote.createdAt)}`, pageWidth - margin, y + 20, { align: "right" });
-
-  y = Math.max(y + 70, fiscalEndY + 20);
+  y = Math.max(titleBottomY + 20, fiscalEndY + 20);
   doc.setDrawColor(200);
   doc.line(margin, y, pageWidth - margin, y);
   y += 20;
