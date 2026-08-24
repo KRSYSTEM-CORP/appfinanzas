@@ -322,7 +322,7 @@ export function PurchaseForm({
 
       <div className="flex flex-col gap-2">
         <Label>¿Cómo se pagó?</Label>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <Button
             type="button"
             variant={paymentStatus === "PAID" ? "default" : "outline"}
