@@ -8,6 +8,7 @@ import { hashPassword, verifyPassword } from "@/lib/password";
 import { setSessionCookie, clearSessionCookie } from "@/lib/session";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { createCompanyWithOwner } from "@/lib/company-provisioning";
+import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import {
   EmployeeLoginSchema,
   LoginSchema,
@@ -18,6 +19,10 @@ import {
 import type { ActionResult } from "@/lib/types";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+const RESET_REQUEST_WINDOW_MS = 60 * 60 * 1000;
+const RESET_REQUEST_MAX_ATTEMPTS = 3;
 
 function hashResetToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -112,6 +117,11 @@ export async function login(formData: FormData): Promise<LoginResult> {
   const { email, password } = parsed.data;
   const genericError = "Correo o contraseña incorrectos";
 
+  const limit = await checkRateLimit("login", email, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
+  if (!limit.allowed) {
+    return { success: false, error: rateLimitMessage(limit.retryAfterMinutes) };
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     include: { company: true },
@@ -120,8 +130,10 @@ export async function login(formData: FormData): Promise<LoginResult> {
   // Google (see app/api/auth/google/callback) — a password attempt against
   // it must fail the same generic way as a non-existent email, not throw.
   if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+    await recordFailedAttempt("login", email);
     return { success: false, error: genericError };
   }
+  await clearAttempts("login", email);
 
   if (user.status === "PENDING") {
     return {
@@ -196,11 +208,18 @@ export async function loginEmployee(formData: FormData): Promise<ActionResult> {
 
   const { companyCode, firstName, lastName, password } = parsed.data;
   const genericError = "Código de empresa, nombre o contraseña incorrectos";
+  const rateLimitKey = `${companyCode.toUpperCase()}:${firstName}:${lastName}`;
+
+  const limit = await checkRateLimit("login-employee", rateLimitKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
+  if (!limit.allowed) {
+    return { success: false, error: rateLimitMessage(limit.retryAfterMinutes) };
+  }
 
   const company = await prisma.company.findUnique({
     where: { loginCode: companyCode.toUpperCase() },
   });
   if (!company) {
+    await recordFailedAttempt("login-employee", rateLimitKey);
     return { success: false, error: genericError };
   }
 
@@ -212,8 +231,10 @@ export async function loginEmployee(formData: FormData): Promise<ActionResult> {
     },
   });
   if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+    await recordFailedAttempt("login-employee", rateLimitKey);
     return { success: false, error: genericError };
   }
+  await clearAttempts("login-employee", rateLimitKey);
 
   if (user.status === "PENDING") {
     return {
@@ -255,6 +276,20 @@ export async function requestPasswordReset(formData: FormData): Promise<ActionRe
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
+
+  // Checked (and recorded) regardless of whether the email is registered —
+  // otherwise this endpoint could be used to email-bomb any address, real
+  // account or not, without ever tripping a limit.
+  const limit = await checkRateLimit(
+    "password-reset",
+    parsed.data.email,
+    RESET_REQUEST_MAX_ATTEMPTS,
+    RESET_REQUEST_WINDOW_MS
+  );
+  if (!limit.allowed) {
+    return { success: false, error: rateLimitMessage(limit.retryAfterMinutes) };
+  }
+  await recordFailedAttempt("password-reset", parsed.data.email);
 
   const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
   if (user) {
