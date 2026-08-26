@@ -1,7 +1,8 @@
 import Image from "next/image";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { WelcomeModal } from "@/components/auth/WelcomeModal";
-import { COPYRIGHT_LINE, WHATSAPP_URL } from "@/lib/legal";
+import { SiteFooter } from "@/components/layout/SiteFooter";
+import { WHATSAPP_URL } from "@/lib/legal";
 import { getRememberedCompany } from "@/lib/actions/auth";
 import { googleOAuthConfigured } from "@/lib/google-oauth";
 
@@ -37,7 +38,7 @@ export default async function LoginPage({
           Escríbenos por WhatsApp
         </a>
       </p>
-      <p className="mt-auto pt-10 text-center text-xs text-muted-foreground">{COPYRIGHT_LINE}</p>
+      <SiteFooter />
     </div>
   );
 }

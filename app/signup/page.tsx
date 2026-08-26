@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { SignupForm } from "@/components/auth/SignupForm";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 import { WHATSAPP_URL } from "@/lib/legal";
 import { googleOAuthConfigured } from "@/lib/google-oauth";
 
@@ -10,7 +11,7 @@ export default async function SignupPage({
 }) {
   const { error } = await searchParams;
   return (
-    <div className="flex flex-col gap-6 p-6 py-16">
+    <div className="flex min-h-full flex-col gap-6 p-6 py-16">
       <div className="text-center flex flex-col items-center gap-3">
         <Image src="/icons/icon-512.png" alt="KR POS" width={64} height={64} className="rounded-lg" />
         <div>
@@ -32,6 +33,7 @@ export default async function SignupPage({
           Escríbenos por WhatsApp
         </a>
       </p>
+      <SiteFooter />
     </div>
   );
 }
