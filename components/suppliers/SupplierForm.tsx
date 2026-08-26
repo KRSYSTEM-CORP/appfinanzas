@@ -40,7 +40,8 @@ export function SupplierForm({ supplier, action }: Props) {
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="rif">RIF (opcional)</Label>
-          <Input id="rif" name="rif" defaultValue={supplier?.rif ?? ""} placeholder="Ej. J-12345678-9" />
+          <Input id="rif" name="rif" defaultValue={supplier?.rif ?? ""} />
+          <p className="text-xs text-muted-foreground">Ej. J-12345678-9</p>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="phone">Teléfono (opcional)</Label>

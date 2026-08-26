@@ -275,8 +275,8 @@ function AdminCompanyRow({
                           min="0"
                           value={feeUsd}
                           onChange={(e) => setFeeUsd(e.target.value)}
-                          placeholder="Precio estándar de la plataforma"
                         />
+                        <p className="text-xs text-muted-foreground">En blanco = precio estándar de la plataforma.</p>
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <Label htmlFor={`due-${owner.id}`}>Fecha de vencimiento — opcional</Label>
@@ -367,8 +367,8 @@ function AdminCompanyRow({
                         id={`pay-note-${owner.id}`}
                         value={payNote}
                         onChange={(e) => setPayNote(e.target.value)}
-                        placeholder="Ej. Transferencia ref. 001234567"
                       />
+                      <p className="text-xs text-muted-foreground">Ej. Transferencia ref. 001234567</p>
                     </div>
                     {payError && <p className="text-sm text-destructive">{payError}</p>}
                   </div>

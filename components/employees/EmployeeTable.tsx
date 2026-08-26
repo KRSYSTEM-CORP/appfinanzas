@@ -154,11 +154,11 @@ export function EmployeeTable({
                 <Label htmlFor="new-fullName">Nombre de usuario</Label>
                 <Input
                   id="new-fullName"
-                  placeholder="Nombre y apellido"
                   autoComplete="off"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">Ej. Nombre y apellido</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-password">Contraseña</Label>
@@ -342,11 +342,11 @@ function EmployeeRow({
                   <Label htmlFor={`edit-fullName-${u.id}`}>Nombre de usuario</Label>
                   <Input
                     id={`edit-fullName-${u.id}`}
-                    placeholder="Nombre y apellido"
                     autoComplete="off"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">Ej. Nombre y apellido</p>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`edit-password-${u.id}`}>Nueva contraseña (opcional)</Label>

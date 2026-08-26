@@ -143,13 +143,8 @@ export function QuoteCart({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="quote-note">Nota (opcional)</Label>
-        <Textarea
-          id="quote-note"
-          placeholder="Se imprime en el presupuesto"
-          value={note}
-          onChange={(e) => onNoteChange(e.target.value)}
-          rows={2}
-        />
+        <Textarea id="quote-note" value={note} onChange={(e) => onNoteChange(e.target.value)} rows={2} />
+        <p className="text-xs text-muted-foreground">Se imprime en el presupuesto</p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

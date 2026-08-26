@@ -50,9 +50,9 @@ export function SellerCommissionForm({
             setValue(e.target.value);
             setSaved(false);
           }}
-          placeholder="Ej. 5"
           className="w-24"
         />
+        <p className="text-xs text-muted-foreground">Ej. 5</p>
       </div>
       <Button type="button" size="sm" onClick={handleSave} disabled={isPending}>
         {isPending ? "Guardando..." : "Guardar"}

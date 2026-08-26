@@ -260,8 +260,8 @@ export function PaymentSplitBuilder({
                     id={`${idPrefix}-reference-${i}`}
                     value={row.reference}
                     onChange={(e) => updateRow(i, { reference: e.target.value })}
-                    placeholder="Ej. 001234567"
                   />
+                  <p className="text-xs text-muted-foreground">Ej. 001234567</p>
                 </div>
               )}
             </div>

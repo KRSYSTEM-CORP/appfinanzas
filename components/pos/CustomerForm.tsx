@@ -143,13 +143,8 @@ export function CustomerForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="rif">Cédula/RIF (opcional)</Label>
-        <Input
-          id="rif"
-          value={rif}
-          onChange={(e) => setRif(e.target.value)}
-          placeholder="Ej. V-12345678 o J-12345678-9"
-          autoComplete="off"
-        />
+        <Input id="rif" value={rif} onChange={(e) => setRif(e.target.value)} autoComplete="off" />
+        <p className="text-xs text-muted-foreground">Ej. V-12345678 o J-12345678-9</p>
       </div>
 
       <Button type="submit" size="lg">

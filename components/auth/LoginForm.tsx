@@ -292,13 +292,8 @@ export function LoginForm({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="fullName">Nombre de usuario</Label>
-              <Input
-                id="fullName"
-                name="fullName"
-                placeholder="Nombre y apellido"
-                autoComplete="username"
-                required
-              />
+              <Input id="fullName" name="fullName" autoComplete="username" required />
+              <p className="text-xs text-muted-foreground">Escribe nombre y apellido</p>
             </div>
           </>
         ) : (
@@ -309,13 +304,8 @@ export function LoginForm({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="fullName">Nombre de usuario</Label>
-              <Input
-                id="fullName"
-                name="fullName"
-                placeholder="Nombre y apellido"
-                autoComplete="username"
-                required
-              />
+              <Input id="fullName" name="fullName" autoComplete="username" required />
+              <p className="text-xs text-muted-foreground">Escribe nombre y apellido</p>
             </div>
           </>
         )}

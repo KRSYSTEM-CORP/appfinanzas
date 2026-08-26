@@ -88,8 +88,8 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
                 name="category"
                 list="category-options"
                 defaultValue={product?.category ?? ""}
-                placeholder="Ej. Ropa, Calzado, Accesorios..."
               />
+              <p className="text-xs text-muted-foreground">Ej. Ropa, Calzado, Accesorios...</p>
               <datalist id="category-options">
                 {categories.map((c) => (
                   <option key={c} value={c} />
@@ -301,8 +301,8 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
                     min={1}
                     step={1}
                     defaultValue={product?.wholesaleMinQty ?? ""}
-                    placeholder="Ej. 51"
                   />
+                  <p className="text-xs text-muted-foreground">Ej. 51</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -326,8 +326,8 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
                     min={1}
                     step={1}
                     defaultValue={product?.bulkMinQty ?? ""}
-                    placeholder="Ej. 100"
                   />
+                  <p className="text-xs text-muted-foreground">Ej. 100</p>
                 </div>
               </div>
             </>

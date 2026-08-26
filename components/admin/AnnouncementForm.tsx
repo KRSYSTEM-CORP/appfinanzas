@@ -37,12 +37,8 @@ export function AnnouncementForm({ recipientCount }: { recipientCount: number })
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="announcement-subject">Asunto</Label>
-        <Input
-          id="announcement-subject"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          placeholder="Ej. Nueva función disponible en KR POS"
-        />
+        <Input id="announcement-subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
+        <p className="text-xs text-muted-foreground">Ej. Nueva función disponible en KR POS</p>
       </div>
 
       <div className="flex flex-col gap-1.5">

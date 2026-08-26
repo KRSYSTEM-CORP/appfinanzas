@@ -32,21 +32,13 @@ export function FiscalDataForm({ initial }: { initial: FiscalData }) {
     <form action={handleSubmit} className="flex flex-col gap-4 max-w-sm">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fiscalLegalName">Razón social</Label>
-        <Input
-          id="fiscalLegalName"
-          name="fiscalLegalName"
-          defaultValue={initial.fiscalLegalName ?? ""}
-          placeholder="Ej. Comercial Ejemplo, C.A."
-        />
+        <Input id="fiscalLegalName" name="fiscalLegalName" defaultValue={initial.fiscalLegalName ?? ""} />
+        <p className="text-xs text-muted-foreground">Ej. Comercial Ejemplo, C.A.</p>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fiscalRif">RIF</Label>
-        <Input
-          id="fiscalRif"
-          name="fiscalRif"
-          defaultValue={initial.fiscalRif ?? ""}
-          placeholder="Ej. J-12345678-9"
-        />
+        <Input id="fiscalRif" name="fiscalRif" defaultValue={initial.fiscalRif ?? ""} />
+        <p className="text-xs text-muted-foreground">Ej. J-12345678-9</p>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fiscalAddress">Dirección fiscal</Label>
@@ -59,12 +51,8 @@ export function FiscalDataForm({ initial }: { initial: FiscalData }) {
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fiscalPhone">Teléfono</Label>
-        <Input
-          id="fiscalPhone"
-          name="fiscalPhone"
-          defaultValue={initial.fiscalPhone ?? ""}
-          placeholder="Ej. 0212-1234567"
-        />
+        <Input id="fiscalPhone" name="fiscalPhone" defaultValue={initial.fiscalPhone ?? ""} />
+        <p className="text-xs text-muted-foreground">Ej. 0212-1234567</p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

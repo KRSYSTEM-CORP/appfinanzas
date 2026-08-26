@@ -282,13 +282,8 @@ export function Cart({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="sale-note">Nota (opcional)</Label>
-        <Textarea
-          id="sale-note"
-          placeholder="Se imprime en la nota de entrega y la factura"
-          value={note}
-          onChange={(e) => onNoteChange(e.target.value)}
-          rows={2}
-        />
+        <Textarea id="sale-note" value={note} onChange={(e) => onNoteChange(e.target.value)} rows={2} />
+        <p className="text-xs text-muted-foreground">Se imprime en la nota de entrega y la factura</p>
       </div>
 
       <div className="flex gap-2">

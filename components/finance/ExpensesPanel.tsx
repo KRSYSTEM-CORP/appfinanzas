@@ -101,8 +101,8 @@ export function ExpensesPanel({
                   id="expense-description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Ej. Pago de alquiler"
                 />
+                <p className="text-xs text-muted-foreground">Ej. Pago de alquiler</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="expense-category">Categoría (opcional)</Label>
@@ -110,8 +110,8 @@ export function ExpensesPanel({
                   id="expense-category"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  placeholder="Ej. Alquiler, Servicios, Nómina"
                 />
+                <p className="text-xs text-muted-foreground">Ej. Alquiler, Servicios, Nómina</p>
               </div>
               <div className="flex gap-3">
                 <div className="flex flex-col gap-1.5 flex-1">

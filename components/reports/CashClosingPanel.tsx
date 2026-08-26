@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Price } from "@/components/money/Price";
 import { PAYMENT_METHOD_LABELS, formatDate } from "@/lib/format";
+import { Label } from "@/components/ui/label";
 import { getDailyClosingSummary, closeCashRegister, type CashClosingSummary } from "@/lib/actions/cash-closing";
 import { buildCashClosingPDF } from "@/lib/cash-closing-pdf";
 import { pdfFormatForPaperSize } from "@/lib/print-paper-sizes";
@@ -176,8 +177,9 @@ export function CashClosingPanel({
         </p>
       ) : (
         <div className="flex flex-col gap-2 max-w-sm">
+          <Label htmlFor="closing-note">Nota (opcional)</Label>
           <Input
-            placeholder="Nota (opcional)"
+            id="closing-note"
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
