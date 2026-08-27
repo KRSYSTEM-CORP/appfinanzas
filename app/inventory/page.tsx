@@ -83,6 +83,7 @@ export default async function InventoryPage() {
         referenceCurrency={referenceCurrency}
         categories={categories}
         canManage={canManage}
+        companyId={session.companyId}
       />
     </div>
   );

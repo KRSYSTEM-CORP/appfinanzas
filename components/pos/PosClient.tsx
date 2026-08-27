@@ -16,6 +16,7 @@ import { computeItemDiscountCents } from "@/lib/discount";
 import { resolveTierPrice, tierPriceCents, type PriceTier, type TieredProduct } from "@/lib/pricing";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { queueSale, type PendingSaleInput } from "@/lib/offline/sync";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 
@@ -33,6 +34,7 @@ export function PosClient({
   company,
   sellerName,
   initialQuote,
+  companyId,
 }: {
   products: Product[];
   rate: number | null;
@@ -51,9 +53,14 @@ export function PosClient({
   // dropped here too, as a second line of defense on top of the filtering
   // already done in getQuoteForConversion.
   initialQuote?: QuoteForConversion | null;
+  companyId: string;
 }) {
   const router = useRouter();
   const online = useOnlineStatus();
+  // Keeps this terminal's product list (stock/prices) in sync with sales and
+  // catalog edits made from any other open terminal for the same business.
+  useLiveRefresh(`pos:${companyId}`, "product");
+  useLiveRefresh(`pos:${companyId}`, "sale");
   const productById = new Map(products.map((p) => [p.id, p]));
   const initialLines: CartLine[] = (initialQuote?.lines ?? [])
     .map((l): CartLine | null => {

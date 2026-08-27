@@ -154,12 +154,15 @@ export const ProductSchema = z
       .preprocess(blankToUndefined, z.coerce.number().int().min(0).optional())
       .transform((v) => v ?? 5),
     taxCategory: TaxCategoryEnum.default("GENERAL"),
+    // New uploads come back from Supabase Storage as an https:// URL; old
+    // rows written before that migration still carry a data:image/ URL and
+    // keep working as-is (both are valid <img src> values) until re-saved.
     image: z
       .string()
       .trim()
       .optional()
       .transform((v) => (v === "" ? undefined : v))
-      .refine((v) => v == null || v.startsWith("data:image/"), "Imagen inválida")
+      .refine((v) => v == null || v.startsWith("data:image/") || v.startsWith("https://"), "Imagen inválida")
       .refine((v) => v == null || v.length < 700_000, "La imagen es demasiado grande"),
     // Quantity-based pricing — off by default; each tier (mayor/gran mayor)
     // is only meaningful once both its price and minimum quantity are set

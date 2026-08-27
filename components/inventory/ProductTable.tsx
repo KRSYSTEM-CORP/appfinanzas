@@ -35,6 +35,7 @@ import { Price } from "@/components/money/Price";
 import { LowStockBadge } from "@/components/inventory/LowStockBadge";
 import { deleteProduct, setProductActive } from "@/lib/actions/products";
 import { isLowStock } from "@/lib/inventory";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import type { ReferenceCurrency } from "@prisma/client";
 
 const ALL_CATEGORIES = "__all__";
@@ -57,6 +58,7 @@ export function ProductTable({
   referenceCurrency,
   categories,
   canManage,
+  companyId,
 }: {
   products: Product[];
   rate: number | null;
@@ -65,7 +67,10 @@ export function ProductTable({
   referenceCurrency: ReferenceCurrency;
   categories: string[];
   canManage: boolean;
+  companyId: string;
 }) {
+  useLiveRefresh(`pos:${companyId}`, "product");
+  useLiveRefresh(`pos:${companyId}`, "sale");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { notifyLive, posChannel } from "@/lib/realtime";
 import { SaleSchema, RegisterPaymentSchema } from "@/lib/validations";
 import {
   resolveSalePayments,
@@ -241,6 +242,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     revalidatePath("/reports");
     revalidatePath("/customers");
     revalidatePath("/quotes/history");
+    void notifyLive(posChannel(companyId), "sale");
     return { success: true, saleId };
   } catch (err) {
     const isDuplicateQuoteLink =
@@ -290,6 +292,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
   revalidatePath("/inventory");
   revalidatePath("/pos");
   revalidatePath("/reports");
+  void notifyLive(posChannel(companyId), "sale");
   return { success: true };
 }
 
@@ -316,6 +319,7 @@ export async function deleteSale(saleId: string): Promise<ActionResult> {
   revalidatePath("/inventory");
   revalidatePath("/pos");
   revalidatePath("/reports");
+  void notifyLive(posChannel(companyId), "sale");
   return { success: true };
 }
 

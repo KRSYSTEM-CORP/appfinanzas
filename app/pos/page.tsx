@@ -15,7 +15,7 @@ export default async function PosPage({
 }) {
   const { fromQuote } = await searchParams;
   const [
-    { companyName, sellerName },
+    { companyName, sellerName, companyId },
     products,
     { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency, printPaperSize },
     categories,
@@ -67,6 +67,7 @@ export default async function PosPage({
           company={company}
           sellerName={sellerName}
           initialQuote={initialQuote}
+          companyId={companyId}
         />
       </div>
     </div>

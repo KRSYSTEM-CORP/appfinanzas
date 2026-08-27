@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { notifyLive, posChannel } from "@/lib/realtime";
 import { ProductSchema, ProductUpdateRowSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 import type { Prisma } from "@prisma/client";
@@ -108,6 +109,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
 
   revalidatePath("/inventory");
   revalidatePath("/pos");
+  void notifyLive(posChannel(companyId), "product");
   return { success: true };
 }
 
@@ -170,6 +172,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
 
   revalidatePath("/inventory");
   revalidatePath("/pos");
+  void notifyLive(posChannel(companyId), "product");
   return { success: true };
 }
 
@@ -180,6 +183,7 @@ export async function setProductActive(id: string, isActive: boolean): Promise<A
   );
   revalidatePath("/inventory");
   revalidatePath("/pos");
+  void notifyLive(posChannel(companyId), "product");
   return { success: true };
 }
 
@@ -198,6 +202,7 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
   revalidatePath("/inventory");
   revalidatePath("/pos");
   revalidatePath("/quotes");
+  void notifyLive(posChannel(companyId), "product");
   return { success: true };
 }
 
@@ -291,6 +296,7 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
 
   revalidatePath("/inventory");
   revalidatePath("/pos");
+  void notifyLive(posChannel(companyId), "product");
   return { created, updated, failed };
 }
 
@@ -404,5 +410,6 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
 
   revalidatePath("/inventory");
   revalidatePath("/pos");
+  void notifyLive(posChannel(companyId), "product");
   return { updated, notFound, failed };
 }
