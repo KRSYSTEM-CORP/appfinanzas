@@ -32,15 +32,3 @@ export function resizeImageToDataUrl(
     reader.readAsDataURL(file);
   });
 }
-
-// Turns a data: URL (e.g. from resizeImageToDataUrl) back into a File, for
-// the callers that upload the resized image to Storage instead of sending
-// the data URL itself to the server.
-export function dataUrlToFile(dataUrl: string, filename: string): File {
-  const [header, base64] = dataUrl.split(",");
-  const mime = header.match(/data:(.*?);base64/)?.[1] ?? "image/jpeg";
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new File([bytes], filename, { type: mime });
-}

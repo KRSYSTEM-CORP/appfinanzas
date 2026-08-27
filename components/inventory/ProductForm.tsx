@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarcodeScannerDialog } from "@/components/scanner/BarcodeScannerDialog";
-import { resizeImageToDataUrl, dataUrlToFile } from "@/lib/image-utils";
-import { uploadProductImage } from "@/lib/actions/uploads";
+import { resizeImageToDataUrl } from "@/lib/image-utils";
 import { TAX_CATEGORY_LABELS } from "@/lib/tax";
 import type { ActionResult } from "@/lib/types";
 import type { Product, ReferenceCurrency, TaxCategory } from "@prisma/client";
@@ -29,7 +28,6 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
   const [image, setImage] = useState(product?.imageDataUrl ?? "");
   const [taxCategory, setTaxCategory] = useState<TaxCategory>(product?.taxCategory ?? "GENERAL");
   const [imageError, setImageError] = useState<string | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
   const [trackStock, setTrackStock] = useState(product?.trackStock ?? true);
   const [priceTiersEnabled, setPriceTiersEnabled] = useState(product?.priceTiersEnabled ?? false);
   const [isPending, startTransition] = useTransition();
@@ -39,22 +37,11 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
     const file = e.target.files?.[0];
     if (!file) return;
     setImageError(null);
-    setUploadingImage(true);
     try {
       const dataUrl = await resizeImageToDataUrl(file, { maxDimension: MAX_IMAGE_DIMENSION, format: "image/jpeg", quality: 0.82 });
-      const resized = dataUrlToFile(dataUrl, "product.jpg");
-      const uploadForm = new FormData();
-      uploadForm.set("file", resized);
-      const result = await uploadProductImage(uploadForm);
-      if (!result.success) {
-        setImageError(result.error);
-        return;
-      }
-      setImage(result.url);
+      setImage(dataUrl);
     } catch {
       setImageError("No se pudo procesar la imagen. Intenta con otro archivo.");
-    } finally {
-      setUploadingImage(false);
     }
   }
 
@@ -127,7 +114,7 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
                 <img src={image} alt="" className="h-16 w-16 shrink-0 rounded object-cover border" />
               ) : (
                 <div className="h-16 w-16 shrink-0 rounded border flex items-center justify-center text-xs text-muted-foreground text-center">
-                  {uploadingImage ? "Subiendo..." : "Sin imagen"}
+                  Sin imagen
                 </div>
               )}
               <div className="flex flex-col gap-1.5 min-w-0">
@@ -136,11 +123,10 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
                   type="file"
                   accept="image/*"
                   onChange={handleImageChange}
-                  disabled={uploadingImage}
                   className="text-sm max-w-full"
                 />
                 {image && (
-                  <Button type="button" variant="outline" size="sm" onClick={removeImage} disabled={uploadingImage} className="self-start">
+                  <Button type="button" variant="outline" size="sm" onClick={removeImage} className="self-start">
                     Quitar imagen
                   </Button>
                 )}
@@ -352,7 +338,7 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={isPending || uploadingImage}>
+        <Button type="submit" disabled={isPending}>
           {isPending ? "Guardando..." : product ? "Guardar cambios" : "Crear producto"}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.push("/inventory")}>
