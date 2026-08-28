@@ -389,6 +389,7 @@ model Customer {
 
   @@unique([companyId, phone])
   @@index([companyId])
+  @@index([companyId, nextContactDate])
 }
 
 model Sale {
@@ -648,6 +649,7 @@ model Supplier {
   purchases Purchase[]
 
   @@index([companyId])
+  @@index([companyId, isActive])
 }
 
 // A recorded purchase from a supplier — the inverse of Sale: receiving one
