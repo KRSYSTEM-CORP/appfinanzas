@@ -210,15 +210,25 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         },
       });
 
+      // Sum quantities per product first (a cart could list the same product
+      // on more than one line) so each product gets exactly one parallel
+      // update computed off its total decrement, rather than two updates
+      // racing off the same stale productById snapshot.
+      const quantityByProductId = new Map<string, number>();
       for (const item of itemsData) {
-        const product = productById.get(item.productId)!;
-        if (!product.trackStock) continue;
-        const newStock = product.stock - item.quantity;
-        await tx.product.updateMany({
-          where: { id: item.productId, companyId, branchId },
-          data: { stock: newStock, ...(newStock === 0 ? { isActive: false } : {}) },
-        });
+        quantityByProductId.set(item.productId, (quantityByProductId.get(item.productId) ?? 0) + item.quantity);
       }
+      await Promise.all(
+        Array.from(quantityByProductId, ([productId, quantity]) => {
+          const product = productById.get(productId)!;
+          if (!product.trackStock) return null;
+          const newStock = product.stock - quantity;
+          return tx.product.updateMany({
+            where: { id: productId, companyId, branchId },
+            data: { stock: newStock, ...(newStock === 0 ? { isActive: false } : {}) },
+          });
+        })
+      );
 
       // Links this sale back to the quote it was "Facturar"-ed from (see
       // getQuoteForConversion in lib/actions/quotes.ts and the ?fromQuote=
@@ -258,16 +268,29 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
 
 async function restoreStock(tx: Prisma.TransactionClient, saleId: string, companyId: string, branchId: string) {
   const items = await tx.saleItem.findMany({ where: { saleId } });
+  const quantityByProductId = new Map<string, number>();
   for (const item of items) {
     if (!item.productId) continue;
-    const product = await tx.product.findFirst({ where: { id: item.productId, companyId, branchId } });
-    if (!product || !product.trackStock) continue;
-    const newStock = product.stock + item.quantity;
-    await tx.product.updateMany({
-      where: { id: item.productId, companyId, branchId },
-      data: { stock: newStock, ...(product.stock === 0 && newStock > 0 ? { isActive: true } : {}) },
-    });
+    quantityByProductId.set(item.productId, (quantityByProductId.get(item.productId) ?? 0) + item.quantity);
   }
+  if (quantityByProductId.size === 0) return;
+
+  const products = await tx.product.findMany({
+    where: { id: { in: Array.from(quantityByProductId.keys()) }, companyId, branchId },
+  });
+  const productById = new Map(products.map((p) => [p.id, p]));
+
+  await Promise.all(
+    Array.from(quantityByProductId, ([productId, quantity]) => {
+      const product = productById.get(productId);
+      if (!product || !product.trackStock) return null;
+      const newStock = product.stock + quantity;
+      return tx.product.updateMany({
+        where: { id: productId, companyId, branchId },
+        data: { stock: newStock, ...(product.stock === 0 && newStock > 0 ? { isActive: true } : {}) },
+      });
+    })
+  );
 }
 
 export async function voidSale(saleId: string): Promise<ActionResult> {

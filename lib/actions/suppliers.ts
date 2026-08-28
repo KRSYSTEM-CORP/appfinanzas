@@ -12,6 +12,7 @@ export async function listSuppliers(activeOnly = false) {
     tx.supplier.findMany({
       where: { companyId, ...(activeOnly ? { isActive: true } : {}) },
       orderBy: { name: "asc" },
+      take: 200,
     })
   );
 }

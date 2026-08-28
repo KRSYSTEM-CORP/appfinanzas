@@ -14,6 +14,7 @@ export async function listActiveProducts() {
     tx.product.findMany({
       where: { companyId, isActive: true, ...(branchId ? { branchId } : {}) },
       orderBy: { name: "asc" },
+      take: 200,
     })
   );
 }
@@ -24,6 +25,7 @@ export async function listAllProducts() {
     tx.product.findMany({
       where: { companyId, ...(branchId ? { branchId } : {}) },
       orderBy: { name: "asc" },
+      take: 200,
     })
   );
 }

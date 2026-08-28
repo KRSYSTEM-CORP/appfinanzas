@@ -189,19 +189,35 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         },
       });
 
+      // Sum quantities per product first (an invoice could list the same
+      // product on more than one line) so each product gets exactly one
+      // parallel update computed off its total received quantity, rather
+      // than two updates racing off the same stale productById snapshot.
+      // costCents keeps the last line's cost, matching the previous
+      // sequential last-write-wins behavior.
+      const stockUpdateByProductId = new Map<string, { quantity: number; unitCostCents: number }>();
       for (const item of itemsData) {
         if (!item.affectsStock) continue;
-        const product = productById.get(item.productId)!;
-        const newStock = product.stock + item.quantity;
-        await tx.product.updateMany({
-          where: { id: item.productId, companyId, branchId },
-          data: {
-            stock: newStock,
-            costCents: item.unitCostCents,
-            ...(product.stock === 0 && newStock > 0 ? { isActive: true } : {}),
-          },
+        const existing = stockUpdateByProductId.get(item.productId);
+        stockUpdateByProductId.set(item.productId, {
+          quantity: (existing?.quantity ?? 0) + item.quantity,
+          unitCostCents: item.unitCostCents,
         });
       }
+      await Promise.all(
+        Array.from(stockUpdateByProductId, ([productId, { quantity, unitCostCents }]) => {
+          const product = productById.get(productId)!;
+          const newStock = product.stock + quantity;
+          return tx.product.updateMany({
+            where: { id: productId, companyId, branchId },
+            data: {
+              stock: newStock,
+              costCents: unitCostCents,
+              ...(product.stock === 0 && newStock > 0 ? { isActive: true } : {}),
+            },
+          });
+        })
+      );
 
       return purchase.id;
     });
@@ -217,16 +233,29 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
 
 async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, companyId: string, branchId: string) {
   const items = await tx.purchaseItem.findMany({ where: { purchaseId } });
+  const quantityByProductId = new Map<string, number>();
   for (const item of items) {
     if (!item.productId || !item.affectsStock) continue;
-    const product = await tx.product.findFirst({ where: { id: item.productId, companyId, branchId } });
-    if (!product) continue;
-    const newStock = Math.max(0, product.stock - item.quantity);
-    await tx.product.updateMany({
-      where: { id: item.productId, companyId, branchId },
-      data: { stock: newStock },
-    });
+    quantityByProductId.set(item.productId, (quantityByProductId.get(item.productId) ?? 0) + item.quantity);
   }
+  if (quantityByProductId.size === 0) return;
+
+  const products = await tx.product.findMany({
+    where: { id: { in: Array.from(quantityByProductId.keys()) }, companyId, branchId },
+  });
+  const productById = new Map(products.map((p) => [p.id, p]));
+
+  await Promise.all(
+    Array.from(quantityByProductId, ([productId, quantity]) => {
+      const product = productById.get(productId);
+      if (!product) return null;
+      const newStock = Math.max(0, product.stock - quantity);
+      return tx.product.updateMany({
+        where: { id: productId, companyId, branchId },
+        data: { stock: newStock },
+      });
+    })
+  );
 }
 
 export async function markPurchasePaid(purchaseId: string): Promise<ActionResult> {

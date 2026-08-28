@@ -25,6 +25,7 @@ export async function listCustomers(query?: string) {
           : {}),
       },
       orderBy: { firstName: "asc" },
+      take: 200,
     })
   );
 }
