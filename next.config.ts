@@ -11,9 +11,9 @@ const nextConfig: NextConfig = {
   },
 };
 
-// No Sentry auth token is configured, so this only wires up error/request
-// instrumentation — source map upload (which needs org/project/authToken)
-// is skipped for now, so stack traces in Sentry will show minified code.
 export default withSentryConfig(nextConfig, {
   silent: true,
+  org: "kr-system",
+  project: "krpos",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
 });
