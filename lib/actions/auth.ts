@@ -9,6 +9,7 @@ import { setSessionCookie, clearSessionCookie } from "@/lib/session";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { createCompanyWithOwner } from "@/lib/company-provisioning";
 import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-ip";
 import {
   EmployeeLoginSchema,
   LoginSchema,
@@ -75,6 +76,11 @@ export async function getRememberedCompany(): Promise<RememberedCompany | null> 
 // Auto-logs in and lands straight on /pos, the same way the Google signup
 // path (app/api/auth/google/callback) does.
 export async function signup(formData: FormData): Promise<ActionResult> {
+  const ip = await getClientIp();
+  const rl = await checkRateLimit("signup", ip, 5, 60 * 60_000);
+  if (!rl.allowed) return { success: false, error: rateLimitMessage(rl.retryAfterMinutes) };
+  await recordFailedAttempt("signup", ip);
+
   const parsed = SignupSchema.safeParse({
     companyName: formData.get("companyName"),
     email: formData.get("email"),
@@ -356,6 +362,11 @@ export async function getCompanyBrandingByEmail(email: string): Promise<CompanyB
   const trimmed = email.trim().toLowerCase();
   if (!trimmed || !trimmed.includes("@")) return NO_BRANDING;
 
+  const ip = await getClientIp();
+  const rl = await checkRateLimit("branding-lookup", ip, 20, 60_000);
+  if (!rl.allowed) return NO_BRANDING;
+  await recordFailedAttempt("branding-lookup", ip);
+
   const user = await prisma.user.findUnique({
     where: { email: trimmed },
     select: { company: { select: { logoDataUrl: true, brandColor: true, brandBackground: true } } },
@@ -372,6 +383,11 @@ export async function getCompanyBrandingByEmail(email: string): Promise<CompanyB
 export async function getCompanyBrandingByCode(companyCode: string): Promise<CompanyBranding> {
   const trimmed = companyCode.trim();
   if (!trimmed) return NO_BRANDING;
+
+  const ip = await getClientIp();
+  const rl = await checkRateLimit("branding-lookup", ip, 20, 60_000);
+  if (!rl.allowed) return NO_BRANDING;
+  await recordFailedAttempt("branding-lookup", ip);
 
   const company = await prisma.company.findUnique({
     where: { loginCode: trimmed.toUpperCase() },
