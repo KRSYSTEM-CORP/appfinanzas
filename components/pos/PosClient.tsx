@@ -312,6 +312,7 @@ export function PosClient({
       paidExchangeRate: null,
       controlNumber: null,
       receiptControlNumber: null,
+      invoiceNumber: null,
       voided: false,
       voidedAt: null,
       companyId: "",

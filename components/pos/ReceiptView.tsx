@@ -17,6 +17,7 @@ import { pdfFormatForPaperSize } from "@/lib/print-paper-sizes";
 import { PrintDialog } from "@/components/print/PrintDialog";
 import { PrintableSaleDocument } from "@/components/print/PrintableSaleDocument";
 import { ShareDialog } from "@/components/print/ShareDialog";
+import { getOrCreateInvoiceNumber } from "@/lib/actions/sales";
 import type {
   PaymentMethod,
   PaymentStatus,
@@ -30,6 +31,7 @@ type ReceiptSale = {
   id: string;
   controlNumber: number | null;
   receiptControlNumber: number | null;
+  invoiceNumber: number | null;
   createdAt: Date;
   totalCents: number;
   discountCents: number;
@@ -81,6 +83,12 @@ export function ReceiptView({
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
+  // Lazily assigned (see getOrCreateInvoiceNumber) the moment the cashier
+  // asks for a Factura on this receipt — kept in state so the rest of the
+  // screen reflects the real number right away instead of waiting for a
+  // full reload.
+  const [invoiceNumber, setInvoiceNumber] = useState(sale.invoiceNumber);
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
 
   async function generatePdfBlob(paperSize?: PrintPaperSize) {
     const doc = await buildDeliveryNotePDF(
@@ -93,6 +101,53 @@ export function ReceiptView({
       paperSize ? pdfFormatForPaperSize(paperSize) : "letter"
     );
     return doc.output("blob") as Blob;
+  }
+
+  async function ensureInvoiceNumber(): Promise<number> {
+    if (invoiceNumber != null) return invoiceNumber;
+    const result = await getOrCreateInvoiceNumber(sale.id);
+    if (!result) throw new Error("No se pudo generar la factura");
+    setInvoiceNumber(result.invoiceNumber);
+    return result.invoiceNumber;
+  }
+
+  async function generateInvoice() {
+    setInvoiceBusy(true);
+    try {
+      await ensureInvoiceNumber();
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
+
+  async function generateInvoicePdfBlob(paperSize?: PrintPaperSize) {
+    const number = await ensureInvoiceNumber();
+    const doc = await buildDeliveryNotePDF(
+      { ...sale, invoiceNumber: number },
+      company,
+      effectiveRate,
+      currencyCode,
+      exchangeRateEnabled,
+      referenceCurrency,
+      paperSize ? pdfFormatForPaperSize(paperSize) : "letter",
+      "invoice"
+    );
+    return { blob: doc.output("blob") as Blob, number };
+  }
+
+  async function downloadInvoice() {
+    setInvoiceBusy(true);
+    try {
+      const { blob, number } = await generateInvoicePdfBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `factura-${String(number).padStart(6, "0")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setInvoiceBusy(false);
+    }
   }
 
   async function copyNote() {
@@ -340,6 +395,56 @@ export function ReceiptView({
           customerPhone={sale.customerPhone}
           message="Aquí tienes tu nota de entrega:"
         />
+      )}
+
+      {/* Factura, unlike Nota de entrega, is never generated automatically —
+          this is the only place it can ever be created, since it's a choice
+          made at (or right after) the moment of sale. Once this receipt
+          screen is left, Reports/Documents only ever show a Factura that
+          was already generated here. */}
+      {!pendingSync && (
+        <>
+          <Separator />
+          {invoiceNumber == null ? (
+            <Button variant="outline" size="lg" onClick={generateInvoice} disabled={invoiceBusy}>
+              Generar factura
+            </Button>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button variant="outline" className="flex-1" onClick={downloadInvoice} disabled={invoiceBusy}>
+                  Descargar factura
+                </Button>
+              </div>
+              <PrintDialog
+                triggerLabel="Imprimir factura"
+                title="Imprimir factura"
+                defaultPaperSize={printPaperSize}
+                buildPdfBlob={async (paperSize) => (await generateInvoicePdfBlob(paperSize)).blob}
+              >
+                {(paperSize) => (
+                  <PrintableSaleDocument
+                    sale={{ ...sale, invoiceNumber }}
+                    company={company}
+                    rate={effectiveRate}
+                    currencyCode={currencyCode}
+                    exchangeRateEnabled={exchangeRateEnabled}
+                    referenceCurrency={referenceCurrency}
+                    variant="invoice"
+                    paperSize={paperSize}
+                  />
+                )}
+              </PrintDialog>
+              <ShareDialog
+                triggerLabel="Compartir factura por WhatsApp"
+                title="Compartir factura"
+                path={`/api/public/sales/${sale.id}?doc=invoice`}
+                customerPhone={sale.customerPhone}
+                message="Aquí tienes tu factura:"
+              />
+            </div>
+          )}
+        </>
       )}
 
       <Button size="lg" onClick={onNewSale}>

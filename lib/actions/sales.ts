@@ -458,6 +458,35 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
   return { success: true };
 }
 
+// Lazily assigns a Factura number the first time it's requested — offered
+// only right on the post-checkout receipt screen (see ReceiptView), never
+// retroactively from Reports/Documents history: Nota de entrega vs. Factura
+// is a choice made at (or immediately after) the moment of sale, not
+// something that can be added on later. Same "progressive, per-company
+// sequence" pattern as receiptControlNumber, kept independent of it and of
+// controlNumber. Returns the (possibly just-assigned) number so the caller
+// can build the PDF immediately without a second round trip. A placeholder
+// ahead of real SENIAT fiscal-machine integration — this alone does not
+// make the document fiscally compliant.
+export async function getOrCreateInvoiceNumber(saleId: string): Promise<{ invoiceNumber: number } | null> {
+  const { companyId, branchId: sessionBranchId } = await requireSession();
+
+  return withTenant(companyId, async (tx) => {
+    const sale = await tx.sale.findFirst({
+      where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
+    });
+    if (!sale) return null;
+    if (sale.invoiceNumber != null) return { invoiceNumber: sale.invoiceNumber };
+
+    const previousCount = await tx.sale.count({
+      where: { branchId: sale.branchId, invoiceNumber: { not: null } },
+    });
+    const invoiceNumber = previousCount + 1;
+    await tx.sale.update({ where: { id: saleId }, data: { invoiceNumber } });
+    return { invoiceNumber };
+  });
+}
+
 export async function getSaleReceipt(saleId: string) {
   const { companyId, branchId } = await requireSession();
   const sale = await withTenant(companyId, (tx) =>
