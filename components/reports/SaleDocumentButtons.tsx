@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { FileTextIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   buildDeliveryNotePDF,
   buildPaymentReceiptPDF,
@@ -14,7 +16,6 @@ import { pdfFormatForPaperSize } from "@/lib/print-paper-sizes";
 import { PrintDialog } from "@/components/print/PrintDialog";
 import { PrintableSaleDocument } from "@/components/print/PrintableSaleDocument";
 import { ShareDialog } from "@/components/print/ShareDialog";
-import { getOrCreateInvoiceNumber } from "@/lib/actions/sales";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 
 export function SaleDocumentButtons({
@@ -35,23 +36,13 @@ export function SaleDocumentButtons({
   printPaperSize: PrintPaperSize;
 }) {
   const [busy, setBusy] = useState(false);
-  // Lazily assigned (see getOrCreateInvoiceNumber) the first time a Factura
-  // is actually requested for this sale — kept in state so the UI reflects
-  // the real number right away instead of waiting for a full page reload.
-  const [invoiceNumber, setInvoiceNumber] = useState(sale.invoiceNumber ?? null);
   // Once a credit sale's payment is registered, its amounts should stay
   // reconciled with what was actually collected (paidExchangeRate) rather
   // than the original, possibly stale, sale-time snapshot.
   const noteRate = sale.paidExchangeRate ?? sale.exchangeRate ?? currentRate;
   const receiptRate = sale.paidExchangeRate ?? sale.exchangeRate ?? currentRate;
-
-  async function ensureInvoiceNumber(): Promise<number> {
-    if (invoiceNumber != null) return invoiceNumber;
-    const result = await getOrCreateInvoiceNumber(sale.id);
-    if (!result) throw new Error("No se pudo generar la factura");
-    setInvoiceNumber(result.invoiceNumber);
-    return result.invoiceNumber;
-  }
+  const hasInvoice = sale.invoiceNumber != null;
+  const hasReceipt = sale.receiptControlNumber != null;
 
   async function buildNotePdf(paperSize?: PrintPaperSize) {
     return buildDeliveryNotePDF(
@@ -65,10 +56,14 @@ export function SaleDocumentButtons({
     );
   }
 
+  // Only ever called when hasInvoice is true — a Factura that was never
+  // generated at checkout can't be created retroactively from here (or
+  // anywhere else): Nota de entrega vs. Factura is a decision fixed at the
+  // moment of sale, not something this viewer offers to change after the
+  // fact.
   async function buildInvoicePdf(paperSize?: PrintPaperSize) {
-    const number = await ensureInvoiceNumber();
-    const doc = await buildDeliveryNotePDF(
-      { ...sale, invoiceNumber: number },
+    return buildDeliveryNotePDF(
+      sale,
       company,
       noteRate,
       currencyCode,
@@ -77,7 +72,6 @@ export function SaleDocumentButtons({
       paperSize ? pdfFormatForPaperSize(paperSize) : "letter",
       "invoice"
     );
-    return { doc, number };
   }
 
   async function buildReceiptPdf(paperSize?: PrintPaperSize) {
@@ -105,8 +99,8 @@ export function SaleDocumentButtons({
   async function downloadInvoice() {
     setBusy(true);
     try {
-      const { doc, number } = await buildInvoicePdf();
-      doc.save(`factura-${String(number).padStart(6, "0")}.pdf`);
+      const doc = await buildInvoicePdf();
+      doc.save(`factura-${String(sale.invoiceNumber).padStart(6, "0")}.pdf`);
     } finally {
       setBusy(false);
     }
@@ -123,100 +117,127 @@ export function SaleDocumentButtons({
   }
 
   return (
-    <div className="flex flex-wrap justify-end gap-2">
-      <Button size="sm" variant="outline" disabled={busy} onClick={downloadNote}>
-        Nota de entrega
-      </Button>
-      <PrintDialog
-        triggerLabel="Imprimir nota"
-        title="Imprimir nota de entrega"
-        defaultPaperSize={printPaperSize}
-        buildPdfBlob={async (paperSize) => (await buildNotePdf(paperSize)).output("blob") as Blob}
-      >
-        {(paperSize) => (
-          <PrintableSaleDocument
-            sale={sale}
-            company={company}
-            rate={noteRate}
-            currencyCode={currencyCode}
-            exchangeRateEnabled={exchangeRateEnabled}
-            referenceCurrency={referenceCurrency}
-            variant="delivery-note"
-            paperSize={paperSize}
-          />
-        )}
-      </PrintDialog>
-      <ShareDialog
-        triggerLabel="Compartir nota"
-        title="Compartir nota de entrega"
-        path={`/api/public/sales/${sale.id}?doc=note`}
-        customerPhone={sale.customerPhone}
-        message="Aquí tienes tu nota de entrega:"
-      />
-      <Button size="sm" variant="outline" disabled={busy} onClick={downloadInvoice}>
-        Factura
-      </Button>
-      <PrintDialog
-        triggerLabel="Imprimir factura"
-        title="Imprimir factura"
-        defaultPaperSize={printPaperSize}
-        buildPdfBlob={async (paperSize) => (await buildInvoicePdf(paperSize)).doc.output("blob") as Blob}
-      >
-        {(paperSize) => (
-          <PrintableSaleDocument
-            sale={{ ...sale, invoiceNumber }}
-            company={company}
-            rate={noteRate}
-            currencyCode={currencyCode}
-            exchangeRateEnabled={exchangeRateEnabled}
-            referenceCurrency={referenceCurrency}
-            variant="invoice"
-            paperSize={paperSize}
-          />
-        )}
-      </PrintDialog>
-      {invoiceNumber != null && (
-        <ShareDialog
-          triggerLabel="Compartir factura"
-          title="Compartir factura"
-          path={`/api/public/sales/${sale.id}?doc=invoice`}
-          customerPhone={sale.customerPhone}
-          message="Aquí tienes tu factura:"
-        />
-      )}
-      {sale.receiptControlNumber != null && (
-        <>
-          <Button size="sm" variant="outline" disabled={busy} onClick={downloadReceipt}>
-            Recibo de pago
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button size="sm" variant="outline">
+            <FileTextIcon className="size-4" />
+            Documentos
           </Button>
-          <PrintDialog
-            triggerLabel="Imprimir recibo"
-            title="Imprimir recibo de pago"
-            defaultPaperSize={printPaperSize}
-            buildPdfBlob={async (paperSize) => (await buildReceiptPdf(paperSize)).output("blob") as Blob}
-          >
-            {(paperSize) => (
-              <PrintableSaleDocument
-                sale={sale}
-                company={company}
-                rate={receiptRate}
-                currencyCode={currencyCode}
-                exchangeRateEnabled={exchangeRateEnabled}
-                referenceCurrency={referenceCurrency}
-                variant="receipt"
-                paperSize={paperSize}
+        }
+      />
+      <PopoverContent>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium text-muted-foreground">Nota de entrega</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" disabled={busy} onClick={downloadNote}>
+                Descargar
+              </Button>
+              <PrintDialog
+                triggerLabel="Imprimir"
+                title="Imprimir nota de entrega"
+                defaultPaperSize={printPaperSize}
+                buildPdfBlob={async (paperSize) => (await buildNotePdf(paperSize)).output("blob") as Blob}
+              >
+                {(paperSize) => (
+                  <PrintableSaleDocument
+                    sale={sale}
+                    company={company}
+                    rate={noteRate}
+                    currencyCode={currencyCode}
+                    exchangeRateEnabled={exchangeRateEnabled}
+                    referenceCurrency={referenceCurrency}
+                    variant="delivery-note"
+                    paperSize={paperSize}
+                  />
+                )}
+              </PrintDialog>
+              <ShareDialog
+                triggerLabel="Compartir"
+                title="Compartir nota de entrega"
+                path={`/api/public/sales/${sale.id}?doc=note`}
+                customerPhone={sale.customerPhone}
+                message="Aquí tienes tu nota de entrega:"
               />
-            )}
-          </PrintDialog>
-          <ShareDialog
-            triggerLabel="Compartir recibo"
-            title="Compartir recibo de pago"
-            path={`/api/public/sales/${sale.id}?doc=receipt`}
-            customerPhone={sale.customerPhone}
-            message="Aquí tienes tu recibo de pago:"
-          />
-        </>
-      )}
-    </div>
+            </div>
+          </div>
+
+          {hasInvoice && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground">Factura</p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" disabled={busy} onClick={downloadInvoice}>
+                  Descargar
+                </Button>
+                <PrintDialog
+                  triggerLabel="Imprimir"
+                  title="Imprimir factura"
+                  defaultPaperSize={printPaperSize}
+                  buildPdfBlob={async (paperSize) => (await buildInvoicePdf(paperSize)).output("blob") as Blob}
+                >
+                  {(paperSize) => (
+                    <PrintableSaleDocument
+                      sale={sale}
+                      company={company}
+                      rate={noteRate}
+                      currencyCode={currencyCode}
+                      exchangeRateEnabled={exchangeRateEnabled}
+                      referenceCurrency={referenceCurrency}
+                      variant="invoice"
+                      paperSize={paperSize}
+                    />
+                  )}
+                </PrintDialog>
+                <ShareDialog
+                  triggerLabel="Compartir"
+                  title="Compartir factura"
+                  path={`/api/public/sales/${sale.id}?doc=invoice`}
+                  customerPhone={sale.customerPhone}
+                  message="Aquí tienes tu factura:"
+                />
+              </div>
+            </div>
+          )}
+
+          {hasReceipt && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground">Recibo de pago</p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" disabled={busy} onClick={downloadReceipt}>
+                  Descargar
+                </Button>
+                <PrintDialog
+                  triggerLabel="Imprimir"
+                  title="Imprimir recibo de pago"
+                  defaultPaperSize={printPaperSize}
+                  buildPdfBlob={async (paperSize) => (await buildReceiptPdf(paperSize)).output("blob") as Blob}
+                >
+                  {(paperSize) => (
+                    <PrintableSaleDocument
+                      sale={sale}
+                      company={company}
+                      rate={receiptRate}
+                      currencyCode={currencyCode}
+                      exchangeRateEnabled={exchangeRateEnabled}
+                      referenceCurrency={referenceCurrency}
+                      variant="receipt"
+                      paperSize={paperSize}
+                    />
+                  )}
+                </PrintDialog>
+                <ShareDialog
+                  triggerLabel="Compartir"
+                  title="Compartir recibo de pago"
+                  path={`/api/public/sales/${sale.id}?doc=receipt`}
+                  customerPhone={sale.customerPhone}
+                  message="Aquí tienes tu recibo de pago:"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
