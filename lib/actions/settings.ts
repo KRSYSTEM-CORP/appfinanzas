@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSession, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { fetchBcvRate } from "@/lib/bcv-rate";
 import {
@@ -38,6 +39,15 @@ const STALE_RATE_MS = 20 * 60 * 60 * 1000;
 
 export async function getExchangeRateInfo(): Promise<ExchangeRateInfo> {
   const { companyId } = await requireSession();
+  // Read on nearly every page in the app — the rate itself only legitimately
+  // changes once a day (the BCV cron) or when a manager edits settings
+  // (each of which invalidates this key below), so a short TTL is safe and
+  // doesn't meaningfully delay the self-healing "stale rate" refresh logic
+  // inside, which only fires after hours of staleness.
+  return getOrSetCache(`exchangeRateInfo:${companyId}`, 600, () => computeExchangeRateInfo(companyId));
+}
+
+async function computeExchangeRateInfo(companyId: string): Promise<ExchangeRateInfo> {
   const company = await withTenant(companyId, (tx) =>
     tx.company.findUnique({
       where: { id: companyId },
@@ -103,6 +113,7 @@ export async function updatePrintPaperSize(formData: FormData): Promise<ActionRe
     })
   );
 
+  await invalidateCache(`exchangeRateInfo:${companyId}`);
   revalidatePath("/settings");
   return { success: true };
 }
@@ -128,6 +139,7 @@ export async function updateReferenceCurrencySettings(formData: FormData): Promi
     })
   );
 
+  await invalidateCache(`exchangeRateInfo:${companyId}`);
   revalidatePath("/settings");
   revalidatePath("/pos");
   revalidatePath("/inventory");
@@ -201,6 +213,7 @@ export async function updateLocalCurrency(formData: FormData): Promise<ActionRes
     })
   );
 
+  await invalidateCache(`exchangeRateInfo:${companyId}`);
   revalidatePath("/settings");
   revalidatePath("/pos");
   revalidatePath("/inventory");
@@ -225,6 +238,7 @@ export async function updateExchangeRate(formData: FormData): Promise<ActionResu
     })
   );
 
+  await invalidateCache(`exchangeRateInfo:${companyId}`);
   revalidatePath("/settings");
   revalidatePath("/pos");
   revalidatePath("/inventory");
@@ -260,6 +274,7 @@ export async function fetchAndUpdateBcvRate(): Promise<ActionResult> {
     })
   );
 
+  await invalidateCache(`exchangeRateInfo:${companyId}`);
   revalidatePath("/settings");
   revalidatePath("/pos");
   revalidatePath("/inventory");
@@ -281,17 +296,22 @@ export async function getBranding(): Promise<BrandingInfo> {
   const session = await getSession();
   if (!session) return { logoDataUrl: null, brandColor: null, brandBackground: null };
   const { companyId } = session;
-  const company = await withTenant(companyId, (tx) =>
-    tx.company.findUnique({
-      where: { id: companyId },
-      select: { logoDataUrl: true, brandColor: true, brandBackground: true },
-    })
-  );
-  return {
-    logoDataUrl: company?.logoDataUrl ?? null,
-    brandColor: company?.brandColor ?? null,
-    brandBackground: company?.brandBackground ?? null,
-  };
+  // Read on every page via the root layout — branding only ever changes
+  // when a manager explicitly edits it (updateBranding invalidates below),
+  // so a long TTL is safe.
+  return getOrSetCache(`branding:${companyId}`, 3600, async () => {
+    const company = await withTenant(companyId, (tx) =>
+      tx.company.findUnique({
+        where: { id: companyId },
+        select: { logoDataUrl: true, brandColor: true, brandBackground: true },
+      })
+    );
+    return {
+      logoDataUrl: company?.logoDataUrl ?? null,
+      brandColor: company?.brandColor ?? null,
+      brandBackground: company?.brandBackground ?? null,
+    };
+  });
 }
 
 export async function updateBranding(formData: FormData): Promise<ActionResult> {
@@ -317,6 +337,7 @@ export async function updateBranding(formData: FormData): Promise<ActionResult> 
     })
   );
 
+  await invalidateCache(`branding:${companyId}`);
   revalidatePath("/settings");
   revalidatePath("/", "layout");
   return { success: true };

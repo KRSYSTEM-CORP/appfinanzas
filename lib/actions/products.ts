@@ -4,29 +4,60 @@ import { revalidatePath } from "next/cache";
 import { requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { notifyLive, posChannel } from "@/lib/realtime";
+import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { ProductSchema, ProductUpdateRowSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 import type { Prisma } from "@prisma/client";
 
+// A short TTL rather than relying purely on invalidation: Product.stock also
+// changes from completeSale/restoreStock/recordPurchase/reverseStock (not
+// just the CRUD actions below), and those checkout-critical paths aren't
+// worth touching again just to keep a display cache perfectly fresh —
+// completeSale always re-validates real stock from the database before
+// decrementing it, so a stale cached list can at worst show an outdated
+// count for up to a minute, never cause an actual oversell.
+const PRODUCTS_CACHE_TTL_SECONDS = 60;
+
+function productsCacheKey(scope: "active" | "all", companyId: string, branchId: string | null) {
+  return `products:${scope}:${companyId}:${branchId ?? "all"}`;
+}
+
 export async function listActiveProducts() {
   const { companyId, branchId } = await requireSession();
-  return withTenant(companyId, (tx) =>
-    tx.product.findMany({
-      where: { companyId, isActive: true, ...(branchId ? { branchId } : {}) },
-      orderBy: { name: "asc" },
-      take: 200,
-    })
+  return getOrSetCache(productsCacheKey("active", companyId, branchId), PRODUCTS_CACHE_TTL_SECONDS, () =>
+    withTenant(companyId, (tx) =>
+      tx.product.findMany({
+        where: { companyId, isActive: true, ...(branchId ? { branchId } : {}) },
+        orderBy: { name: "asc" },
+        take: 200,
+      })
+    )
   );
 }
 
 export async function listAllProducts() {
   const { companyId, branchId } = await requireSession();
-  return withTenant(companyId, (tx) =>
-    tx.product.findMany({
-      where: { companyId, ...(branchId ? { branchId } : {}) },
-      orderBy: { name: "asc" },
-      take: 200,
-    })
+  return getOrSetCache(productsCacheKey("all", companyId, branchId), PRODUCTS_CACHE_TTL_SECONDS, () =>
+    withTenant(companyId, (tx) =>
+      tx.product.findMany({
+        where: { companyId, ...(branchId ? { branchId } : {}) },
+        orderBy: { name: "asc" },
+        take: 200,
+      })
+    )
+  );
+}
+
+// Invalidates both the branch-scoped and "all branches" cache entries for a
+// company, since a manager viewing "Todas las sucursales" and a cashier
+// pinned to one branch read different cache keys for the same underlying
+// data (see productsCacheKey) — a write from either role must clear both.
+async function invalidateProductsCache(companyId: string, branchId: string | null) {
+  await invalidateCache(
+    productsCacheKey("active", companyId, branchId),
+    productsCacheKey("all", companyId, branchId),
+    productsCacheKey("active", companyId, null),
+    productsCacheKey("all", companyId, null)
   );
 }
 
@@ -109,6 +140,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
     return { success: false, error: "No se pudo crear el producto (¿SKU duplicado?)" };
   }
 
+  await invalidateProductsCache(companyId, branchId);
   revalidatePath("/inventory");
   revalidatePath("/pos");
   void notifyLive(posChannel(companyId), "product");
@@ -172,6 +204,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
     return { success: false, error: "No se pudo actualizar el producto (¿SKU duplicado?)" };
   }
 
+  await invalidateProductsCache(companyId, branchId);
   revalidatePath("/inventory");
   revalidatePath("/pos");
   void notifyLive(posChannel(companyId), "product");
@@ -183,6 +216,7 @@ export async function setProductActive(id: string, isActive: boolean): Promise<A
   await withTenant(companyId, (tx) =>
     tx.product.updateMany({ where: { id, companyId, ...(branchId ? { branchId } : {}) }, data: { isActive } })
   );
+  await invalidateProductsCache(companyId, branchId);
   revalidatePath("/inventory");
   revalidatePath("/pos");
   void notifyLive(posChannel(companyId), "product");
@@ -201,6 +235,7 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
   if (result.count === 0) {
     return { success: false, error: "Producto no encontrado" };
   }
+  await invalidateProductsCache(companyId, branchId);
   revalidatePath("/inventory");
   revalidatePath("/pos");
   revalidatePath("/quotes");
@@ -296,6 +331,7 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
     }
   });
 
+  await invalidateProductsCache(companyId, branchId);
   revalidatePath("/inventory");
   revalidatePath("/pos");
   void notifyLive(posChannel(companyId), "product");
@@ -410,6 +446,7 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
     }
   });
 
+  await invalidateProductsCache(companyId, branchId);
   revalidatePath("/inventory");
   revalidatePath("/pos");
   void notifyLive(posChannel(companyId), "product");

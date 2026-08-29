@@ -5,12 +5,16 @@ import { cookies } from "next/headers";
 import { requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { signSessionToken, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/lib/session-token";
+import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import type { ActionResult } from "@/lib/types";
 
 export async function listBranches() {
   const { companyId } = await requireSession();
-  return withTenant(companyId, (tx) =>
-    tx.branch.findMany({ where: { companyId }, orderBy: { createdAt: "asc" } })
+  // Read on every page via the root layout (for the branch switcher) —
+  // branches change only when a manager adds/edits one, which invalidates
+  // this key below.
+  return getOrSetCache(`branches:${companyId}`, 600, () =>
+    withTenant(companyId, (tx) => tx.branch.findMany({ where: { companyId }, orderBy: { createdAt: "asc" } }))
   );
 }
 
@@ -25,6 +29,7 @@ export async function createBranch(formData: FormData): Promise<ActionResult> {
     return { success: false, error: "Ya existe una sucursal con ese nombre" };
   }
 
+  await invalidateCache(`branches:${companyId}`);
   revalidatePath("/settings");
   return { success: true };
 }
@@ -44,6 +49,7 @@ export async function updateBranch(id: string, formData: FormData): Promise<Acti
     return { success: false, error: "Ya existe una sucursal con ese nombre" };
   }
 
+  await invalidateCache(`branches:${companyId}`);
   revalidatePath("/settings");
   return { success: true };
 }
