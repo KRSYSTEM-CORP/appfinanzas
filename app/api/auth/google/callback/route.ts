@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/tenant-db";
 import { exchangeCodeForProfile } from "@/lib/google-oauth";
 import { setSessionCookie } from "@/lib/session";
 import { createCompanyWithOwner } from "@/lib/company-provisioning";
@@ -78,10 +79,12 @@ export async function GET(request: NextRequest) {
     // "Todas las sucursales" (bid null) instead of forcing a picker inline
     // here (a Route Handler, unlike login(), can't return a picker UI); the
     // NavBar switcher lets them pick a specific one afterward.
-    const branches = await prisma.branch.findMany({
-      where: { companyId: user.companyId, isActive: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const branches = await withTenant(user.companyId, (tx) =>
+      tx.branch.findMany({
+        where: { companyId: user.companyId, isActive: true },
+        orderBy: { createdAt: "asc" },
+      })
+    );
     const bid = user.branchId ?? (branches.length === 1 ? branches[0].id : null);
 
     await setSessionCookie({ uid: user.id, cid: user.companyId, companyName: user.company.name, bid });

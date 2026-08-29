@@ -2,6 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/tenant-db";
 import type { Role } from "@prisma/client";
 import { isCompanyBlocked } from "@/lib/billing";
 import type { AppSection } from "@/lib/sections";
@@ -91,15 +92,18 @@ export async function getSession(): Promise<Session | null> {
   // cookie says they last picked/switched to — but only if that branch still
   // exists, is active, and belongs to this same company.
   let branchId = user.branchId;
-  if (!branchId && payload.bid) {
-    const branch = await prisma.branch.findFirst({
-      where: { id: payload.bid, companyId: user.companyId, isActive: true },
-      select: { id: true },
-    });
+  const cookieBid = payload.bid;
+  if (!branchId && cookieBid) {
+    const branch = await withTenant(user.companyId, (tx) =>
+      tx.branch.findFirst({
+        where: { id: cookieBid, companyId: user.companyId, isActive: true },
+        select: { id: true },
+      })
+    );
     branchId = branch?.id ?? null;
   }
   const branch = branchId
-    ? await prisma.branch.findUnique({ where: { id: branchId }, select: { name: true } })
+    ? await withTenant(user.companyId, (tx) => tx.branch.findUnique({ where: { id: branchId }, select: { name: true } }))
     : null;
 
   return {

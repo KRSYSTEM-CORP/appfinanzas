@@ -4,6 +4,7 @@ import { randomBytes, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/tenant-db";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { setSessionCookie, clearSessionCookie } from "@/lib/session";
 import { sendPasswordResetEmail } from "@/lib/email";
@@ -164,9 +165,11 @@ export async function login(formData: FormData): Promise<LoginResult> {
   // actually belongs to this company.
   const submittedBranchId = formData.get("branchId");
   if (typeof submittedBranchId === "string" && submittedBranchId) {
-    const branch = await prisma.branch.findFirst({
-      where: { id: submittedBranchId, companyId: user.companyId, isActive: true },
-    });
+    const branch = await withTenant(user.companyId, (tx) =>
+      tx.branch.findFirst({
+        where: { id: submittedBranchId, companyId: user.companyId, isActive: true },
+      })
+    );
     if (!branch) return { success: false, error: genericError };
 
     await setSessionCookie({
@@ -178,10 +181,12 @@ export async function login(formData: FormData): Promise<LoginResult> {
     redirect("/pos");
   }
 
-  const branches = await prisma.branch.findMany({
-    where: { companyId: user.companyId, isActive: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const branches = await withTenant(user.companyId, (tx) =>
+    tx.branch.findMany({
+      where: { companyId: user.companyId, isActive: true },
+      orderBy: { createdAt: "asc" },
+    })
+  );
   if (branches.length > 1) {
     return { success: false, needsBranch: true, branches: branches.map((b) => ({ id: b.id, name: b.name })) };
   }

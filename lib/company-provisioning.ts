@@ -2,6 +2,7 @@ import "server-only";
 import { randomInt } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { withSuperAdmin } from "@/lib/tenant-db";
 import { PLATFORM_SETTINGS_ID, TRIAL_DAYS, FALLBACK_MONTHLY_FEE_USD_CENTS } from "@/lib/billing";
 
 // Alta de una empresa nueva con su primera sucursal y su dueño (GERENTE). La
@@ -36,7 +37,10 @@ export async function createCompanyWithOwner(companyName: string, owner: NewOwne
 
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      return await prisma.$transaction(async (tx) => {
+      // Creating a company's first Branch needs the RLS escape hatch: the
+      // tenant_isolation policy requires app.company_id to already match,
+      // but there's no existing company to scope into yet at this point.
+      return await withSuperAdmin(async (tx) => {
         const company = await tx.company.create({
           data: {
             name: companyName,
