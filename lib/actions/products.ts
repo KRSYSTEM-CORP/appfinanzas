@@ -7,7 +7,7 @@ import { notifyLive, posChannel } from "@/lib/realtime";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { ProductSchema, ProductUpdateRowSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, TaxCategory } from "@prisma/client";
 
 // A short TTL rather than relying purely on invalidation: Product.stock also
 // changes from completeSale/restoreStock/recordPurchase/reverseStock (not
@@ -145,6 +145,71 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
   revalidatePath("/pos");
   void notifyLive(posChannel(companyId), "product");
   return { success: true };
+}
+
+export type QuickCreateProductResult =
+  | { success: true; product: { id: string; name: string; costCents: number | null; taxCategory: TaxCategory; stock: number } }
+  | { success: false; error: string };
+
+// Pared-down product creation for the "+ Crear producto nuevo" shortcut
+// inside PurchaseForm — same product creation as createProduct above, just
+// driven by a plain object instead of a full form (no image/price tiers to
+// fill in mid-purchase) and returning the created row so the caller can
+// select it immediately instead of reloading the page. Starts at 0 stock,
+// inactive — createPurchase's own zero-stock-to-active bump activates it
+// once this purchase's line actually lands stock on it.
+export async function quickCreateProduct(input: {
+  name: string;
+  category?: string;
+  price: number;
+  cost?: number;
+  taxCategory: TaxCategory;
+}): Promise<QuickCreateProductResult> {
+  const session = await requireManager();
+  const { companyId } = session;
+  if (!session.branchId) {
+    return {
+      success: false,
+      error: 'Selecciona una sucursal antes de crear un producto — no se puede con "Todas las sucursales".',
+    };
+  }
+  const branchId = session.branchId;
+  const name = input.name.trim();
+  if (!name) return { success: false, error: "El nombre es obligatorio" };
+  if (!Number.isFinite(input.price) || input.price < 0) {
+    return { success: false, error: "El precio no puede ser negativo" };
+  }
+
+  let product;
+  try {
+    product = await withTenant(companyId, (tx) =>
+      tx.product.create({
+        data: {
+          name,
+          category: input.category?.trim() || null,
+          priceCents: Math.round(input.price),
+          costCents: input.cost != null ? Math.round(input.cost) : null,
+          taxCategory: input.taxCategory,
+          companyId,
+          branchId,
+          trackStock: true,
+          stock: 0,
+          isActive: false,
+        },
+      })
+    );
+  } catch {
+    return { success: false, error: "No se pudo crear el producto (¿SKU duplicado?)" };
+  }
+
+  await invalidateProductsCache(companyId, branchId);
+  revalidatePath("/inventory");
+  revalidatePath("/pos");
+  void notifyLive(posChannel(companyId), "product");
+  return {
+    success: true,
+    product: { id: product.id, name: product.name, costCents: product.costCents, taxCategory: product.taxCategory, stock: product.stock },
+  };
 }
 
 export async function updateProduct(id: string, formData: FormData): Promise<ActionResult> {

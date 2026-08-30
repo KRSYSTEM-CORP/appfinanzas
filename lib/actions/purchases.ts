@@ -32,13 +32,27 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
-  const { supplierId, supplierInvoiceNo, items, invoiceAmount, invoiceAmountInForeignCurrency, paymentStatus, payments, note } =
-    parsed.data;
+  const {
+    supplierId,
+    manualSupplierName,
+    supplierInvoiceNo,
+    items,
+    invoiceAmount,
+    invoiceAmountInForeignCurrency,
+    paymentStatus,
+    payments,
+    note,
+  } = parsed.data;
 
   try {
     const purchaseId = await withTenant(companyId, async (tx) => {
-      const supplier = await tx.supplier.findFirst({ where: { id: supplierId, companyId } });
-      if (!supplier) throw new Error("Proveedor no encontrado");
+      // A manual supplier name skips this lookup entirely — see
+      // Purchase.manualSupplierName's doc comment, it's never turned into a
+      // real Supplier record.
+      if (supplierId) {
+        const supplier = await tx.supplier.findFirst({ where: { id: supplierId, companyId } });
+        if (!supplier) throw new Error("Proveedor no encontrado");
+      }
 
       const company = await tx.company.findUnique({
         where: { id: companyId },
@@ -162,7 +176,8 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         data: {
           companyId,
           branchId,
-          supplierId,
+          supplierId: supplierId ?? null,
+          manualSupplierName: manualSupplierName ?? null,
           supplierInvoiceNo: supplierInvoiceNo ?? null,
           controlNumber: previousCount + 1,
           totalCents,

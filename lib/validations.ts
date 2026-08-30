@@ -638,7 +638,11 @@ const PurchaseItemSchema = z.object({
 
 export const PurchaseSchema = z
   .object({
-    supplierId: z.string().trim().min(1, "Selecciona un proveedor"),
+    // Exactly one of these two — see the .superRefine below. supplierId
+    // picks a real Supplier record; manualSupplierName is free text for a
+    // one-off purchase that shouldn't create one (see createPurchase).
+    supplierId: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    manualSupplierName: z.preprocess(blankToUndefined, z.string().trim().optional()),
     supplierInvoiceNo: z.preprocess(blankToUndefined, z.string().trim().optional()),
     items: z.array(PurchaseItemSchema).min(1, "Agrega al menos un producto"),
     // The real total on the supplier's paper invoice, entered manually —
@@ -662,6 +666,16 @@ export const PurchaseSchema = z
   .superRefine((data, ctx) => {
     if (data.paymentStatus === "PAID") {
       validatePaymentSplits(data.payments, ctx);
+    }
+    if (!data.supplierId && !data.manualSupplierName) {
+      ctx.addIssue({ code: "custom", path: ["supplierId"], message: "Selecciona o escribe un proveedor" });
+    }
+    if (data.supplierId && data.manualSupplierName) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["manualSupplierName"],
+        message: "Elige un proveedor registrado o escribe uno manual, no ambos",
+      });
     }
   });
 

@@ -182,8 +182,8 @@ export default async function TaxBookPage({
                     <TableCell>{formatDate(p.createdAt)}</TableCell>
                     <TableCell>{p.controlNumber ?? "—"}</TableCell>
                     <TableCell>{p.supplierInvoiceNo ?? "—"}</TableCell>
-                    <TableCell>{p.supplier.name}</TableCell>
-                    <TableCell>{p.supplier.rif ?? "—"}</TableCell>
+                    <TableCell>{p.supplier?.name ?? p.manualSupplierName ?? "—"}</TableCell>
+                    <TableCell>{p.supplier?.rif ?? "—"}</TableCell>
                     <TableCell className="text-right">
                       {formatCurrencyCents(referenceCurrency, p.baseImponibleCents)}
                     </TableCell>

@@ -75,7 +75,7 @@ export default async function PurchasesPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell>{p.supplier.name}</TableCell>
+                    <TableCell>{p.supplier?.name ?? p.manualSupplierName ?? "—"}</TableCell>
                     <TableCell>{p.controlNumber ?? "—"}</TableCell>
                     <TableCell>{p.supplierInvoiceNo ?? "—"}</TableCell>
                     <TableCell className="text-right">

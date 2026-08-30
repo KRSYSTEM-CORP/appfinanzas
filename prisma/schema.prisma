@@ -664,8 +664,16 @@ model Purchase {
   company            Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   branchId           String
   branch             Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  supplierId         String
-  supplier           Supplier              @relation(fields: [supplierId], references: [id])
+  // Null when this purchase used a manual, one-off supplier name instead of
+  // a real Supplier record (see manualSupplierName) — exactly one of the two
+  // is ever set, enforced by PurchaseSchema, not the database.
+  supplierId         String?
+  supplier           Supplier?             @relation(fields: [supplierId], references: [id])
+  // Free-text supplier name entered just for this purchase, when the buyer
+  // doesn't want a real Supplier record created (see createPurchase) —
+  // never turned into one automatically, so it never shows up in the
+  // supplier picker or supplier reports.
+  manualSupplierName String?
   // Sequential per-branch number KYRA assigns to this purchase — independent
   // of the supplier's own invoice numbering below.
   controlNumber      Int?

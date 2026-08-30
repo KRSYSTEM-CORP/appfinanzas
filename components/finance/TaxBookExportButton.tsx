@@ -21,7 +21,8 @@ type PurchaseRow = {
   createdAt: Date;
   controlNumber: number | null;
   supplierInvoiceNo: string | null;
-  supplier: { name: string; rif: string | null };
+  supplier: { name: string; rif: string | null } | null;
+  manualSupplierName: string | null;
   baseImponibleCents: number;
   taxCents: number;
   ivaRetainedCents: number;
@@ -65,8 +66,8 @@ export function TaxBookExportButton({
           formatDate(p.createdAt),
           p.controlNumber ?? "",
           p.supplierInvoiceNo ?? "",
-          p.supplier.name,
-          p.supplier.rif ?? "",
+          p.supplier?.name ?? p.manualSupplierName ?? "",
+          p.supplier?.rif ?? "",
           p.baseImponibleCents / 100,
           p.taxCents / 100,
           p.ivaRetainedCents / 100,

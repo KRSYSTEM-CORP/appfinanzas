@@ -9,11 +9,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PaymentSplitBuilder, defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { createPurchase } from "@/lib/actions/purchases";
+import { quickCreateProduct } from "@/lib/actions/products";
 import { TAX_CATEGORY_LABELS, decomposeTax, rateForCategory } from "@/lib/tax";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { tryToEurCents } from "@/lib/payment-currency";
 import type { IvaSettingsInfo } from "@/lib/actions/settings";
 import type { ReferenceCurrency } from "@prisma/client";
+
+// Only the fields this form actually reads off a product — lets a row
+// created via "+ Crear producto nuevo" (quickCreateProduct's pared-down
+// return value) slot into the same local `products` list as the full
+// Product rows loaded from the server, with no unsound cast.
+type PurchaseProduct = Pick<Product, "id" | "name" | "costCents" | "taxCategory" | "stock">;
 
 type PurchaseItemRow = {
   productId: string;
@@ -71,7 +78,8 @@ function CurrencyToggle({
 
 export function PurchaseForm({
   suppliers,
-  products,
+  products: initialProducts,
+  categories,
   rate,
   currencyCode,
   exchangeRateEnabled,
@@ -79,7 +87,8 @@ export function PurchaseForm({
   ivaSettings,
 }: {
   suppliers: Supplier[];
-  products: Product[];
+  products: PurchaseProduct[];
+  categories: string[];
   rate: number | null;
   currencyCode: string;
   exchangeRateEnabled: boolean;
@@ -87,14 +96,29 @@ export function PurchaseForm({
   ivaSettings: IvaSettingsInfo;
 }) {
   const router = useRouter();
+  // Local copy so a product created inline (see "+ Crear producto nuevo"
+  // below) can be added to the picker right away, without a full reload.
+  const [products, setProducts] = useState<PurchaseProduct[]>(initialProducts);
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
+  // A one-off supplier typed just for this purchase — never saved as a real
+  // Supplier record (see Purchase.manualSupplierName). Mutually exclusive
+  // with supplierId; only one is ever sent to createPurchase.
+  const [useManualSupplier, setUseManualSupplier] = useState(false);
+  const [manualSupplierName, setManualSupplierName] = useState("");
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
   const [paymentStatus, setPaymentStatus] = useState<"PAID" | "PENDING">("PENDING");
   const [paymentRows, setPaymentRows] = useState<PaymentSplitRow[]>(() =>
     defaultPaymentSplitRows(0, rate, exchangeRateEnabled)
   );
   const [note, setNote] = useState("");
-  const [rows, setRows] = useState<PurchaseItemRow[]>([emptyRow(products[0]?.id ?? "")]);
+  const [rows, setRows] = useState<PurchaseItemRow[]>([emptyRow(initialProducts[0]?.id ?? "")]);
+  // Which row's "+ Crear producto nuevo" panel is open, and its draft
+  // fields — null means none is open. Only one at a time, kept simple since
+  // opening a new one just replaces whichever was open.
+  const [newProductRow, setNewProductRow] = useState<number | null>(null);
+  const [newProductDraft, setNewProductDraft] = useState({ name: "", category: "", price: "", cost: "", taxCategory: "GENERAL" as TaxCategory });
+  const [creatingProduct, setCreatingProduct] = useState(false);
+  const [newProductError, setNewProductError] = useState<string | null>(null);
   // The real total on the supplier's paper invoice — see PurchaseSchema's
   // invoiceAmount doc-comment. Defaults to the reference currency, same as
   // the per-line cost default.
@@ -115,6 +139,49 @@ export function PurchaseForm({
 
   function removeRow(index: number) {
     setRows((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function openNewProduct(index: number) {
+    setNewProductRow(index);
+    setNewProductError(null);
+    setNewProductDraft({ name: "", category: "", price: "", cost: "", taxCategory: rows[index].taxCategory });
+  }
+
+  function submitNewProduct() {
+    if (newProductRow == null) return;
+    const rowIndex = newProductRow;
+    const name = newProductDraft.name.trim();
+    if (!name) {
+      setNewProductError("El nombre es obligatorio");
+      return;
+    }
+    const priceCents = Math.round((Number(newProductDraft.price) || 0) * 100);
+    const costCents = newProductDraft.cost ? Math.round(Number(newProductDraft.cost) * 100) : undefined;
+    setCreatingProduct(true);
+    setNewProductError(null);
+    startTransition(async () => {
+      const result = await quickCreateProduct({
+        name,
+        category: newProductDraft.category || undefined,
+        price: priceCents,
+        cost: costCents,
+        taxCategory: newProductDraft.taxCategory,
+      });
+      setCreatingProduct(false);
+      if (!result.success) {
+        setNewProductError(result.error);
+        return;
+      }
+      const created = result.product;
+      setProducts((prev) => [...prev, created]);
+      updateRow(rowIndex, {
+        productId: created.id,
+        taxCategory: created.taxCategory,
+        unitCost: created.costCents != null ? (created.costCents / 100).toFixed(2) : rows[rowIndex].unitCost,
+        unitCostInForeignCurrency: true,
+      });
+      setNewProductRow(null);
+    });
   }
 
   function selectProduct(index: number, productId: string) {
@@ -172,8 +239,8 @@ export function PurchaseForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!supplierId) {
-      setError("Selecciona un proveedor");
+    if (useManualSupplier ? !manualSupplierName.trim() : !supplierId) {
+      setError(useManualSupplier ? "Escribe el nombre del proveedor" : "Selecciona un proveedor");
       return;
     }
     if (!invoiceAmount || Number(invoiceAmount) <= 0) {
@@ -182,7 +249,8 @@ export function PurchaseForm({
     }
     startTransition(async () => {
       const result = await createPurchase({
-        supplierId,
+        supplierId: useManualSupplier ? undefined : supplierId,
+        manualSupplierName: useManualSupplier ? manualSupplierName.trim() : undefined,
         supplierInvoiceNo: supplierInvoiceNo || undefined,
         invoiceAmount,
         invoiceAmountInForeignCurrency,
@@ -220,22 +288,56 @@ export function PurchaseForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border p-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="supplier">Proveedor</Label>
-          <Select value={supplierId} onValueChange={(v) => v && setSupplierId(v)}>
-            <SelectTrigger id="supplier">
-              <SelectValue placeholder="Selecciona un proveedor">
-                {(value: string | null) => suppliers.find((s) => s.id === value)?.name ?? "Selecciona"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {suppliers.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {suppliers.length === 0 && (
-            <p className="text-xs text-destructive">Crea un proveedor primero.</p>
+          <div className="flex w-fit rounded-md border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setUseManualSupplier(false)}
+              className={`px-3 py-1.5 text-sm ${!useManualSupplier ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            >
+              Registrado
+            </button>
+            <button
+              type="button"
+              onClick={() => setUseManualSupplier(true)}
+              className={`px-3 py-1.5 text-sm ${useManualSupplier ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            >
+              Proveedor manual
+            </button>
+          </div>
+          {useManualSupplier ? (
+            <>
+              <Input
+                id="supplier"
+                placeholder="Nombre del proveedor"
+                value={manualSupplierName}
+                onChange={(e) => setManualSupplierName(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Solo queda anotado en esta compra — no crea un proveedor nuevo en tu lista.
+              </p>
+            </>
+          ) : (
+            <>
+              <Select value={supplierId} onValueChange={(v) => v && setSupplierId(v)}>
+                <SelectTrigger id="supplier">
+                  <SelectValue placeholder="Selecciona un proveedor">
+                    {(value: string | null) => suppliers.find((s) => s.id === value)?.name ?? "Selecciona"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {suppliers.length === 0 && (
+                <p className="text-xs text-destructive">
+                  No tienes proveedores registrados — crea uno o usa "Proveedor manual".
+                </p>
+              )}
+            </>
           )}
         </div>
         <div className="flex flex-col gap-1.5">
@@ -271,6 +373,59 @@ export function PurchaseForm({
                       ))}
                     </SelectContent>
                   </Select>
+                  <button
+                    type="button"
+                    onClick={() => (newProductRow === i ? setNewProductRow(null) : openNewProduct(i))}
+                    className="text-xs text-left text-primary underline underline-offset-4 w-fit"
+                  >
+                    {newProductRow === i ? "Cancelar" : "+ Crear producto nuevo"}
+                  </button>
+                  {newProductRow === i && (
+                    <div className="flex flex-col gap-2 rounded-md border border-dashed p-2.5 mt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <Input
+                          placeholder="Nombre del producto"
+                          value={newProductDraft.name}
+                          onChange={(e) => setNewProductDraft((d) => ({ ...d, name: e.target.value }))}
+                        />
+                        <Input
+                          list="purchase-category-options"
+                          placeholder="Categoría (opcional)"
+                          value={newProductDraft.category}
+                          onChange={(e) => setNewProductDraft((d) => ({ ...d, category: e.target.value }))}
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder={`Precio de venta (${referenceCurrency})`}
+                          value={newProductDraft.price}
+                          onChange={(e) => setNewProductDraft((d) => ({ ...d, price: e.target.value }))}
+                        />
+                        <Select
+                          value={newProductDraft.taxCategory}
+                          onValueChange={(v) => v && setNewProductDraft((d) => ({ ...d, taxCategory: v as TaxCategory }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="IVA">
+                              {(value: string | null) => (value ? TAX_CATEGORY_LABELS[value as TaxCategory] : "IVA")}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(Object.keys(TAX_CATEGORY_LABELS) as TaxCategory[]).map((cat) => (
+                              <SelectItem key={cat} value={cat}>
+                                {TAX_CATEGORY_LABELS[cat]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {newProductError && <p className="text-xs text-destructive">{newProductError}</p>}
+                      <Button type="button" size="sm" disabled={creatingProduct} onClick={submitNewProduct}>
+                        {creatingProduct ? "Creando..." : "Crear y usar en esta línea"}
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`tax-${i}`}>IVA</Label>
@@ -481,13 +636,19 @@ export function PurchaseForm({
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={isPending || suppliers.length === 0}>
+        <Button type="submit" disabled={isPending || (!useManualSupplier && suppliers.length === 0)}>
           {isPending ? "Guardando..." : "Registrar compra"}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.push("/purchases")}>
           Cancelar
         </Button>
       </div>
+
+      <datalist id="purchase-category-options">
+        {categories.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
     </form>
   );
 }
