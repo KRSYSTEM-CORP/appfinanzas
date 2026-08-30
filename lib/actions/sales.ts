@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, PaymentStatus } from "@prisma/client";
 import { requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { notifyLive, posChannel } from "@/lib/realtime";
@@ -514,7 +514,11 @@ export async function getSaleReceipt(saleId: string) {
 // [start,end) ranges (see selectionToWindows, lib/report-types.ts) — used by
 // Reportes' date filter. Omitted entirely for callers that want the plain
 // "last N sales" behavior (e.g. Documentos, which does its own filtering).
-export async function listRecentSales(limit = 10, windows?: { start: Date; end: Date }[]) {
+export async function listRecentSales(
+  limit = 10,
+  windows?: { start: Date; end: Date }[],
+  paymentStatus?: PaymentStatus
+) {
   const { companyId, branchId } = await requireSession();
   return withTenant(companyId, (tx) =>
     tx.sale.findMany({
@@ -522,6 +526,7 @@ export async function listRecentSales(limit = 10, windows?: { start: Date; end: 
         companyId,
         ...(branchId ? { branchId } : {}),
         ...(windows ? { OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })) } : {}),
+        ...(paymentStatus ? { paymentStatus } : {}),
       },
       orderBy: { createdAt: "desc" },
       take: limit,

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CashClosingPanel } from "@/components/reports/CashClosingPanel";
 import { SalesTable } from "@/components/reports/SalesTable";
+import { PaymentStatusFilter } from "@/components/reports/PaymentStatusFilter";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { getCurrency } from "@/lib/currencies";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
@@ -14,12 +15,13 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; year?: string; months?: string }>;
+  searchParams: Promise<{ range?: string; year?: string; months?: string; status?: string }>;
 }) {
   const session = await requireSectionAccess("reports");
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const todayStr = todayDateString();
+  const statusFilter = params.status === "PAID" || params.status === "CREDIT" ? params.status : "";
 
   const [
     recentSales,
@@ -28,7 +30,7 @@ export default async function ReportsPage({
     fiscalData,
     todaySummary,
   ] = await Promise.all([
-    listRecentSales(500, selectionToWindows(range)),
+    listRecentSales(500, selectionToWindows(range), statusFilter || undefined),
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
@@ -71,7 +73,10 @@ export default async function ReportsPage({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
           <CardTitle>Ventas</CardTitle>
-          <DateRangeSwitcher selection={range} />
+          <div className="flex items-center gap-3 flex-wrap">
+            <PaymentStatusFilter value={statusFilter} />
+            <DateRangeSwitcher selection={range} extraParams={statusFilter ? { status: statusFilter } : undefined} />
+          </div>
         </CardHeader>
         <CardContent>
           <SalesTable
