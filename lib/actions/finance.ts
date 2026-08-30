@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
+import { closedDayWindows, openDaysCount } from "@/lib/closed-days";
 import { ExpenseSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 
@@ -21,9 +22,12 @@ function windowsSql(column: string, windows: { start: Date; end: Date }[]): Pris
 // those lines are excluded (treated as $0 cost) rather than guessed at.
 export async function costOfGoodsSold(range: DateRangeSelection): Promise<number> {
   const { companyId, branchId } = await requireManager();
-  const windows = selectionToWindows(range);
+  const requestedWindows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return 0;
+
     const [row] = await tx.$queryRaw<{ cogs_cents: bigint | null }[]>`
       SELECT SUM(si."quantity" * p."costCents")::bigint AS cogs_cents
       FROM "SaleItem" si
@@ -37,6 +41,37 @@ export async function costOfGoodsSold(range: DateRangeSelection): Promise<number
     `;
     return Number(row?.cogs_cents ?? 0);
   });
+}
+
+// What actually left the register buying inventory in the period — separate
+// from costOfGoodsSold above, which only counts the cost of what was SOLD.
+// A purchase counts here the moment it's registered, regardless of whether
+// any of it has sold yet (unlike COGS), so a big restock shows up as a real
+// hit to "ganancia neta estimada" right away rather than trickling in as
+// each unit sells.
+export async function purchasesTotal(range: DateRangeSelection): Promise<number> {
+  const { companyId, branchId } = await requireManager();
+  const windows = selectionToWindows(range);
+  return withTenant(companyId, async (tx) => {
+    const result = await tx.purchase.aggregate({
+      _sum: { totalCents: true },
+      where: {
+        companyId,
+        ...(branchId ? { branchId } : {}),
+        OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
+        voided: false,
+      },
+    });
+    return result._sum.totalCents ?? 0;
+  });
+}
+
+// Surfaced on /finance as a heads-up next to the totals above — see
+// openDaysCount's doc-comment.
+export async function openDaysInRange(range: DateRangeSelection): Promise<number> {
+  const { companyId, branchId } = await requireManager();
+  const windows = selectionToWindows(range);
+  return withTenant(companyId, (tx) => openDaysCount(tx, companyId, branchId, windows));
 }
 
 export async function listExpenses(range: DateRangeSelection) {

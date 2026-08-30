@@ -4,13 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { dayBoundsUtc } from "@/lib/report-types";
+import { closingDateFromString } from "@/lib/closed-days";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type PaymentMethod } from "@prisma/client";
-
-function closingDateFromString(dateStr: string): Date {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
-}
 
 export type CashClosingSummary = {
   date: string;

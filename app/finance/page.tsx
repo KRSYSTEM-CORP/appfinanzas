@@ -14,7 +14,7 @@ import {
   bottomProducts,
   incomeByCurrency,
 } from "@/lib/actions/reports";
-import { costOfGoodsSold, expensesTotal, listExpenses } from "@/lib/actions/finance";
+import { costOfGoodsSold, expensesTotal, listExpenses, openDaysInRange, purchasesTotal } from "@/lib/actions/finance";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { parseDateRangeSelection } from "@/lib/report-types";
 
@@ -37,7 +37,9 @@ export default async function FinancePage({
     currencyIncome,
     cogsCents,
     expensesCents,
+    purchasesCents,
     expenses,
+    openDays,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency },
   ] = await Promise.all([
     revenueTotals(range),
@@ -48,11 +50,13 @@ export default async function FinancePage({
     incomeByCurrency(range),
     costOfGoodsSold(range),
     expensesTotal(range),
+    purchasesTotal(range),
     listExpenses(range),
+    openDaysInRange(range),
     getExchangeRateInfo(),
   ]);
 
-  const netProfitCents = totals.totalEurCents - cogsCents - expensesCents;
+  const netProfitCents = totals.totalEurCents - cogsCents - expensesCents - purchasesCents;
 
   function currencyDisplayName(code: string): string {
     if (code === "EUR" || code === "USD") return code;
@@ -65,6 +69,14 @@ export default async function FinancePage({
         <h1 className="text-2xl font-semibold">Finanzas</h1>
         <DateRangeSwitcher selection={range} />
       </div>
+
+      {openDays > 0 && (
+        <p className="text-sm text-warning rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
+          {openDays === 1
+            ? "Hay 1 día sin cierre de caja en este período — sus ventas no están incluidas en los totales de abajo."
+            : `Hay ${openDays} días sin cierre de caja en este período — sus ventas no están incluidas en los totales de abajo.`}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -113,6 +125,11 @@ export default async function FinancePage({
           accent="destructive"
           value={formatCurrencyCents(referenceCurrency, expensesCents)}
         />
+        <StatCard
+          label="Compras registradas"
+          accent="destructive"
+          value={formatCurrencyCents(referenceCurrency, purchasesCents)}
+        />
       </div>
 
       <Card>
@@ -124,7 +141,8 @@ export default async function FinancePage({
             {formatCurrencyCents(referenceCurrency, netProfitCents)}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            Ingresos − costo de mercancía vendida − gastos, para el período seleccionado.
+            Ingresos − costo de mercancía vendida − gastos − compras registradas, para el período
+            seleccionado.
           </p>
         </CardContent>
       </Card>

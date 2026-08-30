@@ -3,6 +3,7 @@
 import { Prisma } from "@prisma/client";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { closedDayWindows } from "@/lib/closed-days";
 import {
   selectionToWindows,
   SHOP_TIME_ZONE,
@@ -32,9 +33,14 @@ async function getCurrentRate(tx: Prisma.TransactionClient, companyId: string): 
 
 export async function revenueTotals(range: DateRangeSelection) {
   const { companyId, branchId } = await requireManager();
-  const windows = selectionToWindows(range);
+  const requestedWindows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) {
+      return { totalEurCents: 0, totalVES: 0, count: 0, avgEurCents: 0 };
+    }
+
     const currentRate = await getCurrentRate(tx, companyId);
 
     const result = await tx.sale.aggregate({
@@ -108,9 +114,12 @@ export async function receivablesTotals() {
 
 export async function salesByDay(range: DateRangeSelection): Promise<SalesByDayPoint[]> {
   const { companyId, branchId } = await requireManager();
-  const windows = selectionToWindows(range);
+  const requestedWindows = selectionToWindows(range);
 
   const rows = await withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return [];
+
     const currentRate = await getCurrentRate(tx, companyId);
 
     // "createdAt" is stored as a naive UTC timestamp; convert to the shop's local
@@ -154,9 +163,12 @@ export type CurrencyIncomeRow = { currencyCode: string; totalCents: number };
 // day it was actually paid, not the day it was sold.
 export async function incomeByCurrency(range: DateRangeSelection): Promise<CurrencyIncomeRow[]> {
   const { companyId, branchId } = await requireManager();
-  const windows = selectionToWindows(range);
+  const requestedWindows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return [];
+
     const rows = await tx.$queryRaw<{ currency: string; total_cents: bigint }[]>`
       SELECT COALESCE(
                sp."currencyCode",
@@ -178,9 +190,11 @@ export async function incomeByCurrency(range: DateRangeSelection): Promise<Curre
 
 export async function topProducts(range: DateRangeSelection, limit = 10): Promise<TopProductPoint[]> {
   const { companyId, branchId } = await requireManager();
-  const windows = selectionToWindows(range);
-  const grouped = await withTenant(companyId, (tx) =>
-    tx.saleItem.groupBy({
+  const requestedWindows = selectionToWindows(range);
+  const grouped = await withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return [];
+    return tx.saleItem.groupBy({
       by: ["productId", "productName", "category"],
       where: {
         sale: {
@@ -193,8 +207,8 @@ export async function topProducts(range: DateRangeSelection, limit = 10): Promis
       _sum: { quantity: true, subtotalCents: true },
       orderBy: { _sum: { quantity: "desc" } },
       take: limit,
-    })
-  );
+    });
+  });
   return grouped.map((g) => ({
     productId: g.productId,
     productName: g.productName,
@@ -211,10 +225,16 @@ export async function topProducts(range: DateRangeSelection, limit = 10): Promis
 // bottom of what happened to sell.
 export async function bottomProducts(range: DateRangeSelection, limit = 10): Promise<BottomProductPoint[]> {
   const { companyId, branchId } = await requireManager();
-  const windows = selectionToWindows(range);
+  const requestedWindows = selectionToWindows(range);
 
-  return withTenant(companyId, (tx) =>
-    tx.$queryRaw<{ id: string; name: string; category: string | null; quantity: bigint }[]>`
+  return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    // No closed day at all in range — every active product still shows up
+    // (that's the point, see doc-comment above), just with quantity 0 for
+    // all of them, same as if none had sold.
+    const saleMatch = windows.length === 0 ? Prisma.sql`FALSE` : windowsSql('"createdAt"', windows);
+
+    return tx.$queryRaw<{ id: string; name: string; category: string | null; quantity: bigint }[]>`
       SELECT p.id, p.name, p.category,
              COALESCE(SUM(si.quantity), 0)::bigint AS quantity
       FROM "Product" p
@@ -223,15 +243,15 @@ export async function bottomProducts(range: DateRangeSelection, limit = 10): Pro
           SELECT id FROM "Sale"
           WHERE "companyId" = ${companyId}
             ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
-            AND ${windowsSql('"createdAt"', windows)} AND "voided" = false
+            AND ${saleMatch} AND "voided" = false
         )
       WHERE p."companyId" = ${companyId} AND p."isActive" = true
         ${branchId ? Prisma.sql`AND p."branchId" = ${branchId}` : Prisma.empty}
       GROUP BY p.id, p.name, p.category
       ORDER BY quantity ASC, p.name ASC
       LIMIT ${limit}
-    `
-  ).then((rows) =>
+    `;
+  }).then((rows) =>
     rows.map((r) => ({ productId: r.id, productName: r.name, category: r.category, quantity: Number(r.quantity) }))
   );
 }
