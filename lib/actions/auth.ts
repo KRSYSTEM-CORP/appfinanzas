@@ -11,6 +11,7 @@ import { sendPasswordResetEmail } from "@/lib/email";
 import { createCompanyWithOwner } from "@/lib/company-provisioning";
 import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 import {
   EmployeeLoginSchema,
   LoginSchema,
@@ -81,6 +82,10 @@ export async function signup(formData: FormData): Promise<ActionResult> {
   const rl = await checkRateLimit("signup", ip, 5, 60 * 60_000);
   if (!rl.allowed) return { success: false, error: rateLimitMessage(rl.retryAfterMinutes) };
   await recordFailedAttempt("signup", ip);
+
+  const turnstileToken = formData.get("cf-turnstile-response");
+  const turnstileOk = await verifyTurnstileToken(typeof turnstileToken === "string" ? turnstileToken : "", ip);
+  if (!turnstileOk) return { success: false, error: "No pudimos verificar que eres humano. Intenta de nuevo." };
 
   const parsed = SignupSchema.safeParse({
     companyName: formData.get("companyName"),
