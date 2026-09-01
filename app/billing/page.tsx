@@ -45,7 +45,7 @@ export default async function BillingPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl">
           <Card>
             <CardHeader>
               <CardTitle>Costo mensual</CardTitle>
@@ -105,6 +105,43 @@ export default async function BillingPage() {
               )}
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Cómo pagar — Pago Móvil</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {info.pagoMovilBank || info.pagoMovilPhone || info.pagoMovilId ? (
+                <>
+                  {info.pagoMovilBank && (
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">Banco: </span>
+                      <span className="font-medium">{info.pagoMovilBank}</span>
+                    </p>
+                  )}
+                  {info.pagoMovilPhone && (
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">Teléfono: </span>
+                      <span className="font-medium">{info.pagoMovilPhone}</span>
+                    </p>
+                  )}
+                  {info.pagoMovilId && (
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">Cédula/RIF: </span>
+                      <span className="font-medium">{info.pagoMovilId}</span>
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Paga el equivalente en bolívares a la tasa del día.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  El super admin todavía no ha configurado los datos de Pago Móvil.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -120,7 +157,7 @@ export default async function BillingPage() {
                   Pasos obligatorios para activar tu suscripción:
                 </p>
                 <ol className="text-sm text-muted-foreground list-decimal list-inside flex flex-col gap-1">
-                  <li>Paga por Binance (USDT), escaneando el QR o con el ID de arriba.</li>
+                  <li>Paga por Binance (USDT) o Pago Móvil, con los datos de arriba.</li>
                   <li>Completa el formulario de abajo con los datos del pago.</li>
                   <li>Envía tu comprobante de pago por WhatsApp (obligatorio) — así te confirmamos más rápido.</li>
                 </ol>

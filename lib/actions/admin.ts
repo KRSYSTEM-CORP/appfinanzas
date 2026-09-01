@@ -323,6 +323,9 @@ export async function getPlatformSettings(): Promise<{
   paymentInstructions: string | null;
   binanceQrDataUrl: string | null;
   binanceId: string | null;
+  pagoMovilBank: string | null;
+  pagoMovilPhone: string | null;
+  pagoMovilId: string | null;
   defaultMonthlyFeeUsdCents: number | null;
 }> {
   await requireSuperAdmin();
@@ -331,6 +334,9 @@ export async function getPlatformSettings(): Promise<{
     paymentInstructions: settings?.paymentInstructions ?? null,
     binanceQrDataUrl: settings?.binanceQrDataUrl ?? null,
     binanceId: settings?.binanceId ?? null,
+    pagoMovilBank: settings?.pagoMovilBank ?? null,
+    pagoMovilPhone: settings?.pagoMovilPhone ?? null,
+    pagoMovilId: settings?.pagoMovilId ?? null,
     defaultMonthlyFeeUsdCents: settings?.defaultMonthlyFeeUsdCents ?? null,
   };
 }
@@ -391,12 +397,18 @@ export async function updatePlatformSettings(input: unknown): Promise<ActionResu
       paymentInstructions: parsed.data.paymentInstructions,
       binanceQrDataUrl: parsed.data.binanceQrDataUrl,
       binanceId: parsed.data.binanceId,
+      pagoMovilBank: parsed.data.pagoMovilBank,
+      pagoMovilPhone: parsed.data.pagoMovilPhone,
+      pagoMovilId: parsed.data.pagoMovilId,
       defaultMonthlyFeeUsdCents: parsed.data.defaultMonthlyFee,
     },
     update: {
       paymentInstructions: parsed.data.paymentInstructions,
       binanceQrDataUrl: parsed.data.binanceQrDataUrl,
       binanceId: parsed.data.binanceId,
+      pagoMovilBank: parsed.data.pagoMovilBank,
+      pagoMovilPhone: parsed.data.pagoMovilPhone,
+      pagoMovilId: parsed.data.pagoMovilId,
       defaultMonthlyFeeUsdCents: parsed.data.defaultMonthlyFee,
     },
   });

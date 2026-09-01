@@ -942,6 +942,16 @@ model PlatformSettings {
   // Binance Pay ID / UID, shown alongside the QR as a manual fallback for
   // whoever can't scan it.
   binanceId                 String?
+  // Pago Móvil details for paying the subscription in Bolívares — the
+  // second rail alongside Binance/USDT above. Same manual-report-then-
+  // super-admin-approves flow as Binance; there's no bank webhook wired up,
+  // this is just where to send it (see /billing and PaymentReportForm's
+  // BILLING_PAYMENT_METHODS, which accepts "CARD" — this app's enum name
+  // for Pago Móvil, see PAYMENT_METHOD_LABELS).
+  pagoMovilBank             String?
+  pagoMovilPhone            String?
+  // Cédula or RIF the Pago Móvil account is registered under.
+  pagoMovilId               String?
   // Applied to Company.monthlyFeeUsdCents automatically when a super admin
   // approves a new signup and leaves the fee field blank (see approveUser
   // in lib/actions/admin.ts) — a single platform-wide price for every new

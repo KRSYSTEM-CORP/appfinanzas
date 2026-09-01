@@ -9,11 +9,14 @@ import { submitPaymentReport } from "@/lib/actions/billing";
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_REQUIRING_REFERENCE } from "@/lib/format";
 import type { PaymentMethod } from "@prisma/client";
 
-// The subscription only accepts this one rail now — no more Transferencia,
-// Pago Móvil, Zelle, PayPal, cash, etc. for paying KR System itself (that
-// restriction is specific to this billing report, not the general
-// PAYMENT_METHOD_LABELS used elsewhere for a company's own retail sales).
-const BILLING_PAYMENT_METHODS: PaymentMethod[] = ["BINANCE"];
+// The subscription accepts exactly these two rails — no Transferencia,
+// Zelle, PayPal, cash, etc. for paying KR System itself (that restriction is
+// specific to this billing report, not the general PAYMENT_METHOD_LABELS
+// used elsewhere for a company's own retail sales). "CARD" is this app's
+// enum value for Pago Móvil (see PAYMENT_METHOD_LABELS) — a Bolívares
+// amount here should be entered as its USD equivalent, same as every other
+// method, since amountUsdCents is always USD-denominated.
+const BILLING_PAYMENT_METHODS: PaymentMethod[] = ["BINANCE", "CARD"];
 
 type ReportLine = { paymentMethod: PaymentMethod; amount: string; reference: string };
 

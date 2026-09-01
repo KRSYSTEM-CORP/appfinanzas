@@ -59,6 +59,9 @@ export default async function AdminPage() {
             initialInstructions={platformSettings.paymentInstructions}
             initialBinanceQrDataUrl={platformSettings.binanceQrDataUrl}
             initialBinanceId={platformSettings.binanceId}
+            initialPagoMovilBank={platformSettings.pagoMovilBank}
+            initialPagoMovilPhone={platformSettings.pagoMovilPhone}
+            initialPagoMovilId={platformSettings.pagoMovilId}
             initialDefaultMonthlyFeeUsdCents={platformSettings.defaultMonthlyFeeUsdCents}
           />
         </CardContent>
