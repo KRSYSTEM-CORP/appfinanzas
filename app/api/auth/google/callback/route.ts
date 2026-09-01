@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/tenant-db";
 import { exchangeCodeForProfile } from "@/lib/google-oauth";
 import { setSessionCookie } from "@/lib/session";
-import { createCompanyWithOwner } from "@/lib/company-provisioning";
+import { sendSignupCodeEmail } from "@/lib/email";
+import { createSignupVerification } from "@/lib/signup-verification";
 
 // El otro extremo de /api/auth/google/start. Tres casos, en orden:
 //
@@ -12,10 +13,11 @@ import { createCompanyWithOwner } from "@/lib/company-provisioning";
 //  2. Existe un usuario con este correo pero sin googleId → se creó por
 //     correo/clave. Se vincula la cuenta de Google a ese mismo usuario en vez
 //     de crear un duplicado — es la misma persona con el mismo correo.
-//  3. No existe nadie → alta completamente nueva: se crea la empresa, su
-//     "Sucursal Principal" y el usuario GERENTE en el mismo gesto, sin pedir
-//     contraseña ni nada más. Esto es lo que hace que el registro sea
-//     "completamente automatizado" (ver createCompanyWithOwner).
+//  3. No existe nadie → alta completamente nueva: aunque Google ya confirmó
+//     el correo, todavía se le pide el mismo código de 6 dígitos que el alta
+//     por correo/clave (ver confirmSignupCode en lib/actions/auth.ts) antes
+//     de crear la empresa/usuario — misma protección contra bots/spam para
+//     ambos caminos de alta, no sólo el manual.
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +31,7 @@ function redirectWithError(request: NextRequest, error: string) {
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
-  const code = params.get("code");
+  const authCode = params.get("code");
   const state = params.get("state");
   const expectedState = request.cookies.get("google_oauth_state")?.value;
 
@@ -38,13 +40,13 @@ export async function GET(request: NextRequest) {
     // un error del sistema, sólo se vuelve al login sin romper nada.
     return redirectWithError(request, "google_cancelado");
   }
-  if (!code || !state || !expectedState || state !== expectedState) {
+  if (!authCode || !state || !expectedState || state !== expectedState) {
     return redirectWithError(request, "google_estado_invalido");
   }
 
   let profile: Awaited<ReturnType<typeof exchangeCodeForProfile>>;
   try {
-    profile = await exchangeCodeForProfile(code);
+    profile = await exchangeCodeForProfile(authCode);
   } catch (error) {
     console.error("[google oauth]", error);
     return redirectWithError(request, "google_fallo");
@@ -94,16 +96,17 @@ export async function GET(request: NextRequest) {
   }
 
   // Alta nueva. El nombre de la empresa se puede cambiar después desde
-  // Configuración — lo que importa aquí es no interponer un formulario más
-  // entre el clic en "Continuar con Google" y quedar adentro.
+  // Configuración. La empresa/usuario todavía no se crean aquí — sólo al
+  // confirmar el código (ver confirmSignupCode, lib/actions/auth.ts), igual
+  // que el alta por correo/clave.
   const displayName = profile.name?.trim() || profile.email.split("@")[0];
-  const { company, branch, user } = await createCompanyWithOwner(`Negocio de ${displayName}`, {
-    email: profile.email,
-    googleId: profile.sub,
-  });
+  const payload = { companyName: `Negocio de ${displayName}`, email: profile.email, googleId: profile.sub };
+  const { verificationId, code } = await createSignupVerification(profile.email, payload);
+  await sendSignupCodeEmail(profile.email, code);
 
-  await setSessionCookie({ uid: user.id, cid: company.id, companyName: company.name, bid: branch.id });
-  const response = NextResponse.redirect(new URL("/pos", request.url));
+  const response = NextResponse.redirect(
+    new URL(`/signup?vid=${verificationId}&email=${encodeURIComponent(profile.email)}`, request.url)
+  );
   response.cookies.delete("google_oauth_state");
   return response;
 }

@@ -62,6 +62,10 @@ export async function createCompanyWithOwner(companyName: string, owner: NewOwne
             companyId: company.id,
             status: "ACTIVE",
             hasSeenTour: false,
+            // Only ever called from confirmSignupCode() (lib/actions/auth.ts),
+            // which already required acceptedTerms === true before reaching
+            // here — for both the email/password and Google paths.
+            termsAcceptedAt: new Date(),
           },
         });
         return { company, branch, user };

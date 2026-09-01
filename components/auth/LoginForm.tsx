@@ -17,6 +17,7 @@ import {
 import { deriveBrandVars, BRAND_VAR_NAMES } from "@/lib/theme-color";
 import { splitFullName } from "@/lib/name";
 import { GoogleIcon } from "@/components/auth/GoogleIcon";
+import { Turnstile } from "@/components/auth/Turnstile";
 
 const NO_BRANDING: CompanyBranding = { logoDataUrl: null, brandColor: null, brandBackground: null };
 
@@ -25,6 +26,7 @@ const GOOGLE_ERRORS: Record<string, string> = {
   google_cancelado: "Cancelaste el inicio de sesión con Google.",
   google_estado_invalido: "El enlace de Google expiró o no es válido. Intenta de nuevo.",
   google_fallo: "Google no pudo confirmar tu cuenta. Intenta de nuevo.",
+  google_turnstile_fallido: "No pudimos verificar que eres humano. Intenta de nuevo.",
   cuenta_pendiente: "Tu cuenta está pendiente de aprobación por un administrador de KR System.",
   cuenta_suspendida: "Tu acceso está suspendido.",
 };
@@ -54,6 +56,7 @@ export function LoginForm({
   // doesn't require the user to retype anything.
   const [branchChoices, setBranchChoices] = useState<BranchOption[] | null>(null);
   const [pendingCredentials, setPendingCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
 
   // Preview the remembered company's branding right away, same as if the
   // employee had just typed its code themselves.
@@ -143,6 +146,17 @@ export function LoginForm({
     }
   }
 
+  function handleGoogleClick() {
+    if (!turnstileToken && process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) {
+      setError("Resuelve la verificación de seguridad para continuar.");
+      return;
+    }
+    const url = new URL("/api/auth/google/start", window.location.origin);
+    url.searchParams.set("from", "login");
+    if (turnstileToken) url.searchParams.set("token", turnstileToken);
+    window.location.href = url.toString();
+  }
+
   async function handleCompanyCodeBlur(e: React.FocusEvent<HTMLInputElement>) {
     const code = e.target.value;
     if (!code) {
@@ -200,10 +214,15 @@ export function LoginForm({
 
       {mode === "owner" && googleConfigured && !branchChoices && (
         <>
-          <a href="/api/auth/google/start" className={buttonVariants({ variant: "outline", size: "lg" })}>
+          <Turnstile onVerify={setTurnstileToken} />
+          <button
+            type="button"
+            onClick={handleGoogleClick}
+            className={buttonVariants({ variant: "outline", size: "lg" })}
+          >
             <GoogleIcon />
             Continuar con Google
-          </a>
+          </button>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <div className="h-px flex-1 bg-border" />o<div className="h-px flex-1 bg-border" />
           </div>

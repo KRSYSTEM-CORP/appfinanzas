@@ -1,6 +1,6 @@
 "use server";
 
-import { randomBytes, randomInt, createHash } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -9,6 +9,13 @@ import { hashPassword, verifyPassword } from "@/lib/password";
 import { setSessionCookie, clearSessionCookie } from "@/lib/session";
 import { sendPasswordResetEmail, sendSignupCodeEmail } from "@/lib/email";
 import { createCompanyWithOwner } from "@/lib/company-provisioning";
+import {
+  SIGNUP_CODE_TTL_MS,
+  SIGNUP_CODE_MAX_ATTEMPTS,
+  hashSignupCode,
+  generateSignupCode,
+  createSignupVerification,
+} from "@/lib/signup-verification";
 import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { verifyTurnstileToken } from "@/lib/turnstile";
@@ -26,24 +33,17 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
 const RESET_REQUEST_WINDOW_MS = 60 * 60 * 1000;
 const RESET_REQUEST_MAX_ATTEMPTS = 3;
-const SIGNUP_CODE_TTL_MS = 10 * 60 * 1000;
-const SIGNUP_CODE_MAX_ATTEMPTS = 5;
 const SIGNUP_RESEND_WINDOW_MS = 10 * 60 * 1000;
 const SIGNUP_RESEND_MAX_ATTEMPTS = 3;
+const TERMS_ERROR = "Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.";
 
 function hashResetToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function hashSignupCode(code: string): string {
-  return createHash("sha256").update(code).digest("hex");
-}
-
-function generateSignupCode(): string {
-  return String(randomInt(0, 1_000_000)).padStart(6, "0");
-}
-
-type SignupPayload = { companyName: string; email: string; passwordHash: string };
+// passwordHash is set for the email/password path, googleId for a brand-new
+// Google signup (see app/api/auth/google/callback/route.ts) — never both.
+type SignupPayload = { companyName: string; email: string; passwordHash?: string; googleId?: string };
 
 export type SignupCodeResult =
   | { success: true; verificationId: string; email: string }
@@ -118,6 +118,10 @@ export async function requestSignupCode(formData: FormData): Promise<SignupCodeR
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
+  if (formData.get("acceptedTerms") !== "on") {
+    return { success: false, error: TERMS_ERROR };
+  }
+
   const { companyName, email, password } = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -127,29 +131,27 @@ export async function requestSignupCode(formData: FormData): Promise<SignupCodeR
 
   const passwordHash = hashPassword(password);
   const payload: SignupPayload = { companyName, email, passwordHash };
-  const code = generateSignupCode();
-
-  // Only one pending signup per email at a time — a retry (e.g. "no me
-  // llegó el código") replaces the previous attempt instead of piling up
-  // rows that would otherwise all race to create the same account.
-  await prisma.signupVerification.deleteMany({ where: { email } });
-  const verification = await prisma.signupVerification.create({
-    data: {
-      email,
-      codeHash: hashSignupCode(code),
-      payload: JSON.stringify(payload),
-      expiresAt: new Date(Date.now() + SIGNUP_CODE_TTL_MS),
-    },
-  });
+  const { verificationId, code } = await createSignupVerification(email, payload);
 
   await sendSignupCodeEmail(email, code);
 
-  return { success: true, verificationId: verification.id, email };
+  return { success: true, verificationId, email };
 }
 
 // Step 2: checks the code and, only if it matches, actually creates the
-// company/owner and logs them in.
-export async function confirmSignupCode(verificationId: string, code: string): Promise<ActionResult> {
+// company/owner and logs them in. acceptedTerms is required here (not just
+// at request time) because a brand-new Google signup (see app/api/auth/
+// google/callback/route.ts) never goes through requestSignupCode at all —
+// this is the one place both paths are guaranteed to pass through.
+export async function confirmSignupCode(
+  verificationId: string,
+  code: string,
+  acceptedTerms: boolean
+): Promise<ActionResult> {
+  if (!acceptedTerms) {
+    return { success: false, error: TERMS_ERROR };
+  }
+
   const genericError = "Este código venció o no es válido. Solicita uno nuevo.";
   const verification = await prisma.signupVerification.findUnique({ where: { id: verificationId } });
   if (!verification) return { success: false, error: genericError };
@@ -173,7 +175,7 @@ export async function confirmSignupCode(verificationId: string, code: string): P
     return { success: false, error: `Código incorrecto. Te quedan ${remaining} intentos.` };
   }
 
-  const { companyName, email, passwordHash } = JSON.parse(verification.payload) as SignupPayload;
+  const { companyName, email, passwordHash, googleId } = JSON.parse(verification.payload) as SignupPayload;
 
   // Re-checked here (not just at request time) in case the address was
   // registered by someone else in the minutes between requesting and
@@ -184,7 +186,7 @@ export async function confirmSignupCode(verificationId: string, code: string): P
     return { success: false, error: "Ese correo ya está registrado" };
   }
 
-  const { company, branch, user } = await createCompanyWithOwner(companyName, { email, passwordHash });
+  const { company, branch, user } = await createCompanyWithOwner(companyName, { email, passwordHash, googleId });
   await prisma.signupVerification.delete({ where: { id: verificationId } });
 
   await setSessionCookie({ uid: user.id, cid: company.id, companyName: company.name, bid: branch.id });
