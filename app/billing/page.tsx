@@ -115,7 +115,7 @@ export default async function BillingPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Cómo pagar — Pago Móvil</CardTitle>
+              <CardTitle>Pago Móvil</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {info.monthlyFeeLocalAmount != null && (
