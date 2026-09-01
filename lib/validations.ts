@@ -19,6 +19,30 @@ function nameField(message: string) {
     .refine((v) => v.length > 0, message);
 }
 
+// Shared strength bar for every place a password gets *set* (signup, reset,
+// change, creating an employee login) — not for LoginSchema/EmployeeLoginSchema,
+// which only check "did they type something" against whatever's already
+// stored. `label` lets each call site's messages read naturally ("La
+// contraseña..." vs "La nueva contraseña...").
+function passwordField(label: string) {
+  return z
+    .string()
+    .min(8, `${label} debe tener al menos 8 caracteres`)
+    .regex(/[A-Z]/, `${label} debe incluir al menos una mayúscula`)
+    .regex(/[a-z]/, `${label} debe incluir al menos una minúscula`)
+    .regex(/[0-9]/, `${label} debe incluir al menos un número`);
+}
+
+// Same bar as passwordField, as a plain predicate — for the one place
+// (EmployeeUpdateSchema below) where a password is optional (blank means
+// "keep the current one") and only needs a single combined message once a
+// manager actually types something.
+function isStrongPassword(v: string): boolean {
+  return v.length >= 8 && /[A-Z]/.test(v) && /[a-z]/.test(v) && /[0-9]/.test(v);
+}
+const PASSWORD_STRENGTH_MESSAGE =
+  "La contraseña debe tener al menos 8 caracteres, con una mayúscula, una minúscula y un número";
+
 // Derived directly from the Prisma enum (rather than hand-listed) so adding
 // a new payment method to the schema can't silently drift from what this
 // validator accepts — a mismatch here previously made new methods fail
@@ -323,7 +347,7 @@ export type QuoteInput = z.infer<typeof QuoteSchema>;
 export const SignupSchema = z.object({
   companyName: z.string().trim().min(1, "El nombre de la empresa es obligatorio"),
   email: z.string().trim().toLowerCase().email("Correo inválido"),
-  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+  password: passwordField("La contraseña"),
 });
 
 export const LoginSchema = z.object({
@@ -334,7 +358,7 @@ export const LoginSchema = z.object({
 export const ChangePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Ingresa tu contraseña actual"),
-    newPassword: z.string().min(8, "La nueva contraseña debe tener al menos 8 caracteres"),
+    newPassword: passwordField("La nueva contraseña"),
     confirmPassword: z.string().min(1, "Confirma la nueva contraseña"),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
@@ -348,7 +372,7 @@ export const RequestPasswordResetSchema = z.object({
 
 export const ResetPasswordSchema = z
   .object({
-    password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    password: passwordField("La contraseña"),
     confirmPassword: z.string().min(1, "Confirma la nueva contraseña"),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -378,7 +402,7 @@ export const EmployeeSchema = z
   .object({
     firstName: nameField("El nombre es obligatorio"),
     lastName: nameField("El apellido es obligatorio"),
-    password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    password: passwordField("La contraseña"),
     role: RoleSchema,
     branchId: branchIdField,
     // Which sections this employee can access (see lib/sections.ts) —
@@ -416,7 +440,7 @@ export const EmployeeUpdateSchema = z
       .string()
       .optional()
       .transform((v) => (v === "" ? undefined : v))
-      .refine((v) => v === undefined || v.length >= 8, "La contraseña debe tener al menos 8 caracteres"),
+      .refine((v) => v === undefined || isStrongPassword(v), PASSWORD_STRENGTH_MESSAGE),
     allowedSections: z.array(z.string()).default([]),
   })
   .refine((data) => data.role !== "VENDEDOR" || data.branchId, {
@@ -538,6 +562,21 @@ export const PlatformSettingsSchema = z.object({
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
   binanceId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
+  pagoMovilBank: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
+  pagoMovilPhone: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
+  pagoMovilId: z
     .string()
     .trim()
     .optional()

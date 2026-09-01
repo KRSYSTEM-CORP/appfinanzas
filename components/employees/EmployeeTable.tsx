@@ -169,6 +169,9 @@ export function EmployeeTable({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Mínimo 8 caracteres, con mayúscula, minúscula y número.
+                </p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-role">Rol</Label>
@@ -357,6 +360,9 @@ function EmployeeRow({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Si la escribes: mínimo 8 caracteres, con mayúscula, minúscula y número.
+                  </p>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`edit-role-${u.id}`}>Rol</Label>

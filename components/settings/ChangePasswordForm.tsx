@@ -35,6 +35,9 @@ export function ChangePasswordForm() {
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="newPassword">Nueva contraseña</Label>
         <Input id="newPassword" name="newPassword" type="password" required />
+        <p className="text-xs text-muted-foreground">
+          Mínimo 8 caracteres, con mayúscula, minúscula y número.
+        </p>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="confirmPassword">Confirmar nueva contraseña</Label>

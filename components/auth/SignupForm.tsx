@@ -66,6 +66,9 @@ export function SignupForm({ googleConfigured, authError }: { googleConfigured: 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="password">Contraseña</Label>
           <Input id="password" name="password" type="password" minLength={8} required />
+          <p className="text-xs text-muted-foreground">
+            Mínimo 8 caracteres, con mayúscula, minúscula y número.
+          </p>
         </div>
 
         <Turnstile />
