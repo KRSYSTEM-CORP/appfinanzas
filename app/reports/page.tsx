@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CashClosingPanel } from "@/components/reports/CashClosingPanel";
+import { PendingClosingsList } from "@/components/reports/PendingClosingsList";
 import { SalesTable } from "@/components/reports/SalesTable";
 import { PaymentStatusFilter } from "@/components/reports/PaymentStatusFilter";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
@@ -7,7 +8,7 @@ import { getCurrency } from "@/lib/currencies";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
 import { requireSectionAccess } from "@/lib/session";
 import { listRecentSales } from "@/lib/actions/sales";
-import { getDailyClosingSummary } from "@/lib/actions/cash-closing";
+import { getDailyClosingSummary, listPendingClosings } from "@/lib/actions/cash-closing";
 import { parseDateRangeSelection, selectionToWindows, todayDateString } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
@@ -29,12 +30,14 @@ export default async function ReportsPage({
     { logoDataUrl },
     fiscalData,
     todaySummary,
+    pendingClosings,
   ] = await Promise.all([
     listRecentSales(500, selectionToWindows(range), statusFilter || undefined),
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
     getDailyClosingSummary(todayStr),
+    listPendingClosings(range),
   ]);
   const company = { name: session.companyName, logoDataUrl, ...fiscalData };
   const localCurrencyName = getCurrency(localCurrencyCode).name.split(" (")[0];
@@ -69,6 +72,25 @@ export default async function ReportsPage({
           </CardContent>
         </Card>
       )}
+
+      <Card className="max-w-3xl">
+        <CardHeader>
+          <CardTitle>Días pendientes por cerrar</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Días con ventas en el período seleccionado abajo que todavía no tienen cierre de caja.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <PendingClosingsList
+            pendingDays={pendingClosings}
+            hasBranchSelected={session.branchId != null}
+            rate={rate}
+            currencyCode={localCurrencyCode}
+            exchangeRateEnabled={exchangeRateEnabled}
+            referenceCurrency={referenceCurrency}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">

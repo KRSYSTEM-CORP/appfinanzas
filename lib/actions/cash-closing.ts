@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { dayBoundsUtc } from "@/lib/report-types";
-import { closingDateFromString } from "@/lib/closed-days";
+import { dayBoundsUtc, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
+import { closingDateFromString, openDayList } from "@/lib/closed-days";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type PaymentMethod } from "@prisma/client";
 
@@ -124,6 +124,39 @@ export async function closeCashRegister(dateStr: string, note?: string): Promise
 
   revalidatePath("/reports");
   return { success: true };
+}
+
+export type PendingClosing = { date: string; totalCents: number; salesCount: number };
+
+// Days in the selected range that have real sales but no cierre de caja yet
+// — the list /reports shows so a manager can find and close a backlog of
+// open days instead of guessing dates one at a time in the date picker. A
+// day with zero sales isn't "pending" in any useful sense, so it's left out.
+export async function listPendingClosings(range: DateRangeSelection): Promise<PendingClosing[]> {
+  const { companyId, branchId } = await requireSession();
+  const windows = selectionToWindows(range);
+
+  return withTenant(companyId, async (tx) => {
+    const openDays = await openDayList(tx, companyId, branchId, windows);
+    if (openDays.length === 0) return [];
+
+    const results = await Promise.all(
+      openDays.map(async (day) => {
+        const totals = await tx.sale.aggregate({
+          where: {
+            companyId,
+            ...(branchId ? { branchId } : {}),
+            createdAt: { gte: day.start, lt: day.end },
+            voided: false,
+          },
+          _sum: { totalCents: true },
+          _count: true,
+        });
+        return { date: day.dateStr, totalCents: totals._sum.totalCents ?? 0, salesCount: totals._count };
+      })
+    );
+    return results.filter((r) => r.salesCount > 0);
+  });
 }
 
 export async function listCashClosings() {

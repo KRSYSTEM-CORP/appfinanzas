@@ -100,3 +100,17 @@ export async function openDaysCount(
   const closedSet = await closedDateSet(tx, companyId, branchId, days);
   return days.filter((d) => !closedSet.has(d.dateStr)).length;
 }
+
+// The actual open days (not just a count) — for /reports' "días pendientes
+// por cerrar" list, so a manager can find and close them without guessing
+// dates one at a time in the date picker.
+export async function openDayList(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  branchId: string | null,
+  windows: { start: Date; end: Date }[]
+): Promise<Day[]> {
+  const days = walkDays(windows);
+  const closedSet = await closedDateSet(tx, companyId, branchId, days);
+  return days.filter((d) => !closedSet.has(d.dateStr)).sort((a, b) => (a.dateStr < b.dateStr ? 1 : -1));
+}
