@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { changeMyPassword } from "@/lib/actions/settings";
+import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
 
 export function ChangePasswordForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -20,6 +22,7 @@ export function ChangePasswordForm() {
       if (result.success) {
         setSuccess(true);
         formRef.current?.reset();
+        setNewPassword("");
       } else {
         setError(result.error);
       }
@@ -34,10 +37,15 @@ export function ChangePasswordForm() {
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="newPassword">Nueva contraseña</Label>
-        <Input id="newPassword" name="newPassword" type="password" required />
-        <p className="text-xs text-muted-foreground">
-          Mínimo 8 caracteres, con mayúscula, minúscula y número.
-        </p>
+        <Input
+          id="newPassword"
+          name="newPassword"
+          type="password"
+          required
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+        />
+        <PasswordRequirements password={newPassword} />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="confirmPassword">Confirmar nueva contraseña</Label>

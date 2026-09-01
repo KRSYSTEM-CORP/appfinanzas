@@ -30,7 +30,8 @@ function passwordField(label: string) {
     .min(8, `${label} debe tener al menos 8 caracteres`)
     .regex(/[A-Z]/, `${label} debe incluir al menos una mayúscula`)
     .regex(/[a-z]/, `${label} debe incluir al menos una minúscula`)
-    .regex(/[0-9]/, `${label} debe incluir al menos un número`);
+    .regex(/[0-9]/, `${label} debe incluir al menos un número`)
+    .regex(/[^a-zA-Z0-9]/, `${label} debe incluir al menos un símbolo especial`);
 }
 
 // Same bar as passwordField, as a plain predicate — for the one place
@@ -38,10 +39,12 @@ function passwordField(label: string) {
 // "keep the current one") and only needs a single combined message once a
 // manager actually types something.
 function isStrongPassword(v: string): boolean {
-  return v.length >= 8 && /[A-Z]/.test(v) && /[a-z]/.test(v) && /[0-9]/.test(v);
+  return (
+    v.length >= 8 && /[A-Z]/.test(v) && /[a-z]/.test(v) && /[0-9]/.test(v) && /[^a-zA-Z0-9]/.test(v)
+  );
 }
 const PASSWORD_STRENGTH_MESSAGE =
-  "La contraseña debe tener al menos 8 caracteres, con una mayúscula, una minúscula y un número";
+  "La contraseña debe tener al menos 8 caracteres, con una mayúscula, una minúscula, un número y un símbolo especial";
 
 // Derived directly from the Prisma enum (rather than hand-listed) so adding
 // a new payment method to the schema can't silently drift from what this

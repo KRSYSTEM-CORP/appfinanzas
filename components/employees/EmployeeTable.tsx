@@ -26,6 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
 import { formatDate } from "@/lib/format";
 import { joinFullName, splitFullName } from "@/lib/name";
 import { APP_SECTIONS } from "@/lib/sections";
@@ -169,9 +170,7 @@ export function EmployeeTable({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Mínimo 8 caracteres, con mayúscula, minúscula y número.
-                </p>
+                <PasswordRequirements password={password} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-role">Rol</Label>
@@ -360,9 +359,12 @@ function EmployeeRow({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Si la escribes: mínimo 8 caracteres, con mayúscula, minúscula y número.
-                  </p>
+                  {password && <PasswordRequirements password={password} />}
+                  {!password && (
+                    <p className="text-xs text-muted-foreground">
+                      Déjala en blanco para no cambiarla.
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`edit-role-${u.id}`}>Rol</Label>
