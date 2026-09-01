@@ -87,20 +87,6 @@ export async function closedDayWindows(
   return days.filter((d) => closedSet.has(d.dateStr)).map(({ start, end }) => ({ start, end }));
 }
 
-// How many calendar days in the requested range have NOT been closed yet —
-// shown on /finance as a heads-up so a low total reads as "some days aren't
-// closed yet" instead of looking like the app lost sales.
-export async function openDaysCount(
-  tx: Prisma.TransactionClient,
-  companyId: string,
-  branchId: string | null,
-  windows: { start: Date; end: Date }[]
-): Promise<number> {
-  const days = walkDays(windows);
-  const closedSet = await closedDateSet(tx, companyId, branchId, days);
-  return days.filter((d) => !closedSet.has(d.dateStr)).length;
-}
-
 // The actual open days (not just a count) — for /reports' "días pendientes
 // por cerrar" list, so a manager can find and close them without guessing
 // dates one at a time in the date picker.

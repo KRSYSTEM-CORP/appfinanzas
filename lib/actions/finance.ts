@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
-import { closedDayWindows, openDaysCount } from "@/lib/closed-days";
+import { closedDayWindows } from "@/lib/closed-days";
 import { ExpenseSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 
@@ -64,14 +64,6 @@ export async function purchasesTotal(range: DateRangeSelection): Promise<number>
     });
     return result._sum.totalCents ?? 0;
   });
-}
-
-// Surfaced on /finance as a heads-up next to the totals above — see
-// openDaysCount's doc-comment.
-export async function openDaysInRange(range: DateRangeSelection): Promise<number> {
-  const { companyId, branchId } = await requireManager();
-  const windows = selectionToWindows(range);
-  return withTenant(companyId, (tx) => openDaysCount(tx, companyId, branchId, windows));
 }
 
 export async function listExpenses(range: DateRangeSelection) {

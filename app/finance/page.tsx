@@ -14,7 +14,7 @@ import {
   bottomProducts,
   incomeByCurrency,
 } from "@/lib/actions/reports";
-import { costOfGoodsSold, expensesTotal, listExpenses, openDaysInRange, purchasesTotal } from "@/lib/actions/finance";
+import { costOfGoodsSold, expensesTotal, listExpenses, purchasesTotal } from "@/lib/actions/finance";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { parseDateRangeSelection } from "@/lib/report-types";
 
@@ -39,7 +39,6 @@ export default async function FinancePage({
     expensesCents,
     purchasesCents,
     expenses,
-    openDays,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency },
   ] = await Promise.all([
     revenueTotals(range),
@@ -52,7 +51,6 @@ export default async function FinancePage({
     expensesTotal(range),
     purchasesTotal(range),
     listExpenses(range),
-    openDaysInRange(range),
     getExchangeRateInfo(),
   ]);
 
@@ -69,14 +67,6 @@ export default async function FinancePage({
         <h1 className="text-2xl font-semibold">Finanzas</h1>
         <DateRangeSwitcher selection={range} />
       </div>
-
-      {openDays > 0 && (
-        <p className="text-sm text-warning rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
-          {openDays === 1
-            ? "Hay 1 día sin cierre de caja en este período — sus ventas no están incluidas en los totales de abajo."
-            : `Hay ${openDays} días sin cierre de caja en este período — sus ventas no están incluidas en los totales de abajo.`}
-        </p>
-      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
