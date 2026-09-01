@@ -56,6 +56,10 @@ export type Session = {
   // assignment changes mid-session.
   branchId: string | null;
   branchName: string | null;
+  // Gates the first-time product tour (components/onboarding/ProductTour.tsx)
+  // — false only for a brand-new signup/employee that hasn't clicked through
+  // or skipped it yet.
+  hasSeenTour: boolean;
 };
 
 export async function getSession(): Promise<Session | null> {
@@ -123,6 +127,7 @@ export async function getSession(): Promise<Session | null> {
     allowedSections: user.allowedSections,
     branchId,
     branchName: branch?.name ?? null,
+    hasSeenTour: user.hasSeenTour,
   };
 }
 

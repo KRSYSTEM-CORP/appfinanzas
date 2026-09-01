@@ -88,6 +88,7 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
         branchId: resolvedBranchId,
         status: "ACTIVE",
         allowedSections: role === "VENDEDOR" ? allowedSections : [],
+        hasSeenTour: false,
       },
     })
   );

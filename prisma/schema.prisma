@@ -266,6 +266,12 @@ model User {
   // so activating this feature never locks out an existing seller until a
   // manager explicitly restricts them.
   allowedSections     String[]             @default([])
+  // Whether this user has clicked through (or skipped) the first-time
+  // product tour shown right after login — see components/onboarding/
+  // ProductTour.tsx. Existing accounts default to true so nobody who
+  // already knows the app suddenly gets the tour forced on them; only
+  // brand-new signups/employees start false.
+  hasSeenTour         Boolean              @default(true)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   sales               Sale[]               @relation("SaleSeller")

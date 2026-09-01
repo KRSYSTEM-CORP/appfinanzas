@@ -61,6 +61,7 @@ export async function createCompanyWithOwner(companyName: string, owner: NewOwne
             googleId: owner.googleId,
             companyId: company.id,
             status: "ACTIVE",
+            hasSeenTour: false,
           },
         });
         return { company, branch, user };

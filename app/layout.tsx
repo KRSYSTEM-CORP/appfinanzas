@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NavBar } from "@/components/nav/NavBar";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { KrPosTour } from "@/components/onboarding/KrPosTour";
 import { getSession } from "@/lib/session";
 import { getBranding } from "@/lib/actions/settings";
 import { listBranches } from "@/lib/actions/branches";
@@ -68,6 +69,7 @@ export default async function RootLayout({
             currentBranchName={session.branchName}
           />
         )}
+        {session && <KrPosTour hasSeenTour={session.hasSeenTour} />}
         <main className="flex-1 min-h-0">{children}</main>
       </body>
     </html>
