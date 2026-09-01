@@ -36,7 +36,7 @@ async function requireSuperAdmin() {
 // One row per company (not per user) so the panel groups a company's owner
 // account together with any employees it has registered — the users array
 // is ordered owner-first (GERENTE, oldest first) so `users[0]` is always the
-// account created by signup(), the one every company-level action targets.
+// account created during signup, the one every company-level action targets.
 // select (not include) on purpose: this feeds straight into a Client
 // Component (AdminUserTable) — Company.exchangeRate is a Prisma Decimal,
 // which isn't a plain serializable object, and every User row carries

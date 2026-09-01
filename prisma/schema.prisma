@@ -300,6 +300,23 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+// Holds a pending email/password signup between "sent the code" and
+// "confirmed it" — the account itself (Company/Branch/User) is only created
+// once the code checks out, so there's no half-created company sitting
+// around for an abandoned or fake signup. payload is the JSON-encoded
+// SignupPayload (see lib/actions/auth.ts) needed to finish provisioning.
+model SignupVerification {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  payload   String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
 // A single failed/attempted hit against a rate-limited auth action (login,
 // employee login, password-reset request) — see lib/rate-limit.ts. `key`
 // combines a scope prefix with the identifier being limited (email, or

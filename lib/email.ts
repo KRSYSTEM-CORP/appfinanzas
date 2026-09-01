@@ -53,6 +53,22 @@ export async function sendAnnouncementEmail(
   );
 }
 
+export async function sendSignupCodeEmail(to: string, code: string): Promise<void> {
+  await send(
+    to,
+    "Tu código de verificación — KR POS",
+    `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2>Confirma tu correo</h2>
+        <p>Usa este código para terminar de crear tu cuenta en KR POS:</p>
+        <p style="font-size: 32px; font-weight: 700; letter-spacing: 6px; text-align: center; margin: 24px 0;">${code}</p>
+        <p>Este código vence en 10 minutos. Si no intentaste crear una cuenta, puedes ignorar este correo.</p>
+        <p style="color: #888; font-size: 12px; margin-top: 32px;">KR POS — By KR System</p>
+      </div>
+    `,
+  );
+}
+
 export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {
   const resetUrl = `${APP_URL}/reset-password/${token}`;
   await send(

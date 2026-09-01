@@ -1,13 +1,13 @@
 "use server";
 
-import { randomBytes, createHash } from "crypto";
+import { randomBytes, randomInt, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/tenant-db";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { setSessionCookie, clearSessionCookie } from "@/lib/session";
-import { sendPasswordResetEmail } from "@/lib/email";
+import { sendPasswordResetEmail, sendSignupCodeEmail } from "@/lib/email";
 import { createCompanyWithOwner } from "@/lib/company-provisioning";
 import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
@@ -26,10 +26,28 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
 const RESET_REQUEST_WINDOW_MS = 60 * 60 * 1000;
 const RESET_REQUEST_MAX_ATTEMPTS = 3;
+const SIGNUP_CODE_TTL_MS = 10 * 60 * 1000;
+const SIGNUP_CODE_MAX_ATTEMPTS = 5;
+const SIGNUP_RESEND_WINDOW_MS = 10 * 60 * 1000;
+const SIGNUP_RESEND_MAX_ATTEMPTS = 3;
 
 function hashResetToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
+
+function hashSignupCode(code: string): string {
+  return createHash("sha256").update(code).digest("hex");
+}
+
+function generateSignupCode(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+type SignupPayload = { companyName: string; email: string; passwordHash: string };
+
+export type SignupCodeResult =
+  | { success: true; verificationId: string; email: string }
+  | { success: false; error: string };
 
 // A shared POS terminal only ever belongs to one company in practice — once
 // anyone (owner or employee) logs in successfully from a device, remember
@@ -73,11 +91,14 @@ export async function getRememberedCompany(): Promise<RememberedCompany | null> 
   return { code, companyName: company?.name ?? null };
 }
 
-// Self-serve: the company is active immediately, with a free trial (see
-// createCompanyWithOwner/lib/billing.ts) — no super admin approval step.
-// Auto-logs in and lands straight on /pos, the same way the Google signup
-// path (app/api/auth/google/callback) does.
-export async function signup(formData: FormData): Promise<ActionResult> {
+// Step 1 of signup: validates the form, emails a 6-digit code, and stashes
+// everything needed to finish provisioning in SignupVerification — the
+// Company/Branch/User only get created once confirmSignupCode() checks the
+// code, so an abandoned or fake signup never leaves a half-created company
+// behind. Auto-logs in and lands on /pos once confirmed, the same way the
+// Google signup path (app/api/auth/google/callback) does (Google's signup
+// skips this: Google already confirmed that address).
+export async function requestSignupCode(formData: FormData): Promise<SignupCodeResult> {
   const ip = await getClientIp();
   const rl = await checkRateLimit("signup", ip, 5, 60 * 60_000);
   if (!rl.allowed) return { success: false, error: rateLimitMessage(rl.retryAfterMinutes) };
@@ -105,10 +126,91 @@ export async function signup(formData: FormData): Promise<ActionResult> {
   }
 
   const passwordHash = hashPassword(password);
+  const payload: SignupPayload = { companyName, email, passwordHash };
+  const code = generateSignupCode();
+
+  // Only one pending signup per email at a time — a retry (e.g. "no me
+  // llegó el código") replaces the previous attempt instead of piling up
+  // rows that would otherwise all race to create the same account.
+  await prisma.signupVerification.deleteMany({ where: { email } });
+  const verification = await prisma.signupVerification.create({
+    data: {
+      email,
+      codeHash: hashSignupCode(code),
+      payload: JSON.stringify(payload),
+      expiresAt: new Date(Date.now() + SIGNUP_CODE_TTL_MS),
+    },
+  });
+
+  await sendSignupCodeEmail(email, code);
+
+  return { success: true, verificationId: verification.id, email };
+}
+
+// Step 2: checks the code and, only if it matches, actually creates the
+// company/owner and logs them in.
+export async function confirmSignupCode(verificationId: string, code: string): Promise<ActionResult> {
+  const genericError = "Este código venció o no es válido. Solicita uno nuevo.";
+  const verification = await prisma.signupVerification.findUnique({ where: { id: verificationId } });
+  if (!verification) return { success: false, error: genericError };
+
+  if (verification.expiresAt < new Date()) {
+    await prisma.signupVerification.delete({ where: { id: verificationId } });
+    return { success: false, error: genericError };
+  }
+
+  if (verification.attempts >= SIGNUP_CODE_MAX_ATTEMPTS) {
+    await prisma.signupVerification.delete({ where: { id: verificationId } });
+    return { success: false, error: "Demasiados intentos. Solicita un nuevo código." };
+  }
+
+  if (hashSignupCode(code) !== verification.codeHash) {
+    await prisma.signupVerification.update({
+      where: { id: verificationId },
+      data: { attempts: { increment: 1 } },
+    });
+    const remaining = SIGNUP_CODE_MAX_ATTEMPTS - verification.attempts - 1;
+    return { success: false, error: `Código incorrecto. Te quedan ${remaining} intentos.` };
+  }
+
+  const { companyName, email, passwordHash } = JSON.parse(verification.payload) as SignupPayload;
+
+  // Re-checked here (not just at request time) in case the address was
+  // registered by someone else in the minutes between requesting and
+  // confirming the code.
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    await prisma.signupVerification.delete({ where: { id: verificationId } });
+    return { success: false, error: "Ese correo ya está registrado" };
+  }
+
   const { company, branch, user } = await createCompanyWithOwner(companyName, { email, passwordHash });
+  await prisma.signupVerification.delete({ where: { id: verificationId } });
 
   await setSessionCookie({ uid: user.id, cid: company.id, companyName: company.name, bid: branch.id });
   redirect("/pos");
+}
+
+// "No me llegó el código" — reuses the same verification row (same payload,
+// same email) with a fresh code/expiry/attempt count.
+export async function resendSignupCode(verificationId: string): Promise<ActionResult> {
+  const verification = await prisma.signupVerification.findUnique({ where: { id: verificationId } });
+  if (!verification) {
+    return { success: false, error: "Esta verificación venció. Vuelve a empezar el registro." };
+  }
+
+  const rl = await checkRateLimit("signup-resend", verificationId, SIGNUP_RESEND_MAX_ATTEMPTS, SIGNUP_RESEND_WINDOW_MS);
+  if (!rl.allowed) return { success: false, error: rateLimitMessage(rl.retryAfterMinutes) };
+  await recordFailedAttempt("signup-resend", verificationId);
+
+  const code = generateSignupCode();
+  await prisma.signupVerification.update({
+    where: { id: verificationId },
+    data: { codeHash: hashSignupCode(code), attempts: 0, expiresAt: new Date(Date.now() + SIGNUP_CODE_TTL_MS) },
+  });
+  await sendSignupCodeEmail(verification.email, code);
+
+  return { success: true };
 }
 
 export type LoginResult =

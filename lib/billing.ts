@@ -1,7 +1,7 @@
 const GRACE_DAYS = 5;
 
 // Free trial granted automatically the moment a new company is created —
-// signup() and the Google signup path (app/api/auth/google/callback) both go
+// confirmSignupCode() and the Google signup path (app/api/auth/google/callback) both go
 // through createCompanyWithOwner (lib/company-provisioning.ts), which is
 // where this actually gets applied. approveUser in lib/actions/admin.ts still
 // applies it too, purely to cover any pre-existing PENDING account from
