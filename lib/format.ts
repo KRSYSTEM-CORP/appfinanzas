@@ -54,6 +54,17 @@ export function formatUSD(cents: number): string {
   }).format(cents / 100);
 }
 
+// Binance Pay settles in USDT, not USD — same 1:1 amount as formatUSD, but
+// labeled the way the subscription's Binance card/report actually asks for
+// it (see app/billing/page.tsx and components/billing/PaymentReportForm.tsx).
+export function formatUSDT(cents: number): string {
+  const amount = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(cents / 100);
+  return `${amount} USDT`;
+}
+
 // Zelle, Binance (USDT) and PayPal are USD-denominated payment rails — see
 // lib/payment-currency.ts for how this drives each payment-split line's
 // actual currency and EUR-cent conversion.

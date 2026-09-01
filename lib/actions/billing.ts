@@ -36,6 +36,13 @@ export type BillingInfo = {
   // The company's own retail currency (Settings → Moneda) — informational,
   // unrelated to platform billing (which is always USDT via Binance now).
   localCurrencyCode: string;
+  // monthlyFeeUsdCents converted to localCurrencyCode at the company's own
+  // exchange rate (Configuración → Tasa de cambio) — null unless that rate
+  // is enabled and denominated in USD, since the subscription itself is
+  // USD-denominated (converting through a EUR-pegged rate would be wrong).
+  // Recomputed on every page load, so it tracks the rate's daily updates
+  // automatically instead of being stored anywhere.
+  monthlyFeeLocalAmount: number | null;
   nextPaymentDueDate: Date | null;
   blocked: boolean;
   paymentInstructions: string | null;
@@ -58,6 +65,9 @@ export async function getBillingInfo(): Promise<BillingInfo> {
           monthlyFeeUsdCents: true,
           nextPaymentDueDate: true,
           localCurrencyCode: true,
+          exchangeRate: true,
+          exchangeRateEnabled: true,
+          referenceCurrency: true,
         },
       })
     ),
@@ -69,11 +79,19 @@ export async function getBillingInfo(): Promise<BillingInfo> {
   const isExempt = company?.isExempt ?? false;
   const nextPaymentDueDate = company?.nextPaymentDueDate ?? null;
 
+  const rate = company?.exchangeRate != null ? Number(company.exchangeRate) : null;
+  const monthlyFeeUsdCents = company?.monthlyFeeUsdCents ?? null;
+  const monthlyFeeLocalAmount =
+    company?.exchangeRateEnabled && company.referenceCurrency === "USD" && rate != null && monthlyFeeUsdCents != null
+      ? (monthlyFeeUsdCents / 100) * rate
+      : null;
+
   return {
     companyName,
     isExempt,
-    monthlyFeeUsdCents: company?.monthlyFeeUsdCents ?? null,
+    monthlyFeeUsdCents,
     localCurrencyCode: company?.localCurrencyCode ?? "VES",
+    monthlyFeeLocalAmount,
     nextPaymentDueDate,
     blocked: isCompanyBlocked({ isExempt, nextPaymentDueDate }),
     paymentInstructions: settings?.paymentInstructions ?? null,

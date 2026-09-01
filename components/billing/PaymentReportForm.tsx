@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { submitPaymentReport } from "@/lib/actions/billing";
-import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_REQUIRING_REFERENCE } from "@/lib/format";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_REQUIRING_REFERENCE, formatUSDT } from "@/lib/format";
+import { formatLocalCurrency } from "@/lib/currencies";
 import type { PaymentMethod } from "@prisma/client";
 
 // The subscription accepts exactly these two rails — no Transferencia,
@@ -20,7 +21,15 @@ const BILLING_PAYMENT_METHODS: PaymentMethod[] = ["BINANCE", "CARD"];
 
 type ReportLine = { paymentMethod: PaymentMethod; amount: string; reference: string };
 
-export function PaymentReportForm() {
+export function PaymentReportForm({
+  monthlyFeeUsdCents,
+  monthlyFeeLocalAmount,
+  localCurrencyCode,
+}: {
+  monthlyFeeUsdCents: number | null;
+  monthlyFeeLocalAmount: number | null;
+  localCurrencyCode: string;
+}) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const [lines, setLines] = useState<ReportLine[]>([{ paymentMethod: "BINANCE", amount: "", reference: "" }]);
@@ -110,6 +119,17 @@ export function PaymentReportForm() {
               </div>
             )}
           </div>
+          {line.paymentMethod === "BINANCE" && monthlyFeeUsdCents != null && (
+            <p className="text-xs text-muted-foreground">
+              Monto de la suscripción: {formatUSDT(monthlyFeeUsdCents)}
+            </p>
+          )}
+          {line.paymentMethod === "CARD" && monthlyFeeLocalAmount != null && (
+            <p className="text-xs text-muted-foreground">
+              Monto de la suscripción: {formatLocalCurrency(monthlyFeeLocalAmount, localCurrencyCode)} (a tu tasa
+              actual) — ingresa su equivalente en USD arriba.
+            </p>
+          )}
         </div>
       ))}
 
