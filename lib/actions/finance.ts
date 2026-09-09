@@ -43,29 +43,6 @@ export async function costOfGoodsSold(range: DateRangeSelection): Promise<number
   });
 }
 
-// What actually left the register buying inventory in the period — separate
-// from costOfGoodsSold above, which only counts the cost of what was SOLD.
-// A purchase counts here the moment it's registered, regardless of whether
-// any of it has sold yet (unlike COGS), so a big restock shows up as a real
-// hit to "ganancia neta estimada" right away rather than trickling in as
-// each unit sells.
-export async function purchasesTotal(range: DateRangeSelection): Promise<number> {
-  const { companyId, branchId } = await requireManager();
-  const windows = selectionToWindows(range);
-  return withTenant(companyId, async (tx) => {
-    const result = await tx.purchase.aggregate({
-      _sum: { totalCents: true },
-      where: {
-        companyId,
-        ...(branchId ? { branchId } : {}),
-        OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
-        voided: false,
-      },
-    });
-    return result._sum.totalCents ?? 0;
-  });
-}
-
 export async function listExpenses(range: DateRangeSelection) {
   const { companyId } = await requireManager();
   const windows = selectionToWindows(range);

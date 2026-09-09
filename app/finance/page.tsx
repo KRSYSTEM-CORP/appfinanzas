@@ -14,7 +14,7 @@ import {
   bottomProducts,
   incomeByCurrency,
 } from "@/lib/actions/reports";
-import { costOfGoodsSold, expensesTotal, listExpenses, purchasesTotal } from "@/lib/actions/finance";
+import { costOfGoodsSold, expensesTotal, listExpenses } from "@/lib/actions/finance";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { parseDateRangeSelection } from "@/lib/report-types";
 
@@ -37,7 +37,6 @@ export default async function FinancePage({
     currencyIncome,
     cogsCents,
     expensesCents,
-    purchasesCents,
     expenses,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency },
   ] = await Promise.all([
@@ -49,12 +48,11 @@ export default async function FinancePage({
     incomeByCurrency(range),
     costOfGoodsSold(range),
     expensesTotal(range),
-    purchasesTotal(range),
     listExpenses(range),
     getExchangeRateInfo(),
   ]);
 
-  const netProfitCents = totals.totalEurCents - cogsCents - expensesCents - purchasesCents;
+  const netProfitCents = totals.totalEurCents - cogsCents - expensesCents;
 
   function currencyDisplayName(code: string): string {
     if (code === "EUR" || code === "USD") return code;
@@ -115,11 +113,6 @@ export default async function FinancePage({
           accent="destructive"
           value={formatCurrencyCents(referenceCurrency, expensesCents)}
         />
-        <StatCard
-          label="Compras registradas"
-          accent="destructive"
-          value={formatCurrencyCents(referenceCurrency, purchasesCents)}
-        />
       </div>
 
       <Card>
@@ -131,8 +124,7 @@ export default async function FinancePage({
             {formatCurrencyCents(referenceCurrency, netProfitCents)}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            Ingresos − costo de mercancía vendida − gastos − compras registradas, para el período
-            seleccionado.
+            Ingresos − costo de mercancía vendida − gastos, para el período seleccionado.
           </p>
         </CardContent>
       </Card>
