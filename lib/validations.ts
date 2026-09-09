@@ -656,3 +656,111 @@ export const SupplierSchema = z.object({
 });
 
 export type SupplierInput = z.infer<typeof SupplierSchema>;
+
+const PurchaseItemSchema = z.object({
+  productId: z.string().trim().min(1, "Selecciona un producto"),
+  quantity: z.coerce.number().int().positive("La cantidad debe ser mayor a 0"),
+  // Raw amount as typed, still in whatever currency unitCostInForeignCurrency
+  // selects — createPurchase resolves it to reference-currency cents server-
+  // side (same pattern as a payment-split row), so the exchange rate used is
+  // always the one on file at the moment the purchase is saved, never a
+  // value trusted from the client.
+  unitCost: z.coerce.number().min(0, "El costo no puede ser negativo").transform(toCents),
+  // true = entered directly in the company's reference currency (Euro/Dólar
+  // BCV) — the only option that existed before this toggle, kept as the
+  // default so old behavior is unchanged when a caller omits this field
+  // (e.g. bulk import, which has no currency toggle of its own).
+  unitCostInForeignCurrency: z.boolean().default(true),
+  taxCategory: TaxCategoryEnum,
+  // Off means this line still lands in the libro de compras but never
+  // touches Product.stock/costCents — for a purchase that isn't tracked
+  // inventory. On by default.
+  affectsStock: booleanFieldWithDefault(true),
+});
+
+export const PurchaseSchema = z
+  .object({
+    // Exactly one of these two — see the .superRefine below. supplierId
+    // picks a real Supplier record; manualSupplierName is free text for a
+    // one-off purchase that shouldn't create one (see createPurchase).
+    supplierId: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    manualSupplierName: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    supplierInvoiceNo: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    items: z.array(PurchaseItemSchema).min(1, "Agrega al menos un producto"),
+    // The real total on the supplier's paper invoice, entered manually —
+    // this becomes Purchase.totalCents (see createPurchase), overriding the
+    // sum of the line items above rather than just cross-checking it: the
+    // line items are each merchant's own per-product cost *estimate*, while
+    // this is the actual, legally-binding invoice total. createPurchase
+    // proportionally rescales each line's base/tax/cost to this real total
+    // once it's known.
+    invoiceAmount: z.coerce.number().positive("Ingresa el monto de la factura").transform(toCents),
+    invoiceAmountInForeignCurrency: z.boolean().default(true),
+    paymentStatus: z.enum(["PAID", "PENDING"]).default("PENDING"),
+    // Same split-by-method/currency model as a POS sale (see SaleSchema's
+    // own `payments` + PaymentSplitBuilder) — only required/validated when
+    // the purchase is paid up front; a credit purchase has nothing to
+    // record here yet (see registerPurchasePayment-style abono, mirrors
+    // registerPayment for sales, if that's ever added).
+    payments: z.array(PaymentSplitSchema).default([]),
+    note: z.preprocess(blankToUndefined, z.string().trim().optional()),
+  })
+  .superRefine((data, ctx) => {
+    if (data.paymentStatus === "PAID") {
+      validatePaymentSplits(data.payments, ctx);
+    }
+    if (!data.supplierId && !data.manualSupplierName) {
+      ctx.addIssue({ code: "custom", path: ["supplierId"], message: "Selecciona o escribe un proveedor" });
+    }
+    if (data.supplierId && data.manualSupplierName) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["manualSupplierName"],
+        message: "Elige un proveedor registrado o escribe uno manual, no ambos",
+      });
+    }
+  });
+
+export type PurchaseInput = z.infer<typeof PurchaseSchema>;
+
+// One Excel row per product line. Rows sharing the same supplier + invoice
+// number are grouped into a single Purchase with several line items (see
+// bulkImportPurchases, lib/actions/purchases.ts) — taxCategory is optional
+// here (unlike the manual-form PurchaseItemSchema above) since a bulk import
+// falls back to the product's own existing tax category when the column is
+// left blank.
+const PAYMENT_STATUS_WORD_MAP: Record<string, "PAID" | "PENDING"> = {
+  contado: "PAID",
+  pagada: "PAID",
+  pagado: "PAID",
+  paid: "PAID",
+  credito: "PENDING",
+  "crédito": "PENDING",
+  pending: "PENDING",
+  "por pagar": "PENDING",
+};
+export const BulkPurchaseRowSchema = z
+  .object({
+    supplierName: z.string().trim().min(1, "El proveedor es obligatorio"),
+    supplierInvoiceNo: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    productSku: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    productName: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    quantity: z.coerce.number().int().positive("La cantidad debe ser mayor a 0"),
+    unitCost: z.coerce.number().min(0, "El costo no puede ser negativo").transform(toCents),
+    taxCategory: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      TaxCategoryEnum.optional()
+    ),
+    paymentStatus: z.preprocess((v) => {
+      if (typeof v !== "string" || v.trim() === "") return undefined;
+      return PAYMENT_STATUS_WORD_MAP[v.trim().toLowerCase()] ?? v.trim().toUpperCase();
+    }, z.enum(["PAID", "PENDING"]).optional()),
+    affectsStock: booleanFieldWithDefault(true),
+    note: z.preprocess(blankToUndefined, z.string().trim().optional()),
+  })
+  .refine((data) => data.productSku || data.productName, {
+    message: "Indica el SKU o el nombre del producto",
+    path: ["productSku"],
+  });
+
+export type BulkPurchaseRowInput = z.infer<typeof BulkPurchaseRowSchema>;

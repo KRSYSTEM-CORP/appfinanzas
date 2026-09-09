@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -8,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PurchaseActions } from "@/components/purchases/PurchaseActions";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { formatDate, PAYMENT_METHOD_LABELS, PURCHASE_PAYMENT_STATUS_LABELS } from "@/lib/format";
@@ -24,11 +26,22 @@ export default async function PurchasesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Compras</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Historial de compras a proveedores y su control de cuentas por pagar.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Compras</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Registra compras a proveedores — cada una aumenta el stock y lleva su propio control de
+            cuentas por pagar.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" nativeButton={false} render={<Link href="/purchases/import" />}>
+            Importar desde Excel
+          </Button>
+          <Button nativeButton={false} render={<Link href="/purchases/new" />}>
+            Nueva compra
+          </Button>
+        </div>
       </div>
 
       <Card>
