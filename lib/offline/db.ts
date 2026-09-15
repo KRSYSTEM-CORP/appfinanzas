@@ -65,32 +65,64 @@ function getDb(): Promise<IDBPDatabase> | null {
           db.createObjectStore(STORE_NAME, { keyPath: "localId" });
         }
       },
+      // Mobile Safari/iOS closes an open IndexedDB connection out from under
+      // the page — silently, in the background, under memory pressure —
+      // without the page ever calling db.close() itself. Without this, the
+      // cached dbPromise above keeps resolving to that now-dead connection
+      // forever, and every operation on it throws (see withDb's retry below
+      // for the matching InvalidStateError/UnknownError this produced in
+      // Sentry: KRPOS-8, KRPOS-9). Clearing the cache here just means the
+      // next call opens a fresh connection instead of reusing a dead one.
+      terminated() {
+        dbPromise = null;
+      },
     });
   }
   return dbPromise;
 }
 
-export async function addPendingSale(sale: PendingSale): Promise<void> {
+// Runs `op` against a fresh-enough connection, retrying once with a brand
+// new connection if the cached one turns out to be dead — covers the case
+// where the browser closed it without terminated() having fired yet (or at
+// all; Safari's own close notifications are unreliable), which otherwise
+// surfaces as the op itself throwing InvalidStateError/UnknownError.
+async function withDb<T>(op: (db: IDBPDatabase) => Promise<T>, fallback: T): Promise<T> {
   const db = await getDb();
-  if (!db) return;
-  await db.put(STORE_NAME, sale);
+  if (!db) return fallback;
+  try {
+    return await op(db);
+  } catch (err) {
+    dbPromise = null;
+    const retryDb = await getDb();
+    if (!retryDb) return fallback;
+    try {
+      return await op(retryDb);
+    } catch {
+      // Still failing on a fresh connection — genuinely unavailable (e.g.
+      // storage disabled), not just a stale handle. Offline queuing is
+      // best-effort, so give up quietly rather than throwing into a caller
+      // that's already treating this as "storage unavailable."
+      console.error("[offline-db] operation failed after reconnect:", err);
+      return fallback;
+    }
+  }
+}
+
+export async function addPendingSale(sale: PendingSale): Promise<void> {
+  await withDb((db) => db.put(STORE_NAME, sale), undefined);
 }
 
 export async function listPendingSalesRaw(): Promise<PendingSale[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return db.getAll(STORE_NAME);
+  return withDb((db) => db.getAll(STORE_NAME), []);
 }
 
 export async function removePendingSale(localId: string): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.delete(STORE_NAME, localId);
+  await withDb((db) => db.delete(STORE_NAME, localId), undefined);
 }
 
 export async function setPendingSaleError(localId: string, error: string): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  const existing = await db.get(STORE_NAME, localId);
-  if (existing) await db.put(STORE_NAME, { ...existing, lastError: error });
+  await withDb(async (db) => {
+    const existing = await db.get(STORE_NAME, localId);
+    if (existing) await db.put(STORE_NAME, { ...existing, lastError: error });
+  }, undefined);
 }
