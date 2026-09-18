@@ -6,8 +6,50 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { isCompanyBlocked, PLATFORM_SETTINGS_ID } from "@/lib/billing";
+import { fetchBcvRate } from "@/lib/bcv-rate";
+import { getOrSetCache } from "@/lib/cache";
 import { PaymentReportSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
+
+// Bs per 1 USD, used only to price the subscription's Pago Móvil amount —
+// deliberately independent of any one company's own Company.exchangeRate
+// (which could be EUR-denominated, disabled, or simply belong to a
+// different business than KR System's own billing). Self-heals the same
+// way a company's own rate does: the daily cron at app/api/cron/bcv-rate/
+// route.ts refreshes it proactively, and this read-time check catches it if
+// that ever fails to run. Cached like getExchangeRateInfo, since /billing
+// (and every company's payment-report hint) reads this on every load.
+const PLATFORM_STALE_RATE_MS = 20 * 60 * 60 * 1000;
+
+export type PlatformExchangeRateInfo = { rate: number | null; updatedAt: Date | null };
+
+export async function getPlatformExchangeRateInfo(): Promise<PlatformExchangeRateInfo> {
+  return getOrSetCache("platformExchangeRateInfo", 600, computePlatformExchangeRateInfo);
+}
+
+async function computePlatformExchangeRateInfo(): Promise<PlatformExchangeRateInfo> {
+  const settings = await prisma.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } });
+  let rate = settings?.platformExchangeRate != null ? Number(settings.platformExchangeRate) : null;
+  let updatedAt = settings?.platformExchangeRateUpdatedAt ?? null;
+
+  const isStale = updatedAt == null || Date.now() - updatedAt.getTime() > PLATFORM_STALE_RATE_MS;
+  if (isStale) {
+    try {
+      const freshRate = await fetchBcvRate("USD");
+      updatedAt = new Date();
+      await prisma.platformSettings.upsert({
+        where: { id: PLATFORM_SETTINGS_ID },
+        create: { id: PLATFORM_SETTINGS_ID, platformExchangeRate: freshRate, platformExchangeRateUpdatedAt: updatedAt },
+        update: { platformExchangeRate: freshRate, platformExchangeRateUpdatedAt: updatedAt },
+      });
+      rate = freshRate;
+    } catch {
+      // Keep serving the last known rate; the next page load or the cron retries.
+    }
+  }
+
+  return { rate, updatedAt };
+}
 
 // This whole file deliberately uses getSession() instead of requireSession():
 // /billing is exactly the page a billing-blocked company needs to reach to
@@ -33,15 +75,11 @@ export type BillingInfo = {
   companyName: string;
   isExempt: boolean;
   monthlyFeeUsdCents: number | null;
-  // The company's own retail currency (Settings → Moneda) — informational,
-  // unrelated to platform billing (which is always USDT via Binance now).
-  localCurrencyCode: string;
-  // monthlyFeeUsdCents converted to localCurrencyCode at the company's own
-  // exchange rate (Configuración → Tasa de cambio) — null unless that rate
-  // is enabled and denominated in USD, since the subscription itself is
-  // USD-denominated (converting through a EUR-pegged rate would be wrong).
-  // Recomputed on every page load, so it tracks the rate's daily updates
-  // automatically instead of being stored anywhere.
+  // monthlyFeeUsdCents converted to Bolívares at KR System's own platform
+  // rate (see getPlatformExchangeRateInfo above) — null only if that rate
+  // has never been set yet (e.g. brand new install, BCV unreachable on
+  // first load). Recomputed on every page load, so it tracks the rate's
+  // daily updates automatically instead of being stored anywhere.
   monthlyFeeLocalAmount: number | null;
   nextPaymentDueDate: Date | null;
   blocked: boolean;
@@ -56,41 +94,30 @@ export type BillingInfo = {
 export async function getBillingInfo(): Promise<BillingInfo> {
   const { companyId, companyName } = await requireCompanyUser();
 
-  const [company, settings] = await Promise.all([
+  const [company, settings, platformRate] = await Promise.all([
     withTenant(companyId, (tx) =>
       tx.company.findUnique({
         where: { id: companyId },
-        select: {
-          isExempt: true,
-          monthlyFeeUsdCents: true,
-          nextPaymentDueDate: true,
-          localCurrencyCode: true,
-          exchangeRate: true,
-          exchangeRateEnabled: true,
-          referenceCurrency: true,
-        },
+        select: { isExempt: true, monthlyFeeUsdCents: true, nextPaymentDueDate: true },
       })
     ),
     // Global config, not scoped to any company — read directly, same as the
     // rest of the platform-wide settings.
     prisma.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } }),
+    getPlatformExchangeRateInfo(),
   ]);
 
   const isExempt = company?.isExempt ?? false;
   const nextPaymentDueDate = company?.nextPaymentDueDate ?? null;
 
-  const rate = company?.exchangeRate != null ? Number(company.exchangeRate) : null;
   const monthlyFeeUsdCents = company?.monthlyFeeUsdCents ?? null;
   const monthlyFeeLocalAmount =
-    company?.exchangeRateEnabled && company.referenceCurrency === "USD" && rate != null && monthlyFeeUsdCents != null
-      ? (monthlyFeeUsdCents / 100) * rate
-      : null;
+    platformRate.rate != null && monthlyFeeUsdCents != null ? (monthlyFeeUsdCents / 100) * platformRate.rate : null;
 
   return {
     companyName,
     isExempt,
     monthlyFeeUsdCents,
-    localCurrencyCode: company?.localCurrencyCode ?? "VES",
     monthlyFeeLocalAmount,
     nextPaymentDueDate,
     blocked: isCompanyBlocked({ isExempt, nextPaymentDueDate }),

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/reports/StatCard";
 import { AdminUserTable } from "@/components/admin/AdminUserTable";
-import { PlatformSettingsForm, PendingReportsTable } from "@/components/admin/PaymentReportsPanel";
+import { PlatformSettingsForm, PlatformExchangeRateForm, PendingReportsTable } from "@/components/admin/PaymentReportsPanel";
 import { AnnouncementForm } from "@/components/admin/AnnouncementForm";
 import {
   listAllCompanies,
@@ -10,6 +10,7 @@ import {
   getPlatformSettings,
   listAnnouncementRecipients,
 } from "@/lib/actions/admin";
+import { getPlatformExchangeRateInfo } from "@/lib/actions/billing";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -22,10 +23,11 @@ export default async function AdminPage() {
   if (!session) redirect("/api/auth/clear-session");
   if (!session.isSuperAdmin) redirect("/pos");
 
-  const [companies, pendingReports, platformSettings, announcementRecipients] = await Promise.all([
+  const [companies, pendingReports, platformSettings, platformExchangeRate, announcementRecipients] = await Promise.all([
     listAllCompanies(),
     listPendingPaymentReports(),
     getPlatformSettings(),
+    getPlatformExchangeRateInfo(),
     listAnnouncementRecipients(),
   ]);
   // Each company's own status is its owner account's status (users[0] —
@@ -64,6 +66,12 @@ export default async function AdminPage() {
             initialPagoMovilId={platformSettings.pagoMovilId}
             initialDefaultMonthlyFeeUsdCents={platformSettings.defaultMonthlyFeeUsdCents}
           />
+          <div className="mt-4">
+            <PlatformExchangeRateForm
+              currentRate={platformExchangeRate.rate}
+              currentUpdatedAt={platformExchangeRate.updatedAt}
+            />
+          </div>
         </CardContent>
       </Card>
 
