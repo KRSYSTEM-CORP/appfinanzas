@@ -192,6 +192,7 @@ export default async function BillingPage() {
               <PaymentReportForm
                 monthlyFeeUsdCents={info.monthlyFeeUsdCents}
                 monthlyFeeLocalAmount={info.monthlyFeeLocalAmount}
+                platformRate={info.platformRate}
               />
             </CardContent>
           </Card>
