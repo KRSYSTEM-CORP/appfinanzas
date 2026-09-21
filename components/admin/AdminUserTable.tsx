@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/format";
 import { isCompanyBlocked, TRIAL_DAYS } from "@/lib/billing";
+import { FEATURES } from "@/lib/features";
 import {
   approveUser,
   denyUser,
@@ -34,6 +35,7 @@ import {
   reactivateUser,
   recordMaintenancePayment,
   setCompanyExempt,
+  setCompanyFeatures,
   deleteCompany,
 } from "@/lib/actions/admin";
 
@@ -61,7 +63,7 @@ type AdminCompanyUser = Pick<
 >;
 type AdminCompany = Pick<
   Company,
-  "id" | "name" | "isExempt" | "nextPaymentDueDate" | "monthlyFeeUsdCents" | "createdAt"
+  "id" | "name" | "isExempt" | "nextPaymentDueDate" | "monthlyFeeUsdCents" | "enabledFeatures" | "createdAt"
 > & { users: AdminCompanyUser[] };
 
 function addDaysISO(from: Date, days: number): string {
@@ -458,6 +460,44 @@ function AdminCompanyRow({
           </div>
         </TableCell>
       </TableRow>
+      {expanded && FEATURES.length > 0 && (
+        <TableRow className="bg-muted/30">
+          <TableCell colSpan={6}>
+            <div className="flex flex-col gap-1.5 py-1 pl-6">
+              <p className="text-xs font-medium text-muted-foreground">
+                Apartados personalizados — solo para {company.name}
+              </p>
+              {FEATURES.map((feature) => {
+                const enabled = company.enabledFeatures.includes(feature.id);
+                return (
+                  <label key={feature.id} className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={enabled}
+                      disabled={isPending}
+                      onChange={() =>
+                        run(() =>
+                          setCompanyFeatures(
+                            company.id,
+                            enabled
+                              ? company.enabledFeatures.filter((id) => id !== feature.id)
+                              : [...company.enabledFeatures, feature.id]
+                          )
+                        )
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{feature.label}</span>
+                      <span className="block text-xs text-muted-foreground">{feature.description}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
       {expanded && employees.length > 0 && (
         <TableRow className="bg-muted/30">
           <TableCell colSpan={6}>

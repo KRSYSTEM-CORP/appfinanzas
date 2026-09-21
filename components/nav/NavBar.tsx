@@ -54,6 +54,7 @@ export function NavBar({
   isSuperAdmin,
   role,
   allowedSections,
+  featureLinks,
   branches,
   currentBranchId,
   currentBranchName,
@@ -63,6 +64,7 @@ export function NavBar({
   isSuperAdmin?: boolean;
   role: Role;
   allowedSections: string[];
+  featureLinks: { href: string; label: string; managerOnly: boolean }[];
   branches: { id: string; name: string }[];
   currentBranchId: string | null;
   currentBranchName: string | null;
@@ -79,6 +81,9 @@ export function NavBar({
       : links.filter((l) => allowedSections.includes(l.section));
   const navLinks = [
     ...visibleLinks,
+    // Custom links a platform admin enabled for this company only — see
+    // lib/features.ts.
+    ...featureLinks.filter((l) => canManage || !l.managerOnly),
     ...(canManage ? managerOnlyLinks : []),
     ...(isSuperAdmin ? [{ href: "/admin", label: "Administración" }] : []),
     // Configuración and Suscripción mensual are GERENTE-only too — a

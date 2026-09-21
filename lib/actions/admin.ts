@@ -15,6 +15,7 @@ import {
 import { sendAnnouncementEmail } from "@/lib/email";
 import { fetchBcvRate } from "@/lib/bcv-rate";
 import { invalidateCache } from "@/lib/cache";
+import { isKnownFeature } from "@/lib/features";
 import {
   AnnouncementSchema,
   BillingCycleSchema,
@@ -57,6 +58,7 @@ export async function listAllCompanies() {
         isExempt: true,
         nextPaymentDueDate: true,
         monthlyFeeUsdCents: true,
+        enabledFeatures: true,
         createdAt: true,
         users: {
           orderBy: [{ role: "asc" }, { createdAt: "asc" }],
@@ -192,6 +194,21 @@ export async function setCompanyExempt(companyId: string, exempt: boolean): Prom
   await withSuperAdmin((tx) => tx.company.update({ where: { id: companyId }, data: { isExempt: exempt } }));
   revalidatePath("/admin");
   revalidatePath("/settings");
+  return { success: true };
+}
+
+// Replaces the set of custom features (lib/features.ts) enabled for ONE
+// company — the whole point is that nobody else's app changes. Unknown ids
+// are rejected instead of stored so a typo can't silently do nothing.
+export async function setCompanyFeatures(companyId: string, features: string[]): Promise<ActionResult> {
+  await requireSuperAdmin();
+  const unique = [...new Set(features)];
+  const unknown = unique.find((id) => !isKnownFeature(id));
+  if (unknown) return { success: false, error: `Apartado desconocido: ${unknown}` };
+
+  await withSuperAdmin((tx) => tx.company.update({ where: { id: companyId }, data: { enabledFeatures: unique } }));
+  revalidatePath("/admin");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 

@@ -6,6 +6,7 @@ import { withTenant } from "@/lib/tenant-db";
 import type { Role } from "@prisma/client";
 import { isCompanyBlocked } from "@/lib/billing";
 import type { AppSection } from "@/lib/sections";
+import { hasFeature, isKnownFeature } from "@/lib/features";
 import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
@@ -48,6 +49,9 @@ export type Session = {
   // Which sections a VENDEDOR can access — see lib/sections.ts. Empty means
   // unrestricted (see requireSectionAccess below); irrelevant for GERENTE.
   allowedSections: string[];
+  // Custom per-company features a platform admin enabled for this company
+  // (lib/features.ts) — only ids still present in the registry.
+  enabledFeatures: string[];
   // The branch this session is currently scoped to — null means "every
   // branch" (a GERENTE/owner viewing consolidated data, see switchBranch()
   // in lib/actions/branches.ts). A VENDEDOR is always pinned to their own
@@ -82,6 +86,7 @@ export async function getSession(): Promise<Session | null> {
           monthlyFeeUsdCents: true,
           nextPaymentDueDate: true,
           localCurrencyCode: true,
+          enabledFeatures: true,
         },
       },
     },
@@ -125,6 +130,7 @@ export async function getSession(): Promise<Session | null> {
     role: user.role,
     sellerName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email,
     allowedSections: user.allowedSections,
+    enabledFeatures: user.company.enabledFeatures.filter(isKnownFeature),
     branchId,
     branchName: branch?.name ?? null,
     hasSeenTour: user.hasSeenTour,
@@ -164,6 +170,16 @@ export async function requireSectionAccess(section: AppSection): Promise<Session
   if (session.role === "GERENTE" || session.isSuperAdmin) return session;
   if (session.allowedSections.length === 0 || session.allowedSections.includes(section)) return session;
   redirect("/pos");
+}
+
+// Gates a per-company custom feature (lib/features.ts): only a session whose
+// company has it enabled gets through, everyone else is bounced to /pos as if
+// the page didn't exist. Deliberately no super-admin bypass — an admin turns
+// a feature on for their own company to try it, same as any customer would.
+export async function requireFeature(featureId: string): Promise<Session> {
+  const session = await requireSession();
+  if (!hasFeature(session.enabledFeatures, featureId)) redirect("/pos");
+  return session;
 }
 
 // Used by actions that operate on ONE concrete branch (creating a product,

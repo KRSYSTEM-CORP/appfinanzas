@@ -4,6 +4,7 @@ import { NavBar } from "@/components/nav/NavBar";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { KrPosTour } from "@/components/onboarding/KrPosTour";
 import { getSession } from "@/lib/session";
+import { FEATURES, hasFeature } from "@/lib/features";
 import { getBranding } from "@/lib/actions/settings";
 import { listBranches } from "@/lib/actions/branches";
 import { deriveBrandVars } from "@/lib/theme-color";
@@ -64,6 +65,11 @@ export default async function RootLayout({
             isSuperAdmin={session.isSuperAdmin}
             role={session.role}
             allowedSections={session.allowedSections}
+            featureLinks={FEATURES.filter((f) => f.href && hasFeature(session.enabledFeatures, f.id)).map((f) => ({
+              href: f.href as string,
+              label: f.label,
+              managerOnly: f.managerOnly ?? false,
+            }))}
             branches={branches.map((b) => ({ id: b.id, name: b.name }))}
             currentBranchId={session.branchId}
             currentBranchName={session.branchName}

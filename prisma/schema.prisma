@@ -194,6 +194,11 @@ model Company {
   expenses              Expense[]
   cashClosings          CashClosing[]
   branches              Branch[]
+  // Custom, per-company sections/improvements a platform admin switches on
+  // from /admin for ONE company only (see lib/features.ts) — every other
+  // company keeps the app exactly as designed. Holds ids from that registry;
+  // empty means the company has no custom features.
+  enabledFeatures       String[]          @default([])
 }
 
 // A physical location/sucursal of a company — each one has its OWN
