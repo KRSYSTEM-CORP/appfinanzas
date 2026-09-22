@@ -1,8 +1,6 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { DownloadIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useInstallApp } from "@/lib/use-install-app";
 
@@ -30,7 +28,7 @@ function Steps({ title, steps }: { title: string; steps: React.ReactNode[] }) {
 // KR POS siempre corre conectado a internet y se actualiza solo con cada
 // despliegue, así que no hay nada que "actualizar" en la app instalada.
 export function AppInstallGuide() {
-  const { canInstall, isInstalled, install } = useInstallApp();
+  const { isInstalled } = useInstallApp();
   const origin = useSyncExternalStore(noopSubscribe, () => window.location.origin, () => "");
 
   return (
@@ -44,16 +42,11 @@ export function AppInstallGuide() {
           Se abre en su propia ventana, con su icono en el escritorio o la barra de tareas, y se
           mantiene actualizada sola: siempre usa internet y muestra la última versión de tu sistema.
         </p>
-        {canInstall && (
-          <Button type="button" className="w-fit" onClick={install}>
-            <DownloadIcon />
-            Instalar KR POS
-          </Button>
-        )}
-        {!isInstalled && !canInstall && (
+        {!isInstalled && (
           <p className="text-sm text-muted-foreground">
-            Si no aparece el botón, instálala desde el navegador: en <strong>Chrome o Edge</strong>,
-            el icono de instalar en la barra de direcciones (o menú → «Instalar KR POS»); en{" "}
+            El botón para instalarla aparece en la pantalla de inicio de sesión, antes de entrar —
+            si no lo viste ahí, instálala desde el navegador: en <strong>Chrome o Edge</strong>, el
+            icono de instalar en la barra de direcciones (o menú → «Instalar KR POS»); en{" "}
             <strong>Safari (Mac)</strong>, Compartir → «Añadir al Dock».
           </p>
         )}

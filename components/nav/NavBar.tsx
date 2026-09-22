@@ -7,7 +7,6 @@ import { MenuIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/actions/auth";
 import { BranchSwitcher } from "@/components/nav/BranchSwitcher";
-import { InstallAppButton } from "@/components/nav/InstallAppButton";
 import type { Role } from "@prisma/client";
 
 const links = [
@@ -149,7 +148,6 @@ export function NavBar({
 
         <div className="ml-auto flex items-center gap-2 shrink-0">
           <div className="hidden md:flex items-center gap-2 shrink-0">
-            <InstallAppButton />
             {branchControl}
             <form action={logout}>
               <Button type="submit" variant="ghost" size="sm">
@@ -192,7 +190,6 @@ export function NavBar({
             );
           })}
           <div className="mt-2 flex flex-col gap-2 border-t pt-3">
-            <InstallAppButton className="w-full justify-start" />
             {branchControl}
             <form action={logout}>
               <Button type="submit" variant="ghost" size="sm" className="w-full justify-start">
