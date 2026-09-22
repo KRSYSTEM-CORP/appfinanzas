@@ -3,7 +3,7 @@ import { PosClient } from "@/components/pos/PosClient";
 import { OfflineSyncBanner } from "@/components/pos/OfflineSyncBanner";
 import { listActiveProducts, listCategories } from "@/lib/actions/products";
 import { getQuoteForConversion } from "@/lib/actions/quotes";
-import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
+import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from "@/lib/actions/settings";
 import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -15,12 +15,13 @@ export default async function PosPage({
 }) {
   const { fromQuote } = await searchParams;
   const [
-    { companyName, sellerName, companyId },
+    { companyName, sellerName, companyId, branchId, branchName, role, isSuperAdmin },
     products,
     { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency, printPaperSize },
     categories,
     { logoDataUrl },
     fiscalData,
+    { ivaGeneralRatePercent, ivaReducedRatePercent },
   ] = await Promise.all([
     requireSession(),
     listActiveProducts(),
@@ -28,6 +29,7 @@ export default async function PosPage({
     listCategories(),
     getBranding(),
     getFiscalData(),
+    getIvaSettings(),
   ]);
   const company = { name: companyName, logoDataUrl, ...fiscalData };
 
@@ -38,7 +40,7 @@ export default async function PosPage({
   return (
     <div className="flex flex-col gap-4 p-6 h-[calc(100vh-56px)]">
       <h1 className="text-2xl font-semibold">Punto de venta</h1>
-      <OfflineSyncBanner />
+      <OfflineSyncBanner canManage={role === "GERENTE" || isSuperAdmin} />
       {exchangeRateEnabled && rate == null && (
         <p className="text-sm text-destructive">
           No has configurado tu tasa de cambio.{" "}
@@ -68,6 +70,11 @@ export default async function PosPage({
           sellerName={sellerName}
           initialQuote={initialQuote}
           companyId={companyId}
+          companyName={companyName}
+          branchId={branchId}
+          branchName={branchName}
+          ivaGeneralRatePercent={ivaGeneralRatePercent}
+          ivaReducedRatePercent={ivaReducedRatePercent}
         />
       </div>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { listPendingSales, syncPendingSales, type PendingSale } from "@/lib/offline/sync";
@@ -9,7 +10,7 @@ import { listPendingSales, syncPendingSales, type PendingSale } from "@/lib/offl
 // the connection returns. Polls the local IndexedDB queue on an interval
 // (rather than wiring an event bus to PosClient) since that queue is the
 // single source of truth and polling it is simple and cheap.
-export function OfflineSyncBanner() {
+export function OfflineSyncBanner({ canManage = false }: { canManage?: boolean }) {
   const online = useOnlineStatus();
   const [pending, setPending] = useState<PendingSale[]>([]);
   const [syncing, setSyncing] = useState(false);
@@ -61,7 +62,19 @@ export function OfflineSyncBanner() {
         {syncing
           ? "Sincronizando..."
           : `${pending.length} venta${pending.length === 1 ? "" : "s"} pendiente${pending.length === 1 ? "" : "s"} de sincronizar`}
-        {withError && <span className="block text-xs text-destructive">{withError.lastError}</span>}
+        {withError && (
+          <span className="block text-xs text-destructive">
+            {withError.lastError}
+            {canManage && (
+              <>
+                {" "}
+                <Link href="/pos/review" className="underline underline-offset-2">
+                  Revisar
+                </Link>
+              </>
+            )}
+          </span>
+        )}
       </span>
       <Button size="sm" variant="outline" disabled={syncing} onClick={sync}>
         Reintentar ahora

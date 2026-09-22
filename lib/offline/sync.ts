@@ -27,6 +27,14 @@ export async function listPendingSales(): Promise<PendingSale[]> {
   return rows.sort((a, b) => a.queuedAt.localeCompare(b.queuedAt));
 }
 
+// Permanently drops a queued sale without ever submitting it — used from the
+// manager-only review screen (app/pos/review/page.tsx) for a sale that
+// genuinely can't be honored (e.g. the customer was told and left without
+// the item). Distinct from a sync failure, which keeps the sale queued.
+export async function discardPendingSale(localId: string): Promise<void> {
+  await removePendingSale(localId);
+}
+
 export type SyncResult = { synced: number; remaining: number };
 
 // Best-effort: submits every queued sale in order through the real

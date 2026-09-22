@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Product, PaymentStatus, SaleItem, SalePayment } from "@prisma/client";
+import type { Product, PaymentStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { CustomerForm, type CustomerInfo } from "@/components/pos/CustomerForm";
 import { ProductPicker } from "@/components/pos/ProductPicker";
@@ -11,11 +11,12 @@ import { ReceiptView } from "@/components/pos/ReceiptView";
 import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { completeSale, getSaleReceipt } from "@/lib/actions/sales";
 import type { QuoteForConversion } from "@/lib/actions/quotes";
-import { resolveSalePayments } from "@/lib/payment-currency";
 import { computeItemDiscountCents } from "@/lib/discount";
-import { resolveTierPrice, tierPriceCents, type PriceTier, type TieredProduct } from "@/lib/pricing";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { queueSale, type PendingSaleInput } from "@/lib/offline/sync";
+import { useCatalogSync } from "@/lib/offline/use-catalog-sync";
+import { buildPendingReceipt } from "@/lib/offline/pending-receipt";
+import { useCart } from "@/lib/pos/use-cart";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
@@ -35,6 +36,11 @@ export function PosClient({
   sellerName,
   initialQuote,
   companyId,
+  companyName,
+  branchId,
+  branchName,
+  ivaGeneralRatePercent,
+  ivaReducedRatePercent,
 }: {
   products: Product[];
   rate: number | null;
@@ -54,6 +60,14 @@ export function PosClient({
   // already done in getQuoteForConversion.
   initialQuote?: QuoteForConversion | null;
   companyId: string;
+  // Only used to keep this terminal's offline catalog snapshot up to date
+  // (see useCatalogSync below) — nothing here changes this component's own
+  // online behavior.
+  companyName: string;
+  branchId: string | null;
+  branchName: string | null;
+  ivaGeneralRatePercent: number;
+  ivaReducedRatePercent: number;
 }) {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -61,6 +75,26 @@ export function PosClient({
   // catalog edits made from any other open terminal for the same business.
   useLiveRefresh(`pos:${companyId}`, "product");
   useLiveRefresh(`pos:${companyId}`, "sale");
+  // Keeps IndexedDB's offline catalog snapshot warm for this branch — see
+  // components/pos/PosOfflineClient.tsx, the screen that reads it back when
+  // this same page can't be reached at all (no network at navigation time).
+  useCatalogSync({
+    branchId,
+    branchName,
+    companyId,
+    companyName,
+    sellerName,
+    products,
+    categories,
+    rate,
+    currencyCode,
+    exchangeRateEnabled,
+    referenceCurrency,
+    printPaperSize,
+    ivaGeneralRatePercent,
+    ivaReducedRatePercent,
+    company,
+  });
   const productById = new Map(products.map((p) => [p.id, p]));
   const initialLines: CartLine[] = (initialQuote?.lines ?? [])
     .map((l): CartLine | null => {
@@ -89,7 +123,17 @@ export function PosClient({
         }
       : null
   );
-  const [lines, setLines] = useState<CartLine[]>(initialLines);
+  const {
+    lines,
+    maxStockFor,
+    addProduct: addProductToCart,
+    increment,
+    decrement,
+    setQuantity,
+    setPriceTier,
+    remove,
+    reset: resetCart,
+  } = useCart(initialLines);
   const [quoteId] = useState<string | null>(initialQuote?.quoteId ?? null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("PAID");
   const [paymentRows, setPaymentRows] = useState<PaymentSplitRow[]>(() =>
@@ -124,101 +168,9 @@ export function PosClient({
     setPaymentRows((prev) => (prev.length === 1 ? defaultPaymentSplitRows(total, rate, exchangeRateEnabled) : prev));
   }, [total, rate, exchangeRateEnabled]);
 
-  // Unlimited for a product that doesn't track stock — there's no count to
-  // cap against.
-  function maxStockFor(product: Product): number {
-    return product.trackStock ? product.stock : Infinity;
-  }
-
-  // The price a line should show for its current quantity: the seller's
-  // manual tier pick if they made one (and the product actually has that
-  // tier configured), otherwise whatever quantity-based tier applies.
-  function linePriceCents(product: TieredProduct, quantity: number, override: PriceTier | null): number {
-    if (override) {
-      const overridePrice = tierPriceCents(product, override);
-      if (overridePrice != null) return overridePrice;
-    }
-    return resolveTierPrice(product, quantity).priceCents;
-  }
-
   function addProduct(product: Product) {
     setError(null);
-    setLines((prev) => {
-      const maxStock = maxStockFor(product);
-      const existing = prev.find((l) => l.productId === product.id);
-      if (existing) {
-        if (existing.quantity >= maxStock) return prev;
-        const quantity = existing.quantity + 1;
-        return prev.map((l) =>
-          l.productId === product.id
-            ? { ...l, quantity, unitPriceCents: linePriceCents(l.product, quantity, l.priceTierOverride) }
-            : l
-        );
-      }
-      return [
-        ...prev,
-        {
-          productId: product.id,
-          name: product.name,
-          unitPriceCents: linePriceCents(product, 1, null),
-          quantity: 1,
-          maxStock,
-          product,
-          priceTierOverride: null,
-        },
-      ];
-    });
-  }
-
-  function increment(productId: string) {
-    setLines((prev) =>
-      prev.map((l) => {
-        if (l.productId !== productId || l.quantity >= l.maxStock) return l;
-        const quantity = l.quantity + 1;
-        return { ...l, quantity, unitPriceCents: linePriceCents(l.product, quantity, l.priceTierOverride) };
-      })
-    );
-  }
-
-  function decrement(productId: string) {
-    setLines((prev) =>
-      prev
-        .map((l) => {
-          if (l.productId !== productId) return l;
-          const quantity = l.quantity - 1;
-          return { ...l, quantity, unitPriceCents: linePriceCents(l.product, quantity, l.priceTierOverride) };
-        })
-        .filter((l) => l.quantity > 0)
-    );
-  }
-
-  // Typed directly into the cart's quantity field (see components/pos/Cart.tsx's
-  // QuantityInput) — already clamped to [1, maxStock] there, clamped again here
-  // as a second line of defense against a stale maxStock.
-  function setQuantity(productId: string, quantity: number) {
-    setLines((prev) =>
-      prev.map((l) => {
-        if (l.productId !== productId) return l;
-        const clamped = Math.min(Math.max(1, quantity), l.maxStock);
-        return { ...l, quantity: clamped, unitPriceCents: linePriceCents(l.product, clamped, l.priceTierOverride) };
-      })
-    );
-  }
-
-  // Manual tier pick from the cart's Detal/Mayor/Gran mayor selector — null
-  // clears the override and goes back to auto-detecting from quantity.
-  function setPriceTier(productId: string, tier: PriceTier | null) {
-    setLines((prev) =>
-      prev.map((l) =>
-        l.productId === productId
-          ? { ...l, priceTierOverride: tier, unitPriceCents: linePriceCents(l.product, l.quantity, tier) }
-          : l
-      )
-    );
-  }
-
-  function remove(productId: string) {
-    setLines((prev) => prev.filter((l) => l.productId !== productId));
+    addProductToCart(product);
   }
 
   function continueFromCustomer(info: CustomerInfo) {
@@ -229,99 +181,35 @@ export function PosClient({
   // Builds a stand-in Sale (matching what ReceiptView expects) from data
   // already on the client, for a sale that was queued offline and has no
   // real database row yet — control numbers are null until it actually
-  // syncs. resolveSalePayments is the same shared helper the server itself
-  // uses, so the currency breakdown shown here matches what will be
-  // persisted once the sync succeeds.
-  function buildPendingReceipt(customer: CustomerInfo): SaleWithItems {
-    const now = new Date();
-    const localId = crypto.randomUUID();
-    const resolvedPayments =
-      paymentStatus === "PAID"
-        ? resolveSalePayments(
-            paymentRows.map((r) => ({
-              paymentMethod: r.paymentMethod,
-              amount: Math.round(parseFloat(r.amount || "0") * 100),
-              paidInForeignCurrency: r.paidInForeignCurrency,
-              reference: r.reference || null,
-            })),
-            currencyCode,
-            rate,
-            exchangeRateEnabled,
-            referenceCurrency
-          )
-        : [];
-
-    const items: SaleItem[] = lines.map((l) => {
-      const rawSubtotalCents = l.unitPriceCents * l.quantity;
-      const itemDiscountCents = computeItemDiscountCents(rawSubtotalCents, discountValue);
-      const subtotalCents = rawSubtotalCents - itemDiscountCents;
-      return {
-        id: crypto.randomUUID(),
-        saleId: localId,
-        productId: l.productId,
-        productName: productById.get(l.productId)?.name ?? l.name,
-        category: productById.get(l.productId)?.category ?? null,
-        unitPriceCents: l.unitPriceCents,
-        quantity: l.quantity,
-        subtotalCents,
-        discountCents: itemDiscountCents,
-        // The real IVA breakdown is computed server-side once this offline
-        // sale actually syncs (see completeSale) — this optimistic preview
-        // never shows a tax breakdown, so these are placeholders only.
-        taxCategory: "GENERAL",
-        taxRatePercent: 0,
-        baseCents: subtotalCents,
-        taxCents: 0,
-      };
-    });
-
-    const payments: SalePayment[] = resolvedPayments.map((p) => ({
-      id: crypto.randomUUID(),
-      saleId: localId,
-      paymentMethod: p.paymentMethod,
-      amountEurCents: p.amountEurCents,
-      currencyCode: p.currencyCode,
-      amountCurrencyCents: p.amountCurrencyCents,
-      paidInForeignCurrency: p.paidInForeignCurrency,
-      reference: p.reference,
-      // Prisma's Decimal type can't be constructed client-side without
-      // importing the runtime class just for this optimistic preview object
-      // (never persisted) — null is a valid value and nothing reads it here.
-      exchangeRate: null,
-      createdAt: now,
-    }));
-
-    return {
-      id: localId,
-      createdAt: now,
-      totalCents: total,
-      discountCents: discountCentsTotal,
-      paymentMethod: payments[0]?.paymentMethod ?? null,
-      note: note.trim() || null,
-      exchangeRate: rate,
-      paidInForeignCurrency: payments.some((p) => p.currencyCode !== currencyCode),
-      customerFirstName: customer.firstName,
-      customerLastName: customer.lastName,
-      customerPhone: customer.phone,
-      customerAddress: customer.address,
-      customerRif: customer.rif || null,
-      customerId: null,
-      paymentReference: payments[0]?.reference ?? null,
+  // syncs. Shared with components/pos/PosOfflineClient.tsx (see
+  // lib/offline/pending-receipt.ts) so both compute the exact same real IVA
+  // breakdown from the cached rates, not a placeholder.
+  function buildReceiptPreview(customer: CustomerInfo): SaleWithItems {
+    return buildPendingReceipt({
+      lines: lines.map((l) => {
+        const product = productById.get(l.productId);
+        return {
+          productId: l.productId,
+          name: product?.name ?? l.name,
+          category: product?.category ?? null,
+          taxCategory: product?.taxCategory ?? "GENERAL",
+          unitPriceCents: l.unitPriceCents,
+          quantity: l.quantity,
+        };
+      }),
+      customer,
       paymentStatus,
-      paidAt: paymentStatus === "PAID" ? now : null,
-      paidExchangeRate: null,
-      controlNumber: null,
-      receiptControlNumber: null,
-      invoiceNumber: null,
-      voided: false,
-      voidedAt: null,
-      companyId: "",
-      sellerId: null,
+      paymentRows,
+      discountPercent: discountValue,
+      note,
       sellerName,
-      items,
-      payments,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
+      rate,
+      currencyCode,
+      exchangeRateEnabled,
+      referenceCurrency,
+      ivaGeneralRatePercent,
+      ivaReducedRatePercent,
+    });
   }
 
   function checkout() {
@@ -366,7 +254,7 @@ export function PosClient({
         sellerName,
         note: note.trim() || null,
       });
-      setCompletedSale(buildPendingReceipt(customerInfo));
+      setCompletedSale(buildReceiptPreview(customerInfo));
       setPendingSync(true);
       setStep("receipt");
     }
@@ -405,7 +293,7 @@ export function PosClient({
 
   function newSale() {
     setCustomer(null);
-    setLines([]);
+    resetCart();
     setPaymentStatus("PAID");
     setPaymentRows(defaultPaymentSplitRows(0, rate, exchangeRateEnabled));
     setNote("");

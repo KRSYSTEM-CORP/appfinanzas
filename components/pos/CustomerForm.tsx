@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { searchCustomers } from "@/lib/actions/customers";
+import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import type { Customer } from "@prisma/client";
 
 export type CustomerInfo = {
@@ -33,25 +34,38 @@ export function CustomerForm({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [, startSearch] = useTransition();
   const requestId = useRef(0);
+  const online = useOnlineStatus();
 
   useEffect(() => {
     const query = firstName.trim();
-    if (query.length < 2) {
+    // The autocomplete is a convenience, not a requirement — every field here
+    // stays manually typeable, so skip the server round-trip entirely while
+    // offline rather than let it fail. searchCustomers is a Server Action
+    // (a fetch under the hood); this app has no error boundary anywhere, so
+    // an uncaught rejection here could otherwise blank the whole checkout
+    // screen at the worst possible moment.
+    if (query.length < 2 || !online) {
       setSuggestions([]);
       return;
     }
     const id = ++requestId.current;
     const timeout = setTimeout(() => {
       startSearch(async () => {
-        const results = await searchCustomers(query);
-        if (id === requestId.current) {
-          setSuggestions(results);
-          setShowSuggestions(true);
+        try {
+          const results = await searchCustomers(query);
+          if (id === requestId.current) {
+            setSuggestions(results);
+            setShowSuggestions(true);
+          }
+        } catch {
+          // Connection dropped mid-search — silently give up on suggestions,
+          // the cashier can just keep typing.
+          if (id === requestId.current) setSuggestions([]);
         }
       });
     }, 250);
     return () => clearTimeout(timeout);
-  }, [firstName]);
+  }, [firstName, online]);
 
   function pickSuggestion(customer: Customer) {
     setFirstName(customer.firstName);

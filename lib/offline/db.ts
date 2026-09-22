@@ -1,9 +1,14 @@
 import { openDB, type IDBPDatabase } from "idb";
-import type { PaymentMethod, PaymentStatus } from "@prisma/client";
+import type { PaymentMethod, PaymentStatus, Product, PrintPaperSize, ReferenceCurrency } from "@prisma/client";
+import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 
 const DB_NAME = "kyra-offline";
-const DB_VERSION = 1;
+// v2 added the "catalog" store (see CatalogSnapshot below) — a purely
+// additive change, upgrade() below only creates what's missing so existing
+// queued sales in "pending-sales" are untouched.
+const DB_VERSION = 2;
 const STORE_NAME = "pending-sales";
+const CATALOG_STORE_NAME = "catalog";
 
 // The exact shape completeSale() expects — kept separate from
 // PaymentSplitRow (which carries the raw text amount) so a queued sale
@@ -50,6 +55,34 @@ export type PendingSale = {
   lastError?: string;
 };
 
+// A single snapshot per branch of everything /pos/offline needs to render a
+// working POS screen with zero network — the full product catalog (already
+// capped at 200 rows server-side, see listActiveProducts) plus every
+// pricing/tax/branding setting normally fetched live by app/pos/page.tsx.
+// Written by lib/offline/use-catalog-sync.ts every time the real /pos page
+// renders successfully; read by PosOfflineClient. Kept as one denormalized
+// document (not a per-product store with indexes) since 200 rows is trivial
+// to filter/search with a plain JS array — no IndexedDB index machinery
+// needed for this size.
+export type CatalogSnapshot = {
+  branchId: string;
+  branchName: string | null;
+  companyId: string;
+  companyName: string;
+  sellerName: string;
+  savedAt: string;
+  products: Product[];
+  categories: string[];
+  rate: number | null;
+  currencyCode: string;
+  exchangeRateEnabled: boolean;
+  referenceCurrency: ReferenceCurrency;
+  printPaperSize: PrintPaperSize;
+  ivaGeneralRatePercent: number;
+  ivaReducedRatePercent: number;
+  company: DeliveryNoteCompany;
+};
+
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
 // IndexedDB doesn't exist during SSR/build, and in principle a browser could
@@ -63,6 +96,9 @@ function getDb(): Promise<IDBPDatabase> | null {
       upgrade(db) {
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           db.createObjectStore(STORE_NAME, { keyPath: "localId" });
+        }
+        if (!db.objectStoreNames.contains(CATALOG_STORE_NAME)) {
+          db.createObjectStore(CATALOG_STORE_NAME, { keyPath: "branchId" });
         }
       },
       // Mobile Safari/iOS closes an open IndexedDB connection out from under
@@ -125,4 +161,15 @@ export async function setPendingSaleError(localId: string, error: string): Promi
     const existing = await db.get(STORE_NAME, localId);
     if (existing) await db.put(STORE_NAME, { ...existing, lastError: error });
   }, undefined);
+}
+
+// Best-effort, fire-and-forget like the rest of this file — a failed write
+// just means the offline shell falls back to "no catalog saved yet" next
+// time, not a user-facing error while online.
+export async function putCatalogSnapshot(snapshot: CatalogSnapshot): Promise<void> {
+  await withDb((db) => db.put(CATALOG_STORE_NAME, snapshot), undefined);
+}
+
+export async function getCatalogSnapshot(branchId: string): Promise<CatalogSnapshot | undefined> {
+  return withDb((db) => db.get(CATALOG_STORE_NAME, branchId), undefined);
 }
