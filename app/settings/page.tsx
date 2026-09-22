@@ -5,6 +5,7 @@ import { ReferenceCurrencyForm } from "@/components/settings/ReferenceCurrencyFo
 import { BrandingForm } from "@/components/settings/BrandingForm";
 import { FiscalDataForm } from "@/components/settings/FiscalDataForm";
 import { PrintPaperSizeForm } from "@/components/settings/PrintPaperSizeForm";
+import { AppInstallGuide } from "@/components/settings/AppInstallGuide";
 import { ChangePasswordForm } from "@/components/settings/ChangePasswordForm";
 import { BcvRateButton } from "@/components/settings/BcvRateButton";
 import { BranchesForm } from "@/components/settings/BranchesForm";
@@ -133,6 +134,11 @@ export default async function SettingsPage() {
           <PrintPaperSizeForm currentPaperSize={printPaperSize} />
         </div>
       ),
+    },
+    {
+      id: "aplicacion",
+      label: "Instalar app",
+      content: <AppInstallGuide />,
     },
     {
       id: "fiscales",
