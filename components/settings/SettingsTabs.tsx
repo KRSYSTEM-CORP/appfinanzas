@@ -14,7 +14,7 @@ export function SettingsTabs({ sections }: { sections: SettingsSection[] }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex gap-1 rounded-lg border p-1 overflow-x-auto w-fit max-w-full">
+      <div className="flex flex-wrap gap-1 rounded-lg border p-1 w-fit max-w-full">
         {sections.map((section) => (
           <button
             key={section.id}

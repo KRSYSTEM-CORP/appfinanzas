@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { updateBranding } from "@/lib/actions/settings";
@@ -65,8 +66,8 @@ export function BrandingForm({
               className="h-12 w-12 shrink-0 rounded object-cover border"
             />
           ) : (
-            <div className="h-12 w-12 shrink-0 rounded border flex items-center justify-center text-xs text-muted-foreground">
-              Sin logo
+            <div className="h-12 w-12 shrink-0 rounded border flex items-center justify-center bg-muted text-muted-foreground">
+              <ImageIcon className="size-4" />
             </div>
           )}
           <input

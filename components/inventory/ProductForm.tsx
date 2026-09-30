@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -113,8 +114,8 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={image} alt="" className="h-16 w-16 shrink-0 rounded object-cover border" />
               ) : (
-                <div className="h-16 w-16 shrink-0 rounded border flex items-center justify-center text-xs text-muted-foreground text-center">
-                  Sin imagen
+                <div className="h-16 w-16 shrink-0 rounded border flex items-center justify-center bg-muted text-muted-foreground">
+                  <ImageIcon className="size-5" />
                 </div>
               )}
               <div className="flex flex-col gap-1.5 min-w-0">
