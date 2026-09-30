@@ -12,5 +12,13 @@ import { clearSessionCookie } from "@/lib/session";
 // under api/), so it's reached directly with no interference.
 export async function GET(request: NextRequest) {
   await clearSessionCookie();
-  return NextResponse.redirect(new URL("/login", request.url));
+  const url = new URL("/login", request.url);
+  // Set by requireSession() (lib/session.ts) when the stale cookie belonged
+  // to a now-SUSPENDED user — lets the login screen show the same "blocked"
+  // panel a fresh suspended login attempt gets, instead of a bare form with
+  // no explanation for why this person was just kicked out.
+  if (request.nextUrl.searchParams.get("reason") === "suspended") {
+    url.searchParams.set("blocked", "suspended");
+  }
+  return NextResponse.redirect(url);
 }

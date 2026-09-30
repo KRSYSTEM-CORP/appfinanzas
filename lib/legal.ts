@@ -13,4 +13,10 @@ export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURICom
 
 export const CONTACT_EMAIL = "contacto@krsystem-corp.com";
 
+// Prefilled with context so support doesn't have to ask what happened first
+// — shown on the account-suspended screen (LoginForm.tsx).
+export const SUSPENDED_WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
+  "Hola, mi cuenta de KR POS fue suspendida y quiero más información."
+)}`;
+
 export const LEGAL_UPDATED_AT = "25 de agosto de 2026";

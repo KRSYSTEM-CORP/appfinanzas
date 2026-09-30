@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
+import { MessageCircleIcon, MailIcon } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/actions/auth";
 import { deriveBrandVars, BRAND_VAR_NAMES } from "@/lib/theme-color";
 import { splitFullName } from "@/lib/name";
+import { SUSPENDED_WHATSAPP_URL, CONTACT_EMAIL } from "@/lib/legal";
 import { GoogleIcon } from "@/components/auth/GoogleIcon";
 import { Turnstile } from "@/components/auth/Turnstile";
 
@@ -37,12 +39,15 @@ export function LoginForm({
   rememberedCompany,
   googleConfigured = false,
   authError,
+  initiallyBlocked = false,
 }: {
   rememberedCompany: RememberedCompany | null;
   googleConfigured?: boolean;
   authError?: string;
+  initiallyBlocked?: boolean;
 }) {
   const [mode, setMode] = useState<"owner" | "employee">("owner");
+  const [suspended, setSuspended] = useState(initiallyBlocked);
   const [error, setError] = useState<string | null>(null);
   const [branding, setBranding] = useState<CompanyBranding>(NO_BRANDING);
   const [isPending, startTransition] = useTransition();
@@ -108,6 +113,10 @@ export function LoginForm({
 
       const result = await login(formData);
       if (result.success) return;
+      if ("suspended" in result) {
+        setSuspended(true);
+        return;
+      }
       if ("error" in result) {
         setError(result.error);
         return;
@@ -168,6 +177,46 @@ export function LoginForm({
     } catch {
       setBranding(NO_BRANDING);
     }
+  }
+
+  if (suspended) {
+    return (
+      <div className="flex flex-col gap-4 max-w-sm mx-auto rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+        <div className="mx-auto flex items-center justify-center size-11 rounded-full bg-destructive/10 text-destructive">
+          <MessageCircleIcon className="size-5" />
+        </div>
+        <div>
+          <h2 className="font-semibold">Cuenta suspendida</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Esta cuenta fue bloqueada por incumplimiento de las normas de uso de KR POS. Comunícate
+            con soporte para resolverlo.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <a
+            href={SUSPENDED_WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: "default" })}
+          >
+            <MessageCircleIcon /> Escribir por WhatsApp
+          </a>
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className={buttonVariants({ variant: "outline", className: "h-auto py-2.5 whitespace-normal break-all" })}
+          >
+            <MailIcon className="shrink-0" /> {CONTACT_EMAIL}
+          </a>
+        </div>
+        <button
+          type="button"
+          onClick={() => setSuspended(false)}
+          className="text-sm text-muted-foreground underline underline-offset-4"
+        >
+          Volver
+        </button>
+      </div>
+    );
   }
 
   return (

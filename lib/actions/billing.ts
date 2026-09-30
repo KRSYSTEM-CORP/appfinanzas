@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { withTenant } from "@/lib/tenant-db";
+import { withTenant, withSuperAdmin } from "@/lib/tenant-db";
 import { isCompanyBlocked, PLATFORM_SETTINGS_ID } from "@/lib/billing";
 import { fetchBcvRate } from "@/lib/bcv-rate";
 import { getOrSetCache } from "@/lib/cache";
+import { sendPaymentReportEmail } from "@/lib/email";
 import { PaymentReportSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 
@@ -154,7 +155,7 @@ export async function listMyPaymentReports() {
 // tells the company to send it by WhatsApp instead, which is how the super
 // admin actually finds out to go review it (see app/billing/page.tsx).
 export async function submitPaymentReport(input: unknown): Promise<ActionResult> {
-  const { companyId, userId } = await requireCompanyUser();
+  const { companyId, companyName, userId } = await requireCompanyUser();
   const parsed = PaymentReportSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
@@ -176,6 +177,22 @@ export async function submitPaymentReport(input: unknown): Promise<ActionResult>
       },
     })
   );
+
+  // The report is already saved by the time this runs, so a flaky email
+  // provider (or one super admin's send failing) never surfaces as a broken
+  // "reportar pago" flow — allSettled, errors only logged. This is the
+  // actual automatic notification the super admin gets; the WhatsApp
+  // message /billing also asks for is a second, human-driven channel, not
+  // this one's replacement.
+  const totalUsdCents = parsed.data.lines.reduce((sum, l) => sum + l.amount, 0);
+  try {
+    const admins = await withSuperAdmin((tx) =>
+      tx.user.findMany({ where: { isSuperAdmin: true }, select: { email: true } })
+    );
+    await Promise.allSettled(admins.map((a) => sendPaymentReportEmail(a.email, companyName, totalUsdCents)));
+  } catch (err) {
+    console.error("[billing] failed to notify admins of payment report:", err);
+  }
 
   revalidatePath("/billing");
   return { success: true };

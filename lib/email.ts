@@ -69,6 +69,32 @@ export async function sendSignupCodeEmail(to: string, code: string): Promise<voi
   );
 }
 
+export async function sendPaymentReportEmail(
+  to: string,
+  companyName: string,
+  totalUsdCents: number,
+): Promise<void> {
+  const amount = (totalUsdCents / 100).toLocaleString("es-VE", {
+    style: "currency",
+    currency: "USD",
+  });
+  const reviewUrl = `${APP_URL}/admin`;
+  await send(
+    to,
+    `Nuevo pago reportado — ${companyName}`,
+    `
+      <h2>Nuevo pago reportado</h2>
+      <p><strong>${escapeHtml(companyName)}</strong> reportó un pago de suscripción por <strong>${amount}</strong>.</p>
+      <p>
+        <a href="${reviewUrl}" style="display: inline-block; background: #4f3ddb; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+          Revisar y aprobar
+        </a>
+      </p>
+      <p>El acceso de la empresa se restablece automáticamente en cuanto apruebes el pago.</p>
+    `,
+  );
+}
+
 export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {
   const resetUrl = `${APP_URL}/reset-password/${token}`;
   await send(

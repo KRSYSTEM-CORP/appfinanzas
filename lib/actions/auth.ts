@@ -218,6 +218,7 @@ export async function resendSignupCode(verificationId: string): Promise<ActionRe
 export type LoginResult =
   | { success: true }
   | { success: false; error: string }
+  | { success: false; suspended: true }
   | { success: false; needsBranch: true; branches: { id: string; name: string }[] };
 
 export async function login(formData: FormData): Promise<LoginResult> {
@@ -259,10 +260,7 @@ export async function login(formData: FormData): Promise<LoginResult> {
     };
   }
   if (user.status === "SUSPENDED") {
-    return {
-      success: false,
-      error: "Tu acceso ha sido suspendido. Contacta al administrador de KR System.",
-    };
+    return { success: false, suspended: true };
   }
 
   await rememberDeviceCompany(user.company.loginCode);

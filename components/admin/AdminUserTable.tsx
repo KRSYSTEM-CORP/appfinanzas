@@ -34,6 +34,7 @@ import {
   suspendUser,
   reactivateUser,
   recordMaintenancePayment,
+  renewSubscriptionManually,
   setCompanyExempt,
   setCompanyFeatures,
   deleteCompany,
@@ -141,6 +142,7 @@ function AdminCompanyRow({
   const [payError, setPayError] = useState<string | null>(null);
 
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [renewError, setRenewError] = useState<string | null>(null);
 
   if (!owner) return null;
 
@@ -178,6 +180,19 @@ function AdminCompanyRow({
       });
       if (!result.success) {
         setPayError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function handleRenew(e: React.MouseEvent) {
+    e.preventDefault();
+    setRenewError(null);
+    startTransition(async () => {
+      const result = await renewSubscriptionManually(company.id);
+      if (!result.success) {
+        setRenewError(result.error);
         return;
       }
       router.refresh();
@@ -381,6 +396,30 @@ function AdminCompanyRow({
                       onClick={handleRecordPayment}
                     >
                       Registrar pago
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
+            {owner.status === "ACTIVE" && !company.isExempt && (
+              <Dialog>
+                <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
+                  Renovar suscripción manual
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>¿Renovar la suscripción de {company.name} manualmente?</DialogTitle>
+                    <DialogDescription>
+                      Esto reinicia su ciclo de cobro a partir de hoy, sin registrar un monto pagado.
+                      La empresa tendrá 5 días para reportar y completar su pago — si no lo hace, el
+                      sistema se bloqueará de nuevo automáticamente.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {renewError && <p className="text-sm text-destructive">{renewError}</p>}
+                  <DialogFooter>
+                    <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                    <DialogClose render={<Button disabled={isPending} />} onClick={handleRenew}>
+                      Renovar
                     </DialogClose>
                   </DialogFooter>
                 </DialogContent>

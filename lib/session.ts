@@ -145,9 +145,27 @@ export async function requireSession(): Promise<Session> {
   // instead of straight to /login so the stale cookie actually gets wiped.
   // Otherwise proxy.ts would see it as valid on the next request and bounce
   // back to /pos, looping forever (see app/api/auth/clear-session/route.ts).
-  if (!session) redirect("/api/auth/clear-session");
+  if (!session) {
+    // A rarer, second lookup — only reached when the cookie's already
+    // failed validation above — so a previously-signed-in owner suspended
+    // by a platform admin mid-session lands on the same "blocked" screen
+    // login() shows for a fresh suspended login attempt, instead of a bare
+    // /login with no explanation.
+    const suspended = await isSuspendedSessionCookie();
+    redirect(suspended ? "/api/auth/clear-session?reason=suspended" : "/api/auth/clear-session");
+  }
   if (session.billingBlocked) redirect("/blocked");
   return session;
+}
+
+async function isSuspendedSessionCookie(): Promise<boolean> {
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE_NAME)?.value;
+  if (!token) return false;
+  const payload = verifySessionToken(token);
+  if (!payload) return false;
+  const user = await prisma.user.findUnique({ where: { id: payload.uid }, select: { status: true } });
+  return user?.status === "SUSPENDED";
 }
 
 // Gates Finanzas and Administración de perfiles: GERENTE has full access, a
