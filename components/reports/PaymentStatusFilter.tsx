@@ -24,16 +24,16 @@ export function PaymentStatusFilter({ value }: { value: "" | "PAID" | "CREDIT" }
   }
 
   return (
-    <div className="flex items-center gap-1 flex-wrap">
+    <div className="flex flex-wrap gap-1 rounded-lg border p-1 w-fit max-w-full">
       {OPTIONS.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => apply(o.value)}
-          className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
             value === o.value
-              ? "bg-primary text-primary-foreground border-primary"
-              : "border-input hover:bg-accent"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted"
           }`}
         >
           {o.label}

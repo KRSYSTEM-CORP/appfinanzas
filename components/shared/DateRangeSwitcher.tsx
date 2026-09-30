@@ -76,16 +76,16 @@ export function DateRangeSwitcher({
   }
 
   return (
-    <div className="flex items-center gap-1 flex-wrap">
+    <div className="flex flex-wrap gap-1 rounded-lg border p-1 w-fit max-w-full">
       {PRESETS.map((p) => (
         <button
           key={p.key}
           type="button"
           onClick={() => apply({ kind: "preset", preset: p.key })}
-          className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
             selection.kind === "preset" && selection.preset === p.key
-              ? "bg-primary text-primary-foreground border-primary"
-              : "border-input hover:bg-accent"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted"
           }`}
         >
           {p.label}
@@ -94,10 +94,10 @@ export function DateRangeSwitcher({
 
       <PopoverPrimitive.Root open={monthsOpen} onOpenChange={setMonthsOpen}>
         <PopoverPrimitive.Trigger
-          className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
             selection.kind === "months"
-              ? "bg-primary text-primary-foreground border-primary"
-              : "border-input hover:bg-accent"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted"
           }`}
         >
           Meses{selection.kind === "months" ? ` (${selection.months.length})` : ""}
