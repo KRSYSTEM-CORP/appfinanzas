@@ -50,6 +50,10 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* Same curve Vaul (the drawer library) animates with — reused here so
+     every popup in the app decelerates the same way instead of the
+     browser's flat default "ease". */
+  --ease-out-smooth: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* KR System's default theme: light background, brand indigo accent (sampled
@@ -143,5 +147,16 @@
     position: static;
     top: auto;
     left: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
