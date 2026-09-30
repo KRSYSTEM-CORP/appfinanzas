@@ -1,4 +1,4 @@
-import { ReceiptTextIcon } from "lucide-react";
+import { BanknoteIcon, CircleDollarSignIcon, ReceiptTextIcon } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -8,17 +8,133 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { SaleActions } from "@/components/reports/SaleActions";
 import { SaleDocumentButtons } from "@/components/reports/SaleDocumentButtons";
 import { Price } from "@/components/money/Price";
-import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, formatDate } from "@/lib/format";
+import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, formatDate, formatDateSlash } from "@/lib/format";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import { legacyCurrencyForPayment } from "@/lib/payment-currency";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { listRecentSales } from "@/lib/actions/sales";
-import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
+import type { PaymentMethod, PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 
 type Sale = Awaited<ReturnType<typeof listRecentSales>>[number];
+
+// A single row's worth of "how they paid" — normalized from either the
+// itemized sale.payments[] (current sales) or the legacy single
+// paymentMethod/paymentReference/paidAt/paidExchangeRate fields (older sales
+// from before payments were itemized), so PaymentMethodCell below never
+// needs to know which shape it got.
+type PaymentEntry = {
+  method: PaymentMethod;
+  currencyCode: string;
+  amountCents: number | null;
+  reference: string | null;
+  date: Date | string | null;
+  rate: number | null;
+};
+
+// Bolívares (the local currency) gets its own icon, distinct from any
+// foreign/divisa currency (USD, EUR, USDT...) — the two payment "kinds" the
+// user actually cares to tell apart at a glance, before opening the dialog
+// for the full breakdown.
+function paymentKind(currencyCode: string, localCurrencyCode: string): "local" | "foreign" {
+  return currencyCode === localCurrencyCode ? "local" : "foreign";
+}
+
+function PaymentMethodCell({
+  sale,
+  localCurrencyCode,
+  referenceCurrency,
+}: {
+  sale: Sale;
+  localCurrencyCode: string;
+  referenceCurrency: ReferenceCurrency;
+}) {
+  const entries: PaymentEntry[] =
+    sale.payments.length > 0
+      ? sale.payments.map((p) => ({
+          method: p.paymentMethod,
+          currencyCode: p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency),
+          amountCents: p.amountCurrencyCents ?? p.amountEurCents,
+          reference: p.reference,
+          date: p.createdAt,
+          rate: p.exchangeRate != null ? Number(p.exchangeRate) : null,
+        }))
+      : sale.paymentMethod
+        ? [
+            {
+              method: sale.paymentMethod,
+              currencyCode: legacyCurrencyForPayment(sale.paymentMethod, referenceCurrency),
+              amountCents: null,
+              reference: sale.paymentReference,
+              date: sale.paidAt,
+              rate: sale.paidExchangeRate != null ? Number(sale.paidExchangeRate) : null,
+            },
+          ]
+        : [];
+
+  if (entries.length === 0) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  const kinds = new Set(entries.map((e) => paymentKind(e.currencyCode, localCurrencyCode)));
+
+  return (
+    <Dialog>
+      <DialogTrigger
+        render={
+          <button
+            type="button"
+            aria-label="Ver detalle del pago"
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 hover:bg-muted transition-colors"
+          />
+        }
+      >
+        {kinds.has("local") && <BanknoteIcon className="size-4 text-muted-foreground" />}
+        {kinds.has("foreign") && <CircleDollarSignIcon className="size-4 text-muted-foreground" />}
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cómo pagó el cliente</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-2 text-sm">
+          {entries.map((e, i) => (
+            <div key={i} className="flex flex-col gap-0.5 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium flex items-center gap-1.5">
+                  {paymentKind(e.currencyCode, localCurrencyCode) === "local" ? (
+                    <BanknoteIcon className="size-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <CircleDollarSignIcon className="size-4 text-muted-foreground shrink-0" />
+                  )}
+                  {PAYMENT_METHOD_LABELS[e.method]}
+                </span>
+                {e.amountCents != null && (
+                  <span className="font-medium">{formatCurrencyCents(e.currencyCode, e.amountCents)}</span>
+                )}
+              </div>
+              {e.reference && <span className="text-muted-foreground text-xs">Ref: {e.reference}</span>}
+              {e.date && <span className="text-muted-foreground text-xs">{formatDate(e.date)}</span>}
+              {e.rate != null && (
+                <span className="text-muted-foreground text-xs">
+                  Tasa {formatLocalCurrency(e.rate, localCurrencyCode)}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // Shared by Reportes (every sale) and Contabilidad → Ventas por vendedor (one
 // seller's sales) so both stay visually identical — same columns, same
@@ -67,11 +183,11 @@ export function SalesTable({
             <TableHead>Cliente</TableHead>
             {showSellerColumn && <TableHead>Vendedor</TableHead>}
             <TableHead>Artículos</TableHead>
-            <TableHead>Método</TableHead>
-            <TableHead>Estado</TableHead>
-            <TableHead>Moneda</TableHead>
+            <TableHead className="text-center">Método</TableHead>
+            <TableHead className="text-center">Estado</TableHead>
+            <TableHead className="text-center">Moneda</TableHead>
             <TableHead className="text-right">Total</TableHead>
-            <TableHead className="text-right">Documentos</TableHead>
+            <TableHead className="text-center">Documentos</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
@@ -79,9 +195,9 @@ export function SalesTable({
           {sales.map((sale) => (
             <TableRow key={sale.id} className={sale.voided ? "opacity-50" : undefined}>
               <TableCell>
-                {formatDate(sale.createdAt)}
+                {formatDateSlash(sale.createdAt)}
                 {sale.voided && (
-                  <span className="block">
+                  <span className="block mt-1">
                     <Badge variant="destructive">Anulada</Badge>
                   </span>
                 )}
@@ -95,66 +211,31 @@ export function SalesTable({
                 <TableCell className="text-muted-foreground">{sale.sellerName ?? "—"}</TableCell>
               )}
               <TableCell>{sale.items.reduce((sum, i) => sum + i.quantity, 0)}</TableCell>
-              <TableCell>
-                {sale.payments.length > 0 ? (
-                  <>
-                    {sale.payments.map((p) => (
-                      <span key={p.id} className="block text-xs">
-                        {PAYMENT_METHOD_LABELS[p.paymentMethod]}:{" "}
-                        {formatCurrencyCents(
-                          p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency),
-                          p.amountCurrencyCents ?? p.amountEurCents
-                        )}
-                        {p.reference && ` (${p.reference})`}
-                        {(p.createdAt || p.exchangeRate != null) && (
-                          <span className="block text-muted-foreground">
-                            {formatDate(p.createdAt)}
-                            {p.exchangeRate != null &&
-                              ` · Tasa ${formatLocalCurrency(Number(p.exchangeRate), localCurrencyCode)}`}
-                          </span>
-                        )}
-                      </span>
-                    ))}
-                  </>
-                ) : sale.paymentMethod ? (
-                  <>
-                    {PAYMENT_METHOD_LABELS[sale.paymentMethod]}
-                    {sale.paymentReference && (
-                      <span className="block text-xs text-muted-foreground">
-                        Ref: {sale.paymentReference}
+              <TableCell className="text-center">
+                <div className="flex flex-col items-center gap-1">
+                  <PaymentMethodCell sale={sale} localCurrencyCode={localCurrencyCode} referenceCurrency={referenceCurrency} />
+                  {sale.paymentStatus === "CREDIT" &&
+                    remainingCentsBySaleId.get(sale.id) !== sale.totalCents && (
+                      <span className="text-xs font-medium text-warning whitespace-nowrap">
+                        Saldo:{" "}
+                        {exchangeRateEnabled && rate != null
+                          ? formatLocalCurrency(
+                              eurCentsToLocal(remainingCentsBySaleId.get(sale.id) ?? 0, rate),
+                              localCurrencyCode
+                            )
+                          : formatCurrencyCents(referenceCurrency, remainingCentsBySaleId.get(sale.id) ?? 0)}
                       </span>
                     )}
-                    {exchangeRateEnabled && sale.paidExchangeRate != null && sale.paidAt && (
-                      <span className="block text-xs text-muted-foreground">
-                        Cobrado: {formatDate(sale.paidAt)} · Tasa{" "}
-                        {formatLocalCurrency(Number(sale.paidExchangeRate), localCurrencyCode)}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-                {sale.paymentStatus === "CREDIT" &&
-                  remainingCentsBySaleId.get(sale.id) !== sale.totalCents && (
-                    <span className="block text-xs font-medium text-warning">
-                      Saldo pendiente:{" "}
-                      {exchangeRateEnabled && rate != null
-                        ? formatLocalCurrency(
-                            eurCentsToLocal(remainingCentsBySaleId.get(sale.id) ?? 0, rate),
-                            localCurrencyCode
-                          )
-                        : formatCurrencyCents(referenceCurrency, remainingCentsBySaleId.get(sale.id) ?? 0)}
-                    </span>
-                  )}
+                </div>
               </TableCell>
-              <TableCell>
+              <TableCell className="text-center">
                 {sale.paymentStatus === "CREDIT" ? (
                   <Badge variant="destructive">{PAYMENT_STATUS_LABELS.CREDIT}</Badge>
                 ) : (
                   <Badge variant="success">{PAYMENT_STATUS_LABELS.PAID}</Badge>
                 )}
               </TableCell>
-              <TableCell>
+              <TableCell className="text-center">
                 {!exchangeRateEnabled ? (
                   <Badge variant="outline">{referenceCurrency}</Badge>
                 ) : sale.paidInForeignCurrency ? (
@@ -178,7 +259,7 @@ export function SalesTable({
                   referenceCurrency={referenceCurrency}
                 />
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-center">
                 <SaleDocumentButtons
                   sale={{
                     ...sale,

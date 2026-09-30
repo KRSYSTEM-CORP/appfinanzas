@@ -119,13 +119,10 @@ export function SaleDocumentButtons({
   return (
     <Popover>
       <PopoverTrigger
-        render={
-          <Button size="sm" variant="outline">
-            <FileTextIcon className="size-4" />
-            Documentos
-          </Button>
-        }
-      />
+        render={<Button size="icon-sm" variant="outline" aria-label="Documentos" />}
+      >
+        <FileTextIcon className="size-4" />
+      </PopoverTrigger>
       <PopoverContent>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">

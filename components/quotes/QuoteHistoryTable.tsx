@@ -134,7 +134,7 @@ export function QuoteHistoryTable({
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Días pendiente</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead>Facturación</TableHead>
+              <TableHead className="text-center">Facturación</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -163,7 +163,7 @@ export function QuoteHistoryTable({
                     onChange={handleStatusChange}
                   />
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-center">
                   {q.sale ? (
                     <Link href="/documents" className="inline-flex">
                       <Badge variant="success">

@@ -169,9 +169,9 @@ export function DocumentsTable({
                 <TableHead>Fecha</TableHead>
                 <TableHead>Nº control</TableHead>
                 <TableHead>Cliente</TableHead>
-                <TableHead>Estado</TableHead>
+                <TableHead className="text-center">Estado</TableHead>
                 <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Documento</TableHead>
+                <TableHead className="text-center">Documento</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -184,13 +184,13 @@ export function DocumentsTable({
                       ? `${quote.customerFirstName} ${quote.customerLastName ?? ""}`.trim()
                       : "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     <Badge variant={quote.status === "CONVERTED" ? "success" : quote.status === "LOST" ? "destructive" : "outline"}>
                       {QUOTE_STATUS_LABELS[quote.status]}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">{formatCurrencyCents(referenceCurrency, quote.totalCents)}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-center">
                     <QuoteDocumentButton
                       quoteId={quote.id}
                       company={company}
@@ -226,9 +226,9 @@ export function DocumentsTable({
                 <TableHead>Nº control</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Vendedor</TableHead>
-                <TableHead>Estado</TableHead>
+                <TableHead className="text-center">Estado</TableHead>
                 <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Documentos</TableHead>
+                <TableHead className="text-center">Documentos</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -242,7 +242,7 @@ export function DocumentsTable({
                       : "—"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{sale.sellerName ?? "—"}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     {sale.paymentStatus === "CREDIT" ? (
                       <Badge variant="destructive">{PAYMENT_STATUS_LABELS.CREDIT}</Badge>
                     ) : (
@@ -258,7 +258,7 @@ export function DocumentsTable({
                       referenceCurrency={referenceCurrency}
                     />
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-center">
                     <SaleDocumentButtons
                       sale={sale}
                       company={company}

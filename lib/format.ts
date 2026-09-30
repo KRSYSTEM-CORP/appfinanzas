@@ -88,6 +88,19 @@ export function formatDate(date: Date | string): string {
   }).format(d);
 }
 
+// DD/MM/YYYY, no time — used where the table row already has its own
+// timestamp detail elsewhere (e.g. inside the payment-method dialog in
+// SalesTable) and the date column itself should stay compact and scannable.
+export function formatDateSlash(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return new Intl.DateTimeFormat("es-VE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: SHOP_TIME_ZONE,
+  }).format(d);
+}
+
 export function formatDateShort(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat("es-VE", {

@@ -61,7 +61,7 @@ export default async function PurchasesPage() {
                   <TableHead className="text-right">Base imponible</TableHead>
                   <TableHead className="text-right">IVA</TableHead>
                   <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -93,7 +93,7 @@ export default async function PurchasesPage() {
                     <TableCell className="text-right font-medium">
                       {formatCurrencyCents(referenceCurrency, p.totalCents)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Badge variant={p.paymentStatus === "PAID" ? "success" : "destructive"}>
                         {PURCHASE_PAYMENT_STATUS_LABELS[p.paymentStatus]}
                       </Badge>
