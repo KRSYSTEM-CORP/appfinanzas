@@ -1,15 +1,28 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { productPointLabel, type TopProductPoint } from "@/lib/report-types";
+
+const SLICE_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
+
+type Slice = TopProductPoint & { label: string; fill: string };
+
+function ChartTooltip({ active, payload }: { active?: boolean; payload?: { payload: Slice }[] }) {
+  if (!active || !payload?.length) return null;
+  const point = payload[0].payload;
+  return (
+    <div className="rounded-md border bg-popover px-3 py-2 text-sm shadow-sm max-w-56">
+      <p className="font-medium">{point.label}</p>
+      <p className="text-xs text-muted-foreground">{point.quantity} unidades vendidas</p>
+    </div>
+  );
+}
 
 export function TopProductsChart({ data }: { data: TopProductPoint[] }) {
   if (data.length === 0) {
@@ -20,24 +33,46 @@ export function TopProductsChart({ data }: { data: TopProductPoint[] }) {
     );
   }
 
-  const chartData = [...data].reverse().map((p) => ({ ...p, label: productPointLabel(p) }));
+  const chartData: Slice[] = data.map((p, i) => ({
+    ...p,
+    label: productPointLabel(p),
+    fill: SLICE_COLORS[i % SLICE_COLORS.length],
+  }));
 
   return (
-    <ResponsiveContainer width="100%" height={Math.max(280, chartData.length * 36)}>
-      <BarChart data={chartData} layout="vertical" margin={{ left: 24 }}>
-        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-        <XAxis type="number" fontSize={12} tickLine={false} axisLine={false} />
-        <YAxis
-          type="category"
-          dataKey="label"
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-          width={140}
-        />
-        <Tooltip />
-        <Bar dataKey="quantity" radius={[0, 4, 4, 0]} fill="var(--chart-1)" />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="h-48 w-48 shrink-0 mx-auto sm:mx-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={chartData}
+              dataKey="quantity"
+              nameKey="label"
+              innerRadius="58%"
+              outerRadius="90%"
+              paddingAngle={chartData.length > 1 ? 2 : 0}
+              strokeWidth={0}
+              animationDuration={700}
+            >
+              {chartData.map((entry, i) => (
+                <Cell key={entry.productId ?? i} fill={entry.fill} />
+              ))}
+            </Pie>
+            <Tooltip content={<ChartTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <ul className="flex flex-col gap-2 w-full min-w-0">
+        {chartData.map((p, i) => (
+          <li key={p.productId ?? i} className="flex items-center gap-2 text-sm min-w-0">
+            <span className="size-2.5 rounded-full shrink-0" style={{ backgroundColor: p.fill }} />
+            <span className="truncate flex-1 min-w-0" title={p.label}>
+              {p.label}
+            </span>
+            <span className="text-muted-foreground tabular-nums shrink-0">{p.quantity}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

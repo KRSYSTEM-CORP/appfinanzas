@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Bar,
-  BarChart,
+  Area,
+  AreaChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -72,7 +72,13 @@ export function SalesByDayChart({
 
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={chartData}>
+      <AreaChart data={chartData}>
+        <defs>
+          <linearGradient id="salesByDayFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.35} />
+            <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         <XAxis dataKey="day" fontSize={12} tickLine={false} axisLine={false} />
         <YAxis fontSize={12} tickLine={false} axisLine={false} />
@@ -85,8 +91,17 @@ export function SalesByDayChart({
             />
           }
         />
-        <Bar dataKey={exchangeRateEnabled ? "ves" : "eur"} radius={[4, 4, 0, 0]} fill="var(--chart-1)" />
-      </BarChart>
+        <Area
+          type="monotone"
+          dataKey={exchangeRateEnabled ? "ves" : "eur"}
+          stroke="var(--chart-1)"
+          strokeWidth={2}
+          fill="url(#salesByDayFill)"
+          animationDuration={700}
+          dot={{ r: 3, fill: "var(--chart-1)", strokeWidth: 0 }}
+          activeDot={{ r: 5 }}
+        />
+      </AreaChart>
     </ResponsiveContainer>
   );
 }
