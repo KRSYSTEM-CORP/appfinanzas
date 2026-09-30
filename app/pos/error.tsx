@@ -14,7 +14,7 @@ export default function PosError({ error, reset }: { error: Error & { digest?: s
   }, [error]);
 
   return (
-    <div className="flex flex-col items-center justify-center gap-4 h-[calc(100vh-56px)] p-6 text-center">
+    <div className="flex flex-col items-center justify-center gap-4 md:h-full p-6 text-center">
       <div>
         <h2 className="text-lg font-semibold">Algo salió mal en el punto de venta</h2>
         <p className="text-sm text-muted-foreground mt-1">

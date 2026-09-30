@@ -38,7 +38,7 @@ export default async function PosPage({
   const initialQuote = quoteConversion && quoteConversion.success ? quoteConversion.quote : null;
 
   return (
-    <div className="flex flex-col gap-4 p-6 h-[calc(100vh-56px)]">
+    <div className="flex flex-col gap-4 p-6 md:h-full">
       <h1 className="text-2xl font-semibold">Punto de venta</h1>
       <OfflineSyncBanner canManage={role === "GERENTE" || isSuperAdmin} />
       {exchangeRateEnabled && rate == null && (

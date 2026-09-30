@@ -65,7 +65,7 @@ export function PosOfflineClient() {
 
   if (!snapshot) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 h-[calc(100vh-56px)] p-6 text-center">
+      <div className="flex flex-col items-center justify-center gap-2 md:h-full p-6 text-center">
         <h2 className="text-lg font-semibold">Sin conexión</h2>
         <p className="text-sm text-muted-foreground max-w-sm">
           Todavía no hay un catálogo guardado en este dispositivo para vender sin internet.
@@ -243,7 +243,7 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
   }
 
   return (
-    <div className="flex flex-col gap-3 h-[calc(100vh-56px)] p-6">
+    <div className="flex flex-col gap-3 md:h-full p-6">
       <OfflineSyncBanner />
       {freshnessNote}
       <div className="flex items-center justify-between rounded-lg border px-3 py-2">

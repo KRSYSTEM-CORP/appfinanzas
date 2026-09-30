@@ -25,7 +25,7 @@ export default async function QuotesPage() {
   const company = { name: companyName, logoDataUrl, ...fiscalData };
 
   return (
-    <div className="flex flex-col gap-4 p-6 h-[calc(100vh-56px)]">
+    <div className="flex flex-col gap-4 p-6 md:h-full">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Presupuestos</h1>
         <Link href="/quotes/history" className="text-sm text-primary underline underline-offset-2">

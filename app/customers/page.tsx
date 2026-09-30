@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AlertTriangleIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,9 +28,14 @@ export default async function CustomersPage() {
       </div>
 
       {toContact.length > 0 && (
-        <Card className="border-l-4 border-l-warning">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-base">Clientes a contactar ({toContact.length})</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              <span className="flex items-center justify-center size-6 rounded-full bg-warning/10 text-warning shrink-0">
+                <AlertTriangleIcon className="size-3.5" />
+              </span>
+              Clientes a contactar ({toContact.length})
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-2">
