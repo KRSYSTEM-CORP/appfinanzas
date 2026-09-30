@@ -8,7 +8,7 @@ import type { Product } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ActionMenu } from "@/components/ui/action-menu";
 import {
   Select,
   SelectContent,
@@ -282,64 +282,59 @@ export function ProductTable({
                       >
                         Editar
                       </Button>
-                      <Popover>
-                        <PopoverTrigger
-                          render={
-                            <Button
-                              size="icon-sm"
-                              variant="ghost"
-                              disabled={isPending}
-                              aria-label={`Más acciones para ${p.name}`}
-                            />
-                          }
+                      <ActionMenu
+                        trigger={
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            disabled={isPending}
+                            aria-label={`Más acciones para ${p.name}`}
+                          />
+                        }
+                        triggerChildren={<MoreVerticalIcon />}
+                        contentClassName="w-48"
+                      >
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => toggleActive(p.id, p.isActive)}
+                          className="px-2.5 py-2 text-sm rounded-md text-left hover:bg-muted transition-colors disabled:opacity-50"
                         >
-                          <MoreVerticalIcon />
-                        </PopoverTrigger>
-                        <PopoverContent align="end" className="w-48 p-1.5">
-                          <div className="flex flex-col gap-0.5">
-                            <button
-                              type="button"
-                              disabled={isPending}
-                              onClick={() => toggleActive(p.id, p.isActive)}
-                              className="px-2.5 py-2 text-sm rounded-md text-left hover:bg-muted transition-colors disabled:opacity-50"
-                            >
-                              {p.isActive ? "Desactivar" : "Activar"}
-                            </button>
-                            <Dialog>
-                              <DialogTrigger
-                                render={
-                                  <button
-                                    type="button"
-                                    disabled={isPending}
-                                    className="px-2.5 py-2 text-sm rounded-md text-left text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                                  />
-                                }
+                          {p.isActive ? "Desactivar" : "Activar"}
+                        </button>
+                        <Dialog>
+                          <DialogTrigger
+                            render={
+                              <button
+                                type="button"
+                                disabled={isPending}
+                                className="px-2.5 py-2 text-sm rounded-md text-left text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                              />
+                            }
+                          >
+                            Eliminar
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>¿Eliminar &quot;{p.name}&quot;?</DialogTitle>
+                              <DialogDescription>
+                                Esta acción es irreversible. El producto desaparecerá del inventario
+                                y del punto de venta. Las ventas y presupuestos ya generados con
+                                este producto no se ven afectados.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                              <DialogClose
+                                render={<Button variant="destructive" disabled={isPending} />}
+                                onClick={() => handleDelete(p.id)}
                               >
                                 Eliminar
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>¿Eliminar &quot;{p.name}&quot;?</DialogTitle>
-                                  <DialogDescription>
-                                    Esta acción es irreversible. El producto desaparecerá del inventario
-                                    y del punto de venta. Las ventas y presupuestos ya generados con
-                                    este producto no se ven afectados.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <DialogFooter>
-                                  <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                                  <DialogClose
-                                    render={<Button variant="destructive" disabled={isPending} />}
-                                    onClick={() => handleDelete(p.id)}
-                                  >
-                                    Eliminar
-                                  </DialogClose>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                              </DialogClose>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </ActionMenu>
                     </div>
                   </TableCell>
                 )}

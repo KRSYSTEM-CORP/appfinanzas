@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { FileTextIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ActionMenu } from "@/components/ui/action-menu";
 import {
   buildDeliveryNotePDF,
   buildPaymentReceiptPDF,
@@ -117,14 +117,12 @@ export function SaleDocumentButtons({
   }
 
   return (
-    <Popover>
-      <PopoverTrigger
-        render={<Button size="icon-sm" variant="outline" aria-label="Documentos" />}
-      >
-        <FileTextIcon className="size-4" />
-      </PopoverTrigger>
-      <PopoverContent>
-        <div className="flex flex-col gap-4">
+    <ActionMenu
+      trigger={<Button size="icon-sm" variant="outline" aria-label="Documentos" />}
+      triggerChildren={<FileTextIcon className="size-4" />}
+      contentClassName="w-72"
+    >
+      <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <p className="text-xs font-medium text-muted-foreground">Nota de entrega</p>
             <div className="flex flex-wrap gap-2">
@@ -234,7 +232,6 @@ export function SaleDocumentButtons({
             </div>
           )}
         </div>
-      </PopoverContent>
-    </Popover>
+    </ActionMenu>
   );
 }
