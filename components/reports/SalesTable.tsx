@@ -1,3 +1,4 @@
+import { ReceiptTextIcon } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -213,9 +214,14 @@ export function SalesTable({
             </TableRow>
           ))}
           {sales.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={colSpan} className="text-center text-muted-foreground py-8">
-                {emptyLabel}
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={colSpan} className="p-0">
+                <div className="flex flex-col items-center gap-3 py-14 text-center">
+                  <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                    <ReceiptTextIcon className="size-5" />
+                  </div>
+                  <p className="text-sm text-muted-foreground max-w-xs">{emptyLabel}</p>
+                </div>
               </TableCell>
             </TableRow>
           )}

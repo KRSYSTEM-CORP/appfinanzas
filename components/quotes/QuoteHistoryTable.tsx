@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { FileTextIcon } from "lucide-react";
 import Link from "next/link";
 import type { Quote, QuoteStatus, ReferenceCurrency } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -185,9 +186,14 @@ export function QuoteHistoryTable({
               </TableRow>
             ))}
             {sorted.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                  Aún no hay presupuestos.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={8} className="p-0">
+                  <div className="flex flex-col items-center gap-3 py-14 text-center">
+                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                      <FileTextIcon className="size-5" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">Aún no hay presupuestos.</p>
+                  </div>
                 </TableCell>
               </TableRow>
             )}

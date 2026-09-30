@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -83,12 +84,20 @@ export function CustomerForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-md mx-auto py-8">
-      <div>
-        <h2 className="text-xl font-semibold">Datos del cliente</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Completa los datos antes de agregar productos a la venta.
-        </p>
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-5 max-w-md mx-auto my-8 rounded-xl border bg-card p-6 shadow-sm"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex items-center justify-center size-9 shrink-0 rounded-lg bg-primary/10 text-primary">
+          <UserIcon className="size-4.5" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold leading-tight">Datos del cliente</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Un dato rápido y pasas directo al catálogo.
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -161,8 +170,8 @@ export function CustomerForm({
         <p className="text-xs text-muted-foreground">Ej. V-12345678 o J-12345678-9</p>
       </div>
 
-      <Button type="submit" size="lg">
-        Continuar
+      <Button type="submit" size="lg" className="w-full">
+        Ver catálogo
       </Button>
     </form>
   );

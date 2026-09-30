@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { StoreIcon } from "lucide-react";
 import type { Branch } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -97,9 +98,17 @@ export function BranchesForm({ branches }: { branches: Branch[] }) {
               <BranchRow key={b.id} branch={b} />
             ))}
             {branches.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                  Aún no hay sucursales.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={4} className="p-0">
+                  <div className="flex flex-col items-center gap-3 py-14 text-center">
+                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                      <StoreIcon className="size-5" />
+                    </div>
+                    <p className="text-sm font-medium">Aún no tienes sucursales</p>
+                    <p className="text-sm text-muted-foreground max-w-xs">
+                      Cada sucursal tiene su propio inventario y su propia caja.
+                    </p>
+                  </div>
                 </TableCell>
               </TableRow>
             )}

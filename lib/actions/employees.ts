@@ -8,15 +8,27 @@ import { EmployeeSchema, EmployeeUpdateSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 import type { UserStatus } from "@prisma/client";
 
+// select (not a raw findMany) for two reasons: commissionPercent is a
+// Prisma Decimal, which can't cross the Server->Client Component boundary
+// as-is (React Server Components only accept plain serializable objects) —
+// converted to a plain number below; and passwordHash/googleId have no
+// reason to ever reach the browser, even hashed.
 export async function listEmployees() {
   const { companyId } = await requireManager();
-  return withTenant(companyId, (tx) =>
+  const users = await withTenant(companyId, (tx) =>
     tx.user.findMany({
       where: { companyId },
       orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+      omit: { passwordHash: true, googleId: true },
     })
   );
+  return users.map((u) => ({
+    ...u,
+    commissionPercent: u.commissionPercent != null ? Number(u.commissionPercent) : null,
+  }));
 }
+
+export type EmployeeListItem = Awaited<ReturnType<typeof listEmployees>>[number];
 
 // True if the company would still have at least one other active GERENTE
 // after excluding `excludeUserId` — used to block actions that would leave a

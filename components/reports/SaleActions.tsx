@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { MoreVerticalIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogClose,
@@ -178,51 +180,103 @@ export function SaleActions({
           </DialogContent>
         </Dialog>
       )}
-      {!voided && (
+      {!voided ? (
+        <Popover>
+          <PopoverTrigger
+            render={<Button size="icon-sm" variant="ghost" disabled={isPending} aria-label="Más acciones" />}
+          >
+            <MoreVerticalIcon />
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-44 p-1.5">
+            <div className="flex flex-col gap-0.5">
+              <Dialog>
+                <DialogTrigger
+                  render={
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      className="px-2.5 py-2 text-sm rounded-md text-left hover:bg-muted transition-colors disabled:opacity-50"
+                    />
+                  }
+                >
+                  Anular
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>¿Anular esta venta?</DialogTitle>
+                    <DialogDescription>
+                      El stock de los productos vendidos se repondrá y la venta dejará de contar en
+                      los ingresos y gráficas. Seguirá visible en el historial marcada como
+                      &quot;Anulada&quot;.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                    <DialogClose render={<Button disabled={isPending} />} onClick={handleVoid}>
+                      Anular
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              <Dialog>
+                <DialogTrigger
+                  render={
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      className="px-2.5 py-2 text-sm rounded-md text-left text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                    />
+                  }
+                >
+                  Eliminar
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>¿Eliminar esta venta?</DialogTitle>
+                    <DialogDescription>
+                      Esta acción es irreversible. El stock de los productos vendidos se repondrá y
+                      la venta desaparecerá por completo del historial y los reportes.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                    <DialogClose
+                      render={<Button variant="destructive" disabled={isPending} />}
+                      onClick={handleDelete}
+                    >
+                      Eliminar
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </PopoverContent>
+        </Popover>
+      ) : (
         <Dialog>
-          <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
-            Anular
+          <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
+            Eliminar
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>¿Anular esta venta?</DialogTitle>
+              <DialogTitle>¿Eliminar esta venta?</DialogTitle>
               <DialogDescription>
-                El stock de los productos vendidos se repondrá y la venta dejará de contar en los
-                ingresos y gráficas. Seguirá visible en el historial marcada como &quot;Anulada&quot;.
+                Esta acción es irreversible. La venta desaparecerá por completo del historial y los
+                reportes.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-              <DialogClose render={<Button disabled={isPending} />} onClick={handleVoid}>
-                Anular
+              <DialogClose
+                render={<Button variant="destructive" disabled={isPending} />}
+                onClick={handleDelete}
+              >
+                Eliminar
               </DialogClose>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
-      <Dialog>
-        <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
-          Eliminar
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>¿Eliminar esta venta?</DialogTitle>
-            <DialogDescription>
-              Esta acción es irreversible. {!voided && "El stock de los productos vendidos se repondrá y "}
-              la venta desaparecerá por completo del historial y los reportes.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-            <DialogClose
-              render={<Button variant="destructive" disabled={isPending} />}
-              onClick={handleDelete}
-            >
-              Eliminar
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

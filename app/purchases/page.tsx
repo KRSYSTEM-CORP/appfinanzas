@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ShoppingBagIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -108,9 +109,17 @@ export default async function PurchasesPage() {
                   </TableRow>
                 ))}
                 {purchases.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                      Aún no hay compras registradas.
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={9} className="p-0">
+                      <div className="flex flex-col items-center gap-3 py-14 text-center">
+                        <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                          <ShoppingBagIcon className="size-5" />
+                        </div>
+                        <p className="text-sm font-medium">Aún no tienes compras</p>
+                        <p className="text-sm text-muted-foreground max-w-xs">
+                          Registra tu primera compra a un proveedor para aumentar el stock.
+                        </p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}

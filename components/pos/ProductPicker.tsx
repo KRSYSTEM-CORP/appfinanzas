@@ -57,6 +57,8 @@ export function ProductPicker({
     <div className="flex flex-col gap-3 h-full">
       <div className="flex gap-2">
         <Input
+          type="search"
+          aria-label="Buscar producto por nombre o SKU"
           placeholder="Buscar producto por nombre o SKU..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}

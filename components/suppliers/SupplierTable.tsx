@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { TruckIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Supplier } from "@prisma/client";
@@ -60,6 +61,8 @@ export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
   return (
     <div className="flex flex-col gap-3">
       <Input
+        type="search"
+        aria-label="Buscar proveedores por nombre o RIF"
         placeholder="Buscar por nombre o RIF..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -134,9 +137,14 @@ export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
               </TableRow>
             ))}
             {filtered.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                  No se encontraron proveedores.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={5} className="p-0">
+                  <div className="flex flex-col items-center gap-3 py-14 text-center">
+                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                      <TruckIcon className="size-5" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">No se encontraron proveedores.</p>
+                  </div>
                 </TableCell>
               </TableRow>
             )}

@@ -1,3 +1,4 @@
+import { ReceiptIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -252,9 +253,16 @@ export default async function BillingPage() {
                   );
                 })}
                 {reports.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                      Todavía no has reportado ningún pago.
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={5} className="p-0">
+                      <div className="flex flex-col items-center gap-3 py-14 text-center">
+                        <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                          <ReceiptIcon className="size-5" />
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Todavía no has reportado ningún pago.
+                        </p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}

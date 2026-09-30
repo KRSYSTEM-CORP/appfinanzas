@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { User, UserStatus, Role, Branch } from "@prisma/client";
+import { MoreVerticalIcon, UsersRoundIcon } from "lucide-react";
+import type { UserStatus, Role, Branch } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
@@ -35,6 +37,7 @@ import {
   updateEmployee,
   setEmployeeStatus,
   deleteEmployee,
+  type EmployeeListItem,
 } from "@/lib/actions/employees";
 
 const ROLE_LABELS: Record<Role, string> = { GERENTE: "Gerente", VENDEDOR: "Vendedor" };
@@ -44,7 +47,7 @@ const STATUS_LABELS: Record<UserStatus, string> = {
   SUSPENDED: "Suspendido",
 };
 
-function displayName(u: Pick<User, "firstName" | "lastName" | "email">): string {
+function displayName(u: Pick<EmployeeListItem, "firstName" | "lastName" | "email">): string {
   return u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email;
 }
 
@@ -96,7 +99,7 @@ export function EmployeeTable({
   currentUserId,
   branches,
 }: {
-  employees: User[];
+  employees: EmployeeListItem[];
   currentUserId: string;
   branches: Branch[];
 }) {
@@ -235,9 +238,18 @@ export function EmployeeTable({
               <EmployeeRow key={u.id} user={u} currentUserId={currentUserId} branches={branches} />
             ))}
             {employees.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                  Aún no hay empleados registrados.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={6} className="p-0">
+                  <div className="flex flex-col items-center gap-3 py-14 text-center">
+                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                      <UsersRoundIcon className="size-5" />
+                    </div>
+                    <p className="text-sm font-medium">Aún no tienes empleados</p>
+                    <p className="text-sm text-muted-foreground max-w-xs">
+                      Crea el primer perfil para que tu equipo pueda iniciar sesión con el código de
+                      empresa.
+                    </p>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
@@ -253,7 +265,7 @@ function EmployeeRow({
   currentUserId,
   branches,
 }: {
-  user: User;
+  user: EmployeeListItem;
   currentUserId: string;
   branches: Branch[];
 }) {
@@ -415,52 +427,75 @@ function EmployeeRow({
             </DialogContent>
           </Dialog>
 
-          {u.status === "ACTIVE" ? (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isPending || u.id === currentUserId}
-              onClick={() => run(() => setEmployeeStatus(u.id, "SUSPENDED"), setStatusError)}
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  disabled={isPending}
+                  aria-label={`Más acciones para ${displayName(u)}`}
+                />
+              }
             >
-              Suspender
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isPending}
-              onClick={() => run(() => setEmployeeStatus(u.id, "ACTIVE"), setStatusError)}
-            >
-              Reactivar
-            </Button>
-          )}
-
-          <Dialog>
-            <DialogTrigger
-              render={<Button size="sm" variant="destructive" disabled={isPending || u.id === currentUserId} />}
-            >
-              Eliminar
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>¿Eliminar a {displayName(u)}?</DialogTitle>
-                <DialogDescription>
-                  Esta acción es irreversible. Sus ventas y presupuestos pasados conservarán su
-                  nombre, pero ya no podrá iniciar sesión.
-                </DialogDescription>
-              </DialogHeader>
-              {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
-              <DialogFooter>
-                <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                <DialogClose
-                  render={<Button variant="destructive" disabled={isPending} />}
-                  onClick={() => run(() => deleteEmployee(u.id), setDeleteError)}
-                >
-                  Eliminar
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              <MoreVerticalIcon />
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-48 p-1.5">
+              <div className="flex flex-col gap-0.5">
+                {u.status === "ACTIVE" ? (
+                  <button
+                    type="button"
+                    disabled={isPending || u.id === currentUserId}
+                    onClick={() => run(() => setEmployeeStatus(u.id, "SUSPENDED"), setStatusError)}
+                    className="px-2.5 py-2 text-sm rounded-md text-left hover:bg-muted transition-colors disabled:opacity-50"
+                  >
+                    Suspender
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => run(() => setEmployeeStatus(u.id, "ACTIVE"), setStatusError)}
+                    className="px-2.5 py-2 text-sm rounded-md text-left hover:bg-muted transition-colors disabled:opacity-50"
+                  >
+                    Reactivar
+                  </button>
+                )}
+                <Dialog>
+                  <DialogTrigger
+                    render={
+                      <button
+                        type="button"
+                        disabled={isPending || u.id === currentUserId}
+                        className="px-2.5 py-2 text-sm rounded-md text-left text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                      />
+                    }
+                  >
+                    Eliminar
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>¿Eliminar a {displayName(u)}?</DialogTitle>
+                      <DialogDescription>
+                        Esta acción es irreversible. Sus ventas y presupuestos pasados conservarán
+                        su nombre, pero ya no podrá iniciar sesión.
+                      </DialogDescription>
+                    </DialogHeader>
+                    {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                      <DialogClose
+                        render={<Button variant="destructive" disabled={isPending} />}
+                        onClick={() => run(() => deleteEmployee(u.id), setDeleteError)}
+                      >
+                        Eliminar
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </TableCell>
     </TableRow>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FileTextIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -135,6 +136,8 @@ export function DocumentsTable({
       <div className="flex gap-2 flex-wrap items-center justify-between">
         <div className="flex gap-2 flex-wrap">
           <Input
+            type="search"
+            aria-label="Buscar documentos por cliente, teléfono o número de control"
             placeholder="Buscar por cliente, teléfono o Nº de control..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -200,9 +203,14 @@ export function DocumentsTable({
                 </TableRow>
               ))}
               {filteredQuotes.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    No se encontraron presupuestos.
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="p-0">
+                    <div className="flex flex-col items-center gap-3 py-14 text-center">
+                      <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                        <FileTextIcon className="size-5" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">No se encontraron presupuestos.</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}
@@ -264,9 +272,14 @@ export function DocumentsTable({
                 </TableRow>
               ))}
               {filteredSales.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    No se encontraron documentos.
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={7} className="p-0">
+                    <div className="flex flex-col items-center gap-3 py-14 text-center">
+                      <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                        <FileTextIcon className="size-5" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">No se encontraron documentos.</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

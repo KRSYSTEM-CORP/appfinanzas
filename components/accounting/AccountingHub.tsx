@@ -28,6 +28,8 @@ export function AccountingHub({ sections }: { sections: AccountingSection[] }) {
       <div className="relative max-w-sm">
         <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
         <Input
+          type="search"
+          aria-label="Buscar en contabilidad"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar en contabilidad…"
@@ -36,7 +38,7 @@ export function AccountingHub({ sections }: { sections: AccountingSection[] }) {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Sin resultados para "{query}".</p>
+        <p className="text-sm text-muted-foreground">Sin resultados para &quot;{query}&quot;.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((s) => (

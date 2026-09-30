@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { UsersIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Customer } from "@prisma/client";
@@ -52,6 +53,8 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
   return (
     <div className="flex flex-col gap-3">
       <Input
+        type="search"
+        aria-label="Buscar clientes por nombre o teléfono"
         placeholder="Buscar por nombre o teléfono..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -128,9 +131,14 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
               </TableRow>
             ))}
             {filtered.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                  No se encontraron clientes.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={4} className="p-0">
+                  <div className="flex flex-col items-center gap-3 py-14 text-center">
+                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                      <UsersIcon className="size-5" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">No se encontraron clientes.</p>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
