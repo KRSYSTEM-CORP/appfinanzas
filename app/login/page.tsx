@@ -14,12 +14,12 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; blocked?: string }>;
 }) {
-  const [rememberedCompany, { error }] = await Promise.all([getRememberedCompany(), searchParams]);
+  const [rememberedCompany, { error, blocked }] = await Promise.all([getRememberedCompany(), searchParams]);
   return (
     <div className="grid lg:grid-cols-2 min-h-full">
-      <div className="flex flex-col gap-6 p-6 py-12">
+      <div className="flex flex-col gap-6 p-6 py-12 overflow-x-hidden">
         <div className="w-full max-w-sm mx-auto flex flex-col gap-6 flex-1">
           <TrialBadge />
           <div className="text-center flex flex-col items-center gap-3">
@@ -41,6 +41,7 @@ export default async function LoginPage({
             rememberedCompany={rememberedCompany}
             googleConfigured={googleOAuthConfigured()}
             authError={error}
+            initiallyBlocked={blocked === "suspended"}
           />
           <WelcomeModal />
           <p className="text-center text-sm text-muted-foreground">

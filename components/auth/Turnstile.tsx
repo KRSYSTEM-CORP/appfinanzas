@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 type TurnstileGlobal = {
   render: (
     container: HTMLElement,
-    options: { sitekey: string; callback: (token: string) => void }
+    options: { sitekey: string; callback: (token: string) => void; size?: "normal" | "compact" | "flexible" }
   ) => string;
 };
 
@@ -29,6 +29,11 @@ export function Turnstile({ onVerify }: { onVerify?: (token: string) => void }) 
     turnstile.render(containerRef.current, {
       sitekey: siteKey,
       callback: (token) => onVerify?.(token),
+      // "flexible" fills the container's width instead of Cloudflare's
+      // fixed 300px default, which overflowed the form on narrow phones
+      // (anything under ~330px wide, since the widget doesn't shrink on
+      // its own). Keeps the same widget/protection, just responsive.
+      size: "flexible",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteKey, scriptLoaded]);
@@ -43,7 +48,7 @@ export function Turnstile({ onVerify }: { onVerify?: (token: string) => void }) 
         defer
         onReady={() => setScriptLoaded(true)}
       />
-      <div ref={containerRef} />
+      <div ref={containerRef} className="w-full" />
     </>
   );
 }

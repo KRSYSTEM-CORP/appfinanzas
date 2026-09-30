@@ -141,7 +141,7 @@ export function ProductTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border overflow-hidden">
+      <div className="rounded-lg border overflow-x-auto">
         <div className="px-3 py-2 border-b bg-muted/40 text-sm font-medium">Resumen por categoría</div>
         <Table>
           <TableHeader>
@@ -220,7 +220,9 @@ export function ProductTable({
         </span>
       </div>
 
-      <div className="rounded-lg border overflow-x-auto">
+      <p className="sm:hidden text-xs text-muted-foreground px-1">Desliza la tabla para ver más →</p>
+      <div className="relative rounded-lg border overflow-hidden">
+      <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -235,7 +237,7 @@ export function ProductTable({
           </TableHeader>
           <TableBody>
             {filtered.map((p) => (
-              <TableRow key={p.id} className={!p.isActive ? "opacity-60" : undefined}>
+              <TableRow key={p.id} className={!p.isActive ? "text-destructive" : undefined}>
                 <TableCell className="font-medium whitespace-normal">
                   <div className="flex items-center gap-2">
                     {p.imageDataUrl ? (
@@ -265,7 +267,7 @@ export function ProductTable({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={p.isActive ? "success" : "outline"}>
+                  <Badge variant={p.isActive ? "success" : "destructive"}>
                     {p.isActive ? "Activo" : "Inactivo"}
                   </Badge>
                 </TableCell>
@@ -379,6 +381,8 @@ export function ProductTable({
             )}
           </TableBody>
         </Table>
+      </div>
+        <div className="sm:hidden pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent" />
       </div>
     </div>
   );
