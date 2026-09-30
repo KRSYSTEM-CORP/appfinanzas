@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { NavBar } from "@/components/nav/NavBar";
+import { Sidebar } from "@/components/nav/Sidebar";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { KrPosTour } from "@/components/onboarding/KrPosTour";
 import { getSession } from "@/lib/session";
@@ -56,14 +56,15 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       style={brandVars as React.CSSProperties}
     >
-      <body className="min-h-full flex flex-col">
+      <body className={`min-h-full flex flex-col ${session ? "md:h-dvh md:flex-row md:overflow-hidden" : ""}`}>
         <ServiceWorkerRegistration />
         {session && (
-          <NavBar
+          <Sidebar
             companyName={session.companyName}
             logoDataUrl={branding.logoDataUrl}
             isSuperAdmin={session.isSuperAdmin}
             role={session.role}
+            sellerName={session.sellerName}
             allowedSections={session.allowedSections}
             featureLinks={FEATURES.filter((f) => f.href && hasFeature(session.enabledFeatures, f.id)).map((f) => ({
               href: f.href as string,
@@ -76,7 +77,7 @@ export default async function RootLayout({
           />
         )}
         {session && <KrPosTour hasSeenTour={session.hasSeenTour} />}
-        <main className="flex-1 min-h-0">{children}</main>
+        <main className={`flex-1 min-w-0 ${session ? "md:h-full md:overflow-y-auto" : "min-h-0"}`}>{children}</main>
       </body>
     </html>
   );

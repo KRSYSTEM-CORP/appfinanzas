@@ -31,7 +31,7 @@ export default async function LoginPage({
               <p className="text-sm text-muted-foreground mt-1">KR POS — Ventas e Inventario</p>
             </div>
             {/* Only offered here, before signing in — once inside the app the
-                nav no longer shows it (see components/nav/NavBar.tsx). Always
+                nav no longer shows it (see components/nav/Sidebar.tsx). Always
                 shows something actionable: the real install button when the
                 browser offers it, otherwise manual steps (e.g. every iPhone,
                 since Safari never fires beforeinstallprompt at all). */}
