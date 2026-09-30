@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { PrintPaperSize } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -12,23 +13,19 @@ import { PAPER_SIZES, getPaperSize } from "@/lib/print-paper-sizes";
 export function PrintPaperSizeForm({ currentPaperSize }: { currentPaperSize: PrintPaperSize }) {
   const router = useRouter();
   const [paperSize, setPaperSize] = useState<PrintPaperSize>(currentPaperSize);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setSaved(false);
     startTransition(async () => {
       const formData = new FormData();
       formData.set("printPaperSize", paperSize);
       const result = await updatePrintPaperSize(formData);
       if (result.success) {
-        setSaved(true);
+        toast.success("Tamaño de papel guardado.");
         router.refresh();
       } else {
-        setError(result.error);
+        toast.error(result.error);
       }
     });
   }
@@ -56,9 +53,6 @@ export function PrintPaperSizeForm({ currentPaperSize }: { currentPaperSize: Pri
           pago — puedes cambiarlo en cada impresión.
         </p>
       </div>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {saved && !error && <p className="text-sm text-muted-foreground">Guardado.</p>}
 
       <Button type="submit" disabled={isPending || paperSize === currentPaperSize}>
         {isPending ? "Guardando..." : "Guardar tamaño de papel"}

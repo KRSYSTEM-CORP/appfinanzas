@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,14 +14,10 @@ export function IvaSettingsForm({ initial }: { initial: IvaSettingsInfo }) {
   const [ivaReducedRatePercent, setIvaReducedRatePercent] = useState(String(initial.ivaReducedRatePercent));
   const [isIvaWithholdingAgent, setIsIvaWithholdingAgent] = useState(initial.isIvaWithholdingAgent);
   const [ivaWithholdingPercent, setIvaWithholdingPercent] = useState(String(initial.ivaWithholdingPercent));
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setSaved(false);
     startTransition(async () => {
       const formData = new FormData();
       formData.set("ivaGeneralRatePercent", ivaGeneralRatePercent);
@@ -29,10 +26,10 @@ export function IvaSettingsForm({ initial }: { initial: IvaSettingsInfo }) {
       formData.set("ivaWithholdingPercent", ivaWithholdingPercent);
       const result = await updateIvaSettings(formData);
       if (result.success) {
-        setSaved(true);
+        toast.success("Configuración de IVA guardada.");
         router.refresh();
       } else {
-        setError(result.error);
+        toast.error(result.error);
       }
     });
   }
@@ -110,9 +107,6 @@ export function IvaSettingsForm({ initial }: { initial: IvaSettingsInfo }) {
           />
         </div>
       )}
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {saved && !error && <p className="text-sm text-muted-foreground">Guardado.</p>}
 
       <Button type="submit" disabled={isPending}>
         {isPending ? "Guardando..." : "Guardar configuración de IVA"}

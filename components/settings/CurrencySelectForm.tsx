@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,23 +19,19 @@ export function CurrencySelectForm({
 }) {
   const router = useRouter();
   const [currencyCode, setCurrencyCode] = useState(currentCurrencyCode);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setSaved(false);
     startTransition(async () => {
       const formData = new FormData();
       formData.set("localCurrencyCode", currencyCode);
       const result = await updateLocalCurrency(formData);
       if (result.success) {
-        setSaved(true);
+        toast.success("Moneda guardada.");
         router.refresh();
       } else {
-        setError(result.error);
+        toast.error(result.error);
       }
     });
   }
@@ -62,9 +59,6 @@ export function CurrencySelectForm({
           esta moneda usando tu tasa de cambio.
         </p>
       </div>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {saved && !error && <p className="text-sm text-muted-foreground">Guardado.</p>}
 
       <Button type="submit" disabled={isPending || currencyCode === currentCurrencyCode}>
         {isPending ? "Guardando..." : "Guardar moneda"}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,19 +12,15 @@ import { updateFiscalData, type FiscalData } from "@/lib/actions/settings";
 export function FiscalDataForm({ initial }: { initial: FiscalData }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   function handleSubmit(formData: FormData) {
-    setError(null);
-    setSaved(false);
     startTransition(async () => {
       const result = await updateFiscalData(formData);
       if (result.success) {
-        setSaved(true);
+        toast.success("Datos fiscales guardados.");
         router.refresh();
       } else {
-        setError(result.error);
+        toast.error(result.error);
       }
     });
   }
@@ -54,9 +51,6 @@ export function FiscalDataForm({ initial }: { initial: FiscalData }) {
         <Input id="fiscalPhone" name="fiscalPhone" defaultValue={initial.fiscalPhone ?? ""} />
         <p className="text-xs text-muted-foreground">Ej. 0212-1234567</p>
       </div>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {saved && !error && <p className="text-sm text-muted-foreground">Guardado.</p>}
 
       <Button type="submit" disabled={isPending}>
         {isPending ? "Guardando..." : "Guardar datos fiscales"}

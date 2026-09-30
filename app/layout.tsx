@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import { Sidebar } from "@/components/nav/Sidebar";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { KrPosTour } from "@/components/onboarding/KrPosTour";
@@ -78,6 +79,7 @@ export default async function RootLayout({
         )}
         {session && <KrPosTour hasSeenTour={session.hasSeenTour} />}
         <main className={`flex-1 min-w-0 ${session ? "md:h-full md:overflow-y-auto" : "min-h-0"}`}>{children}</main>
+        <Toaster richColors closeButton position="bottom-right" />
       </body>
     </html>
   );

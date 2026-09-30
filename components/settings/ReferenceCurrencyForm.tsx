@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { updateReferenceCurrencySettings } from "@/lib/actions/settings";
@@ -17,26 +18,22 @@ export function ReferenceCurrencyForm({
   const router = useRouter();
   const [enabled, setEnabled] = useState(currentEnabled);
   const [referenceCurrency, setReferenceCurrency] = useState<ReferenceCurrency>(currentReferenceCurrency);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const dirty = enabled !== currentEnabled || referenceCurrency !== currentReferenceCurrency;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setSaved(false);
     startTransition(async () => {
       const formData = new FormData();
       formData.set("exchangeRateEnabled", String(enabled));
       formData.set("referenceCurrency", referenceCurrency);
       const result = await updateReferenceCurrencySettings(formData);
       if (result.success) {
-        setSaved(true);
+        toast.success("Preferencias de moneda guardadas.");
         router.refresh();
       } else {
-        setError(result.error);
+        toast.error(result.error);
       }
     });
   }
@@ -51,10 +48,7 @@ export function ReferenceCurrencyForm({
             size="sm"
             variant={enabled ? "default" : "outline"}
             className="flex-1"
-            onClick={() => {
-              setEnabled(true);
-              setSaved(false);
-            }}
+            onClick={() => setEnabled(true)}
           >
             Activada
           </Button>
@@ -63,10 +57,7 @@ export function ReferenceCurrencyForm({
             size="sm"
             variant={!enabled ? "default" : "outline"}
             className="flex-1"
-            onClick={() => {
-              setEnabled(false);
-              setSaved(false);
-            }}
+            onClick={() => setEnabled(false)}
           >
             Desactivada
           </Button>
@@ -86,10 +77,7 @@ export function ReferenceCurrencyForm({
             size="sm"
             variant={referenceCurrency === "EUR" ? "default" : "outline"}
             className="flex-1"
-            onClick={() => {
-              setReferenceCurrency("EUR");
-              setSaved(false);
-            }}
+            onClick={() => setReferenceCurrency("EUR")}
           >
             EUR (Euro)
           </Button>
@@ -98,10 +86,7 @@ export function ReferenceCurrencyForm({
             size="sm"
             variant={referenceCurrency === "USD" ? "default" : "outline"}
             className="flex-1"
-            onClick={() => {
-              setReferenceCurrency("USD");
-              setSaved(false);
-            }}
+            onClick={() => setReferenceCurrency("USD")}
           >
             USD (Dólar)
           </Button>
@@ -110,9 +95,6 @@ export function ReferenceCurrencyForm({
           Todos tus productos se guardan y calculan internamente en esta moneda de referencia.
         </p>
       </div>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {saved && !error && <p className="text-sm text-muted-foreground">Guardado.</p>}
 
       <Button type="submit" disabled={isPending || !dirty} className="self-start">
         {isPending ? "Guardando..." : "Guardar"}

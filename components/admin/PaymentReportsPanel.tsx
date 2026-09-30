@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { PaymentMethod } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -79,8 +80,6 @@ export function PlatformSettingsForm({
   const [defaultFee, setDefaultFee] = useState(
     initialDefaultMonthlyFeeUsdCents != null ? String(initialDefaultMonthlyFeeUsdCents / 100) : ""
   );
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const qrInputRef = useRef<HTMLInputElement>(null);
 
   async function handleQrFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -89,16 +88,13 @@ export function PlatformSettingsForm({
     try {
       const dataUrl = await resizeImageToDataUrl(file, { maxDimension: 600, format: "image/png" });
       setBinanceQrDataUrl(dataUrl);
-      setSaved(false);
     } catch {
-      setError("No se pudo procesar la imagen. Intenta con otro archivo.");
+      toast.error("No se pudo procesar la imagen. Intenta con otro archivo.");
     }
   }
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setSaved(false);
     startTransition(async () => {
       const result = await updatePlatformSettings({
         paymentInstructions: instructions,
@@ -110,10 +106,10 @@ export function PlatformSettingsForm({
         defaultMonthlyFee: defaultFee,
       });
       if (!result.success) {
-        setError(result.error);
+        toast.error(result.error);
         return;
       }
-      setSaved(true);
+      toast.success("Configuración de la plataforma guardada.");
       router.refresh();
     });
   }
@@ -130,7 +126,6 @@ export function PlatformSettingsForm({
           value={defaultFee}
           onChange={(e) => {
             setDefaultFee(e.target.value);
-            setSaved(false);
           }}
         />
         <p className="text-xs text-muted-foreground">
@@ -169,7 +164,6 @@ export function PlatformSettingsForm({
           value={binanceId}
           onChange={(e) => {
             setBinanceId(e.target.value);
-            setSaved(false);
           }}
         />
         <p className="text-xs text-muted-foreground">Ej. 123456789</p>
@@ -188,7 +182,6 @@ export function PlatformSettingsForm({
             value={pagoMovilBank}
             onChange={(e) => {
               setPagoMovilBank(e.target.value);
-              setSaved(false);
             }}
           />
           <p className="text-xs text-muted-foreground">Ej. Banesco</p>
@@ -200,7 +193,6 @@ export function PlatformSettingsForm({
             value={pagoMovilPhone}
             onChange={(e) => {
               setPagoMovilPhone(e.target.value);
-              setSaved(false);
             }}
           />
           <p className="text-xs text-muted-foreground">Ej. 0412-1234567</p>
@@ -212,7 +204,6 @@ export function PlatformSettingsForm({
             value={pagoMovilId}
             onChange={(e) => {
               setPagoMovilId(e.target.value);
-              setSaved(false);
             }}
           />
           <p className="text-xs text-muted-foreground">Ej. V-12345678</p>
@@ -225,7 +216,6 @@ export function PlatformSettingsForm({
           value={instructions}
           onChange={(e) => {
             setInstructions(e.target.value);
-            setSaved(false);
           }}
           rows={4}
         />
@@ -233,8 +223,6 @@ export function PlatformSettingsForm({
           Ej. Solo en horario laboral, confirma por WhatsApp antes de enviar
         </p>
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {saved && !error && <p className="text-sm text-muted-foreground">Guardado.</p>}
       <Button type="submit" size="sm" disabled={isPending} className="self-start">
         Guardar
       </Button>
@@ -255,25 +243,30 @@ export function PlatformExchangeRateForm({
   currentUpdatedAt: Date | null;
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
   const [isSaving, startSaveTransition] = useTransition();
   const [isFetching, startFetchTransition] = useTransition();
 
   function handleSubmit(formData: FormData) {
-    setError(null);
     startSaveTransition(async () => {
       const result = await updatePlatformExchangeRate(formData);
-      if (result.success) router.refresh();
-      else setError(result.error);
+      if (result.success) {
+        toast.success("Tasa actualizada.");
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
     });
   }
 
   function handleFetchBcv() {
-    setError(null);
     startFetchTransition(async () => {
       const result = await fetchAndUpdatePlatformBcvRate();
-      if (result.success) router.refresh();
-      else setError(result.error);
+      if (result.success) {
+        toast.success("Tasa actualizada con el BCV.");
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
     });
   }
 
@@ -310,7 +303,6 @@ export function PlatformExchangeRateForm({
       {currentUpdatedAt && (
         <p className="text-xs text-muted-foreground">Última actualización: {formatDate(currentUpdatedAt)}</p>
       )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }
@@ -322,6 +314,7 @@ export function PendingReportsTable({ reports }: { reports: PendingReport[] }) {
   function handleApprove(reportId: string) {
     startTransition(async () => {
       await approvePaymentReport(reportId);
+      toast.success("Pago aprobado.");
       router.refresh();
     });
   }
@@ -369,19 +362,18 @@ function PendingReportRow({
   const [isRejecting, startTransition] = useTransition();
   const router = useRouter();
   const [reviewNote, setReviewNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
   const totalUsdCents = r.lines.reduce((sum, l) => sum + l.amountUsdCents, 0);
 
   function handleReject(e: React.MouseEvent) {
     e.preventDefault();
-    setError(null);
     startTransition(async () => {
       const result = await rejectPaymentReport(r.id, { reviewNote });
       if (!result.success) {
-        setError(result.error);
+        toast.error(result.error);
         return;
       }
+      toast.success("Reporte rechazado.");
       router.refresh();
     });
   }
@@ -440,7 +432,6 @@ function PendingReportRow({
                 value={reviewNote}
                 onChange={(e) => setReviewNote(e.target.value)}
               />
-              {error && <p className="text-sm text-destructive">{error}</p>}
               <DialogFooter>
                 <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
                 <DialogClose

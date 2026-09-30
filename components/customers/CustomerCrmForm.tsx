@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,20 +17,16 @@ function toDateInputValue(date: Date | null | undefined): string {
 
 export function CustomerCrmForm({ customer }: { customer: Customer }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(formData: FormData) {
-    setError(null);
-    setSaved(false);
     startTransition(async () => {
       const result = await updateCustomerCrm(customer.id, formData);
       if (result.success) {
-        setSaved(true);
+        toast.success("Cliente actualizado.");
         router.refresh();
       } else {
-        setError(result.error);
+        toast.error(result.error);
       }
     });
   }
@@ -59,9 +56,6 @@ export function CustomerCrmForm({ customer }: { customer: Customer }) {
           placeholder="Preferencias, acuerdos, contexto para la próxima llamada..."
         />
       </div>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {saved && !error && <p className="text-sm text-muted-foreground">Guardado.</p>}
 
       <Button type="submit" disabled={isPending}>
         {isPending ? "Guardando..." : "Guardar"}
