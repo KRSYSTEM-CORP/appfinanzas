@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { MinusIcon, PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -169,9 +169,10 @@ export function Cart({
                 type="button"
                 size="icon-sm"
                 variant="outline"
+                aria-label="Quitar una unidad"
                 onClick={() => onDecrement(line.productId)}
               >
-                −
+                <MinusIcon />
               </Button>
               <QuantityInput
                 quantity={line.quantity}
@@ -182,10 +183,11 @@ export function Cart({
                 type="button"
                 size="icon-sm"
                 variant="outline"
+                aria-label="Agregar una unidad"
                 disabled={line.quantity >= line.maxStock}
                 onClick={() => onIncrement(line.productId)}
               >
-                +
+                <PlusIcon />
               </Button>
             </div>
             <div className="w-28 text-right">
@@ -199,11 +201,12 @@ export function Cart({
             </div>
             <Button
               type="button"
-              size="sm"
+              size="icon-sm"
               variant="ghost"
+              aria-label={`Quitar ${line.name} del carrito`}
               onClick={() => onRemove(line.productId)}
             >
-              ✕
+              <XIcon />
             </Button>
           </div>
         ))}

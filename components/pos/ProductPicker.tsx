@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Product } from "@prisma/client";
+import { PackageIcon, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,15 +57,18 @@ export function ProductPicker({
   return (
     <div className="flex flex-col gap-3 h-full">
       <div className="flex gap-2">
-        <Input
-          type="search"
-          aria-label="Buscar producto por nombre o SKU"
-          placeholder="Buscar producto por nombre o SKU..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          autoFocus
-          className="flex-1"
-        />
+        <div className="relative flex-1">
+          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            type="search"
+            aria-label="Buscar producto por nombre o SKU"
+            placeholder="Buscar producto por nombre o SKU..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+            className="pl-8"
+          />
+        </div>
         <BarcodeScannerDialog onDetected={handleScan} />
       </div>
       {scanError && <p className="text-sm text-destructive">{scanError}</p>}
@@ -100,11 +104,15 @@ export function ProductPicker({
               type="button"
               disabled={outOfStock}
               onClick={() => onAdd(p)}
-              className="flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              className="relative flex flex-col items-start gap-1 rounded-xl border bg-card p-3 text-left shadow-xs transition-all duration-150 ease-out-smooth hover:border-ring/40 hover:shadow-sm active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
             >
-              {p.imageDataUrl && (
+              {p.imageDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.imageDataUrl} alt="" className="h-16 w-full rounded object-cover" />
+                <img src={p.imageDataUrl} alt="" className="h-16 w-full rounded-lg object-cover" />
+              ) : (
+                <div className="flex h-16 w-full items-center justify-center rounded-lg bg-muted">
+                  <PackageIcon className="size-6 text-muted-foreground/50" />
+                </div>
               )}
               <span className="font-medium text-sm">{p.name}</span>
               <Price
@@ -114,7 +122,7 @@ export function ProductPicker({
                 exchangeRateEnabled={exchangeRateEnabled}
                 referenceCurrency={referenceCurrency}
               />
-              {p.trackStock && (
+              {p.trackStock && !outOfStock && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted-foreground">Stock: {p.stock}</span>
                   {isLowStock(p) && (
@@ -123,6 +131,11 @@ export function ProductPicker({
                     </Badge>
                   )}
                 </div>
+              )}
+              {outOfStock && (
+                <Badge variant="destructive" className="text-[10px] h-4">
+                  Agotado
+                </Badge>
               )}
             </button>
           );
