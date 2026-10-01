@@ -106,7 +106,8 @@ export function SaleActions({
   const isPartiallyPaid = remainingCents < totalCents;
 
   return (
-    <div className="flex justify-end gap-2">
+    <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+      <div className="flex justify-center">
       {!voided && paymentStatus === "CREDIT" && (
         <Dialog
           open={payOpen}
@@ -180,6 +181,8 @@ export function SaleActions({
           </DialogContent>
         </Dialog>
       )}
+      </div>
+      <div className="flex justify-end">
       {!voided ? (
         <ActionMenu
           trigger={<Button size="icon-sm" variant="ghost" disabled={isPending} aria-label="Más acciones" />}
@@ -271,6 +274,7 @@ export function SaleActions({
           </DialogContent>
         </Dialog>
       )}
+      </div>
     </div>
   );
 }
