@@ -111,6 +111,11 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
     0
   );
   const total = rawTotal - discountCentsTotal;
+  // A 100%-discounted sale has nothing to collect — see Cart's isExonerated
+  // and checkout() below, which forces paymentStatus to PAID with no
+  // payment rows instead of whatever the cashier had selected before
+  // applying the exoneration.
+  const exonerated = total <= 0;
 
   useEffect(() => {
     setPaymentRows((prev) =>
@@ -132,9 +137,9 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
         quantity: l.quantity,
         priceTier: l.priceTierOverride ?? undefined,
       })),
-      paymentStatus,
+      paymentStatus: exonerated ? "PAID" : paymentStatus,
       payments:
-        paymentStatus === "PAID"
+        !exonerated && paymentStatus === "PAID"
           ? paymentRows.map((r) => ({
               paymentMethod: r.paymentMethod,
               amount: r.amount,
@@ -179,8 +184,8 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
             };
           }),
           customer,
-          paymentStatus,
-          paymentRows,
+          paymentStatus: exonerated ? "PAID" : paymentStatus,
+          paymentRows: exonerated ? [] : paymentRows,
           discountPercent: discountValue,
           note,
           sellerName: snapshot.sellerName,

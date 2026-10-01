@@ -159,6 +159,11 @@ export function PosClient({
     0
   );
   const total = rawTotal - discountCentsTotal;
+  // A 100%-discounted sale has nothing to collect — see Cart's isExonerated
+  // and checkout()/buildReceiptPreview below, which both use this to force
+  // paymentStatus to PAID with no payment rows instead of whatever the
+  // cashier had selected before applying the exoneration.
+  const exonerated = total <= 0;
 
   // Keep the single default payment row in sync with the cart total as
   // products are added/removed, so the common single-method case never
@@ -198,8 +203,8 @@ export function PosClient({
         };
       }),
       customer,
-      paymentStatus,
-      paymentRows,
+      paymentStatus: exonerated ? "PAID" : paymentStatus,
+      paymentRows: exonerated ? [] : paymentRows,
       discountPercent: discountValue,
       note,
       sellerName,
@@ -221,9 +226,9 @@ export function PosClient({
         quantity: l.quantity,
         priceTier: l.priceTierOverride ?? undefined,
       })),
-      paymentStatus,
+      paymentStatus: exonerated ? "PAID" : paymentStatus,
       payments:
-        paymentStatus === "PAID"
+        !exonerated && paymentStatus === "PAID"
           ? paymentRows.map((r) => ({
               paymentMethod: r.paymentMethod,
               amount: r.amount,

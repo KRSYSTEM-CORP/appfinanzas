@@ -130,6 +130,11 @@ export function Cart({
     0
   );
   const total = rawTotal - discountCents;
+  // A 100%-discounted sale has nothing to collect — asking the cashier to
+  // still pick "Pagada"/"A crédito" and a payment method for Bs. 0,00 is
+  // just friction, and the server already accepts paymentStatus "PAID"
+  // with no payment rows for a zero total (see completeSale).
+  const isExonerated = total <= 0 && lines.length > 0;
 
   return (
     <div className="flex flex-col h-full gap-3">
@@ -289,37 +294,45 @@ export function Cart({
         <p className="text-xs text-muted-foreground">Se imprime en la nota de entrega y la factura</p>
       </div>
 
-      <div className="flex gap-2">
-        {(Object.keys(PAYMENT_STATUS_LABELS) as PaymentStatus[]).map((status) => (
-          <Button
-            key={status}
-            type="button"
-            size="sm"
-            variant={paymentStatus === status ? "default" : "outline"}
-            onClick={() => onPaymentStatusChange(status)}
-            className="flex-1"
-          >
-            {PAYMENT_STATUS_LABELS[status]}
-          </Button>
-        ))}
-      </div>
-
-      {paymentStatus === "PAID" ? (
-        <PaymentSplitBuilder
-          rows={paymentRows}
-          onChange={onPaymentRowsChange}
-          totalCents={total}
-          rate={rate}
-          currencyCode={currencyCode}
-          exchangeRateEnabled={exchangeRateEnabled}
-          referenceCurrency={referenceCurrency}
-          idPrefix="checkout"
-        />
-      ) : (
+      {isExonerated ? (
         <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
-          Esta venta quedará pendiente de cobro. El método de pago y la moneda se registrarán
-          cuando el cliente pague, desde la sección de Reportes.
+          Venta exonerada (100% de descuento) — no se requiere método de pago.
         </p>
+      ) : (
+        <>
+          <div className="flex gap-2">
+            {(Object.keys(PAYMENT_STATUS_LABELS) as PaymentStatus[]).map((status) => (
+              <Button
+                key={status}
+                type="button"
+                size="sm"
+                variant={paymentStatus === status ? "default" : "outline"}
+                onClick={() => onPaymentStatusChange(status)}
+                className="flex-1"
+              >
+                {PAYMENT_STATUS_LABELS[status]}
+              </Button>
+            ))}
+          </div>
+
+          {paymentStatus === "PAID" ? (
+            <PaymentSplitBuilder
+              rows={paymentRows}
+              onChange={onPaymentRowsChange}
+              totalCents={total}
+              rate={rate}
+              currencyCode={currencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+              idPrefix="checkout"
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
+              Esta venta quedará pendiente de cobro. El método de pago y la moneda se registrarán
+              cuando el cliente pague, desde la sección de Reportes.
+            </p>
+          )}
+        </>
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
