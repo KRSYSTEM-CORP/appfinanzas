@@ -205,10 +205,8 @@ export function Sidebar({
     // eslint-disable-next-line @next/next/no-img-element
     <img src={logoDataUrl} alt="" className="size-8 shrink-0 rounded-lg object-cover" />
   ) : (
-    <div className="size-8 shrink-0 rounded-lg bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),black_25%)] flex items-center justify-center p-1.5">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/icons/icon-192.png" alt="" className="w-full h-full object-contain" />
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/icons/icon-192.png" alt="" className="size-8 shrink-0 rounded-lg object-cover" />
   );
 
   return (

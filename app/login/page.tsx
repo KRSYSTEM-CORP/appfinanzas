@@ -23,9 +23,13 @@ export default async function LoginPage({
         <div className="w-full max-w-sm mx-auto flex flex-col gap-6 flex-1">
           <TrialBadge />
           <div className="text-center flex flex-col items-center gap-3">
-            <div className="rounded-2xl bg-gradient-to-br from-primary to-[color-mix(in_oklch,var(--primary),black_20%)] p-2 shadow-lg shadow-primary/20 lg:hidden">
-              <Image src="/icons/icon-512.png" alt="KR POS" width={64} height={64} className="rounded-xl" />
-            </div>
+            <Image
+              src="/icons/icon-512.png"
+              alt="KR POS"
+              width={64}
+              height={64}
+              className="rounded-2xl shadow-lg shadow-primary/20 lg:hidden"
+            />
             <div>
               <h1 className="text-2xl font-semibold">Inicia sesión</h1>
               <p className="text-sm text-muted-foreground mt-1">KR POS — Ventas e Inventario</p>
