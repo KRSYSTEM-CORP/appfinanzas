@@ -12,10 +12,9 @@ export function PortalHero() {
       <div className="portal-hero-blob-a" />
       <div className="portal-hero-blob-b" />
 
-      <div className="relative flex items-center gap-2.5">
+      <div className="relative flex items-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icons/icon-192.png" alt="" className="size-7 rounded-md" />
-        <span className="font-semibold tracking-tight">KR POS</span>
+        <img src="/brand/wordmark-white.png" alt="KR POS" className="h-7 w-auto" />
       </div>
 
       <div className="relative flex flex-col gap-4 max-w-md">

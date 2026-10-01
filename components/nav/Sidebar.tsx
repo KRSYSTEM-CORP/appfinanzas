@@ -220,11 +220,13 @@ export function Sidebar({
         }`}
       >
         <div className={`flex items-center gap-2.5 px-3 h-16 border-b shrink-0 ${collapsed ? "justify-center px-2" : ""}`}>
-          {brandMark}
-          {!collapsed && (
-            <div className="flex flex-col leading-none min-w-0">
-              <span className="font-semibold text-sm">KR POS</span>
-              <span className="text-xs text-sidebar-foreground/60 truncate max-w-[150px]">{companyName}</span>
+          {collapsed ? (
+            brandMark
+          ) : (
+            <div className="flex flex-col gap-1 min-w-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/wordmark-color.png" alt="KR POS" className="h-5 w-auto" />
+              <span className="text-xs text-sidebar-foreground/60 truncate max-w-[180px]">{companyName}</span>
             </div>
           )}
         </div>
