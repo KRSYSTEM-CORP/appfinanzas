@@ -320,7 +320,7 @@ export function PendingReportsTable({ reports }: { reports: PendingReport[] }) {
   }
 
   return (
-    <div className="rounded-lg border shadow-xs overflow-x-auto">
+    <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>

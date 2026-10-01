@@ -251,7 +251,7 @@ export function UpdateInventoryForm() {
               {isPending ? "Actualizando..." : "Confirmar actualización"}
             </Button>
           </div>
-          <div className="rounded-lg border shadow-xs overflow-x-auto max-h-96 overflow-y-auto">
+          <div className="rounded-lg border bg-card shadow-xs overflow-x-auto max-h-96 overflow-y-auto">
             <Table>
               <TableHeader>
                 <TableRow>

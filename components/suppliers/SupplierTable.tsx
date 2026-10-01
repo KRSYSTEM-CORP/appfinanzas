@@ -72,7 +72,7 @@ export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
         />
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <div className="rounded-lg border shadow-xs overflow-x-auto">
+      <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

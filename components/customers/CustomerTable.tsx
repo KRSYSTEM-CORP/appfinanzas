@@ -63,7 +63,7 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
           className="pl-8"
         />
       </div>
-      <div className="rounded-lg border shadow-xs overflow-x-auto">
+      <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

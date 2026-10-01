@@ -165,7 +165,7 @@ export function DocumentsTable({
       </div>
 
       {docType === "quote" ? (
-        <div className="rounded-lg border shadow-xs overflow-x-auto">
+        <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -221,7 +221,7 @@ export function DocumentsTable({
           </Table>
         </div>
       ) : (
-        <div className="rounded-lg border shadow-xs overflow-x-auto">
+        <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

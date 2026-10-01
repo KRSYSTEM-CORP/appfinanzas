@@ -149,7 +149,7 @@ export function ExpensesPanel({
 
       {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
 
-      <div className="rounded-lg border shadow-xs overflow-x-auto">
+      <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

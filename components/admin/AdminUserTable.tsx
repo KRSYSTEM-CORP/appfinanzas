@@ -81,7 +81,7 @@ export function AdminUserTable({
   currentUserId: string;
 }) {
   return (
-    <div className="rounded-lg border shadow-xs overflow-x-auto">
+    <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>

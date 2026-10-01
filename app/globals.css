@@ -158,28 +158,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply text-foreground;
-    background-color: var(--background);
-    position: relative;
-  }
-  /* A fixed, multi-hue ambient wash behind the whole shell — same brand
-     colors as the login's hero, now with real presence instead of a sliver
-     that scrolls away. A `position: fixed` element (not the buggier
-     `background-attachment: fixed` property) so it holds steady on iOS
-     Safari too. Sits at z-index -1, behind every card/table, which all have
-     their own opaque --card/--background fill — this never touches content
-     contrast, it only ever shows in the empty space around it. */
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background-image:
-      radial-gradient(ellipse 65% 55% at 8% -5%, color-mix(in oklch, var(--primary), transparent 35%), transparent 60%),
-      radial-gradient(ellipse 60% 50% at 100% 0%, color-mix(in oklch, var(--chart-5), transparent 45%), transparent 62%),
-      radial-gradient(ellipse 70% 60% at 15% 115%, color-mix(in oklch, var(--chart-1), transparent 55%), transparent 65%),
-      radial-gradient(ellipse 55% 50% at 100% 100%, color-mix(in oklch, var(--chart-2), transparent 60%), transparent 60%);
+    @apply bg-background text-foreground;
   }
   html {
     @apply font-sans;

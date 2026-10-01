@@ -141,7 +141,7 @@ export function ProductTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border shadow-xs overflow-x-auto">
+      <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
         <div className="px-3 py-2 border-b bg-muted/40 text-sm font-medium">Resumen por categoría</div>
         <Table>
           <TableHeader>
@@ -224,7 +224,7 @@ export function ProductTable({
       </div>
 
       <p className="sm:hidden text-xs text-muted-foreground px-1">Desliza la tabla para ver más →</p>
-      <div className="relative rounded-lg border shadow-xs overflow-hidden">
+      <div className="relative rounded-lg border bg-card shadow-xs overflow-hidden">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
