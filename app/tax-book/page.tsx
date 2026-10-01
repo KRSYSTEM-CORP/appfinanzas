@@ -72,7 +72,7 @@ export default async function TaxBookPage({
         </div>
       </div>
 
-      <div className="rounded-lg border divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-4 [&>*]:p-4">
+      <div className="rounded-lg border bg-card shadow-xs divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-4 [&>*]:p-4">
         <StatCard
           label="Ventas: base imponible"
           accent="primary"

@@ -73,7 +73,7 @@ export default async function SettingsPage() {
 
           {exchangeRateEnabled && (
             <div className="flex flex-col gap-4">
-              <div className="rounded-lg border p-4 flex flex-col gap-1">
+              <div className="rounded-lg border bg-card shadow-xs p-4 flex flex-col gap-1">
                 <span className="text-sm text-muted-foreground">Tasa actual</span>
                 <span className="text-2xl font-semibold">
                   {rate != null ? formatLocalCurrency(rate, localCurrencyCode) : "No configurada"}

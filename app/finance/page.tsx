@@ -139,7 +139,7 @@ export default async function FinancePage({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {currencyIncome.map((row) => (
-                <div key={row.currencyCode} className="rounded-lg border p-3">
+                <div key={row.currencyCode} className="rounded-lg border bg-card shadow-xs p-3">
                   <p className="text-xs text-muted-foreground">{currencyDisplayName(row.currencyCode)}</p>
                   <p className="text-lg font-semibold">
                     {formatCurrencyCents(row.currencyCode, row.totalCents)}

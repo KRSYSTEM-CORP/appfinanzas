@@ -43,7 +43,7 @@ export default async function CustomerCrmPage({
         </Link>
       </div>
 
-      <div className="rounded-lg border divide-y sm:divide-y-0 sm:divide-x grid grid-cols-1 sm:grid-cols-3 [&>*]:p-4">
+      <div className="rounded-lg border bg-card shadow-xs divide-y sm:divide-y-0 sm:divide-x grid grid-cols-1 sm:grid-cols-3 [&>*]:p-4">
         <StatCard
           label="Total comprado"
           accent="primary"

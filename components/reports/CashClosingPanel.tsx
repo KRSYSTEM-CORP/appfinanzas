@@ -145,14 +145,14 @@ export function CashClosingPanel({
               size="lg"
             />
           </div>
-          <div className="rounded-lg border p-3 flex flex-col gap-1">
+          <div className="rounded-lg border bg-card shadow-xs p-3 flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Ventas</span>
             <span className="text-lg font-semibold">{summary.salesCount}</span>
           </div>
         </div>
 
         {summary.byMethod.length > 0 && (
-          <div className="flex flex-col gap-1.5 rounded-lg border p-3">
+          <div className="flex flex-col gap-1.5 rounded-lg border bg-card shadow-xs p-3">
             <span className="text-sm text-muted-foreground">Por método de pago</span>
             {summary.byMethod.map((m) => (
               <div key={m.paymentMethod} className="flex items-center justify-between text-sm">
