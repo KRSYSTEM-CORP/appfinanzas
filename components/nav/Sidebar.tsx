@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/actions/auth";
 import { BranchSwitcher } from "@/components/nav/BranchSwitcher";
+import { ThemeToggle } from "@/components/nav/ThemeToggle";
 import type { Role } from "@prisma/client";
 
 const COLLAPSE_KEY = "kr-pos-sidebar-collapsed";
@@ -238,6 +239,7 @@ export function Sidebar({
               <span className="text-xs text-sidebar-foreground/60">{ROLE_LABELS[role]}</span>
             </div>
           )}
+          <ThemeToggle collapsed={collapsed} />
           <form action={logout} className={collapsed ? "" : "w-full"}>
             <Button type="submit" variant="ghost" size={collapsed ? "icon-sm" : "sm"} className={collapsed ? "" : "w-full justify-start"} title={collapsed ? "Salir" : undefined} aria-label={collapsed ? "Salir" : undefined}>
               {collapsed ? <LogOutIcon className="size-4" /> : "Salir"}
@@ -287,6 +289,7 @@ export function Sidebar({
                 <span className="text-sm font-medium truncate">{sellerName}</span>
                 <span className="text-xs text-sidebar-foreground/60">{ROLE_LABELS[role]}</span>
               </div>
+              <ThemeToggle />
               <form action={logout}>
                 <Button type="submit" variant="ghost" size="sm" className="w-full justify-start">
                   Salir

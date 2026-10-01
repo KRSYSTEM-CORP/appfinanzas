@@ -108,6 +108,51 @@
   --sidebar-ring: #4f3ddb;
 }
 
+/* Dark mode: a user-level preference (see components/nav/ThemeToggle.tsx),
+   independent of a company's own chosen background in Apariencia
+   (lib/theme-color.ts's deriveBrandVars). A company's custom background is
+   applied as an inline style on <html>, which always wins over this class's
+   properties regardless of cascade order — so a company that picked its own
+   look keeps it exactly as before, dark toggle or not; this palette only
+   ever reaches companies still on the app default. */
+.dark {
+  --background: #121113;
+  --foreground: #f3f1ec;
+  --card: #1a191c;
+  --card-foreground: #f3f1ec;
+  --popover: #1a191c;
+  --popover-foreground: #f3f1ec;
+  --primary: #8d7ef5;
+  --primary-foreground: #121113;
+  --secondary: #262432;
+  --secondary-foreground: #cdc8f5;
+  --muted: #221f23;
+  --muted-foreground: #9b968f;
+  --accent: #262432;
+  --accent-foreground: #cdc8f5;
+  --destructive: #f16767;
+  --success: #4ad66d;
+  --success-foreground: #0b0b0b;
+  --warning: #ebab4e;
+  --warning-foreground: #0b0b0b;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #8d7ef5;
+  --chart-1: #5b9ee8;
+  --chart-2: #3fcf9b;
+  --chart-3: #f0b94a;
+  --chart-4: #52d152;
+  --chart-5: #8d7ef5;
+  --sidebar: #18171a;
+  --sidebar-foreground: #f3f1ec;
+  --sidebar-primary: #8d7ef5;
+  --sidebar-primary-foreground: #121113;
+  --sidebar-accent: #262432;
+  --sidebar-accent-foreground: #cdc8f5;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #8d7ef5;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -117,6 +162,35 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Browser-drawn surfaces carried over to the brand palette instead of
+     the generic OS default — selection and the scrollbar track/thumb. */
+  ::selection {
+    background-color: color-mix(in oklch, var(--primary), transparent 75%);
+    color: var(--foreground);
+  }
+  * {
+    scrollbar-color: color-mix(in oklch, var(--foreground), transparent 75%) transparent;
+    scrollbar-width: thin;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--foreground), transparent 75%);
+    border-radius: 999px;
+    border: 2px solid var(--background);
+  }
+  /* Prices, stock counts, dates — digits in a column should line up
+     instead of shifting width as they change (see Product Principles:
+     "Numbers are the product"). */
+  td,
+  th {
+    font-variant-numeric: tabular-nums;
   }
 }
 

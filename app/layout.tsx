@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import { Toaster } from "sonner";
 import { Sidebar } from "@/components/nav/Sidebar";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
@@ -56,8 +57,12 @@ export default async function RootLayout({
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       style={brandVars as React.CSSProperties}
+      suppressHydrationWarning
     >
       <body className={`min-h-full flex flex-col ${session ? "md:h-dvh md:flex-row md:overflow-hidden" : ""}`}>
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`(function(){try{var s=localStorage.getItem('kr-pos-theme');var d=s?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`}
+        </Script>
         <ServiceWorkerRegistration />
         {session && (
           <Sidebar
