@@ -222,8 +222,25 @@ export function Sidebar({
             brandMark
           ) : (
             <div className="flex flex-col gap-1 min-w-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/wordmark-color.png" alt="KR POS" className="h-5 w-auto" />
+              <div className="flex items-center gap-2">
+                {/* self-start: opts out of this flex column's default stretch
+                    alignment, which some browsers apply to a cross-axis-auto
+                    <img> by ignoring its intrinsic aspect ratio and stretching
+                    it to the column's full width. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/wordmark-color.png" alt="KR POS" className="h-5 w-auto shrink-0 self-start" />
+                {logoDataUrl && (
+                  <>
+                    <span className="h-4 w-px bg-sidebar-foreground/15 shrink-0" aria-hidden="true" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={logoDataUrl}
+                      alt=""
+                      className="h-5 w-auto max-w-[88px] shrink-0 self-start rounded object-contain"
+                    />
+                  </>
+                )}
+              </div>
               <span className="text-xs text-sidebar-foreground/60 truncate max-w-[180px]">{companyName}</span>
             </div>
           )}
