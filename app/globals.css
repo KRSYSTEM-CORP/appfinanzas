@@ -158,7 +158,17 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background-color: var(--background);
+    /* A very faint violet glow near the top of the shell — same spirit as
+       the login's animated hero, but just an ambient wash behind the real
+       work surface (tables, cards), never a panel competing with it. Every
+       card/table sits on its own opaque --card fill, so this never touches
+       actual content contrast. */
+    background-image:
+      radial-gradient(ellipse 70% 45% at 15% -10%, color-mix(in oklch, var(--primary), transparent 94%), transparent 60%),
+      radial-gradient(ellipse 55% 35% at 100% 0%, color-mix(in oklch, var(--primary), transparent 96%), transparent 60%);
+    background-repeat: no-repeat;
   }
   html {
     @apply font-sans;

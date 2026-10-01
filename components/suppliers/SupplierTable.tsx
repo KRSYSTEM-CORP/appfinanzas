@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { TruckIcon } from "lucide-react";
+import { SearchIcon, TruckIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Supplier } from "@prisma/client";
@@ -60,16 +60,19 @@ export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <Input
-        type="search"
-        aria-label="Buscar proveedores por nombre o RIF"
-        placeholder="Buscar por nombre o RIF..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="max-w-sm"
-      />
+      <div className="relative max-w-sm">
+        <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <Input
+          type="search"
+          aria-label="Buscar proveedores por nombre o RIF"
+          placeholder="Buscar por nombre o RIF..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="pl-8"
+        />
+      </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <div className="rounded-lg border overflow-x-auto">
+      <div className="rounded-lg border shadow-xs overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

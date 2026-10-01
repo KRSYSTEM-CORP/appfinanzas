@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { UsersIcon } from "lucide-react";
+import { SearchIcon, UsersIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Customer } from "@prisma/client";
@@ -52,15 +52,18 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
 
   return (
     <div className="flex flex-col gap-3">
-      <Input
-        type="search"
-        aria-label="Buscar clientes por nombre o teléfono"
-        placeholder="Buscar por nombre o teléfono..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="max-w-sm"
-      />
-      <div className="rounded-lg border overflow-x-auto">
+      <div className="relative max-w-sm">
+        <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+        <Input
+          type="search"
+          aria-label="Buscar clientes por nombre o teléfono"
+          placeholder="Buscar por nombre o teléfono..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="pl-8"
+        />
+      </div>
+      <div className="rounded-lg border shadow-xs overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

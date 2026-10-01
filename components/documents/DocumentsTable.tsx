@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { FileTextIcon } from "lucide-react";
+import { FileTextIcon, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -135,14 +135,17 @@ export function DocumentsTable({
     <div className="flex flex-col gap-3">
       <div className="flex gap-2 flex-wrap items-center justify-between">
         <div className="flex gap-2 flex-wrap">
-          <Input
-            type="search"
-            aria-label="Buscar documentos por cliente, teléfono o número de control"
-            placeholder="Buscar por cliente, teléfono o Nº de control..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="max-w-sm"
-          />
+          <div className="relative max-w-sm flex-1">
+            <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              type="search"
+              aria-label="Buscar documentos por cliente, teléfono o número de control"
+              placeholder="Buscar por cliente, teléfono o Nº de control..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-8"
+            />
+          </div>
           <Select value={docType} onValueChange={(v) => setDocType((v as DocType) ?? "delivery_note")}>
             <SelectTrigger>
               <SelectValue placeholder="Tipo de documento">
@@ -162,7 +165,7 @@ export function DocumentsTable({
       </div>
 
       {docType === "quote" ? (
-        <div className="rounded-lg border overflow-x-auto">
+        <div className="rounded-lg border shadow-xs overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -218,7 +221,7 @@ export function DocumentsTable({
           </Table>
         </div>
       ) : (
-        <div className="rounded-lg border overflow-x-auto">
+        <div className="rounded-lg border shadow-xs overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

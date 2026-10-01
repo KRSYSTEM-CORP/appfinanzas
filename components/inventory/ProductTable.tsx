@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreVerticalIcon, PackageSearchIcon, XIcon } from "lucide-react";
+import { MoreVerticalIcon, PackageIcon, PackageSearchIcon, SearchIcon, XIcon } from "lucide-react";
 import type { Product } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,7 +141,7 @@ export function ProductTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border overflow-x-auto">
+      <div className="rounded-lg border shadow-xs overflow-x-auto">
         <div className="px-3 py-2 border-b bg-muted/40 text-sm font-medium">Resumen por categoría</div>
         <Table>
           <TableHeader>
@@ -169,14 +169,17 @@ export function ProductTable({
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <Input
-          type="search"
-          aria-label="Buscar productos por nombre o SKU"
-          placeholder="Buscar por nombre o SKU..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="max-w-sm"
-        />
+        <div className="relative max-w-sm flex-1">
+          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            type="search"
+            aria-label="Buscar productos por nombre o SKU"
+            placeholder="Buscar por nombre o SKU..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-8"
+          />
+        </div>
         <Select value={category} onValueChange={(v) => setCategory(v ?? ALL_CATEGORIES)}>
           <SelectTrigger aria-label="Filtrar por categoría">
             <SelectValue placeholder="Categoría">
@@ -221,7 +224,7 @@ export function ProductTable({
       </div>
 
       <p className="sm:hidden text-xs text-muted-foreground px-1">Desliza la tabla para ver más →</p>
-      <div className="relative rounded-lg border overflow-hidden">
+      <div className="relative rounded-lg border shadow-xs overflow-hidden">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -244,7 +247,9 @@ export function ProductTable({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={p.imageDataUrl} alt="" className="h-8 w-8 rounded object-cover border shrink-0" />
                     ) : (
-                      <div className="h-8 w-8 rounded border bg-muted shrink-0" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded border bg-muted shrink-0">
+                        <PackageIcon className="size-4 text-muted-foreground/50" />
+                      </div>
                     )}
                     {p.name}
                   </div>

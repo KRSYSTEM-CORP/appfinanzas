@@ -205,7 +205,7 @@ export default async function BillingPage() {
           <CardTitle>Historial de reportes</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border overflow-x-auto">
+          <div className="rounded-lg border shadow-xs overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
