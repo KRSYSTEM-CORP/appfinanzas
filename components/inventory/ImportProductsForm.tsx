@@ -229,7 +229,7 @@ export function ImportProductsForm() {
               {isPending ? "Importando..." : "Confirmar importación"}
             </Button>
           </div>
-          <div className="rounded-lg border overflow-x-auto max-h-96 overflow-y-auto">
+          <div className="rounded-lg border shadow-xs overflow-x-auto max-h-96 overflow-y-auto">
             <Table>
               <TableHeader>
                 <TableRow>

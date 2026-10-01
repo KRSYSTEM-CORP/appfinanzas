@@ -1,5 +1,6 @@
 "use client";
 
+import { MinusIcon, PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -100,9 +101,10 @@ export function QuoteCart({
                 type="button"
                 size="icon-sm"
                 variant="outline"
+                aria-label="Quitar una unidad"
                 onClick={() => onDecrement(line.productId)}
               >
-                −
+                <MinusIcon />
               </Button>
               <QuantityInput
                 quantity={line.quantity}
@@ -113,10 +115,11 @@ export function QuoteCart({
                 type="button"
                 size="icon-sm"
                 variant="outline"
+                aria-label="Agregar una unidad"
                 disabled={line.quantity >= line.maxStock}
                 onClick={() => onIncrement(line.productId)}
               >
-                +
+                <PlusIcon />
               </Button>
             </div>
             <div className="w-28 text-right font-mono tabular-nums text-sm font-medium">
@@ -124,11 +127,12 @@ export function QuoteCart({
             </div>
             <Button
               type="button"
-              size="sm"
+              size="icon-sm"
               variant="ghost"
+              aria-label={`Quitar ${line.name} del presupuesto`}
               onClick={() => onRemove(line.productId)}
             >
-              ✕
+              <XIcon />
             </Button>
           </div>
         ))}
