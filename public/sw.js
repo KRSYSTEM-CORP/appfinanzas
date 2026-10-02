@@ -31,7 +31,7 @@
 // itself, so every open tab falls back to the old plain network-passthrough
 // behavior on its next load without anyone needing to clear site data by
 // hand.
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const CACHE_NAME = `kr-pos-shell-${CACHE_VERSION}`;
 const OFFLINE_SHELL_PATH = "/pos/offline";
 // Any failed navigation to one of these paths is redirected to the offline
