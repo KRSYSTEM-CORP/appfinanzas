@@ -166,7 +166,7 @@ export function DocumentsTable({
 
       {docType === "quote" ? (
         <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-          <Table>
+          <Table className="table-cards">
             <TableHeader>
               <TableRow>
                 <TableHead>Fecha</TableHead>
@@ -180,20 +180,20 @@ export function DocumentsTable({
             <TableBody>
               {filteredQuotes.map((quote) => (
                 <TableRow key={quote.id}>
-                  <TableCell>{formatDate(quote.createdAt)}</TableCell>
-                  <TableCell>{quote.controlNumber ?? "—"}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Fecha">{formatDate(quote.createdAt)}</TableCell>
+                  <TableCell data-label="Nº control">{quote.controlNumber ?? "—"}</TableCell>
+                  <TableCell data-label="Cliente">
                     {quote.customerFirstName
                       ? `${quote.customerFirstName} ${quote.customerLastName ?? ""}`.trim()
                       : "—"}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell data-label="Estado" className="text-center">
                     <Badge variant={quote.status === "CONVERTED" ? "success" : quote.status === "LOST" ? "destructive" : "outline"}>
                       {QUOTE_STATUS_LABELS[quote.status]}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">{formatCurrencyCents(referenceCurrency, quote.totalCents)}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell data-label="Total" className="text-right">{formatCurrencyCents(referenceCurrency, quote.totalCents)}</TableCell>
+                  <TableCell data-label="Documento" className="text-center">
                     <QuoteDocumentButton
                       quoteId={quote.id}
                       company={company}
@@ -222,7 +222,7 @@ export function DocumentsTable({
         </div>
       ) : (
         <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-          <Table>
+          <Table className="table-cards">
             <TableHeader>
               <TableRow>
                 <TableHead>Fecha</TableHead>
@@ -237,22 +237,22 @@ export function DocumentsTable({
             <TableBody>
               {filteredSales.map((sale) => (
                 <TableRow key={sale.id}>
-                  <TableCell>{formatDate(sale.createdAt)}</TableCell>
-                  <TableCell>{controlNumberLabel(sale)}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Fecha">{formatDate(sale.createdAt)}</TableCell>
+                  <TableCell data-label="Nº control">{controlNumberLabel(sale)}</TableCell>
+                  <TableCell data-label="Cliente">
                     {sale.customerFirstName
                       ? `${sale.customerFirstName} ${sale.customerLastName ?? ""}`.trim()
                       : "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{sale.sellerName ?? "—"}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell data-label="Vendedor" className="text-muted-foreground">{sale.sellerName ?? "—"}</TableCell>
+                  <TableCell data-label="Estado" className="text-center">
                     {sale.paymentStatus === "CREDIT" ? (
                       <Badge variant="destructive">{PAYMENT_STATUS_LABELS.CREDIT}</Badge>
                     ) : (
                       <Badge variant="success">{PAYMENT_STATUS_LABELS.PAID}</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell data-label="Total" className="text-right">
                     <Price
                       eurCents={sale.totalCents}
                       rate={sale.paidExchangeRate ?? sale.exchangeRate ?? currentRate}
@@ -261,7 +261,7 @@ export function DocumentsTable({
                       referenceCurrency={referenceCurrency}
                     />
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell data-label="Documentos" className="text-center">
                     <SaleDocumentButtons
                       sale={sale}
                       company={company}

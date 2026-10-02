@@ -84,7 +84,7 @@ export function BranchesForm({ branches }: { branches: Branch[] }) {
       </div>
 
       <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-        <Table>
+        <Table className="table-cards">
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
@@ -160,14 +160,14 @@ function BranchRow({ branch: b }: { branch: Branch }) {
 
   return (
     <TableRow>
-      <TableCell className="font-medium">{b.name}</TableCell>
-      <TableCell>
+      <TableCell data-label="Nombre" className="font-medium">{b.name}</TableCell>
+      <TableCell data-label="Estado">
         <Badge variant={b.isActive ? "success" : "destructive"}>
           {b.isActive ? "Activa" : "Inactiva"}
         </Badge>
       </TableCell>
-      <TableCell className="text-muted-foreground text-sm">{formatDate(b.createdAt)}</TableCell>
-      <TableCell className="text-right">
+      <TableCell data-label="Desde" className="text-muted-foreground text-sm">{formatDate(b.createdAt)}</TableCell>
+      <TableCell data-label="Acciones" className="text-right">
         {editError && <p className="text-sm text-destructive mb-1">{editError}</p>}
         <div className="flex justify-end flex-wrap gap-2">
           <Dialog open={editOpen} onOpenChange={setEditOpen}>

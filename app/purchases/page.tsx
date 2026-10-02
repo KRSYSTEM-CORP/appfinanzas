@@ -51,7 +51,7 @@ export default async function PurchasesPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="table-cards">
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha</TableHead>
@@ -68,7 +68,7 @@ export default async function PurchasesPage() {
               <TableBody>
                 {purchases.map((p) => (
                   <TableRow key={p.id} className={p.voided ? "opacity-50" : undefined}>
-                    <TableCell>
+                    <TableCell data-label="Fecha">
                       {formatDate(p.createdAt)}
                       {p.voided && (
                         <span className="block">
@@ -76,13 +76,13 @@ export default async function PurchasesPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell>{p.supplier?.name ?? p.manualSupplierName ?? "—"}</TableCell>
-                    <TableCell>{p.controlNumber ?? "—"}</TableCell>
-                    <TableCell>{p.supplierInvoiceNo ?? "—"}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="Proveedor">{p.supplier?.name ?? p.manualSupplierName ?? "—"}</TableCell>
+                    <TableCell data-label="Nº control">{p.controlNumber ?? "—"}</TableCell>
+                    <TableCell data-label="Factura proveedor">{p.supplierInvoiceNo ?? "—"}</TableCell>
+                    <TableCell data-label="Base imponible" className="text-right">
                       {formatCurrencyCents(referenceCurrency, p.baseImponibleCents)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="IVA" className="text-right">
                       {formatCurrencyCents(referenceCurrency, p.taxCents)}
                       {p.ivaRetainedCents > 0 && (
                         <span className="block text-xs text-muted-foreground">
@@ -90,10 +90,10 @@ export default async function PurchasesPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-medium">
+                    <TableCell data-label="Total" className="text-right font-medium">
                       {formatCurrencyCents(referenceCurrency, p.totalCents)}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell data-label="Estado" className="text-center">
                       <Badge variant={p.paymentStatus === "PAID" ? "success" : "destructive"}>
                         {PURCHASE_PAYMENT_STATUS_LABELS[p.paymentStatus]}
                       </Badge>
@@ -103,7 +103,7 @@ export default async function PurchasesPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="Acciones" className="text-right">
                       <PurchaseActions purchaseId={p.id} paymentStatus={p.paymentStatus} voided={p.voided} />
                     </TableCell>
                   </TableRow>

@@ -206,7 +206,7 @@ export default async function BillingPage() {
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-            <Table>
+            <Table className="table-cards">
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha</TableHead>
@@ -221,10 +221,10 @@ export default async function BillingPage() {
                   const totalUsdCents = r.lines.reduce((sum, l) => sum + l.amountUsdCents, 0);
                   return (
                     <TableRow key={r.id}>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell data-label="Fecha" className="text-sm text-muted-foreground">
                         {formatDate(r.createdAt)}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell data-label="Métodos de pago" className="text-sm">
                         {r.lines.map((line, i) => (
                           <div key={i}>
                             {PAYMENT_METHOD_LABELS[line.paymentMethod]}: {formatUSD(line.amountUsdCents)}
@@ -232,8 +232,8 @@ export default async function BillingPage() {
                           </div>
                         ))}
                       </TableCell>
-                      <TableCell className="font-medium">{formatUSD(totalUsdCents)}</TableCell>
-                      <TableCell>
+                      <TableCell data-label="Total" className="font-medium">{formatUSD(totalUsdCents)}</TableCell>
+                      <TableCell data-label="Estado">
                         <Badge
                           variant={
                             r.status === "APPROVED"
@@ -246,7 +246,7 @@ export default async function BillingPage() {
                           {STATUS_LABELS[r.status]}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell data-label="Nota del admin" className="text-sm text-muted-foreground">
                         {r.reviewNote ?? "—"}
                       </TableCell>
                     </TableRow>

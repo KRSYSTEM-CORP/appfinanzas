@@ -73,7 +73,7 @@ export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-        <Table>
+        <Table className="table-cards">
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
@@ -86,15 +86,15 @@ export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
           <TableBody>
             {filtered.map((s) => (
               <TableRow key={s.id} className={!s.isActive ? "opacity-50" : undefined}>
-                <TableCell className="font-medium">{s.name}</TableCell>
-                <TableCell>{s.rif ?? "—"}</TableCell>
-                <TableCell>{s.phone ?? "—"}</TableCell>
-                <TableCell>
+                <TableCell data-label="Nombre" className="font-medium">{s.name}</TableCell>
+                <TableCell data-label="RIF">{s.rif ?? "—"}</TableCell>
+                <TableCell data-label="Teléfono">{s.phone ?? "—"}</TableCell>
+                <TableCell data-label="Estado">
                   <Badge variant={s.isActive ? "success" : "outline"}>
                     {s.isActive ? "Activo" : "Inactivo"}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell data-label="Acciones" className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button
                       size="sm"

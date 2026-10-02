@@ -152,7 +152,7 @@ export function ExpensesPanel({
       {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
 
       <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-        <Table>
+        <Table className="table-cards">
           <TableHeader>
             <TableRow>
               <TableHead>Fecha</TableHead>
@@ -165,13 +165,13 @@ export function ExpensesPanel({
           <TableBody>
             {expenses.map((expense) => (
               <TableRow key={expense.id}>
-                <TableCell>{formatDate(expense.spentAt)}</TableCell>
-                <TableCell>{expense.description}</TableCell>
-                <TableCell className="text-muted-foreground">{expense.category ?? "—"}</TableCell>
-                <TableCell className="text-right">
+                <TableCell data-label="Fecha">{formatDate(expense.spentAt)}</TableCell>
+                <TableCell data-label="Descripción">{expense.description}</TableCell>
+                <TableCell data-label="Categoría" className="text-muted-foreground">{expense.category ?? "—"}</TableCell>
+                <TableCell data-label="Monto" className="text-right">
                   {formatCurrencyCents(referenceCurrency, expense.amountCents)}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell data-label="Acciones" className="text-right">
                   <Button
                     size="sm"
                     variant="destructive"

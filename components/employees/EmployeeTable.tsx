@@ -222,7 +222,7 @@ export function EmployeeTable({
       </div>
 
       <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-        <Table>
+        <Table className="table-cards">
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
@@ -319,7 +319,7 @@ function EmployeeRow({
 
   return (
     <TableRow>
-      <TableCell className="font-medium">
+      <TableCell data-label="Nombre" className="font-medium">
         {displayName(u)}
         {u.id === currentUserId && (
           <Badge variant="outline" className="ml-2">
@@ -327,17 +327,17 @@ function EmployeeRow({
           </Badge>
         )}
       </TableCell>
-      <TableCell>{ROLE_LABELS[u.role]}</TableCell>
-      <TableCell className="text-muted-foreground text-sm">
+      <TableCell data-label="Rol">{ROLE_LABELS[u.role]}</TableCell>
+      <TableCell data-label="Sucursal" className="text-muted-foreground text-sm">
         {u.branchId ? branches.find((b) => b.id === u.branchId)?.name ?? "—" : "Todas"}
       </TableCell>
-      <TableCell>
+      <TableCell data-label="Estado">
         <Badge variant={u.status === "ACTIVE" ? "success" : "destructive"}>
           {STATUS_LABELS[u.status]}
         </Badge>
       </TableCell>
-      <TableCell className="text-muted-foreground text-sm">{formatDate(u.createdAt)}</TableCell>
-      <TableCell className="text-right">
+      <TableCell data-label="Desde" className="text-muted-foreground text-sm">{formatDate(u.createdAt)}</TableCell>
+      <TableCell data-label="Acciones" className="text-right">
         {statusError && <p className="text-sm text-destructive mb-1">{statusError}</p>}
         <div className="flex justify-end flex-wrap gap-2">
           <Dialog open={editOpen} onOpenChange={setEditOpen}>
