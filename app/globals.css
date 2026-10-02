@@ -239,6 +239,9 @@
    forcing sideways scrolling to reach the row's actions. Each cell needs a
    data-label. */
 @media (max-width: 767px) {
+  [data-slot="table-container"]:has(> .table-cards) {
+    overflow: visible;
+  }
   .table-cards thead {
     position: absolute;
     width: 1px;

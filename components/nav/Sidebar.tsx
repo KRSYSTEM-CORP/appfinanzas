@@ -14,6 +14,7 @@ import {
   PackageIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
+  SearchIcon,
   SettingsIcon,
   ShieldIcon,
   ShoppingCartIcon,
@@ -25,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/actions/auth";
 import { BranchSwitcher } from "@/components/nav/BranchSwitcher";
 import { ThemeToggle } from "@/components/nav/ThemeToggle";
+import { CommandPalette, type PaletteItem } from "@/components/nav/CommandPalette";
 import type { Role } from "@prisma/client";
 
 const COLLAPSE_KEY = "kr-pos-sidebar-collapsed";
@@ -143,6 +145,7 @@ export function Sidebar({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const canManage = role === "GERENTE" || isSuperAdmin;
 
   useEffect(() => {
@@ -182,6 +185,23 @@ export function Sidebar({
     ...(isSuperAdmin ? [{ href: "/admin", label: "Administración", icon: ShieldIcon }] : []),
     ...(canManage ? companyItemsBase : []),
   ];
+
+  const paletteItems: PaletteItem[] = [
+    ...opItems.map((i) => ({ href: i.href, label: i.label, group: "Operación" })),
+    ...managementItems.map((i) => ({ href: i.href, label: i.label, group: "Gestión" })),
+    ...companyItems.map((i) => ({ href: i.href, label: i.label, group: "Empresa" })),
+  ];
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -256,6 +276,23 @@ export function Sidebar({
               <span className="text-xs text-sidebar-foreground/60">{ROLE_LABELS[role]}</span>
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            title={collapsed ? "Buscar (Ctrl K)" : undefined}
+            aria-label="Buscar pantalla"
+            className={`flex items-center gap-2 rounded-lg p-1.5 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+              collapsed ? "justify-center" : "w-full px-2.5"
+            }`}
+          >
+            <SearchIcon className="size-4 shrink-0" />
+            {!collapsed && (
+              <>
+                <span className="flex-1 text-left">Buscar</span>
+                <kbd className="rounded border px-1 text-[11px] text-sidebar-foreground/50">Ctrl K</kbd>
+              </>
+            )}
+          </button>
           <ThemeToggle collapsed={collapsed} />
           <form action={logout} className={collapsed ? "" : "w-full"}>
             <Button type="submit" variant="ghost" size={collapsed ? "icon-sm" : "sm"} className={collapsed ? "" : "w-full justify-start"} title={collapsed ? "Salir" : undefined} aria-label={collapsed ? "Salir" : undefined}>
@@ -289,6 +326,16 @@ export function Sidebar({
           {brandMark}
           <span className="font-semibold text-sm truncate">{companyName}</span>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="ml-auto"
+          aria-label="Buscar pantalla"
+          onClick={() => setPaletteOpen(true)}
+        >
+          <SearchIcon />
+        </Button>
       </div>
 
       {mobileOpen && (
@@ -316,6 +363,8 @@ export function Sidebar({
           </div>
         </div>
       )}
+
+      <CommandPalette items={paletteItems} open={paletteOpen} onOpenChange={setPaletteOpen} />
     </>
   );
 }

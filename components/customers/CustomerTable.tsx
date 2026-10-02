@@ -64,7 +64,7 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
         />
       </div>
       <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-        <Table>
+        <Table className="table-cards">
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
@@ -76,12 +76,12 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
           <TableBody>
             {filtered.map((c) => (
               <TableRow key={c.id}>
-                <TableCell className="font-medium">
+                <TableCell data-label="Nombre" className="font-medium">
                   {c.firstName} {c.lastName}
                 </TableCell>
-                <TableCell>{c.phone}</TableCell>
-                <TableCell>{c.address ?? "—"}</TableCell>
-                <TableCell className="text-right">
+                <TableCell data-label="Teléfono">{c.phone}</TableCell>
+                <TableCell data-label="Dirección">{c.address ?? "—"}</TableCell>
+                <TableCell data-label="Acciones" className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button
                       size="sm"

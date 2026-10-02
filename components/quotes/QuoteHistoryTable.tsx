@@ -123,7 +123,7 @@ export function QuoteHistoryTable({
         </div>
       )}
       <div className="overflow-x-auto">
-        <Table>
+        <Table className="table-cards">
           <TableHeader>
             <TableRow>
               <TableHead className="w-8">
@@ -141,7 +141,7 @@ export function QuoteHistoryTable({
           <TableBody>
             {sorted.map((q) => (
               <TableRow key={q.id}>
-                <TableCell>
+                <TableCell data-label="Seleccionar">
                   <input
                     type="checkbox"
                     checked={selected.has(q.id)}
@@ -149,14 +149,14 @@ export function QuoteHistoryTable({
                     aria-label={`Seleccionar presupuesto ${q.controlNumber ?? q.id}`}
                   />
                 </TableCell>
-                <TableCell>{formatDate(q.createdAt)}</TableCell>
-                <TableCell>{q.controlNumber ?? "—"}</TableCell>
-                <TableCell>{`${q.customerFirstName ?? ""} ${q.customerLastName ?? ""}`.trim() || "—"}</TableCell>
-                <TableCell className="text-right font-medium">
+                <TableCell data-label="Fecha">{formatDate(q.createdAt)}</TableCell>
+                <TableCell data-label="Nº control">{q.controlNumber ?? "—"}</TableCell>
+                <TableCell data-label="Cliente">{`${q.customerFirstName ?? ""} ${q.customerLastName ?? ""}`.trim() || "—"}</TableCell>
+                <TableCell data-label="Total" className="text-right font-medium">
                   {formatCurrencyCents(referenceCurrency, q.totalCents)}
                 </TableCell>
-                <TableCell>{q.status === "PENDING" ? `${daysPending(q.createdAt)} días` : "—"}</TableCell>
-                <TableCell>
+                <TableCell data-label="Días pendiente">{q.status === "PENDING" ? `${daysPending(q.createdAt)} días` : "—"}</TableCell>
+                <TableCell data-label="Estado">
                   <QuoteStatusButtons
                     quoteId={q.id}
                     status={q.status}
@@ -164,7 +164,7 @@ export function QuoteHistoryTable({
                     onChange={handleStatusChange}
                   />
                 </TableCell>
-                <TableCell className="text-center">
+                <TableCell data-label="Facturación" className="text-center">
                   {q.sale ? (
                     <Link href="/documents" className="inline-flex">
                       <Badge variant="success">

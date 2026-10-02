@@ -226,7 +226,7 @@ export function ProductTable({
       <p className="sm:hidden text-xs text-muted-foreground px-1">Desliza la tabla para ver más →</p>
       <div className="relative rounded-lg border bg-card shadow-xs overflow-hidden">
       <div className="overflow-x-auto">
-        <Table>
+        <Table className="table-cards">
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
@@ -241,7 +241,7 @@ export function ProductTable({
           <TableBody>
             {filtered.map((p) => (
               <TableRow key={p.id} className={!p.isActive ? "text-destructive" : undefined}>
-                <TableCell className="font-medium whitespace-normal">
+                <TableCell data-label="Nombre" className="font-medium whitespace-normal">
                   <div className="flex items-center gap-2">
                     {p.imageDataUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -254,9 +254,9 @@ export function ProductTable({
                     {p.name}
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground">{p.sku ?? "—"}</TableCell>
-                <TableCell className="text-muted-foreground">{p.category ?? "—"}</TableCell>
-                <TableCell>
+                <TableCell data-label="SKU" className="text-muted-foreground">{p.sku ?? "—"}</TableCell>
+                <TableCell data-label="Categoría" className="text-muted-foreground">{p.category ?? "—"}</TableCell>
+                <TableCell data-label="Precio">
                   <Price
                     eurCents={p.priceCents}
                     rate={rate}
@@ -265,19 +265,19 @@ export function ProductTable({
                     referenceCurrency={referenceCurrency}
                   />
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Stock">
                   <div className="flex items-center gap-2">
                     <span className="tabular-nums">{p.stock}</span>
                     <LowStockBadge product={p} />
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Estado">
                   <Badge variant={p.isActive ? "success" : "destructive"}>
                     {p.isActive ? "Activo" : "Inactivo"}
                   </Badge>
                 </TableCell>
                 {canManage && (
-                  <TableCell className="text-right">
+                  <TableCell data-label="Acciones" className="text-right">
                     <div className="flex justify-end items-center gap-1">
                       <Button
                         size="sm"
@@ -382,7 +382,6 @@ export function ProductTable({
           </TableBody>
         </Table>
       </div>
-        <div className="sm:hidden pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent" />
       </div>
     </div>
   );
