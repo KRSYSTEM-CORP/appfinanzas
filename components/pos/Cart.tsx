@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { MinusIcon, PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -135,9 +136,26 @@ export function Cart({
   // just friction, and the server already accepts paymentStatus "PAID"
   // with no payment rows for a zero total (see completeSale).
   const isExonerated = total <= 0 && lines.length > 0;
+  const itemCount = lines.reduce((sum, l) => sum + l.quantity, 0);
+
+  const checkoutRef = useRef<HTMLDivElement>(null);
+  const [checkoutInView, setCheckoutInView] = useState(false);
+
+  useEffect(() => {
+    const el = checkoutRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => setCheckoutInView(entry.isIntersecting));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  function scrollToCheckout() {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    checkoutRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+  }
 
   return (
-    <div className="flex flex-col h-full gap-3">
+    <div className={`flex flex-col h-full gap-3 ${lines.length > 0 ? "pb-24 md:pb-0" : ""}`}>
       <h2 className="font-semibold">Carrito</h2>
 
       <div className="flex-1 overflow-y-auto flex flex-col gap-2">
@@ -335,17 +353,42 @@ export function Cart({
         </>
       )}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div ref={checkoutRef} className="flex flex-col gap-3">
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Button
-        type="button"
-        size="lg"
-        disabled={lines.length === 0}
-        loading={isPending}
-        onClick={onCheckout}
-      >
-        {isPending ? "Procesando..." : "Completar venta"}
-      </Button>
+        <Button
+          type="button"
+          size="lg"
+          disabled={lines.length === 0}
+          loading={isPending}
+          onClick={onCheckout}
+        >
+          {isPending ? "Procesando..." : "Completar venta"}
+        </Button>
+      </div>
+
+      {/* Phones only: the cart sits below the product list, so keep the total
+          and a jump to the checkout button in reach until it is on screen. */}
+      {lines.length > 0 && !checkoutInView && (
+        <div className="md:hidden fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t bg-card px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgb(0_0_0/0.06)]">
+          <div className="flex min-w-0 flex-col">
+            <span className="text-xs text-muted-foreground">
+              {itemCount} {itemCount === 1 ? "artículo" : "artículos"}
+            </span>
+            <Price
+              eurCents={total}
+              rate={rate}
+              currencyCode={currencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+              size="lg"
+            />
+          </div>
+          <Button type="button" size="lg" className="shrink-0" onClick={scrollToCheckout}>
+            Ir a cobrar
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
