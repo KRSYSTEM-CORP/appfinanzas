@@ -22,8 +22,8 @@ export function Price({
 
   if (!exchangeRateEnabled) {
     return (
-      <span className={`inline-flex flex-col ${className ?? ""}`}>
-        <span className={`font-mono tabular-nums ${size === "lg" ? "text-lg font-semibold" : "font-medium"}`}>
+      <span className={`inline-flex min-w-0 max-w-full flex-col ${className ?? ""}`}>
+        <span className={`font-mono tabular-nums [overflow-wrap:anywhere] ${size === "lg" ? "text-lg font-semibold" : "font-medium"}`}>
           {referenceLabel}
         </span>
       </span>
@@ -31,8 +31,8 @@ export function Price({
   }
 
   return (
-    <span className={`inline-flex flex-col ${className ?? ""}`}>
-      <span className={`font-mono tabular-nums ${size === "lg" ? "text-lg font-semibold" : "font-medium"}`}>
+    <span className={`inline-flex min-w-0 max-w-full flex-col ${className ?? ""}`}>
+      <span className={`font-mono tabular-nums [overflow-wrap:anywhere] ${size === "lg" ? "text-lg font-semibold" : "font-medium"}`}>
         {rate != null ? formatLocalCurrency(eurCentsToLocal(eurCents, rate), currencyCode) : "—"}
       </span>
       <span className="font-mono tabular-nums text-xs text-muted-foreground">{referenceLabel}</span>

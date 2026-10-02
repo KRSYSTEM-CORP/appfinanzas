@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Building2Icon } from "lucide-react";
 import type { Company, Role, User, UserStatus } from "@prisma/client";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -99,8 +101,8 @@ export function AdminUserTable({
           ))}
           {companies.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                No hay empresas registradas todavía.
+              <TableCell colSpan={6} className="p-0">
+                <EmptyState icon={Building2Icon} title="No hay empresas registradas todavía." className="py-10" />
               </TableCell>
             </TableRow>
           )}

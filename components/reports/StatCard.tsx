@@ -34,7 +34,7 @@ export function StatCard({
   return (
     <div className="flex flex-col gap-1">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <div className="text-2xl font-semibold tabular-nums" style={accentColor ? { color: accentColor } : undefined}>
+      <div className="text-2xl font-semibold tabular-nums [overflow-wrap:anywhere]" style={accentColor ? { color: accentColor } : undefined}>
         {value}
       </div>
     </div>

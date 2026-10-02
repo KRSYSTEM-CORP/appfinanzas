@@ -3,7 +3,9 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { CreditCardIcon } from "lucide-react";
 import type { PaymentMethod } from "@prisma/client";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -339,8 +341,8 @@ export function PendingReportsTable({ reports }: { reports: PendingReport[] }) {
           ))}
           {reports.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                No hay reportes de pago pendientes.
+              <TableCell colSpan={7} className="p-0">
+                <EmptyState icon={CreditCardIcon} title="No hay reportes de pago pendientes." className="py-10" />
               </TableCell>
             </TableRow>
           )}

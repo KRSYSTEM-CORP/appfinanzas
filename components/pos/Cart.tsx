@@ -340,7 +340,8 @@ export function Cart({
       <Button
         type="button"
         size="lg"
-        disabled={lines.length === 0 || isPending}
+        disabled={lines.length === 0}
+        loading={isPending}
         onClick={onCheckout}
       >
         {isPending ? "Procesando..." : "Completar venta"}

@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { SaleActions } from "@/components/reports/SaleActions";
 import { SaleDocumentButtons } from "@/components/reports/SaleDocumentButtons";
 import { Price } from "@/components/money/Price";
@@ -24,6 +25,8 @@ import { legacyCurrencyForPayment } from "@/lib/payment-currency";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { listRecentSales } from "@/lib/actions/sales";
 import type { PaymentMethod, PrintPaperSize, ReferenceCurrency } from "@prisma/client";
+
+const DEFAULT_EMPTY_LABEL = "Aún no hay ventas registradas.";
 
 type Sale = Awaited<ReturnType<typeof listRecentSales>>[number];
 
@@ -151,7 +154,7 @@ export function SalesTable({
   referenceCurrency,
   printPaperSize,
   showSellerColumn = true,
-  emptyLabel = "Aún no hay ventas registradas.",
+  emptyLabel = DEFAULT_EMPTY_LABEL,
 }: {
   sales: Sale[];
   company: DeliveryNoteCompany;
@@ -176,7 +179,7 @@ export function SalesTable({
 
   return (
     <div className="overflow-x-auto">
-      <Table>
+      <Table className="table-cards">
         <TableHeader>
           <TableRow>
             <TableHead>Fecha</TableHead>
@@ -194,7 +197,7 @@ export function SalesTable({
         <TableBody>
           {sales.map((sale) => (
             <TableRow key={sale.id} className={sale.voided ? "opacity-50" : undefined}>
-              <TableCell>
+              <TableCell data-label="Fecha">
                 {formatDateSlash(sale.createdAt)}
                 {sale.voided && (
                   <span className="block mt-1">
@@ -202,16 +205,16 @@ export function SalesTable({
                   </span>
                 )}
               </TableCell>
-              <TableCell>
+              <TableCell data-label="Cliente">
                 {sale.customerFirstName
                   ? `${sale.customerFirstName} ${sale.customerLastName ?? ""}`.trim()
                   : "—"}
               </TableCell>
               {showSellerColumn && (
-                <TableCell className="text-muted-foreground">{sale.sellerName ?? "—"}</TableCell>
+                <TableCell data-label="Vendedor" className="text-muted-foreground">{sale.sellerName ?? "—"}</TableCell>
               )}
-              <TableCell>{sale.items.reduce((sum, i) => sum + i.quantity, 0)}</TableCell>
-              <TableCell className="text-center">
+              <TableCell data-label="Artículos">{sale.items.reduce((sum, i) => sum + i.quantity, 0)}</TableCell>
+              <TableCell data-label="Método" className="text-center">
                 <div className="flex flex-col items-center gap-1">
                   <PaymentMethodCell sale={sale} localCurrencyCode={localCurrencyCode} referenceCurrency={referenceCurrency} />
                   {sale.paymentStatus === "CREDIT" &&
@@ -228,14 +231,14 @@ export function SalesTable({
                     )}
                 </div>
               </TableCell>
-              <TableCell className="text-center">
+              <TableCell data-label="Estado" className="text-center">
                 {sale.paymentStatus === "CREDIT" ? (
                   <Badge variant="destructive">{PAYMENT_STATUS_LABELS.CREDIT}</Badge>
                 ) : (
                   <Badge variant="success">{PAYMENT_STATUS_LABELS.PAID}</Badge>
                 )}
               </TableCell>
-              <TableCell className="text-center">
+              <TableCell data-label="Moneda" className="text-center">
                 {!exchangeRateEnabled ? (
                   <Badge variant="outline">{referenceCurrency}</Badge>
                 ) : sale.paidInForeignCurrency ? (
@@ -244,7 +247,7 @@ export function SalesTable({
                   <Badge variant="outline">{localCurrencyName}</Badge>
                 )}
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell data-label="Total" className="text-right">
                 <Price
                   eurCents={sale.totalCents}
                   rate={
@@ -259,7 +262,7 @@ export function SalesTable({
                   referenceCurrency={referenceCurrency}
                 />
               </TableCell>
-              <TableCell className="text-center">
+              <TableCell data-label="Documentos" className="text-center">
                 <SaleDocumentButtons
                   sale={{
                     ...sale,
@@ -279,7 +282,7 @@ export function SalesTable({
                   printPaperSize={printPaperSize}
                 />
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell data-label="Acciones" className="text-right">
                 <SaleActions
                   saleId={sale.id}
                   voided={sale.voided}
@@ -297,12 +300,12 @@ export function SalesTable({
           {sales.length === 0 && (
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={colSpan} className="p-0">
-                <div className="flex flex-col items-center gap-3 py-14 text-center">
-                  <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
-                    <ReceiptTextIcon className="size-5" />
-                  </div>
-                  <p className="text-sm text-muted-foreground max-w-xs">{emptyLabel}</p>
-                </div>
+                <EmptyState
+                  icon={ReceiptTextIcon}
+                  title={emptyLabel}
+                  action={emptyLabel === DEFAULT_EMPTY_LABEL ? { href: "/pos", label: "Ir al punto de venta" } : undefined}
+                  className="py-14"
+                />
               </TableCell>
             </TableRow>
           )}

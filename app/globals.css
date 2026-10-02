@@ -234,3 +234,60 @@
     scroll-behavior: auto !important;
   }
 }
+/* Tables that opt in with .table-cards turn each row into a stacked card on
+   phones (the header row stays available to screen readers) instead of
+   forcing sideways scrolling to reach the row's actions. Each cell needs a
+   data-label. */
+@media (max-width: 767px) {
+  .table-cards thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .table-cards,
+  .table-cards tbody,
+  .table-cards tr {
+    display: block;
+    width: 100%;
+  }
+  .table-cards tr {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+  .table-cards td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0;
+    border: 0;
+    text-align: right;
+  }
+  .table-cards td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    text-align: left;
+  }
+  .table-cards tr:has(> td[colspan]) {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .table-cards td[colspan] {
+    display: block;
+    padding: 0;
+  }
+  .table-cards td[colspan]::before {
+    content: none;
+  }
+}

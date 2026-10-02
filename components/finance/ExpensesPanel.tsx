@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ReceiptTextIcon } from "lucide-react";
 import type { Expense } from "@prisma/client";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -183,8 +185,8 @@ export function ExpensesPanel({
             ))}
             {expenses.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                  Sin gastos registrados en este período.
+                <TableCell colSpan={5} className="p-0">
+                  <EmptyState icon={ReceiptTextIcon} title="Sin gastos registrados en este período." className="py-10" />
                 </TableCell>
               </TableRow>
             )}

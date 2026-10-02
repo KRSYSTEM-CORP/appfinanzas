@@ -1,4 +1,6 @@
+import { BookOpenIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Table,
   TableBody,
@@ -135,8 +137,8 @@ export default async function TaxBookPage({
                 ))}
                 {sales.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                      Sin ventas en este período.
+                    <TableCell colSpan={8} className="p-0">
+                      <EmptyState icon={BookOpenIcon} title="Sin ventas en este período." className="py-10" />
                     </TableCell>
                   </TableRow>
                 )}
@@ -200,8 +202,8 @@ export default async function TaxBookPage({
                 ))}
                 {purchases.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                      Sin compras en este período.
+                    <TableCell colSpan={9} className="p-0">
+                      <EmptyState icon={BookOpenIcon} title="Sin compras en este período." className="py-10" />
                     </TableCell>
                   </TableRow>
                 )}

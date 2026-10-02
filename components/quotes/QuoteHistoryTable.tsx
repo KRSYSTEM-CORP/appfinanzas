@@ -7,6 +7,7 @@ import Link from "next/link";
 import type { Quote, QuoteStatus, ReferenceCurrency } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Table,
   TableBody,
@@ -188,12 +189,12 @@ export function QuoteHistoryTable({
             {sorted.length === 0 && (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={8} className="p-0">
-                  <div className="flex flex-col items-center gap-3 py-14 text-center">
-                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
-                      <FileTextIcon className="size-5" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">Aún no hay presupuestos.</p>
-                  </div>
+                  <EmptyState
+                    icon={FileTextIcon}
+                    title="Aún no hay presupuestos."
+                    action={{ href: "/quotes", label: "Crear presupuesto" }}
+                    className="py-14"
+                  />
                 </TableCell>
               </TableRow>
             )}
