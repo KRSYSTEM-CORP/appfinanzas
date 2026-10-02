@@ -326,7 +326,11 @@ export const SaleSchema = z
   })
   .merge(CustomerSchema)
   .superRefine((data, ctx) => {
-    if (data.paymentStatus === "PAID") {
+    // A 100%-discount (exonerated) sale totals 0, so there is nothing to
+    // pay and no payment split to collect — completeSale still verifies the
+    // (empty) split sums to that 0 total.
+    const exonerated = data.discountPercent >= 100;
+    if (data.paymentStatus === "PAID" && !exonerated) {
       validatePaymentSplits(data.payments, ctx);
     }
   });
