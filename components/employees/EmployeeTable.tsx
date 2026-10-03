@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { MoreVerticalIcon, UsersRoundIcon } from "lucide-react";
+import { CameraIcon, MoreVerticalIcon, UsersRoundIcon } from "lucide-react";
 import type { UserStatus, Role, Branch } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,9 +30,11 @@ import {
   updateEmployee,
   setEmployeeStatus,
   deleteEmployee,
+  setEmployeePhoto,
   type EmployeeListItem,
 } from "@/lib/actions/employees";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
+import { resizeImageToDataUrl } from "@/lib/image-utils";
 
 const ROLE_LABELS: Record<Role, string> = { GERENTE: "Gerente", VENDEDOR: "Vendedor" };
 const STATUS_LABELS: Record<UserStatus, string> = {
@@ -43,6 +45,83 @@ const STATUS_LABELS: Record<UserStatus, string> = {
 
 function initialsOf(name: string): string {
   return name.split(/\s+/).map((w) => w[0] ?? "").slice(0, 2).join("").toUpperCase();
+}
+
+// Profile picture when there is one, initials otherwise.
+function Avatar({ user, className }: { user: EmployeeListItem; className: string }) {
+  const name = displayName(user);
+  return user.photoDataUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={user.photoDataUrl} alt={name} className={`${className} shrink-0 rounded-full object-cover`} />
+  ) : (
+    <span
+      className={`${className} flex shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary`}
+      aria-hidden="true"
+    >
+      {initialsOf(name)}
+    </span>
+  );
+}
+
+// Lets a manager pick a photo for a profile: resized in the browser to 256px
+// (so a phone photo never hits the request size limit) and saved right away.
+function PhotoControl({ user: u }: { user: EmployeeListItem }) {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, { maxDimension: 256, format: "image/jpeg", quality: 0.85 });
+      startTransition(async () => {
+        const result = await setEmployeePhoto(u.id, dataUrl);
+        if (!result.success) setError(result.error);
+        else router.refresh();
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo procesar la imagen");
+    }
+  }
+
+  function handleRemove() {
+    setError(null);
+    startTransition(async () => {
+      const result = await setEmployeePhoto(u.id, null);
+      if (!result.success) setError(result.error);
+      else router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-label={`Foto de ${displayName(u)}`}
+        onChange={(e) => {
+          void handleFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => inputRef.current?.click()}>
+          <CameraIcon data-icon="inline-start" />
+          {u.photoDataUrl ? "Cambiar foto" : "Subir foto"}
+        </Button>
+        {u.photoDataUrl && (
+          <Button type="button" size="sm" variant="ghost" disabled={isPending} onClick={handleRemove}>
+            Quitar foto
+          </Button>
+        )}
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
 }
 
 function displayName(u: Pick<EmployeeListItem, "firstName" | "lastName" | "email">): string {
@@ -224,16 +303,19 @@ export function EmployeeTable({
         label="Empleados"
         renderRowMobile={(u) => (
           <MobileRow
-            title={`${displayName(u)}${u.id === currentUserId ? " (tú)" : ""}`}
+            title={
+              <span className="flex items-center gap-2">
+                <Avatar user={u} className="size-7 text-[11px]" />
+                <span className="truncate">{`${displayName(u)}${u.id === currentUserId ? " (tú)" : ""}`}</span>
+              </span>
+            }
             meta={`${ROLE_LABELS[u.role]} · ${u.branchId ? (branches.find((b) => b.id === u.branchId)?.name ?? "—") : "Todas las sucursales"}`}
             badge={<Badge variant={u.status === "ACTIVE" ? "success" : "destructive"}>{STATUS_LABELS[u.status]}</Badge>}
           />
         )}
         renderRow={(u) => (
           <>
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-              {initialsOf(displayName(u))}
-            </span>
+            <Avatar user={u} className="size-10 text-sm" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">
                 {displayName(u)}
@@ -253,9 +335,7 @@ export function EmployeeTable({
         renderDetail={(u) => (
           <>
             <div className="flex items-center gap-3">
-              <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
-                {initialsOf(displayName(u))}
-              </span>
+              <Avatar user={u} className="size-16 text-lg" />
               <div className="min-w-0">
                 <h3 className="text-lg font-semibold leading-tight">
                   {displayName(u)}
@@ -268,6 +348,7 @@ export function EmployeeTable({
                 <p className="truncate text-sm text-muted-foreground">{u.email}</p>
               </div>
             </div>
+            <PhotoControl user={u} />
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <div className="flex flex-col gap-0.5">
                 <dt className="text-xs text-muted-foreground">Rol</dt>

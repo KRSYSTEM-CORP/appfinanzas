@@ -44,6 +44,25 @@ async function hasOtherActiveManager(
   return count > 0;
 }
 
+// A small JPEG/PNG/WebP data URL produced by resizeImageToDataUrl (256px), or
+// null to remove the photo. The size cap is a server-side guard — the client
+// already resizes, but nothing stops a hand-crafted request.
+const PHOTO_DATA_URL = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
+const MAX_PHOTO_CHARS = 200_000;
+
+export async function setEmployeePhoto(userId: string, dataUrl: string | null): Promise<ActionResult> {
+  const { companyId } = await requireManager();
+  if (dataUrl !== null && (dataUrl.length > MAX_PHOTO_CHARS || !PHOTO_DATA_URL.test(dataUrl))) {
+    return { success: false, error: "La imagen no es válida o es demasiado grande." };
+  }
+  const updated = await withTenant(companyId, (tx) =>
+    tx.user.updateMany({ where: { id: userId, companyId }, data: { photoDataUrl: dataUrl } })
+  );
+  if (updated.count === 0) return { success: false, error: "Empleado no encontrado" };
+  revalidatePath("/employees");
+  return { success: true };
+}
+
 export async function createEmployee(formData: FormData): Promise<ActionResult> {
   const { companyId } = await requireManager();
   const parsed = EmployeeSchema.safeParse({

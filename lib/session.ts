@@ -79,6 +79,8 @@ export async function getSession(): Promise<Session | null> {
   // instead of trusting a still-valid signed cookie until it expires.
   const user = await prisma.user.findUnique({
     where: { id: payload.uid },
+    // The photo is only for the profiles screen; don't carry it on every request.
+    omit: { photoDataUrl: true },
     include: {
       company: {
         select: {
