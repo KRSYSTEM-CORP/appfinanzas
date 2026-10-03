@@ -4,18 +4,11 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StoreIcon } from "lucide-react";
 import type { Branch } from "@prisma/client";
+import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogClose,
@@ -83,43 +76,46 @@ export function BranchesForm({ branches }: { branches: Branch[] }) {
         </Dialog>
       </div>
 
-      <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-        <Table className="table-cards">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Desde</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {branches.map((b) => (
-              <BranchRow key={b.id} branch={b} />
-            ))}
-            {branches.length === 0 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={4} className="p-0">
-                  <div className="flex flex-col items-center gap-3 py-14 text-center">
-                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
-                      <StoreIcon className="size-5" />
-                    </div>
-                    <p className="text-sm font-medium">Aún no tienes sucursales</p>
-                    <p className="text-sm text-muted-foreground max-w-xs">
-                      Cada sucursal tiene su propio inventario y su propia caja.
-                    </p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <MasterDetail
+        items={branches}
+        label="Sucursales"
+        empty={
+          <div className="flex flex-col items-center gap-3 rounded-lg border bg-card py-14 text-center shadow-xs">
+            <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+              <StoreIcon className="size-5" />
+            </div>
+            <p className="text-sm font-medium">Aún no tienes sucursales</p>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              Cada sucursal tiene su propio inventario y su propia caja.
+            </p>
+          </div>
+        }
+        renderRowMobile={(b) => (
+          <MobileRow
+            title={b.name}
+            meta={`Desde ${formatDate(b.createdAt)}`}
+            badge={<Badge variant={b.isActive ? "success" : "destructive"}>{b.isActive ? "Activa" : "Inactiva"}</Badge>}
+          />
+        )}
+        renderRow={(b) => (
+          <>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
+              <StoreIcon className="size-4 text-muted-foreground/60" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">{b.name}</span>
+              <span className="block truncate text-xs text-muted-foreground">Desde {formatDate(b.createdAt)}</span>
+            </span>
+            <Badge variant={b.isActive ? "success" : "destructive"}>{b.isActive ? "Activa" : "Inactiva"}</Badge>
+          </>
+        )}
+        renderDetail={(b) => <BranchDetail key={b.id} branch={b} />}
+      />
     </div>
   );
 }
 
-function BranchRow({ branch: b }: { branch: Branch }) {
+function BranchDetail({ branch: b }: { branch: Branch }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editOpen, setEditOpen] = useState(false);
@@ -159,49 +155,50 @@ function BranchRow({ branch: b }: { branch: Branch }) {
   }
 
   return (
-    <TableRow>
-      <TableCell data-label="Nombre" className="font-medium">{b.name}</TableCell>
-      <TableCell data-label="Estado">
-        <Badge variant={b.isActive ? "success" : "destructive"}>
-          {b.isActive ? "Activa" : "Inactiva"}
-        </Badge>
-      </TableCell>
-      <TableCell data-label="Desde" className="text-muted-foreground text-sm">{formatDate(b.createdAt)}</TableCell>
-      <TableCell data-label="Acciones" className="text-right">
-        {editError && <p className="text-sm text-destructive mb-1">{editError}</p>}
-        <div className="flex justify-end flex-wrap gap-2">
-          <Dialog open={editOpen} onOpenChange={setEditOpen}>
-            <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
-              Renombrar
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Renombrar sucursal</DialogTitle>
-              </DialogHeader>
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`edit-branch-name-${b.id}`}>Nombre</Label>
-                  <Input
-                    id={`edit-branch-name-${b.id}`}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                <Button disabled={isPending} onClick={handleEdit}>
-                  Guardar
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Button size="sm" variant="outline" disabled={isPending} onClick={handleToggleActive}>
-            {b.isActive ? "Desactivar" : "Activar"}
-          </Button>
+    <>
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-lg font-semibold leading-tight">{b.name}</h3>
+        <p className="text-sm text-muted-foreground">Desde {formatDate(b.createdAt)}</p>
+      </div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+        <div className="flex flex-col gap-0.5">
+          <dt className="text-xs text-muted-foreground">Estado</dt>
+          <dd>
+            <Badge variant={b.isActive ? "success" : "destructive"}>{b.isActive ? "Activa" : "Inactiva"}</Badge>
+          </dd>
         </div>
-      </TableCell>
-    </TableRow>
+      </dl>
+      {editError && <p className="text-sm text-destructive">{editError}</p>}
+      <div className="flex flex-wrap gap-2 border-t pt-4">
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogTrigger render={<Button variant="outline" disabled={isPending} />}>Renombrar</DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Renombrar sucursal</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`edit-branch-name-${b.id}`}>Nombre</Label>
+                <Input
+                  id={`edit-branch-name-${b.id}`}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+              <Button disabled={isPending} onClick={handleEdit}>
+                Guardar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Button variant="outline" disabled={isPending} onClick={handleToggleActive}>
+          {b.isActive ? "Desactivar" : "Activar"}
+        </Button>
+      </div>
+    </>
   );
 }

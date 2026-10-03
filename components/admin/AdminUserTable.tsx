@@ -4,19 +4,12 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Building2Icon } from "lucide-react";
 import type { Company, Role, User, UserStatus } from "@prisma/client";
+import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogClose,
@@ -82,37 +75,46 @@ export function AdminUserTable({
   companies: AdminCompany[];
   currentUserId: string;
 }) {
+  // A company without an owner row has nothing to show or act on.
+  const withOwner = companies.filter((c) => c.users.length > 0);
   return (
-    <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Empresa</TableHead>
-            <TableHead>Correo</TableHead>
-            <TableHead>Estado</TableHead>
-            <TableHead>Cobro</TableHead>
-            <TableHead>Registrado</TableHead>
-            <TableHead className="text-right">Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {companies.map((c) => (
-            <AdminCompanyRow key={c.id} company={c} currentUserId={currentUserId} />
-          ))}
-          {companies.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={6} className="p-0">
-                <EmptyState icon={Building2Icon} title="No hay empresas registradas todavía." className="py-10" />
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </div>
+    <MasterDetail
+      items={withOwner}
+      label="Empresas"
+      empty={
+        <div className="rounded-lg border bg-card shadow-xs">
+          <EmptyState icon={Building2Icon} title="No hay empresas registradas todavía." className="py-10" />
+        </div>
+      }
+      renderRowMobile={(c) => (
+        <MobileRow
+          title={c.name}
+          meta={c.users[0].email}
+          badge={<Badge variant={statusVariant(c.users[0].status)}>{STATUS_LABELS[c.users[0].status]}</Badge>}
+        />
+      )}
+      renderRow={(c) => (
+        <>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
+            <Building2Icon className="size-4 text-muted-foreground/60" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold">{c.name}</span>
+            <span className="block truncate text-xs text-muted-foreground">{c.users[0].email}</span>
+          </span>
+          <Badge variant={statusVariant(c.users[0].status)}>{STATUS_LABELS[c.users[0].status]}</Badge>
+        </>
+      )}
+      renderDetail={(c) => <AdminCompanyDetail key={c.id} company={c} currentUserId={currentUserId} />}
+    />
   );
 }
 
-function AdminCompanyRow({
+function statusVariant(status: UserStatus) {
+  return status === "ACTIVE" ? "success" : status === "PENDING" ? "outline" : "destructive";
+}
+
+function AdminCompanyDetail({
   company,
   currentUserId,
 }: {
@@ -121,7 +123,6 @@ function AdminCompanyRow({
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
-  const [expanded, setExpanded] = useState(false);
 
   const owner = company.users[0];
   const employees = company.users.slice(1);
@@ -221,341 +222,322 @@ function AdminCompanyRow({
 
   return (
     <>
-      <TableRow>
-        <TableCell className="font-medium">
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="flex items-center gap-1.5 text-left hover:underline underline-offset-2"
-          >
-            <span className="text-muted-foreground">{expanded ? "▾" : "▸"}</span>
-            {company.name}
-            {employees.length > 0 && (
-              <Badge variant="outline" className="ml-1">
-                {employees.length} {employees.length === 1 ? "empleado" : "empleados"}
-              </Badge>
-            )}
-          </button>
-        </TableCell>
-        <TableCell>
+      <div className="flex flex-col gap-1">
+        <h3 className="text-lg font-semibold leading-tight">{company.name}</h3>
+        <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           {owner.email}
-          {owner.isSuperAdmin && (
-            <Badge variant="outline" className="ml-2">
-              Admin
-            </Badge>
-          )}
-        </TableCell>
-        <TableCell>
-          <Badge
-            variant={
-              owner.status === "ACTIVE" ? "success" : owner.status === "PENDING" ? "outline" : "destructive"
-            }
-          >
-            {STATUS_LABELS[owner.status]}
-          </Badge>
-        </TableCell>
-        <TableCell>
-          {company.isExempt ? (
-            <Badge variant="outline">Exonerada</Badge>
-          ) : blocked ? (
-            <Badge variant="destructive">Bloqueada por pago</Badge>
-          ) : company.nextPaymentDueDate ? (
-            <Badge variant="outline">Vence el {formatDate(company.nextPaymentDueDate)}</Badge>
-          ) : (
-            <Badge variant="outline">Sin ciclo configurado</Badge>
-          )}
-        </TableCell>
-        <TableCell className="text-muted-foreground text-sm">{formatDate(company.createdAt)}</TableCell>
-        <TableCell className="text-right">
-          <div className="flex justify-end flex-wrap gap-2">
-            {owner.status === "PENDING" && (
-              <>
-                <Dialog>
-                  <DialogTrigger render={<Button size="sm" disabled={isPending} />}>
-                    Aprobar
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Aprobar a {company.name}</DialogTitle>
-                      <DialogDescription>
-                        Al aprobar, la empresa queda activa de inmediato con {TRIAL_DAYS} días de
-                        prueba gratis. Deja los campos en blanco para usar el precio mensual
-                        estándar de la plataforma — solo complétalos si esta empresa necesita un
-                        trato distinto (precio o fecha de vencimiento personalizados).
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="flex flex-col gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor={`fee-${owner.id}`}>Monto mensual (USD) — opcional</Label>
-                        <Input
-                          id={`fee-${owner.id}`}
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={feeUsd}
-                          onChange={(e) => setFeeUsd(e.target.value)}
-                        />
-                        <p className="text-xs text-muted-foreground">En blanco = precio estándar de la plataforma.</p>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor={`due-${owner.id}`}>Fecha de vencimiento — opcional</Label>
-                        <Input
-                          id={`due-${owner.id}`}
-                          type="date"
-                          value={approveDueDate}
-                          onChange={(e) => setApproveDueDate(e.target.value)}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          En blanco = {TRIAL_DAYS} días de prueba gratis a partir de hoy.
-                        </p>
-                      </div>
-                      {approveError && <p className="text-sm text-destructive">{approveError}</p>}
-                    </div>
-                    <DialogFooter>
-                      <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                      <DialogClose render={<Button disabled={isPending} />} onClick={handleApprove}>
-                        Aprobar y activar
-                      </DialogClose>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-                <Dialog>
-                  <DialogTrigger
-                    render={<Button size="sm" variant="outline" disabled={isPending} />}
-                  >
-                    Denegar
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>¿Denegar el acceso a {company.name}?</DialogTitle>
-                      <DialogDescription>
-                        El usuario {owner.email} no podrá iniciar sesión. Podrás reactivarlo más
-                        adelante si cambias de opinión.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                      <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                      <DialogClose
-                        render={<Button variant="destructive" disabled={isPending} />}
-                        onClick={() => run(() => denyUser(owner.id))}
-                      >
-                        Denegar
-                      </DialogClose>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </>
+          {owner.isSuperAdmin && <Badge variant="outline">Admin</Badge>}
+        </p>
+      </div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+        <div className="flex flex-col gap-1">
+          <dt className="text-xs text-muted-foreground">Estado</dt>
+          <dd>
+            <Badge variant={statusVariant(owner.status)}>{STATUS_LABELS[owner.status]}</Badge>
+          </dd>
+        </div>
+        <div className="flex flex-col gap-1">
+          <dt className="text-xs text-muted-foreground">Registrado</dt>
+          <dd className="font-medium">{formatDate(company.createdAt)}</dd>
+        </div>
+        <div className="col-span-2 flex flex-col gap-1">
+          <dt className="text-xs text-muted-foreground">Cobro</dt>
+          <dd>
+            {company.isExempt ? (
+              <Badge variant="outline">Exonerada</Badge>
+            ) : blocked ? (
+              <Badge variant="destructive">Bloqueada por pago</Badge>
+            ) : company.nextPaymentDueDate ? (
+              <Badge variant="outline">Vence el {formatDate(company.nextPaymentDueDate)}</Badge>
+            ) : (
+              <Badge variant="outline">Sin ciclo configurado</Badge>
             )}
-            {owner.status === "ACTIVE" && !company.isExempt && (
-              <Dialog>
-                <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
-                  Registrar pago
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Registrar pago de suscripción — {company.name}</DialogTitle>
-                    <DialogDescription>
-                      Confirma el pago recibido. Esto actualiza el monto vigente y desbloquea
-                      la cuenta si estaba vencida.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor={`pay-amount-${owner.id}`}>Monto (USD)</Label>
-                      <Input
-                        id={`pay-amount-${owner.id}`}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={payAmount}
-                        onChange={(e) => setPayAmount(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor={`pay-period-${owner.id}`}>Nueva fecha de vencimiento</Label>
-                      <Input
-                        id={`pay-period-${owner.id}`}
-                        type="date"
-                        value={payPeriodEnd}
-                        onChange={(e) => setPayPeriodEnd(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor={`pay-note-${owner.id}`}>Nota (opcional)</Label>
-                      <Input
-                        id={`pay-note-${owner.id}`}
-                        value={payNote}
-                        onChange={(e) => setPayNote(e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">Ej. Transferencia ref. 001234567</p>
-                    </div>
-                    {payError && <p className="text-sm text-destructive">{payError}</p>}
-                  </div>
-                  <DialogFooter>
-                    <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                    <DialogClose
-                      render={<Button disabled={isPending} />}
-                      onClick={handleRecordPayment}
-                    >
-                      Registrar pago
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-            {owner.status === "ACTIVE" && !company.isExempt && (
-              <Dialog>
-                <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
-                  Renovar suscripción manual
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>¿Renovar la suscripción de {company.name} manualmente?</DialogTitle>
-                    <DialogDescription>
-                      Esto reinicia su ciclo de cobro a partir de hoy, sin registrar un monto pagado.
-                      La empresa tendrá 5 días para reportar y completar su pago — si no lo hace, el
-                      sistema se bloqueará de nuevo automáticamente.
-                    </DialogDescription>
-                  </DialogHeader>
-                  {renewError && <p className="text-sm text-destructive">{renewError}</p>}
-                  <DialogFooter>
-                    <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                    <DialogClose render={<Button disabled={isPending} />} onClick={handleRenew}>
-                      Renovar
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-            {(owner.status === "ACTIVE" || owner.status === "PENDING") && (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isPending}
-                onClick={() => run(() => setCompanyExempt(company.id, !company.isExempt))}
-              >
-                {company.isExempt ? "Quitar exoneración" : "Exonerar"}
-              </Button>
-            )}
-            {owner.status === "ACTIVE" && owner.id !== currentUserId && (
-              <Dialog>
-                <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
-                  Suspender
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>¿Suspender el acceso de {company.name}?</DialogTitle>
-                    <DialogDescription>
-                      El usuario {owner.email} dejará de poder iniciar sesión de inmediato. Podrás
-                      reactivarlo cuando quieras.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                    <DialogClose
-                      render={<Button variant="destructive" disabled={isPending} />}
-                      onClick={() => run(() => suspendUser(owner.id))}
-                    >
-                      Suspender
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-            {owner.status === "SUSPENDED" && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={isPending}
-                  onClick={() => run(() => reactivateUser(owner.id))}
-                >
-                  Reactivar
-                </Button>
-                <Dialog>
-                  <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
-                    Eliminar
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>¿Eliminar permanentemente a {company.name}?</DialogTitle>
-                      <DialogDescription>
-                        Esta acción es irreversible. Se borrarán todos sus datos: productos,
-                        clientes, ventas, presupuestos y pagos registrados. No se puede deshacer.
-                      </DialogDescription>
-                    </DialogHeader>
-                    {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
-                    <DialogFooter>
-                      <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                      <DialogClose
-                        render={<Button variant="destructive" disabled={isPending} />}
-                        onClick={handleDeleteCompany}
-                      >
-                        Eliminar definitivamente
-                      </DialogClose>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </>
-            )}
-          </div>
-        </TableCell>
-      </TableRow>
-      {expanded && FEATURES.length > 0 && (
-        <TableRow className="bg-muted/30">
-          <TableCell colSpan={6}>
-            <div className="flex flex-col gap-1.5 py-1 pl-6">
-              <p className="text-xs font-medium text-muted-foreground">
-                Apartados personalizados — solo para {company.name}
-              </p>
-              {FEATURES.map((feature) => {
-                const enabled = company.enabledFeatures.includes(feature.id);
-                return (
-                  <label key={feature.id} className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={enabled}
-                      disabled={isPending}
-                      onChange={() =>
-                        run(() =>
-                          setCompanyFeatures(
-                            company.id,
-                            enabled
-                              ? company.enabledFeatures.filter((id) => id !== feature.id)
-                              : [...company.enabledFeatures, feature.id]
-                          )
-                        )
-                      }
-                    />
-                    <span>
-                      <span className="font-medium">{feature.label}</span>
-                      <span className="block text-xs text-muted-foreground">{feature.description}</span>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          </TableCell>
-        </TableRow>
-      )}
-      {expanded && employees.length > 0 && (
-        <TableRow className="bg-muted/30">
-          <TableCell colSpan={6}>
-            <div className="flex flex-col gap-1.5 py-1 pl-6">
-              <p className="text-xs font-medium text-muted-foreground">Empleados de {company.name}</p>
-              {employees.map((emp) => (
-                <div key={emp.id} className="flex items-center gap-3 text-sm">
-                  <span className="min-w-[160px]">{displayName(emp)}</span>
-                  <span className="text-muted-foreground">{ROLE_LABELS[emp.role]}</span>
-                  <Badge variant={emp.status === "ACTIVE" ? "success" : "destructive"}>
-                    {STATUS_LABELS[emp.status]}
-                  </Badge>
+          </dd>
+        </div>
+      </dl>
+      <div className="border-t pt-4">
+    <div className="flex flex-wrap gap-2">
+      {owner.status === "PENDING" && (
+        <>
+          <Dialog>
+            <DialogTrigger render={<Button size="sm" disabled={isPending} />}>
+              Aprobar
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Aprobar a {company.name}</DialogTitle>
+                <DialogDescription>
+                  Al aprobar, la empresa queda activa de inmediato con {TRIAL_DAYS} días de
+                  prueba gratis. Deja los campos en blanco para usar el precio mensual
+                  estándar de la plataforma — solo complétalos si esta empresa necesita un
+                  trato distinto (precio o fecha de vencimiento personalizados).
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={`fee-${owner.id}`}>Monto mensual (USD) — opcional</Label>
+                  <Input
+                    id={`fee-${owner.id}`}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={feeUsd}
+                    onChange={(e) => setFeeUsd(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">En blanco = precio estándar de la plataforma.</p>
                 </div>
-              ))}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={`due-${owner.id}`}>Fecha de vencimiento — opcional</Label>
+                  <Input
+                    id={`due-${owner.id}`}
+                    type="date"
+                    value={approveDueDate}
+                    onChange={(e) => setApproveDueDate(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    En blanco = {TRIAL_DAYS} días de prueba gratis a partir de hoy.
+                  </p>
+                </div>
+                {approveError && <p className="text-sm text-destructive">{approveError}</p>}
+              </div>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                <DialogClose render={<Button disabled={isPending} />} onClick={handleApprove}>
+                  Aprobar y activar
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog>
+            <DialogTrigger
+              render={<Button size="sm" variant="outline" disabled={isPending} />}
+            >
+              Denegar
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>¿Denegar el acceso a {company.name}?</DialogTitle>
+                <DialogDescription>
+                  El usuario {owner.email} no podrá iniciar sesión. Podrás reactivarlo más
+                  adelante si cambias de opinión.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                <DialogClose
+                  render={<Button variant="destructive" disabled={isPending} />}
+                  onClick={() => run(() => denyUser(owner.id))}
+                >
+                  Denegar
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
+      {owner.status === "ACTIVE" && !company.isExempt && (
+        <Dialog>
+          <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
+            Registrar pago
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Registrar pago de suscripción — {company.name}</DialogTitle>
+              <DialogDescription>
+                Confirma el pago recibido. Esto actualiza el monto vigente y desbloquea
+                la cuenta si estaba vencida.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`pay-amount-${owner.id}`}>Monto (USD)</Label>
+                <Input
+                  id={`pay-amount-${owner.id}`}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`pay-period-${owner.id}`}>Nueva fecha de vencimiento</Label>
+                <Input
+                  id={`pay-period-${owner.id}`}
+                  type="date"
+                  value={payPeriodEnd}
+                  onChange={(e) => setPayPeriodEnd(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`pay-note-${owner.id}`}>Nota (opcional)</Label>
+                <Input
+                  id={`pay-note-${owner.id}`}
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Ej. Transferencia ref. 001234567</p>
+              </div>
+              {payError && <p className="text-sm text-destructive">{payError}</p>}
             </div>
-          </TableCell>
-        </TableRow>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+              <DialogClose
+                render={<Button disabled={isPending} />}
+                onClick={handleRecordPayment}
+              >
+                Registrar pago
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      {owner.status === "ACTIVE" && !company.isExempt && (
+        <Dialog>
+          <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
+            Renovar suscripción manual
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>¿Renovar la suscripción de {company.name} manualmente?</DialogTitle>
+              <DialogDescription>
+                Esto reinicia su ciclo de cobro a partir de hoy, sin registrar un monto pagado.
+                La empresa tendrá 5 días para reportar y completar su pago — si no lo hace, el
+                sistema se bloqueará de nuevo automáticamente.
+              </DialogDescription>
+            </DialogHeader>
+            {renewError && <p className="text-sm text-destructive">{renewError}</p>}
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+              <DialogClose render={<Button disabled={isPending} />} onClick={handleRenew}>
+                Renovar
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      {(owner.status === "ACTIVE" || owner.status === "PENDING") && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={isPending}
+          onClick={() => run(() => setCompanyExempt(company.id, !company.isExempt))}
+        >
+          {company.isExempt ? "Quitar exoneración" : "Exonerar"}
+        </Button>
+      )}
+      {owner.status === "ACTIVE" && owner.id !== currentUserId && (
+        <Dialog>
+          <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
+            Suspender
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>¿Suspender el acceso de {company.name}?</DialogTitle>
+              <DialogDescription>
+                El usuario {owner.email} dejará de poder iniciar sesión de inmediato. Podrás
+                reactivarlo cuando quieras.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+              <DialogClose
+                render={<Button variant="destructive" disabled={isPending} />}
+                onClick={() => run(() => suspendUser(owner.id))}
+              >
+                Suspender
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      {owner.status === "SUSPENDED" && (
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isPending}
+            onClick={() => run(() => reactivateUser(owner.id))}
+          >
+            Reactivar
+          </Button>
+          <Dialog>
+            <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
+              Eliminar
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>¿Eliminar permanentemente a {company.name}?</DialogTitle>
+                <DialogDescription>
+                  Esta acción es irreversible. Se borrarán todos sus datos: productos,
+                  clientes, ventas, presupuestos y pagos registrados. No se puede deshacer.
+                </DialogDescription>
+              </DialogHeader>
+              {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                <DialogClose
+                  render={<Button variant="destructive" disabled={isPending} />}
+                  onClick={handleDeleteCompany}
+                >
+                  Eliminar definitivamente
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
+    </div>
+      </div>
+      {FEATURES.length > 0 && (
+        <div className="flex flex-col gap-1.5 border-t pt-4">
+          <p className="text-xs font-medium text-muted-foreground">
+            Apartados personalizados — solo para {company.name}
+          </p>
+          {FEATURES.map((feature) => {
+            const enabled = company.enabledFeatures.includes(feature.id);
+            return (
+              <label key={feature.id} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={enabled}
+                  disabled={isPending}
+                  onChange={() =>
+                    run(() =>
+                      setCompanyFeatures(
+                        company.id,
+                        enabled
+                          ? company.enabledFeatures.filter((id) => id !== feature.id)
+                          : [...company.enabledFeatures, feature.id]
+                      )
+                    )
+                  }
+                />
+                <span>
+                  <span className="font-medium">{feature.label}</span>
+                  <span className="block text-xs text-muted-foreground">{feature.description}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+      {employees.length > 0 && (
+        <div className="flex flex-col gap-1.5 border-t pt-4">
+          <p className="text-xs font-medium text-muted-foreground">
+            Empleados de {company.name} ({employees.length})
+          </p>
+          {employees.map((emp) => (
+            <div key={emp.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <span className="font-medium">{displayName(emp)}</span>
+              <span className="text-muted-foreground">{ROLE_LABELS[emp.role]}</span>
+              <Badge variant={emp.status === "ACTIVE" ? "success" : "destructive"}>
+                {STATUS_LABELS[emp.status]}
+              </Badge>
+            </div>
+          ))}
+        </div>
       )}
     </>
   );

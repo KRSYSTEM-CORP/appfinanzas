@@ -1,28 +1,13 @@
-import { ReceiptIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { PaymentHistoryList } from "@/components/billing/PaymentHistoryList";
 import { PaymentReportForm } from "@/components/billing/PaymentReportForm";
 import { getBillingInfo, listMyPaymentReports } from "@/lib/actions/billing";
-import { formatDate, formatUSD, formatUSDT, PAYMENT_METHOD_LABELS } from "@/lib/format";
+import { formatDate, formatUSD, formatUSDT } from "@/lib/format";
 import { formatLocalCurrency } from "@/lib/currencies";
 import { WHATSAPP_PHONE } from "@/lib/legal";
-import type { PaymentReportStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_LABELS: Record<PaymentReportStatus, string> = {
-  PENDING: "Pendiente de revisión",
-  APPROVED: "Aprobado",
-  REJECTED: "Rechazado",
-};
 
 export default async function BillingPage() {
   const [info, reports] = await Promise.all([getBillingInfo(), listMyPaymentReports()]);
@@ -205,70 +190,19 @@ export default async function BillingPage() {
           <CardTitle>Historial de reportes</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
-            <Table className="table-cards">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Métodos de pago</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Nota del admin</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {reports.map((r) => {
-                  const totalUsdCents = r.lines.reduce((sum, l) => sum + l.amountUsdCents, 0);
-                  return (
-                    <TableRow key={r.id}>
-                      <TableCell data-label="Fecha" className="text-sm text-muted-foreground">
-                        {formatDate(r.createdAt)}
-                      </TableCell>
-                      <TableCell data-label="Métodos de pago" className="text-sm">
-                        {r.lines.map((line, i) => (
-                          <div key={i}>
-                            {PAYMENT_METHOD_LABELS[line.paymentMethod]}: {formatUSD(line.amountUsdCents)}
-                            {line.reference && ` (${line.reference})`}
-                          </div>
-                        ))}
-                      </TableCell>
-                      <TableCell data-label="Total" className="font-medium">{formatUSD(totalUsdCents)}</TableCell>
-                      <TableCell data-label="Estado">
-                        <Badge
-                          variant={
-                            r.status === "APPROVED"
-                              ? "secondary"
-                              : r.status === "PENDING"
-                                ? "outline"
-                                : "destructive"
-                          }
-                        >
-                          {STATUS_LABELS[r.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell data-label="Nota del admin" className="text-sm text-muted-foreground">
-                        {r.reviewNote ?? "—"}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {reports.length === 0 && (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={5} className="p-0">
-                      <div className="flex flex-col items-center gap-3 py-14 text-center">
-                        <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
-                          <ReceiptIcon className="size-5" />
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Todavía no has reportado ningún pago.
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <PaymentHistoryList
+            reports={reports.map((r) => ({
+              id: r.id,
+              createdAt: r.createdAt,
+              status: r.status,
+              reviewNote: r.reviewNote,
+              lines: r.lines.map((l) => ({
+                paymentMethod: l.paymentMethod,
+                amountUsdCents: l.amountUsdCents,
+                reference: l.reference,
+              })),
+            }))}
+          />
         </CardContent>
       </Card>
     </div>
