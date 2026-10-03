@@ -8,14 +8,6 @@ import type { Customer } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -25,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { MasterDetail } from "@/components/shared/MasterDetail";
+import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { deleteCustomer } from "@/lib/actions/customers";
 
 export function CustomerTable({ customers, canManage }: { customers: Customer[]; canManage: boolean }) {
@@ -67,6 +59,9 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
       <MasterDetail
         items={filtered}
         label="Clientes"
+        renderRowMobile={(c) => (
+          <MobileRow title={`${c.firstName} ${c.lastName}`} meta={[c.phone, c.address].filter(Boolean).join(" · ")} />
+        )}
         renderRow={(c) => (
           <>
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
@@ -155,91 +150,6 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
           </div>
         }
       />
-      <div className="md:hidden rounded-lg border bg-card shadow-xs overflow-x-auto">
-        <Table className="table-cards">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Teléfono</TableHead>
-              <TableHead>Dirección</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell data-label="Nombre" className="font-medium">
-                  {c.firstName} {c.lastName}
-                </TableCell>
-                <TableCell data-label="Teléfono">{c.phone}</TableCell>
-                <TableCell data-label="Dirección">{c.address ?? "—"}</TableCell>
-                <TableCell data-label="Acciones" className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      nativeButton={false}
-                      render={<Link href={`/customers/${c.id}/crm`} />}
-                    >
-                      CRM
-                    </Button>
-                    {canManage && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        nativeButton={false}
-                        render={<Link href={`/customers/${c.id}`} />}
-                      >
-                        Editar
-                      </Button>
-                    )}
-                    {canManage && (
-                      <Dialog>
-                        <DialogTrigger render={<Button size="sm" variant="destructive" />}>
-                          Eliminar
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>¿Eliminar cliente?</DialogTitle>
-                            <DialogDescription>
-                              Se eliminará {c.firstName} {c.lastName} de tu lista de clientes. Las
-                              ventas ya realizadas conservarán sus datos, pero no podrás
-                              autocompletarlos en una próxima compra.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <DialogFooter>
-                            <DialogClose render={<Button variant="outline" />}>
-                              Cancelar
-                            </DialogClose>
-                            <DialogClose
-                              render={<Button variant="destructive" disabled={isPending} />}
-                              onClick={() => handleDelete(c.id)}
-                            >
-                              Eliminar
-                            </DialogClose>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-            {filtered.length === 0 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={4} className="p-0">
-                  <div className="flex flex-col items-center gap-3 py-14 text-center">
-                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
-                      <UsersIcon className="size-5" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">No se encontraron clientes.</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
     </div>
   );
 }

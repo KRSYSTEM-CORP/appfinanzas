@@ -9,14 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -26,7 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { MasterDetail } from "@/components/shared/MasterDetail";
+import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { deleteSupplier, setSupplierActive } from "@/lib/actions/suppliers";
 
 export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
@@ -76,6 +68,13 @@ export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
       <MasterDetail
         items={filtered}
         label="Proveedores"
+        renderRowMobile={(s) => (
+          <MobileRow
+            title={s.name}
+            meta={[s.rif, s.phone].filter(Boolean).join(" · ") || "Sin datos de contacto"}
+            badge={<Badge variant={s.isActive ? "success" : "outline"}>{s.isActive ? "Activo" : "Inactivo"}</Badge>}
+          />
+        )}
         renderRow={(s) => (
           <>
             <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
@@ -162,88 +161,6 @@ export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
           </div>
         }
       />
-      <div className="md:hidden rounded-lg border bg-card shadow-xs overflow-x-auto">
-        <Table className="table-cards">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>RIF</TableHead>
-              <TableHead>Teléfono</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((s) => (
-              <TableRow key={s.id} className={!s.isActive ? "opacity-50" : undefined}>
-                <TableCell data-label="Nombre" className="font-medium">{s.name}</TableCell>
-                <TableCell data-label="RIF">{s.rif ?? "—"}</TableCell>
-                <TableCell data-label="Teléfono">{s.phone ?? "—"}</TableCell>
-                <TableCell data-label="Estado">
-                  <Badge variant={s.isActive ? "success" : "outline"}>
-                    {s.isActive ? "Activo" : "Inactivo"}
-                  </Badge>
-                </TableCell>
-                <TableCell data-label="Acciones" className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      nativeButton={false}
-                      render={<Link href={`/suppliers/${s.id}`} />}
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={isPending}
-                      onClick={() => handleToggleActive(s.id, !s.isActive)}
-                    >
-                      {s.isActive ? "Desactivar" : "Activar"}
-                    </Button>
-                    <Dialog>
-                      <DialogTrigger render={<Button size="sm" variant="destructive" />}>
-                        Eliminar
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>¿Eliminar proveedor?</DialogTitle>
-                          <DialogDescription>
-                            Se eliminará {s.name} de tu lista de proveedores. Si tiene compras
-                            registradas, no podrá eliminarse — desactívalo en su lugar.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                          <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                          <DialogClose
-                            render={<Button variant="destructive" disabled={isPending} />}
-                            onClick={() => handleDelete(s.id)}
-                          >
-                            Eliminar
-                          </DialogClose>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-            {filtered.length === 0 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={5} className="p-0">
-                  <div className="flex flex-col items-center gap-3 py-14 text-center">
-                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
-                      <TruckIcon className="size-5" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">No se encontraron proveedores.</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
     </div>
   );
 }

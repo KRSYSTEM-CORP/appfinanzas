@@ -8,15 +8,7 @@ import type { Quote, QuoteStatus, ReferenceCurrency } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { MasterDetail } from "@/components/shared/MasterDetail";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { formatDate, QUOTE_STATUS_LABELS } from "@/lib/format";
 import { updateQuoteStatus, updateQuoteStatusBulk } from "@/lib/actions/quotes";
@@ -126,6 +118,18 @@ export function QuoteHistoryTable({
       <MasterDetail
         items={sorted}
         label="Presupuestos"
+        renderRowMobile={(q) => (
+          <MobileRow
+            title={`${q.customerFirstName ?? ""} ${q.customerLastName ?? ""}`.trim() || "—"}
+            meta={`Nº ${q.controlNumber ?? "—"} · ${formatDate(q.createdAt)}`}
+            badge={
+              <Badge variant={q.status === "CONVERTED" ? "success" : q.status === "LOST" ? "destructive" : "outline"}>
+                {QUOTE_STATUS_LABELS[q.status]}
+              </Badge>
+            }
+            amount={<span className="font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, q.totalCents)}</span>}
+          />
+        )}
         header={
           <label className="flex items-center gap-2 border-b bg-muted/40 px-3.5 py-2 text-xs text-muted-foreground">
             <input
@@ -222,85 +226,6 @@ export function QuoteHistoryTable({
           />
         }
       />
-      <div className="md:hidden overflow-x-auto">
-        <Table className="table-cards">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-8">
-                <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Seleccionar todos" />
-              </TableHead>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Nº control</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Días pendiente</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-center">Facturación</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sorted.map((q) => (
-              <TableRow key={q.id}>
-                <TableCell data-label="Seleccionar">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(q.id)}
-                    onChange={() => toggleOne(q.id)}
-                    aria-label={`Seleccionar presupuesto ${q.controlNumber ?? q.id}`}
-                  />
-                </TableCell>
-                <TableCell data-label="Fecha">{formatDate(q.createdAt)}</TableCell>
-                <TableCell data-label="Nº control">{q.controlNumber ?? "—"}</TableCell>
-                <TableCell data-label="Cliente">{`${q.customerFirstName ?? ""} ${q.customerLastName ?? ""}`.trim() || "—"}</TableCell>
-                <TableCell data-label="Total" className="text-right font-medium">
-                  {formatCurrencyCents(referenceCurrency, q.totalCents)}
-                </TableCell>
-                <TableCell data-label="Días pendiente">{q.status === "PENDING" ? `${daysPending(q.createdAt)} días` : "—"}</TableCell>
-                <TableCell data-label="Estado">
-                  <QuoteStatusButtons
-                    quoteId={q.id}
-                    status={q.status}
-                    disabled={isPending}
-                    onChange={handleStatusChange}
-                  />
-                </TableCell>
-                <TableCell data-label="Facturación" className="text-center">
-                  {q.sale ? (
-                    <Link href="/documents" className="inline-flex">
-                      <Badge variant="success">
-                        Facturado{q.sale.controlNumber != null ? ` · Nº ${q.sale.controlNumber}` : ""}
-                      </Badge>
-                    </Link>
-                  ) : q.status === "PENDING" ? (
-                    <Button
-                      type="button"
-                      size="xs"
-                      nativeButton={false}
-                      render={<Link href={`/pos?fromQuote=${q.id}`} />}
-                    >
-                      Facturar
-                    </Button>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">—</span>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-            {sorted.length === 0 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={8} className="p-0">
-                  <EmptyState
-                    icon={FileTextIcon}
-                    title="Aún no hay presupuestos."
-                    action={{ href: "/quotes", label: "Crear presupuesto" }}
-                    className="py-14"
-                  />
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
     </div>
   );
 }

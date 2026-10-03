@@ -3,7 +3,7 @@
 import { ShoppingBagIcon } from "lucide-react";
 import type { ReferenceCurrency } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
-import { MasterDetail } from "@/components/shared/MasterDetail";
+import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { PurchaseActions } from "@/components/purchases/PurchaseActions";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { formatDate, PAYMENT_METHOD_LABELS, PURCHASE_PAYMENT_STATUS_LABELS } from "@/lib/format";
@@ -31,6 +31,14 @@ export function PurchaseMasterDetail({
     <MasterDetail
       items={purchases}
       label="Compras"
+      renderRowMobile={(p) => (
+        <MobileRow
+          title={supplierOf(p)}
+          meta={`Nº ${p.controlNumber ?? "—"} · ${formatDate(p.createdAt)}${p.voided ? " · Anulada" : ""}`}
+          badge={statusBadge(p)}
+          amount={<span className="font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, p.totalCents)}</span>}
+        />
+      )}
       renderRow={(p) => (
         <>
           <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">

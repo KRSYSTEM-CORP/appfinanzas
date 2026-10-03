@@ -1,14 +1,11 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreVerticalIcon, PackageIcon, PackageSearchIcon, SearchIcon, XIcon } from "lucide-react";
+import { SearchIcon, XIcon } from "lucide-react";
 import type { Product } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { ActionMenu } from "@/components/ui/action-menu";
 import {
   Select,
   SelectContent,
@@ -24,18 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Price } from "@/components/money/Price";
-import { LowStockBadge } from "@/components/inventory/LowStockBadge";
 import { ProductMasterDetail } from "@/components/inventory/ProductMasterDetail";
 import { deleteProduct, setProductActive } from "@/lib/actions/products";
 import { isLowStock } from "@/lib/inventory";
@@ -237,174 +222,6 @@ export function ProductTable({
         onDelete={handleDelete}
         onClearFilters={clearFilters}
       />
-      <div className="md:hidden flex flex-col gap-4">
-      <div className="relative rounded-lg border bg-card shadow-xs overflow-hidden">
-      <div className="overflow-x-auto">
-        <Table className="table-cards product-cards">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead>Categoría</TableHead>
-              <TableHead>Precio</TableHead>
-              <TableHead>Stock</TableHead>
-              <TableHead>Estado</TableHead>
-              {canManage && <TableHead className="text-right">Acciones</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((p) => (
-              <TableRow key={p.id} className={!p.isActive ? "text-destructive" : undefined}>
-                <TableCell data-label="Nombre" data-cell="name" className="font-medium whitespace-normal">
-                  <div className="flex items-center gap-2">
-                    {p.imageDataUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.imageDataUrl} alt="" className="h-8 w-8 rounded object-cover border shrink-0" />
-                    ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded border bg-muted shrink-0">
-                        <PackageIcon className="size-4 text-muted-foreground/50" />
-                      </div>
-                    )}
-                    {p.name}
-                  </div>
-                </TableCell>
-                <TableCell data-label="SKU" data-cell="sku" className="text-muted-foreground">{p.sku ?? "—"}</TableCell>
-                <TableCell data-label="Categoría" data-cell="category" className="text-muted-foreground">{p.category ?? "—"}</TableCell>
-                <TableCell data-label="Precio" data-cell="price">
-                  <Price
-                    eurCents={p.priceCents}
-                    rate={rate}
-                    currencyCode={currencyCode}
-                    exchangeRateEnabled={exchangeRateEnabled}
-                    referenceCurrency={referenceCurrency}
-                  />
-                </TableCell>
-                <TableCell data-label="Stock" data-cell="stock">
-                  <div className="flex items-center gap-2">
-                    <span className="tabular-nums">{p.stock}</span>
-                    <LowStockBadge product={p} />
-                  </div>
-                </TableCell>
-                <TableCell data-label="Estado" data-cell="status">
-                  <Badge variant={p.isActive ? "success" : "destructive"}>
-                    {p.isActive ? "Activo" : "Inactivo"}
-                  </Badge>
-                </TableCell>
-                {canManage && (
-                  <TableCell data-label="Acciones" data-cell="actions" className="text-right">
-                    <div className="flex justify-end items-center gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        nativeButton={false}
-                        className="max-md:hidden"
-                        render={<Link href={`/inventory/${p.id}`} />}
-                      >
-                        Editar
-                      </Button>
-                      <ActionMenu
-                        trigger={
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            disabled={isPending}
-                            aria-label={`Más acciones para ${p.name}`}
-                          />
-                        }
-                        triggerChildren={<MoreVerticalIcon />}
-                        contentClassName="w-48"
-                      >
-                        <Link
-                          href={`/inventory/${p.id}`}
-                          className="md:hidden px-2.5 py-2 text-sm rounded-md text-left hover:bg-muted transition-colors"
-                        >
-                          Editar
-                        </Link>
-                        <button
-                          type="button"
-                          disabled={isPending}
-                          onClick={() => toggleActive(p.id, p.isActive)}
-                          className="px-2.5 py-2 text-sm rounded-md text-left hover:bg-muted transition-colors disabled:opacity-50"
-                        >
-                          {p.isActive ? "Desactivar" : "Activar"}
-                        </button>
-                        <Dialog>
-                          <DialogTrigger
-                            render={
-                              <button
-                                type="button"
-                                disabled={isPending}
-                                className="px-2.5 py-2 text-sm rounded-md text-left text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                              />
-                            }
-                          >
-                            Eliminar
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>¿Eliminar &quot;{p.name}&quot;?</DialogTitle>
-                              <DialogDescription>
-                                Esta acción es irreversible. El producto desaparecerá del inventario
-                                y del punto de venta. Las ventas y presupuestos ya generados con
-                                este producto no se ven afectados.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter>
-                              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                              <DialogClose
-                                render={<Button variant="destructive" disabled={isPending} />}
-                                onClick={() => handleDelete(p.id)}
-                              >
-                                Eliminar
-                              </DialogClose>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      </ActionMenu>
-                    </div>
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-            {filtered.length === 0 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={canManage ? 7 : 6} className="p-0">
-                  <div className="flex flex-col items-center gap-3 py-14 text-center">
-                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
-                      <PackageSearchIcon className="size-5" />
-                    </div>
-                    {products.length === 0 ? (
-                      <>
-                        <p className="text-sm font-medium">Aún no tienes productos</p>
-                        <p className="text-sm text-muted-foreground max-w-xs">
-                          Agrega tu primer producto para empezar a vender y controlar tu inventario.
-                        </p>
-                        {canManage && (
-                          <Button size="sm" nativeButton={false} render={<Link href="/inventory/new" />}>
-                            Nuevo producto
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm font-medium">Ningún producto coincide</p>
-                        <p className="text-sm text-muted-foreground max-w-xs">
-                          Prueba con otro término de búsqueda o quita algún filtro.
-                        </p>
-                        <Button type="button" size="sm" variant="outline" onClick={clearFilters}>
-                          Limpiar filtros
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      </div>
-      </div>
     </div>
   );
 }

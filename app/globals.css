@@ -489,3 +489,16 @@
   .product-cards td[data-cell="actions"] { grid-area: actions; }
   .product-cards td[data-cell="actions"] > div { justify-content: flex-end; }
 }
+
+/* Bottom sheet used by MasterDetail on phones: slides up, backdrop fades in.
+   Closing is instant on purpose (the system responding should feel quick). */
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@keyframes sheet-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.sheet-in { animation: sheet-in 260ms var(--ease-ui) both; }
+.sheet-fade { animation: sheet-fade 180ms ease-out both; }

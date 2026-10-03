@@ -4,7 +4,7 @@ import { ReceiptTextIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
-import { MasterDetail } from "@/components/shared/MasterDetail";
+import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { PaymentMethodCell } from "@/components/reports/PaymentMethodCell";
 import { SaleActions } from "@/components/reports/SaleActions";
 import { SaleDocumentButtons } from "@/components/reports/SaleDocumentButtons";
@@ -56,6 +56,23 @@ export function SalesMasterDetail({
     <MasterDetail
       items={sales}
       label="Ventas"
+      renderRowMobile={(s) => (
+        <MobileRow
+          title={nameOf(s)}
+          meta={`${formatDateSlash(s.createdAt)}${showSellerColumn && s.sellerName ? ` · ${s.sellerName}` : ""}${s.voided ? " · Anulada" : ""}`}
+          badge={statusBadge(s)}
+          amount={
+            <Price
+              eurCents={s.totalCents}
+              rate={totalRate(s)}
+              currencyCode={localCurrencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+              className="items-end"
+            />
+          }
+        />
+      )}
       empty={empty}
       renderRow={(s) => (
         <>

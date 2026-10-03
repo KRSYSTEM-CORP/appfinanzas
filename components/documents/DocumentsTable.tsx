@@ -4,17 +4,9 @@ import { useMemo, useState } from "react";
 import { FileTextIcon, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Price } from "@/components/money/Price";
-import { MasterDetail } from "@/components/shared/MasterDetail";
+import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { SaleDocumentButtons } from "@/components/reports/SaleDocumentButtons";
 import { QuoteDocumentButton } from "@/components/quotes/QuoteDocumentButton";
 import { PAYMENT_STATUS_LABELS, QUOTE_STATUS_LABELS, formatDate } from "@/lib/format";
@@ -170,6 +162,18 @@ export function DocumentsTable({
         <MasterDetail
           items={filteredQuotes}
           label="Presupuestos"
+          renderRowMobile={(quote) => (
+            <MobileRow
+              title={quote.customerFirstName ? `${quote.customerFirstName} ${quote.customerLastName ?? ""}`.trim() : "—"}
+              meta={`Nº ${quote.controlNumber ?? "—"} · ${formatDate(quote.createdAt)}`}
+              badge={
+                <Badge variant={quote.status === "CONVERTED" ? "success" : quote.status === "LOST" ? "destructive" : "outline"}>
+                  {QUOTE_STATUS_LABELS[quote.status]}
+                </Badge>
+              }
+              amount={<span className="font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, quote.totalCents)}</span>}
+            />
+          )}
           renderRow={(quote) => (
             <>
               <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
@@ -238,67 +242,33 @@ export function DocumentsTable({
             </div>
           }
         />
-        <div className="md:hidden rounded-lg border bg-card shadow-xs overflow-x-auto">
-          <Table className="table-cards">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Nº control</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead className="text-center">Estado</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-center">Documento</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredQuotes.map((quote) => (
-                <TableRow key={quote.id}>
-                  <TableCell data-label="Fecha">{formatDate(quote.createdAt)}</TableCell>
-                  <TableCell data-label="Nº control">{quote.controlNumber ?? "—"}</TableCell>
-                  <TableCell data-label="Cliente">
-                    {quote.customerFirstName
-                      ? `${quote.customerFirstName} ${quote.customerLastName ?? ""}`.trim()
-                      : "—"}
-                  </TableCell>
-                  <TableCell data-label="Estado" className="text-center">
-                    <Badge variant={quote.status === "CONVERTED" ? "success" : quote.status === "LOST" ? "destructive" : "outline"}>
-                      {QUOTE_STATUS_LABELS[quote.status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell data-label="Total" className="text-right">{formatCurrencyCents(referenceCurrency, quote.totalCents)}</TableCell>
-                  <TableCell data-label="Documento" className="text-center">
-                    <QuoteDocumentButton
-                      quoteId={quote.id}
-                      company={company}
-                      rate={currentRate}
-                      currencyCode={currencyCode}
-                      exchangeRateEnabled={exchangeRateEnabled}
-                      referenceCurrency={referenceCurrency}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredQuotes.length === 0 && (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="p-0">
-                    <div className="flex flex-col items-center gap-3 py-14 text-center">
-                      <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
-                        <FileTextIcon className="size-5" />
-                      </div>
-                      <p className="text-sm text-muted-foreground">No se encontraron presupuestos.</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
         </>
       ) : (
         <>
         <MasterDetail
           items={filteredSales}
           label="Documentos"
+          renderRowMobile={(sale) => (
+            <MobileRow
+              title={sale.customerFirstName ? `${sale.customerFirstName} ${sale.customerLastName ?? ""}`.trim() : "—"}
+              meta={`Nº ${controlNumberLabel(sale)} · ${formatDate(sale.createdAt)}`}
+              badge={
+                <Badge variant={sale.paymentStatus === "CREDIT" ? "destructive" : "success"}>
+                  {sale.paymentStatus === "CREDIT" ? PAYMENT_STATUS_LABELS.CREDIT : PAYMENT_STATUS_LABELS.PAID}
+                </Badge>
+              }
+              amount={
+                <Price
+                  eurCents={sale.totalCents}
+                  rate={sale.paidExchangeRate ?? sale.exchangeRate ?? currentRate}
+                  currencyCode={currencyCode}
+                  exchangeRateEnabled={exchangeRateEnabled}
+                  referenceCurrency={referenceCurrency}
+                  className="items-end"
+                />
+              }
+            />
+          )}
           renderRow={(sale) => (
             <>
               <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
@@ -388,74 +358,6 @@ export function DocumentsTable({
             </div>
           }
         />
-        <div className="md:hidden rounded-lg border bg-card shadow-xs overflow-x-auto">
-          <Table className="table-cards">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Nº control</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Vendedor</TableHead>
-                <TableHead className="text-center">Estado</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-center">Documentos</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredSales.map((sale) => (
-                <TableRow key={sale.id}>
-                  <TableCell data-label="Fecha">{formatDate(sale.createdAt)}</TableCell>
-                  <TableCell data-label="Nº control">{controlNumberLabel(sale)}</TableCell>
-                  <TableCell data-label="Cliente">
-                    {sale.customerFirstName
-                      ? `${sale.customerFirstName} ${sale.customerLastName ?? ""}`.trim()
-                      : "—"}
-                  </TableCell>
-                  <TableCell data-label="Vendedor" className="text-muted-foreground">{sale.sellerName ?? "—"}</TableCell>
-                  <TableCell data-label="Estado" className="text-center">
-                    {sale.paymentStatus === "CREDIT" ? (
-                      <Badge variant="destructive">{PAYMENT_STATUS_LABELS.CREDIT}</Badge>
-                    ) : (
-                      <Badge variant="success">{PAYMENT_STATUS_LABELS.PAID}</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell data-label="Total" className="text-right">
-                    <Price
-                      eurCents={sale.totalCents}
-                      rate={sale.paidExchangeRate ?? sale.exchangeRate ?? currentRate}
-                      currencyCode={currencyCode}
-                      exchangeRateEnabled={exchangeRateEnabled}
-                      referenceCurrency={referenceCurrency}
-                    />
-                  </TableCell>
-                  <TableCell data-label="Documentos" className="text-center">
-                    <SaleDocumentButtons
-                      sale={sale}
-                      company={company}
-                      currentRate={currentRate}
-                      currencyCode={currencyCode}
-                      exchangeRateEnabled={exchangeRateEnabled}
-                      referenceCurrency={referenceCurrency}
-                      printPaperSize={printPaperSize}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredSales.length === 0 && (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={7} className="p-0">
-                    <div className="flex flex-col items-center gap-3 py-14 text-center">
-                      <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
-                        <FileTextIcon className="size-5" />
-                      </div>
-                      <p className="text-sm text-muted-foreground">No se encontraron documentos.</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
         </>
       )}
     </div>

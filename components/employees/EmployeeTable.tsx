@@ -10,14 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+
 import {
   Dialog,
   DialogClose,
@@ -39,7 +32,7 @@ import {
   deleteEmployee,
   type EmployeeListItem,
 } from "@/lib/actions/employees";
-import { MasterDetail } from "@/components/shared/MasterDetail";
+import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 
 const ROLE_LABELS: Record<Role, string> = { GERENTE: "Gerente", VENDEDOR: "Vendedor" };
 const STATUS_LABELS: Record<UserStatus, string> = {
@@ -229,6 +222,13 @@ export function EmployeeTable({
       <MasterDetail
         items={employees}
         label="Empleados"
+        renderRowMobile={(u) => (
+          <MobileRow
+            title={`${displayName(u)}${u.id === currentUserId ? " (tú)" : ""}`}
+            meta={`${ROLE_LABELS[u.role]} · ${u.branchId ? (branches.find((b) => b.id === u.branchId)?.name ?? "—") : "Todas las sucursales"}`}
+            badge={<Badge variant={u.status === "ACTIVE" ? "success" : "destructive"}>{STATUS_LABELS[u.status]}</Badge>}
+          />
+        )}
         renderRow={(u) => (
           <>
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
@@ -307,41 +307,6 @@ export function EmployeeTable({
           </div>
         }
       />
-      <div className="md:hidden rounded-lg border bg-card shadow-xs overflow-x-auto">
-        <Table className="table-cards">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Rol</TableHead>
-              <TableHead>Sucursal</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Desde</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {employees.map((u) => (
-              <EmployeeRow key={u.id} user={u} currentUserId={currentUserId} branches={branches} />
-            ))}
-            {employees.length === 0 && (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={6} className="p-0">
-                  <div className="flex flex-col items-center gap-3 py-14 text-center">
-                    <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
-                      <UsersRoundIcon className="size-5" />
-                    </div>
-                    <p className="text-sm font-medium">Aún no tienes empleados</p>
-                    <p className="text-sm text-muted-foreground max-w-xs">
-                      Crea el primer perfil para que tu equipo pueda iniciar sesión con el código de
-                      empresa.
-                    </p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
     </div>
   );
 }
@@ -563,39 +528,4 @@ function EmployeeActions({
   );
 }
 
-function EmployeeRow({
-  user: u,
-  currentUserId,
-  branches,
-}: {
-  user: EmployeeListItem;
-  currentUserId: string;
-  branches: Branch[];
-}) {
-  return (
-    <TableRow>
-      <TableCell data-label="Nombre" className="font-medium">
-        {displayName(u)}
-        {u.id === currentUserId && (
-          <Badge variant="outline" className="ml-2">
-            Tú
-          </Badge>
-        )}
-      </TableCell>
-      <TableCell data-label="Rol">{ROLE_LABELS[u.role]}</TableCell>
-      <TableCell data-label="Sucursal" className="text-muted-foreground text-sm">
-        {u.branchId ? branches.find((b) => b.id === u.branchId)?.name ?? "—" : "Todas"}
-      </TableCell>
-      <TableCell data-label="Estado">
-        <Badge variant={u.status === "ACTIVE" ? "success" : "destructive"}>
-          {STATUS_LABELS[u.status]}
-        </Badge>
-      </TableCell>
-      <TableCell data-label="Desde" className="text-muted-foreground text-sm">{formatDate(u.createdAt)}</TableCell>
-      <TableCell data-label="Acciones" className="text-right">
-        <EmployeeActions user={u} currentUserId={currentUserId} branches={branches} />
-      </TableCell>
-    </TableRow>
-  );
-}
 
