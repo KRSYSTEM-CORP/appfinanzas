@@ -12,6 +12,11 @@ const sections = [
     description: "Cuánto vendió cada vendedor, sus documentos y su comisión.",
   },
   {
+    href: "/accounting/receivables",
+    title: "Cuentas por cobrar",
+    description: "Ventas a crédito con saldo pendiente y abonos por registrar.",
+  },
+  {
     href: "/suppliers",
     title: "Proveedores",
     description: "Directorio de proveedores y sus datos de contacto.",
