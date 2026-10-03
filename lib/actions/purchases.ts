@@ -529,11 +529,15 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
   return { created, failed: failed.sort((a, b) => a.row - b.row) };
 }
 
-export async function listRecentPurchases(limit = 100) {
+export async function listRecentPurchases(limit = 100, windows?: { start: Date; end: Date }[]) {
   const { companyId, branchId } = await requireManager();
   const purchases = await withTenant(companyId, (tx) =>
     tx.purchase.findMany({
-      where: { companyId, ...(branchId ? { branchId } : {}) },
+      where: {
+        companyId,
+        ...(branchId ? { branchId } : {}),
+        ...(windows ? { OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })) } : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: limit,
       include: { items: true, supplier: true, payments: true },

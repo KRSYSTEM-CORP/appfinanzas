@@ -129,7 +129,19 @@ export function ProductMasterDetail({
       renderRowMobile={(p) => (
         <MobileRow
           title={<span className={p.isActive ? "" : "text-destructive"}>{p.name}</span>}
-          meta={`${p.category ?? "Sin categoría"}${p.trackStock ? ` · Stock ${p.stock}` : ""}`}
+          meta={
+            <>
+              {p.category ?? "Sin categoría"}
+              {p.trackStock && (
+                <>
+                  {" · "}
+                  <span className={`font-medium tabular-nums ${isLowStock(p) ? "text-warning" : "text-success"}`}>
+                    Stock {p.stock}
+                  </span>
+                </>
+              )}
+            </>
+          }
           badge={
             !p.isActive ? (
               <Badge variant="destructive">Inactivo</Badge>

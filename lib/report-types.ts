@@ -154,6 +154,14 @@ export function comparisonWindows(
   };
 }
 
+// Every month of the current year in the shop time zone — the default for
+// screens that track open balances (Compras, Cuentas por cobrar), where a
+// current-month default would hide what is still owed from earlier months.
+export function wholeYearSelection(): DateRangeSelection {
+  const { year } = zonedDateParts(new Date(), SHOP_TIME_ZONE);
+  return { kind: "months", year, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] };
+}
+
 const PRESET_VALUES = new Set(["today", "7d", "month"]);
 
 // Parses `?range=...` (+`&year=`/`&months=` for the "months" kind) back into

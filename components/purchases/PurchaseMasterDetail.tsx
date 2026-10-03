@@ -120,9 +120,9 @@ export function PurchaseMasterDetail({
           <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
             <ShoppingBagIcon className="size-5" />
           </div>
-          <p className="text-sm font-medium">Aún no tienes compras</p>
+          <p className="text-sm font-medium">No hay compras en este período</p>
           <p className="text-sm text-muted-foreground max-w-xs">
-            Registra tu primera compra a un proveedor para aumentar el stock.
+            Prueba con otro rango de fechas, o registra una compra a un proveedor para aumentar el stock.
           </p>
         </div>
       }
