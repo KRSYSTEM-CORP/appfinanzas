@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { Price } from "@/components/money/Price";
 import { LowStockBadge } from "@/components/inventory/LowStockBadge";
+import { ProductMasterDetail } from "@/components/inventory/ProductMasterDetail";
 import { deleteProduct, setProductActive } from "@/lib/actions/products";
 import { isLowStock } from "@/lib/inventory";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
@@ -223,7 +224,20 @@ export function ProductTable({
         </span>
       </div>
 
-      <p className="sm:hidden text-xs text-muted-foreground px-1">Desliza la tabla para ver más →</p>
+      <ProductMasterDetail
+        products={filtered}
+        totalCount={products.length}
+        rate={rate}
+        currencyCode={currencyCode}
+        exchangeRateEnabled={exchangeRateEnabled}
+        referenceCurrency={referenceCurrency}
+        canManage={canManage}
+        isPending={isPending}
+        onToggleActive={toggleActive}
+        onDelete={handleDelete}
+        onClearFilters={clearFilters}
+      />
+      <div className="md:hidden flex flex-col gap-4">
       <div className="relative rounded-lg border bg-card shadow-xs overflow-hidden">
       <div className="overflow-x-auto">
         <Table className="table-cards product-cards">
@@ -388,6 +402,7 @@ export function ProductTable({
             )}
           </TableBody>
         </Table>
+      </div>
       </div>
       </div>
     </div>
