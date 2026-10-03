@@ -169,7 +169,7 @@ export function ProductTable({
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative max-w-sm flex-1">
+        <div className="relative w-full max-w-sm sm:w-auto sm:flex-1">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             type="search"
