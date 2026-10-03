@@ -1,19 +1,10 @@
 import { BookOpenIcon, PackageIcon, PercentIcon, ReceiptTextIcon } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/EmptyState";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { StatCard } from "@/components/reports/StatCard";
+import { PurchasesBookList, SalesBookList } from "@/components/finance/TaxBookLists";
 import { TaxBookExportButton } from "@/components/finance/TaxBookExportButton";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { formatCurrencyCents } from "@/lib/currencies";
-import { formatDate } from "@/lib/format";
 import { getSalesTaxBook, getPurchasesTaxBook } from "@/lib/actions/tax-book";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { parseDateRangeSelection } from "@/lib/report-types";
@@ -101,132 +92,25 @@ export default async function TaxBookPage({
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Libro de Ventas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Nº control</TableHead>
-                  <TableHead>Nº factura</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>RIF/Cédula</TableHead>
-                  <TableHead className="text-right">Base imponible</TableHead>
-                  <TableHead className="text-right">IVA</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sales.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell>{formatDate(s.createdAt)}</TableCell>
-                    <TableCell>{s.controlNumber ?? "—"}</TableCell>
-                    <TableCell>{s.invoiceNumber ?? "—"}</TableCell>
-                    <TableCell>{`${s.customerFirstName ?? ""} ${s.customerLastName ?? ""}`.trim() || "—"}</TableCell>
-                    <TableCell>{s.customerRif ?? "—"}</TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrencyCents(referenceCurrency, s.baseImponibleCents)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrencyCents(referenceCurrency, s.taxCents)}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrencyCents(referenceCurrency, s.totalCents)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {sales.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="p-0">
-                      <EmptyState icon={BookOpenIcon} title="Sin ventas en este período." className="py-10" />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-              {sales.length > 0 && (
-                <tfoot>
-                  <TableRow className="font-semibold">
-                    <TableCell colSpan={5}>Totales</TableCell>
-                    <TableCell className="text-right">{formatCurrencyCents(referenceCurrency, salesTotals.base)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyCents(referenceCurrency, salesTotals.tax)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyCents(referenceCurrency, salesTotals.total)}</TableCell>
-                  </TableRow>
-                </tfoot>
-              )}
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <section className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold">Libro de Ventas</h2>
+        <SalesBookList
+          sales={sales}
+          referenceCurrency={referenceCurrency}
+          totals={salesTotals}
+          empty={<EmptyState icon={BookOpenIcon} title="Sin ventas en este período." className="py-10" />}
+        />
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Libro de Compras</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Nº control</TableHead>
-                  <TableHead>Factura proveedor</TableHead>
-                  <TableHead>Proveedor</TableHead>
-                  <TableHead>RIF</TableHead>
-                  <TableHead className="text-right">Base imponible</TableHead>
-                  <TableHead className="text-right">IVA</TableHead>
-                  <TableHead className="text-right">IVA retenido</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {purchases.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell>{formatDate(p.createdAt)}</TableCell>
-                    <TableCell>{p.controlNumber ?? "—"}</TableCell>
-                    <TableCell>{p.supplierInvoiceNo ?? "—"}</TableCell>
-                    <TableCell>{p.supplier?.name ?? p.manualSupplierName ?? "—"}</TableCell>
-                    <TableCell>{p.supplier?.rif ?? "—"}</TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrencyCents(referenceCurrency, p.baseImponibleCents)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrencyCents(referenceCurrency, p.taxCents)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrencyCents(referenceCurrency, p.ivaRetainedCents)}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrencyCents(referenceCurrency, p.totalCents)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {purchases.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} className="p-0">
-                      <EmptyState icon={BookOpenIcon} title="Sin compras en este período." className="py-10" />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-              {purchases.length > 0 && (
-                <tfoot>
-                  <TableRow className="font-semibold">
-                    <TableCell colSpan={5}>Totales</TableCell>
-                    <TableCell className="text-right">{formatCurrencyCents(referenceCurrency, purchasesTotals.base)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyCents(referenceCurrency, purchasesTotals.tax)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyCents(referenceCurrency, purchasesTotals.retained)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyCents(referenceCurrency, purchasesTotals.total)}</TableCell>
-                  </TableRow>
-                </tfoot>
-              )}
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <section className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold">Libro de Compras</h2>
+        <PurchasesBookList
+          purchases={purchases}
+          referenceCurrency={referenceCurrency}
+          totals={purchasesTotals}
+          empty={<EmptyState icon={BookOpenIcon} title="Sin compras en este período." className="py-10" />}
+        />
+      </section>
     </div>
   );
 }

@@ -22,6 +22,7 @@ export function MasterDetail<T extends { id: string }>({
   renderDetail,
   renderLead,
   header,
+  footer,
   empty,
 }: {
   items: T[];
@@ -36,6 +37,8 @@ export function MasterDetail<T extends { id: string }>({
   renderLead?: (item: T) => ReactNode;
   // Optional strip above the list (e.g. "select all").
   header?: ReactNode;
+  // Optional strip below the list (e.g. period totals).
+  footer?: ReactNode;
   empty: ReactNode;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -86,6 +89,7 @@ export function MasterDetail<T extends { id: string }>({
             </div>
           ))}
         </div>
+        {footer}
       </div>
 
       {sheetItem && createPortal(
@@ -143,6 +147,7 @@ export function MasterDetail<T extends { id: string }>({
               );
             })}
           </div>
+          {footer}
         </div>
         <aside className="sticky top-4 flex flex-col gap-4 rounded-lg border bg-card p-5 shadow-xs">
           {renderDetail(selected)}
