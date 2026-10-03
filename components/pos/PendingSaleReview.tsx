@@ -35,8 +35,12 @@ export function PendingSaleReview() {
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    // First load; state is only set from the promise callback.
+    listPendingSales().then((all) => {
+      setPending(all.filter((s) => s.lastError));
+      setLoading(false);
+    });
+  }, []);
 
   async function retry(localId: string) {
     setSyncingId(localId);

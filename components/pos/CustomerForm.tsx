@@ -36,6 +36,8 @@ export function CustomerForm({
   const [, startSearch] = useTransition();
   const requestId = useRef(0);
   const online = useOnlineStatus();
+  // Offline there is nothing to suggest, whatever was fetched earlier.
+  const visibleSuggestions = online ? suggestions : [];
 
   useEffect(() => {
     const query = firstName.trim();
@@ -45,10 +47,7 @@ export function CustomerForm({
     // (a fetch under the hood); this app has no error boundary anywhere, so
     // an uncaught rejection here could otherwise blank the whole checkout
     // screen at the worst possible moment.
-    if (query.length < 2 || !online) {
-      setSuggestions([]);
-      return;
-    }
+    if (query.length < 2 || !online) return;
     const id = ++requestId.current;
     const timeout = setTimeout(() => {
       startSearch(async () => {
@@ -106,16 +105,20 @@ export function CustomerForm({
           <Input
             id="firstName"
             value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            onFocus={() => setShowSuggestions(suggestions.length > 0)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setFirstName(value);
+              if (value.trim().length < 2) setSuggestions([]);
+            }}
+            onFocus={() => setShowSuggestions(visibleSuggestions.length > 0)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             required
             autoFocus
             autoComplete="off"
           />
-          {showSuggestions && suggestions.length > 0 && (
+          {showSuggestions && visibleSuggestions.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-1 z-10 rounded-md border bg-popover shadow-md overflow-hidden">
-              {suggestions.map((c) => (
+              {visibleSuggestions.map((c) => (
                 <button
                   type="button"
                   key={c.id}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, Supplier, TaxCategory } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PaymentSplitBuilder, defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
+import { useDefaultPaymentRow } from "@/components/payments/useDefaultPaymentRow";
 import { createPurchase } from "@/lib/actions/purchases";
 import { quickCreateProduct } from "@/lib/actions/products";
 import { TAX_CATEGORY_LABELS, decomposeTax, rateForCategory } from "@/lib/tax";
@@ -230,11 +231,7 @@ export function PurchaseForm({
 
   // Keep the single default payment row in sync with the purchase total as
   // rows/costs are edited, same pattern as the POS cart.
-  useEffect(() => {
-    setPaymentRows((prev) =>
-      prev.length === 1 ? defaultPaymentSplitRows(amountOwedCents, rate, exchangeRateEnabled) : prev
-    );
-  }, [amountOwedCents, rate, exchangeRateEnabled]);
+  useDefaultPaymentRow(amountOwedCents, rate, exchangeRateEnabled, setPaymentRows);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -334,7 +331,7 @@ export function PurchaseForm({
               </Select>
               {suppliers.length === 0 && (
                 <p className="text-xs text-destructive">
-                  No tienes proveedores registrados — crea uno o usa "Proveedor manual".
+                  No tienes proveedores registrados — crea uno o usa &quot;Proveedor manual&quot;.
                 </p>
               )}
             </>

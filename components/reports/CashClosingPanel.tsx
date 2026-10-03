@@ -45,17 +45,27 @@ export function CashClosingPanel({
   const [isPending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
 
+  // A parent re-render with a freshly fetched summary for the same date (e.g.
+  // after switching branch in the NavBar) must resync local state. Adjusted
+  // while rendering, so there is no frame with the stale summary.
+  const [syncedInitial, setSyncedInitial] = useState(initialSummary);
+  if (syncedInitial !== initialSummary) {
+    setSyncedInitial(initialSummary);
+    if (date === initialSummary.date) setSummary(initialSummary);
+  }
+
+  function handleDateChange(next: string) {
+    setDate(next);
+    if (next === initialSummary.date) setSummary(initialSummary);
+  }
+
+  // Any other date is fetched from the server (also re-fetched when the parent
+  // summary changes, e.g. after a branch switch).
   useEffect(() => {
-    if (date === initialSummary.date) {
-      setSummary(initialSummary);
-      return;
-    }
+    if (date === initialSummary.date) return;
     startTransition(async () => {
       setSummary(await getDailyClosingSummary(date));
     });
-    // initialSummary is intentionally in the deps: a parent re-render with a
-    // freshly fetched summary for the same date (e.g. after switching branch
-    // in the NavBar) must resync local state, not just a `date` change.
   }, [date, initialSummary]);
 
   async function buildPdf(paperSize?: PrintPaperSize) {
@@ -102,7 +112,7 @@ export function CashClosingPanel({
           type="date"
           value={date}
           max={todayStr}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(e) => handleDateChange(e.target.value)}
           className="max-w-[180px]"
         />
         {summary.closed && <Badge variant="secondary">Cerrada</Badge>}

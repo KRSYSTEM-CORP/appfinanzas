@@ -35,16 +35,15 @@ export function ShareDialog({
   const [open, setOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [url, setUrl] = useState("");
+  // The dialog only opens after a click, so the origin is always available.
+  const url = open ? `${window.location.origin}${path}` : "";
 
   useEffect(() => {
     if (!open) return;
-    const fullUrl = `${window.location.origin}${path}`;
-    setUrl(fullUrl);
-    QRCode.toDataURL(fullUrl, { margin: 1, width: 220 })
+    QRCode.toDataURL(url, { margin: 1, width: 220 })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(null));
-  }, [open, path]);
+  }, [open, url]);
 
   async function handleCopy() {
     await navigator.clipboard.writeText(url);

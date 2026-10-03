@@ -30,9 +30,13 @@ export function BarcodeScannerDialog({
   const controlsRef = useRef<IScannerControls | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (next) setError(null);
+  }
+
   useEffect(() => {
     if (!open) return;
-    setError(null);
     const reader = new BrowserMultiFormatReader();
     let cancelled = false;
 
@@ -58,7 +62,7 @@ export function BarcodeScannerDialog({
   }, [open, onDetected]);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
         {triggerLabel}
       </DialogTrigger>

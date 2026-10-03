@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { ChevronDownIcon, SparklesIcon } from "lucide-react";
 
 // Bump the suffix (v1 -> v2) if the content changes enough that returning
@@ -20,16 +20,20 @@ const STEPS = [
 // the one thing a returning user actually came here to do: sign in. It
 // still teaches a brand-new visitor what the product is, one tap away.
 export function WelcomeModal() {
-  const [dismissed, setDismissed] = useState(true);
+  // Stored flag read as an external store: dismissed on the server (so the
+  // box never flashes for returning visitors), the real value once hydrated.
+  const storedDismissed = useSyncExternalStore(
+    () => () => {},
+    () => Boolean(localStorage.getItem(DISMISS_KEY)),
+    () => true
+  );
+  const [justDismissed, setJustDismissed] = useState(false);
+  const dismissed = storedDismissed || justDismissed;
   const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    setDismissed(Boolean(localStorage.getItem(DISMISS_KEY)));
-  }, []);
 
   function dismiss() {
     localStorage.setItem(DISMISS_KEY, "1");
-    setDismissed(true);
+    setJustDismissed(true);
   }
 
   if (dismissed) return null;

@@ -30,16 +30,20 @@ export function OfflineSyncBanner({ canManage = false }: { canManage?: boolean }
   }, [refresh]);
 
   useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 5000);
+    // Load from the local queue; state is only set from the promise callback.
+    const load = () => listPendingSales().then(setPending);
+    load();
+    const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, []);
 
   useEffect(() => {
-    if (online) sync();
-    // Only when connectivity flips back on — sync() itself is stable via useCallback.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online]);
+    if (!online) return;
+    // Deferred one tick so the "syncing" state isn't set from inside the effect
+    // body. Only when connectivity flips back on — sync() is stable.
+    const timer = setTimeout(sync, 0);
+    return () => clearTimeout(timer);
+  }, [online, sync]);
 
   if (!online) {
     return (

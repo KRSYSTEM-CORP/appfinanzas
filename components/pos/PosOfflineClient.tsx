@@ -9,6 +9,7 @@ import { Cart } from "@/components/pos/Cart";
 import { ReceiptView } from "@/components/pos/ReceiptView";
 import { OfflineSyncBanner } from "@/components/pos/OfflineSyncBanner";
 import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
+import { useDefaultPaymentRow } from "@/components/payments/useDefaultPaymentRow";
 import { computeItemDiscountCents } from "@/lib/discount";
 import { queueSale, type PendingSaleInput } from "@/lib/offline/sync";
 import { buildPendingReceipt } from "@/lib/offline/pending-receipt";
@@ -48,12 +49,11 @@ export function PosOfflineClient() {
   const [snapshot, setSnapshot] = useState<CatalogSnapshot | null>(null);
 
   useEffect(() => {
+    // Everything is set from the promise callback (even when there is no saved
+    // branch) so state is only ever updated asynchronously, never inside the
+    // effect body itself.
     const last = readLastBranch();
-    if (!last) {
-      setLoading(false);
-      return;
-    }
-    getCatalogSnapshot(last.branchId).then((snap) => {
+    Promise.resolve(last ? getCatalogSnapshot(last.branchId) : undefined).then((snap) => {
       setSnapshot(snap ?? null);
       setLoading(false);
     });
@@ -117,12 +117,7 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
   // applying the exoneration.
   const exonerated = total <= 0;
 
-  useEffect(() => {
-    setPaymentRows((prev) =>
-      prev.length === 1 ? defaultPaymentSplitRows(total, snapshot.rate, snapshot.exchangeRateEnabled) : prev
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [total]);
+  useDefaultPaymentRow(total, snapshot.rate, snapshot.exchangeRateEnabled, setPaymentRows);
 
   function continueFromCustomer(info: CustomerInfo) {
     setCustomer(info);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { PrintPaperSize } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -64,21 +64,24 @@ export function PrintDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [paperSize, setPaperSize] = useState<PrintPaperSize>(defaultPaperSize);
-  const [mounted, setMounted] = useState(false);
+  // False on the server and during hydration, true once on the client.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const thermal = isThermal(paperSize);
 
-  useEffect(() => setMounted(true), []);
-
   useEffect(() => {
     if (!open || thermal) return;
     let cancelled = false;
-    setPdfError(null);
     buildPdfBlob(paperSize)
       .then((blob) => {
         if (cancelled) return;
+        setPdfError(null);
         setPdfUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return URL.createObjectURL(blob);
@@ -100,14 +103,17 @@ export function PrintDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!open) {
+  // Release the generated PDF as soon as the dialog closes.
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    setPdfError(null);
+    if (!next) {
       setPdfUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
       });
     }
-  }, [open]);
+  }
 
   function handlePrint() {
     if (thermal) {
@@ -119,7 +125,7 @@ export function PrintDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogTrigger render={<Button size="sm" variant="outline" />}>{triggerLabel}</DialogTrigger>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>

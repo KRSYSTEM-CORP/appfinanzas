@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, PaymentStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { ProductPicker } from "@/components/pos/ProductPicker";
 import { Cart, type CartLine } from "@/components/pos/Cart";
 import { ReceiptView } from "@/components/pos/ReceiptView";
 import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
+import { useDefaultPaymentRow } from "@/components/payments/useDefaultPaymentRow";
 import { completeSale, getSaleReceipt } from "@/lib/actions/sales";
 import type { QuoteForConversion } from "@/lib/actions/quotes";
 import { computeItemDiscountCents } from "@/lib/discount";
@@ -169,9 +170,7 @@ export function PosClient({
   // products are added/removed, so the common single-method case never
   // requires the user to manually retype the amount. Once a second row is
   // added (an intentional split), amounts are fully user-controlled.
-  useEffect(() => {
-    setPaymentRows((prev) => (prev.length === 1 ? defaultPaymentSplitRows(total, rate, exchangeRateEnabled) : prev));
-  }, [total, rate, exchangeRateEnabled]);
+  useDefaultPaymentRow(total, rate, exchangeRateEnabled, setPaymentRows);
 
   function addProduct(product: Product) {
     setError(null);
