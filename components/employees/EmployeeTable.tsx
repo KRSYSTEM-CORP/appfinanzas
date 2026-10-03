@@ -39,6 +39,7 @@ import {
   deleteEmployee,
   type EmployeeListItem,
 } from "@/lib/actions/employees";
+import { MasterDetail } from "@/components/shared/MasterDetail";
 
 const ROLE_LABELS: Record<Role, string> = { GERENTE: "Gerente", VENDEDOR: "Vendedor" };
 const STATUS_LABELS: Record<UserStatus, string> = {
@@ -46,6 +47,10 @@ const STATUS_LABELS: Record<UserStatus, string> = {
   ACTIVE: "Activo",
   SUSPENDED: "Suspendido",
 };
+
+function initialsOf(name: string): string {
+  return name.split(/\s+/).map((w) => w[0] ?? "").slice(0, 2).join("").toUpperCase();
+}
 
 function displayName(u: Pick<EmployeeListItem, "firstName" | "lastName" | "email">): string {
   return u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email;
@@ -221,7 +226,88 @@ export function EmployeeTable({
         </Dialog>
       </div>
 
-      <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
+      <MasterDetail
+        items={employees}
+        label="Empleados"
+        renderRow={(u) => (
+          <>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+              {initialsOf(displayName(u))}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">
+                {displayName(u)}
+                {u.id === currentUserId && (
+                  <Badge variant="outline" className="ml-2">
+                    Tú
+                  </Badge>
+                )}
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {ROLE_LABELS[u.role]} · {u.branchId ? (branches.find((b) => b.id === u.branchId)?.name ?? "—") : "Todas las sucursales"}
+              </span>
+            </span>
+            <Badge variant={u.status === "ACTIVE" ? "success" : "destructive"}>{STATUS_LABELS[u.status]}</Badge>
+          </>
+        )}
+        renderDetail={(u) => (
+          <>
+            <div className="flex items-center gap-3">
+              <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+                {initialsOf(displayName(u))}
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold leading-tight">
+                  {displayName(u)}
+                  {u.id === currentUserId && (
+                    <Badge variant="outline" className="ml-2 align-middle">
+                      Tú
+                    </Badge>
+                  )}
+                </h3>
+                <p className="truncate text-sm text-muted-foreground">{u.email}</p>
+              </div>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">Rol</dt>
+                <dd className="font-medium">{ROLE_LABELS[u.role]}</dd>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">Estado</dt>
+                <dd>
+                  <Badge variant={u.status === "ACTIVE" ? "success" : "destructive"}>{STATUS_LABELS[u.status]}</Badge>
+                </dd>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">Sucursal</dt>
+                <dd className="font-medium">
+                  {u.branchId ? (branches.find((b) => b.id === u.branchId)?.name ?? "—") : "Todas"}
+                </dd>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">Desde</dt>
+                <dd className="font-medium">{formatDate(u.createdAt)}</dd>
+              </div>
+            </dl>
+            <div className="border-t pt-4 [&_.justify-end]:justify-start text-left">
+              <EmployeeActions user={u} currentUserId={currentUserId} branches={branches} />
+            </div>
+          </>
+        )}
+        empty={
+          <div className="flex flex-col items-center gap-3 rounded-lg border bg-card py-14 text-center shadow-xs">
+            <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+              <UsersRoundIcon className="size-5" />
+            </div>
+            <p className="text-sm font-medium">Aún no tienes empleados</p>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              Crea el primer perfil para que tu equipo pueda iniciar sesión con el código de empresa.
+            </p>
+          </div>
+        }
+      />
+      <div className="md:hidden rounded-lg border bg-card shadow-xs overflow-x-auto">
         <Table className="table-cards">
           <TableHeader>
             <TableRow>
@@ -260,7 +346,7 @@ export function EmployeeTable({
   );
 }
 
-function EmployeeRow({
+function EmployeeActions({
   user: u,
   currentUserId,
   branches,
@@ -318,26 +404,7 @@ function EmployeeRow({
   }
 
   return (
-    <TableRow>
-      <TableCell data-label="Nombre" className="font-medium">
-        {displayName(u)}
-        {u.id === currentUserId && (
-          <Badge variant="outline" className="ml-2">
-            Tú
-          </Badge>
-        )}
-      </TableCell>
-      <TableCell data-label="Rol">{ROLE_LABELS[u.role]}</TableCell>
-      <TableCell data-label="Sucursal" className="text-muted-foreground text-sm">
-        {u.branchId ? branches.find((b) => b.id === u.branchId)?.name ?? "—" : "Todas"}
-      </TableCell>
-      <TableCell data-label="Estado">
-        <Badge variant={u.status === "ACTIVE" ? "success" : "destructive"}>
-          {STATUS_LABELS[u.status]}
-        </Badge>
-      </TableCell>
-      <TableCell data-label="Desde" className="text-muted-foreground text-sm">{formatDate(u.createdAt)}</TableCell>
-      <TableCell data-label="Acciones" className="text-right">
+    <div className="text-right">
         {statusError && <p className="text-sm text-destructive mb-1">{statusError}</p>}
         <div className="flex justify-end flex-wrap gap-2">
           <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -492,7 +559,43 @@ function EmployeeRow({
             </Dialog>
           </ActionMenu>
         </div>
+    </div>
+  );
+}
+
+function EmployeeRow({
+  user: u,
+  currentUserId,
+  branches,
+}: {
+  user: EmployeeListItem;
+  currentUserId: string;
+  branches: Branch[];
+}) {
+  return (
+    <TableRow>
+      <TableCell data-label="Nombre" className="font-medium">
+        {displayName(u)}
+        {u.id === currentUserId && (
+          <Badge variant="outline" className="ml-2">
+            Tú
+          </Badge>
+        )}
+      </TableCell>
+      <TableCell data-label="Rol">{ROLE_LABELS[u.role]}</TableCell>
+      <TableCell data-label="Sucursal" className="text-muted-foreground text-sm">
+        {u.branchId ? branches.find((b) => b.id === u.branchId)?.name ?? "—" : "Todas"}
+      </TableCell>
+      <TableCell data-label="Estado">
+        <Badge variant={u.status === "ACTIVE" ? "success" : "destructive"}>
+          {STATUS_LABELS[u.status]}
+        </Badge>
+      </TableCell>
+      <TableCell data-label="Desde" className="text-muted-foreground text-sm">{formatDate(u.createdAt)}</TableCell>
+      <TableCell data-label="Acciones" className="text-right">
+        <EmployeeActions user={u} currentUserId={currentUserId} branches={branches} />
       </TableCell>
     </TableRow>
   );
 }
+

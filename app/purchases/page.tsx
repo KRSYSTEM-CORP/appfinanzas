@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PurchaseActions } from "@/components/purchases/PurchaseActions";
+import { PurchaseMasterDetail } from "@/components/purchases/PurchaseMasterDetail";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { formatDate, PAYMENT_METHOD_LABELS, PURCHASE_PAYMENT_STATUS_LABELS } from "@/lib/format";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
@@ -50,7 +51,8 @@ export default async function PurchasesPage() {
           <CardTitle>Historial de compras</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <PurchaseMasterDetail purchases={purchases} referenceCurrency={referenceCurrency} />
+          <div className="md:hidden overflow-x-auto">
             <Table className="table-cards">
               <TableHeader>
                 <TableRow>

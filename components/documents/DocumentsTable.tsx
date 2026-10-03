@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Price } from "@/components/money/Price";
+import { MasterDetail } from "@/components/shared/MasterDetail";
 import { SaleDocumentButtons } from "@/components/reports/SaleDocumentButtons";
 import { QuoteDocumentButton } from "@/components/quotes/QuoteDocumentButton";
 import { PAYMENT_STATUS_LABELS, QUOTE_STATUS_LABELS, formatDate } from "@/lib/format";
@@ -165,7 +166,79 @@ export function DocumentsTable({
       </div>
 
       {docType === "quote" ? (
-        <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
+        <>
+        <MasterDetail
+          items={filteredQuotes}
+          label="Presupuestos"
+          renderRow={(quote) => (
+            <>
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
+                <FileTextIcon className="size-4 text-muted-foreground/60" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold">
+                  {quote.customerFirstName ? `${quote.customerFirstName} ${quote.customerLastName ?? ""}`.trim() : "—"}
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  Nº {quote.controlNumber ?? "—"} · {formatDate(quote.createdAt)}
+                </span>
+              </span>
+              <Badge variant={quote.status === "CONVERTED" ? "success" : quote.status === "LOST" ? "destructive" : "outline"}>
+                {QUOTE_STATUS_LABELS[quote.status]}
+              </Badge>
+              <span className="w-28 shrink-0 text-right text-sm font-medium tabular-nums">
+                {formatCurrencyCents(referenceCurrency, quote.totalCents)}
+              </span>
+            </>
+          )}
+          renderDetail={(quote) => (
+            <>
+              <div className="flex flex-col gap-0.5">
+                <h3 className="text-lg font-semibold leading-tight">
+                  {quote.customerFirstName ? `${quote.customerFirstName} ${quote.customerLastName ?? ""}`.trim() : "—"}
+                </h3>
+                <p className="text-sm text-muted-foreground">Presupuesto Nº {quote.controlNumber ?? "—"}</p>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs text-muted-foreground">Fecha</dt>
+                  <dd className="font-medium">{formatDate(quote.createdAt)}</dd>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs text-muted-foreground">Estado</dt>
+                  <dd>
+                    <Badge variant={quote.status === "CONVERTED" ? "success" : quote.status === "LOST" ? "destructive" : "outline"}>
+                      {QUOTE_STATUS_LABELS[quote.status]}
+                    </Badge>
+                  </dd>
+                </div>
+                <div className="col-span-2 flex flex-col gap-0.5">
+                  <dt className="text-xs text-muted-foreground">Total</dt>
+                  <dd className="text-lg font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, quote.totalCents)}</dd>
+                </div>
+              </dl>
+              <div className="border-t pt-4">
+                <QuoteDocumentButton
+                  quoteId={quote.id}
+                  company={company}
+                  rate={currentRate}
+                  currencyCode={currencyCode}
+                  exchangeRateEnabled={exchangeRateEnabled}
+                  referenceCurrency={referenceCurrency}
+                />
+              </div>
+            </>
+          )}
+          empty={
+            <div className="flex flex-col items-center gap-3 rounded-lg border bg-card py-14 text-center shadow-xs">
+              <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                <FileTextIcon className="size-5" />
+              </div>
+              <p className="text-sm text-muted-foreground">No se encontraron presupuestos.</p>
+            </div>
+          }
+        />
+        <div className="md:hidden rounded-lg border bg-card shadow-xs overflow-x-auto">
           <Table className="table-cards">
             <TableHeader>
               <TableRow>
@@ -220,8 +293,102 @@ export function DocumentsTable({
             </TableBody>
           </Table>
         </div>
+        </>
       ) : (
-        <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
+        <>
+        <MasterDetail
+          items={filteredSales}
+          label="Documentos"
+          renderRow={(sale) => (
+            <>
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
+                <FileTextIcon className="size-4 text-muted-foreground/60" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold">
+                  {sale.customerFirstName ? `${sale.customerFirstName} ${sale.customerLastName ?? ""}`.trim() : "—"}
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  Nº {controlNumberLabel(sale)} · {formatDate(sale.createdAt)}
+                </span>
+              </span>
+              <Badge variant={sale.paymentStatus === "CREDIT" ? "destructive" : "success"}>
+                {sale.paymentStatus === "CREDIT" ? PAYMENT_STATUS_LABELS.CREDIT : PAYMENT_STATUS_LABELS.PAID}
+              </Badge>
+              <span className="flex w-28 shrink-0 justify-end text-sm">
+                <Price
+                  eurCents={sale.totalCents}
+                  rate={sale.paidExchangeRate ?? sale.exchangeRate ?? currentRate}
+                  currencyCode={currencyCode}
+                  exchangeRateEnabled={exchangeRateEnabled}
+                  referenceCurrency={referenceCurrency}
+                  className="items-end"
+                />
+              </span>
+            </>
+          )}
+          renderDetail={(sale) => (
+            <>
+              <div className="flex flex-col gap-0.5">
+                <h3 className="text-lg font-semibold leading-tight">
+                  {sale.customerFirstName ? `${sale.customerFirstName} ${sale.customerLastName ?? ""}`.trim() : "—"}
+                </h3>
+                <p className="text-sm text-muted-foreground">Documento Nº {controlNumberLabel(sale)}</p>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs text-muted-foreground">Fecha</dt>
+                  <dd className="font-medium">{formatDate(sale.createdAt)}</dd>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs text-muted-foreground">Vendedor</dt>
+                  <dd className="font-medium">{sale.sellerName ?? "—"}</dd>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-xs text-muted-foreground">Estado</dt>
+                  <dd>
+                    <Badge variant={sale.paymentStatus === "CREDIT" ? "destructive" : "success"}>
+                      {sale.paymentStatus === "CREDIT" ? PAYMENT_STATUS_LABELS.CREDIT : PAYMENT_STATUS_LABELS.PAID}
+                    </Badge>
+                  </dd>
+                </div>
+                <div className="col-span-2 flex flex-col gap-0.5">
+                  <dt className="text-xs text-muted-foreground">Total</dt>
+                  <dd className="flex">
+                    <Price
+                      eurCents={sale.totalCents}
+                      rate={sale.paidExchangeRate ?? sale.exchangeRate ?? currentRate}
+                      currencyCode={currencyCode}
+                      exchangeRateEnabled={exchangeRateEnabled}
+                      referenceCurrency={referenceCurrency}
+                      size="lg"
+                    />
+                  </dd>
+                </div>
+              </dl>
+              <div className="border-t pt-4">
+                <SaleDocumentButtons
+                  sale={sale}
+                  company={company}
+                  currentRate={currentRate}
+                  currencyCode={currencyCode}
+                  exchangeRateEnabled={exchangeRateEnabled}
+                  referenceCurrency={referenceCurrency}
+                  printPaperSize={printPaperSize}
+                />
+              </div>
+            </>
+          )}
+          empty={
+            <div className="flex flex-col items-center gap-3 rounded-lg border bg-card py-14 text-center shadow-xs">
+              <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
+                <FileTextIcon className="size-5" />
+              </div>
+              <p className="text-sm text-muted-foreground">No se encontraron documentos.</p>
+            </div>
+          }
+        />
+        <div className="md:hidden rounded-lg border bg-card shadow-xs overflow-x-auto">
           <Table className="table-cards">
             <TableHeader>
               <TableRow>
@@ -289,6 +456,7 @@ export function DocumentsTable({
             </TableBody>
           </Table>
         </div>
+        </>
       )}
     </div>
   );
