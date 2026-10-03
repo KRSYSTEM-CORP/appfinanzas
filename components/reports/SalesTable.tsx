@@ -179,7 +179,7 @@ export function SalesTable({
 
   return (
     <div className="overflow-x-auto">
-      <Table className="table-cards">
+      <Table className="table-cards sales-cards">
         <TableHeader>
           <TableRow>
             <TableHead>Fecha</TableHead>
@@ -197,7 +197,7 @@ export function SalesTable({
         <TableBody>
           {sales.map((sale) => (
             <TableRow key={sale.id} className={sale.voided ? "opacity-50" : undefined}>
-              <TableCell data-label="Fecha">
+              <TableCell data-label="Fecha" data-cell="date">
                 {formatDateSlash(sale.createdAt)}
                 {sale.voided && (
                   <span className="block mt-1">
@@ -205,16 +205,16 @@ export function SalesTable({
                   </span>
                 )}
               </TableCell>
-              <TableCell data-label="Cliente">
+              <TableCell data-label="Cliente" data-cell="client">
                 {sale.customerFirstName
                   ? `${sale.customerFirstName} ${sale.customerLastName ?? ""}`.trim()
                   : "—"}
               </TableCell>
               {showSellerColumn && (
-                <TableCell data-label="Vendedor" className="text-muted-foreground">{sale.sellerName ?? "—"}</TableCell>
+                <TableCell data-label="Vendedor" data-cell="seller" className="text-muted-foreground">{sale.sellerName ?? "—"}</TableCell>
               )}
-              <TableCell data-label="Artículos">{sale.items.reduce((sum, i) => sum + i.quantity, 0)}</TableCell>
-              <TableCell data-label="Método" className="text-center">
+              <TableCell data-label="Artículos" data-cell="items">{sale.items.reduce((sum, i) => sum + i.quantity, 0)}</TableCell>
+              <TableCell data-label="Método" data-cell="method" className="text-center">
                 <div className="flex flex-col items-center gap-1">
                   <PaymentMethodCell sale={sale} localCurrencyCode={localCurrencyCode} referenceCurrency={referenceCurrency} />
                   {sale.paymentStatus === "CREDIT" &&
@@ -231,14 +231,14 @@ export function SalesTable({
                     )}
                 </div>
               </TableCell>
-              <TableCell data-label="Estado" className="text-center">
+              <TableCell data-label="Estado" data-cell="status" className="text-center">
                 {sale.paymentStatus === "CREDIT" ? (
                   <Badge variant="destructive">{PAYMENT_STATUS_LABELS.CREDIT}</Badge>
                 ) : (
                   <Badge variant="success">{PAYMENT_STATUS_LABELS.PAID}</Badge>
                 )}
               </TableCell>
-              <TableCell data-label="Moneda" className="text-center">
+              <TableCell data-label="Moneda" data-cell="currency" className="text-center">
                 {!exchangeRateEnabled ? (
                   <Badge variant="outline">{referenceCurrency}</Badge>
                 ) : sale.paidInForeignCurrency ? (
@@ -247,7 +247,7 @@ export function SalesTable({
                   <Badge variant="outline">{localCurrencyName}</Badge>
                 )}
               </TableCell>
-              <TableCell data-label="Total" className="text-right">
+              <TableCell data-label="Total" data-cell="total" className="text-right">
                 <Price
                   eurCents={sale.totalCents}
                   rate={
@@ -262,7 +262,7 @@ export function SalesTable({
                   referenceCurrency={referenceCurrency}
                 />
               </TableCell>
-              <TableCell data-label="Documentos" className="text-center">
+              <TableCell data-label="Documentos" data-cell="docs" className="text-center">
                 <SaleDocumentButtons
                   sale={{
                     ...sale,
@@ -282,7 +282,7 @@ export function SalesTable({
                   printPaperSize={printPaperSize}
                 />
               </TableCell>
-              <TableCell data-label="Acciones" className="text-right">
+              <TableCell data-label="Acciones" data-cell="actions" className="text-right">
                 <SaleActions
                   saleId={sale.id}
                   voided={sale.voided}

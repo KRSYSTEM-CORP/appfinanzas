@@ -78,6 +78,19 @@ export function deriveBrandVars(background?: string | null, accent?: string | nu
   return vars;
 }
 
+// Dark mode keeps the company's accent, but a very dark one (a deep blue, a
+// near-black) all but disappears against the dark surfaces — links and the
+// active nav item need a readable contrast — so it is lifted toward white.
+export function deriveDarkAccent(accent?: string | null): BrandVars {
+  if (!accent || !hexToRgb(accent)) return {};
+  const lifted = relativeLuminance(accent) < 0.3 ? mixTowards(accent, "white", 0.45) : accent;
+  return {
+    "--primary": lifted,
+    "--primary-foreground": relativeLuminance(lifted) < 0.5 ? "#ffffff" : "#0b0b0b",
+    "--ring": lifted,
+  };
+}
+
 // The full list of variable names deriveBrandVars can ever set — used
 // client-side to clear a previous company's overrides back to the app
 // default when the lookup returns nothing (e.g. the field was blanked).

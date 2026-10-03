@@ -294,3 +294,88 @@
     content: none;
   }
 }
+
+/* Sales rows on phones: a structured card (who + status, when/who/how many,
+   total + currency, payment method, then documents + the main action) built
+   on top of the generic table-cards layout using each cell's data-cell. */
+@media (max-width: 767px) {
+  .sales-cards tr:not(:has(> td[colspan])) {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    grid-template-areas:
+      "client client status"
+      "date seller items"
+      "total total currency"
+      "method method method"
+      "rule rule rule"
+      "docs actions actions";
+    column-gap: 0.75rem;
+    row-gap: 0.75rem;
+    padding: 0.875rem;
+  }
+  .sales-cards td[data-cell] {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    text-align: left;
+  }
+  .sales-cards td[data-cell]::before {
+    content: none;
+  }
+  .sales-cards td[data-cell="date"]::before,
+  .sales-cards td[data-cell="seller"]::before,
+  .sales-cards td[data-cell="items"]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .sales-cards td[data-cell="client"] {
+    grid-area: client;
+    align-self: center;
+    font-size: 1rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .sales-cards td[data-cell="status"] {
+    grid-area: status;
+    justify-self: end;
+    align-self: center;
+  }
+  .sales-cards td[data-cell="date"] { grid-area: date; }
+  .sales-cards td[data-cell="seller"] { grid-area: seller; }
+  .sales-cards td[data-cell="items"] { grid-area: items; text-align: right; }
+  .sales-cards td[data-cell="total"] {
+    grid-area: total;
+    align-self: end;
+  }
+  .sales-cards td[data-cell="total"] > span > span:first-child {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+  .sales-cards td[data-cell="currency"] {
+    grid-area: currency;
+    justify-self: end;
+    align-self: end;
+  }
+  .sales-cards td[data-cell="method"] {
+    grid-area: method;
+  }
+  .sales-cards td[data-cell="method"] > div {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
+  }
+  .sales-cards tr:not(:has(> td[colspan]))::after {
+    content: "";
+    grid-area: rule;
+    height: 1px;
+    background: var(--border);
+  }
+  .sales-cards td[data-cell="docs"] { grid-area: docs; }
+  .sales-cards td[data-cell="actions"] { grid-area: actions; }
+}

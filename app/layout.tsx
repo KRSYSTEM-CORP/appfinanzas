@@ -9,7 +9,7 @@ import { getSession } from "@/lib/session";
 import { FEATURES, hasFeature } from "@/lib/features";
 import { getBranding } from "@/lib/actions/settings";
 import { listBranches } from "@/lib/actions/branches";
-import { deriveBrandVars } from "@/lib/theme-color";
+import { deriveBrandVars, deriveDarkAccent } from "@/lib/theme-color";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -50,16 +50,32 @@ export default async function RootLayout({
     session ? getBranding() : Promise.resolve({ logoDataUrl: null, brandColor: null, brandBackground: null }),
     canManage ? listBranches() : Promise.resolve([]),
   ]);
-  const brandVars = deriveBrandVars(branding.brandBackground, branding.brandColor);
+  // The accent (buttons/links) applies in both themes, but the company's
+  // chosen background and the surface colors derived from it only make sense
+  // in light mode. As an inline style on <html> they beat the .dark palette,
+  // so dark mode used to reach only the sidebar. Scoping them to
+  // :root:not(.dark) lets dark mode switch the whole app.
+  const toCss = (vars: Record<string, string | undefined>) =>
+    Object.entries(vars)
+      .map(([name, value]) => `${name}:${value}`)
+      .join(";");
+  const lightCss = toCss(deriveBrandVars(branding.brandBackground, branding.brandColor));
+  const darkCss = toCss(deriveDarkAccent(branding.brandColor));
+  const brandCss = [
+    lightCss && `html:root:not(.dark){${lightCss}}`,
+    darkCss && `html:root.dark{${darkCss}}`,
+  ]
+    .filter(Boolean)
+    .join("");
 
   return (
     <html
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      style={brandVars as React.CSSProperties}
       suppressHydrationWarning
     >
       <body className={`min-h-full flex flex-col ${session ? "md:h-dvh md:flex-row md:overflow-hidden" : ""}`}>
+        {brandCss && <style>{brandCss}</style>}
         <Script id="theme-init" strategy="beforeInteractive">
           {`(function(){try{var s=localStorage.getItem('kr-pos-theme');var d=s?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`}
         </Script>
