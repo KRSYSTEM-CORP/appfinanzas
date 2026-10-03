@@ -243,8 +243,10 @@ export function Sidebar({
     // eslint-disable-next-line @next/next/no-img-element
     <img src={logoDataUrl} alt="" className="size-8 shrink-0 rounded-lg object-cover" />
   ) : (
+    // The colored KR POS wordmark, transparent background, in both light and
+    // dark mode (its blue-to-pink gradient reads on either surface).
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/icons/icon-192.png" alt="" className="size-8 shrink-0 rounded-lg object-cover" />
+    <img src="/brand/wordmark-color.png" alt="KR POS" className="h-7 w-auto shrink-0" />
   );
 
   return (
