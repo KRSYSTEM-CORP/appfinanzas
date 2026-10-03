@@ -379,3 +379,48 @@
   .sales-cards td[data-cell="docs"] { grid-area: docs; }
   .sales-cards td[data-cell="actions"] { grid-area: actions; }
 }
+
+/* Redesign 2026 — shared tokens. */
+:root {
+  --tabbar-h: 4rem;
+  --ease-ui: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Subtle glass for floating bars: the fill is derived from the surface
+   token it floats over (so it follows each company's brand colors and dark
+   mode) at 80% opacity with a light blur. Data surfaces stay solid. */
+.glass-bar {
+  background: color-mix(in oklab, var(--glass-base, var(--card)) 80%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+}
+.glass-sidebar {
+  --glass-base: var(--sidebar);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass-bar {
+    background: var(--glass-base, var(--card));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Cards in a stat strip enter one after another (50ms apart). */
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .stat-grid > * {
+    animation: card-in 360ms var(--ease-ui) both;
+  }
+  .stat-grid > *:nth-child(2) { animation-delay: 50ms; }
+  .stat-grid > *:nth-child(3) { animation-delay: 100ms; }
+  .stat-grid > *:nth-child(4) { animation-delay: 150ms; }
+}

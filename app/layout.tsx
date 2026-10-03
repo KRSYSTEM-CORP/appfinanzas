@@ -99,7 +99,7 @@ export default async function RootLayout({
           />
         )}
         {session && <KrPosTour hasSeenTour={session.hasSeenTour} />}
-        <main className={`flex-1 min-w-0 ${session ? "md:h-full md:overflow-y-auto" : "min-h-0"}`}>{children}</main>
+        <main className={`flex-1 min-w-0 ${session ? "md:h-full md:overflow-y-auto max-md:pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))]" : "min-h-0"}`}>{children}</main>
         <Toaster richColors closeButton position="bottom-right" />
       </body>
     </html>

@@ -370,7 +370,7 @@ export function Cart({
       {/* Phones only: the cart sits below the product list, so keep the total
           and a jump to the checkout button in reach until it is on screen. */}
       {lines.length > 0 && !checkoutInView && (
-        <div className="md:hidden fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t bg-card px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgb(0_0_0/0.06)]">
+        <div className="md:hidden fixed inset-x-0 bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 border-t glass-bar px-4 py-3">
           <div className="flex min-w-0 flex-col">
             <span className="text-xs text-muted-foreground">
               {itemCount} {itemCount === 1 ? "artículo" : "artículos"}

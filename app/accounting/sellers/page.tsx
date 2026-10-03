@@ -130,7 +130,7 @@ export default async function SellersReportPage({
             </Link>
           </div>
 
-          <div className="rounded-lg border bg-card shadow-xs divide-y sm:divide-y-0 sm:divide-x grid grid-cols-1 sm:grid-cols-3 [&>*]:p-4">
+          <div className="rounded-lg border bg-card shadow-xs stat-grid divide-y sm:divide-y-0 sm:divide-x grid grid-cols-1 sm:grid-cols-3 [&>*]:p-4">
             <StatCard label="Ventas" accent="primary" value={detail.count} />
             <StatCard label="Total facturado" accent="success" value={money(detail.totalEurCents)} />
             <StatCard

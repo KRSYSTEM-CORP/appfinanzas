@@ -59,7 +59,7 @@ export function CommandPalette({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent showCloseButton={false} className="gap-0 p-0 sm:max-w-md">
+      <DialogContent showCloseButton={false} className="gap-0 p-0 sm:max-w-md data-open:animate-none! data-closed:animate-none! duration-0!">
         <DialogTitle className="sr-only">Buscar pantalla</DialogTitle>
         <DialogDescription className="sr-only">
           Escribe para filtrar las pantallas, usa las flechas para moverte y Enter para ir.

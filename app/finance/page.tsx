@@ -1,3 +1,4 @@
+import { ClockIcon, PackageIcon, TrendingUpIcon, WalletIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/reports/StatCard";
 import { SalesByDayChart } from "@/components/reports/SalesByDayChart";
@@ -66,10 +67,11 @@ export default async function FinancePage({
         <DateRangeSwitcher selection={range} />
       </div>
 
-      <div className="rounded-lg border divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-4 [&>*]:p-4">
+      <div className="rounded-lg border bg-card shadow-xs stat-grid divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-4 [&>*]:p-4">
         <StatCard
           label="Ingresos totales"
           accent="primary"
+          icon={TrendingUpIcon}
           value={
             <div className="flex flex-col">
               <span>
@@ -88,6 +90,7 @@ export default async function FinancePage({
         <StatCard
           label={`Por cobrar (${receivables.count})`}
           accent="warning"
+          icon={ClockIcon}
           value={
             <div className="flex flex-col">
               <span className={receivables.count > 0 ? "text-destructive" : undefined}>
@@ -106,11 +109,13 @@ export default async function FinancePage({
         <StatCard
           label="Costo de mercancía vendida"
           accent="violet"
+          icon={PackageIcon}
           value={formatCurrencyCents(referenceCurrency, cogsCents)}
         />
         <StatCard
           label="Gastos totales"
           accent="destructive"
+          icon={WalletIcon}
           value={formatCurrencyCents(referenceCurrency, expensesCents)}
         />
       </div>

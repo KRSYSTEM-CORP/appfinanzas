@@ -46,7 +46,7 @@ export default async function AdminPage() {
         </p>
       </div>
 
-      <div className="rounded-lg border bg-card shadow-xs divide-y sm:divide-y-0 sm:divide-x grid grid-cols-1 sm:grid-cols-3 [&>*]:p-4">
+      <div className="rounded-lg border bg-card shadow-xs stat-grid divide-y sm:divide-y-0 sm:divide-x grid grid-cols-1 sm:grid-cols-3 [&>*]:p-4">
         <StatCard label="Pendientes de aprobación" value={String(pendingCount)} />
         <StatCard label="Usuarios activos" value={String(activeCount)} />
         <StatCard label="Suspendidos" value={String(suspendedCount)} />

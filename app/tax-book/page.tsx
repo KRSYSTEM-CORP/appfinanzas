@@ -1,4 +1,4 @@
-import { BookOpenIcon } from "lucide-react";
+import { BookOpenIcon, PackageIcon, PercentIcon, ReceiptTextIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
@@ -74,25 +74,29 @@ export default async function TaxBookPage({
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card shadow-xs divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-4 [&>*]:p-4">
+      <div className="rounded-lg border bg-card shadow-xs stat-grid divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-4 [&>*]:p-4">
         <StatCard
           label="Ventas: base imponible"
           accent="primary"
+          icon={ReceiptTextIcon}
           value={formatCurrencyCents(referenceCurrency, salesTotals.base)}
         />
         <StatCard
           label="Ventas: IVA"
           accent="violet"
+          icon={PercentIcon}
           value={formatCurrencyCents(referenceCurrency, salesTotals.tax)}
         />
         <StatCard
           label="Compras: base imponible"
           accent="success"
+          icon={PackageIcon}
           value={formatCurrencyCents(referenceCurrency, purchasesTotals.base)}
         />
         <StatCard
           label="Compras: IVA"
           accent="warning"
+          icon={PercentIcon}
           value={formatCurrencyCents(referenceCurrency, purchasesTotals.tax)}
         />
       </div>

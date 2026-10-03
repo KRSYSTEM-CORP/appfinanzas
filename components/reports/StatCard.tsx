@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 // A fixed color per metric (never rotated/cycled) — e.g. Finanzas always
 // shows Ingresos in blue, Gastos in red, Ganancia neta in green, etc. The
@@ -25,15 +25,31 @@ export function StatCard({
   label,
   value,
   accent,
+  icon: Icon,
 }: {
   label: string;
   value: ReactNode;
   accent?: StatCardAccent;
+  icon?: ComponentType<{ className?: string }>;
 }) {
   const accentColor = accent ? ACCENT_VAR[accent] : undefined;
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-sm text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-2">
+        {Icon && (
+          <span
+            className="grid size-7 shrink-0 place-items-center rounded-lg"
+            style={
+              accentColor
+                ? { color: accentColor, background: `color-mix(in oklab, ${accentColor} 14%, transparent)` }
+                : undefined
+            }
+          >
+            <Icon className="size-4" />
+          </span>
+        )}
+        <span className="text-sm text-muted-foreground">{label}</span>
+      </div>
       <div className="text-2xl font-semibold tabular-nums [overflow-wrap:anywhere]" style={accentColor ? { color: accentColor } : undefined}>
         {value}
       </div>

@@ -8,6 +8,7 @@ import {
   CalculatorIcon,
   ClipboardListIcon,
   CreditCardIcon,
+  EllipsisIcon,
   FileTextIcon,
   LogOutIcon,
   MenuIcon,
@@ -186,6 +187,23 @@ export function Sidebar({
     ...(canManage ? companyItemsBase : []),
   ];
 
+  // Punto de venta, Inventario, Reportes and Contabilidad for managers; a
+  // seller without accounting access gets Clientes in that slot instead.
+  const tabCandidates: (NavItem & { managerOnly?: boolean })[] = [
+    { href: "/pos", label: "POS", section: "pos", icon: ShoppingCartIcon },
+    { href: "/inventory", label: "Inventario", section: "inventory", icon: PackageIcon },
+    { href: "/reports", label: "Reportes", section: "reports", icon: BarChart3Icon },
+    { href: "/accounting", label: "Contabilidad", icon: CalculatorIcon, managerOnly: true },
+    { href: "/customers", label: "Clientes", section: "customers", icon: UsersIcon },
+  ];
+  const tabs = tabCandidates
+    .filter((t) =>
+      t.managerOnly
+        ? canManage
+        : canManage || allowedSections.length === 0 || allowedSections.includes(t.section as string)
+    )
+    .slice(0, 4);
+
   const paletteItems: PaletteItem[] = [
     ...opItems.map((i) => ({ href: i.href, label: i.label, group: "Operación" })),
     ...managementItems.map((i) => ({ href: i.href, label: i.label, group: "Gestión" })),
@@ -311,7 +329,7 @@ export function Sidebar({
       </aside>
 
       {/* Mobile: slim top bar + off-canvas drawer. */}
-      <div className="md:hidden sticky top-0 z-40 flex items-center gap-3 border-b bg-sidebar text-sidebar-foreground px-4 h-14 shrink-0">
+      <div className="md:hidden sticky top-0 z-40 flex items-center gap-3 border-b glass-bar glass-sidebar text-sidebar-foreground px-4 h-14 shrink-0">
         <Button
           type="button"
           variant="ghost"
@@ -363,6 +381,47 @@ export function Sidebar({
           </div>
         </div>
       )}
+
+      {/* Phones: five fixed destinations always in reach (the rest lives under
+          "Más"). Equal-width columns with icon + label centered in each. */}
+      <nav
+        aria-label="Navegación principal"
+        className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t glass-bar glass-sidebar pb-[env(safe-area-inset-bottom)]"
+      >
+        <ul className="flex h-[var(--tabbar-h)] items-stretch px-1.5">
+          {tabs.map((tab) => {
+            const active = isLinkActive(pathname, tab.href);
+            const Icon = tab.icon;
+            return (
+              <li key={tab.href} className="flex flex-1 items-center justify-center py-1.5">
+                <Link
+                  href={tab.href}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex h-full w-full flex-col items-center justify-center gap-1 rounded-2xl text-[11px] leading-none font-medium transition-[transform,background-color,color] duration-150 ease-out active:scale-95 ${
+                    active ? "bg-primary/10 text-primary" : "text-sidebar-foreground/65"
+                  }`}
+                >
+                  <Icon className="size-5 shrink-0" />
+                  <span className="max-w-full truncate px-0.5">{tab.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+          <li className="flex flex-1 items-center justify-center py-1.5">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Abrir menú"
+              className={`flex h-full w-full flex-col items-center justify-center gap-1 rounded-2xl text-[11px] leading-none font-medium transition-[transform,background-color,color] duration-150 ease-out active:scale-95 ${
+                mobileOpen ? "bg-primary/10 text-primary" : "text-sidebar-foreground/65"
+              }`}
+            >
+              <EllipsisIcon className="size-5 shrink-0" />
+              <span>Más</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
 
       <CommandPalette items={paletteItems} open={paletteOpen} onOpenChange={setPaletteOpen} />
     </>
