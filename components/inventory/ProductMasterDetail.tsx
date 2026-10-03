@@ -98,7 +98,7 @@ export function ProductMasterDetail({
   }
 
   return (
-    <div className="hidden md:grid md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-4 items-start">
+    <div className="hidden md:grid md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-4 items-start">
       <div role="listbox" aria-label="Productos" className="overflow-hidden rounded-lg border bg-card shadow-xs">
         {products.map((p) => {
           const active = p.id === selected.id;
@@ -128,16 +128,18 @@ export function ProductMasterDetail({
                   {!p.isActive && " · Inactivo"}
                 </div>
               </div>
-              {p.trackStock && (
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${
-                    isLowStock(p) ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
-                  }`}
-                >
-                  {p.stock}
-                </span>
-              )}
-              <div className="shrink-0 text-sm">{priceOf(p)}</div>
+              <div className="flex w-16 shrink-0 justify-center">
+                {p.trackStock && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${
+                      isLowStock(p) ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
+                    }`}
+                  >
+                    {p.stock}
+                  </span>
+                )}
+              </div>
+              <div className="flex w-28 shrink-0 justify-end text-sm">{priceOf(p)}</div>
             </button>
           );
         })}
@@ -162,7 +164,7 @@ export function ProductMasterDetail({
           <p className="text-sm text-muted-foreground">{selected.category ?? "Sin categoría"}</p>
         </div>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-          <div className="flex flex-col gap-0.5">
+          <div className="col-span-2 flex flex-col gap-0.5">
             <dt className="text-xs text-muted-foreground">Precio</dt>
             <dd className="flex">{priceOf(selected, "lg")}</dd>
           </div>
