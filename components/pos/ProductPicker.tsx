@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import type { Product } from "@prisma/client";
 import { PackageIcon, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Price } from "@/components/money/Price";
 import { BarcodeScannerDialog } from "@/components/scanner/BarcodeScannerDialog";
@@ -104,7 +103,7 @@ export function ProductPicker({
               type="button"
               disabled={outOfStock}
               onClick={() => onAdd(p)}
-              className="relative flex flex-col items-start gap-1 rounded-xl border bg-card p-3 text-left shadow-xs transition-all duration-150 ease-out-smooth hover:border-ring/40 hover:shadow-sm active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+              className="relative flex flex-col items-start gap-1.5 rounded-xl border bg-card p-2.5 text-left shadow-xs transition-all duration-150 ease-out-smooth hover:border-ring/40 hover:shadow-sm active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
             >
               {p.imageDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -114,7 +113,7 @@ export function ProductPicker({
                   <PackageIcon className="size-6 text-muted-foreground/50" />
                 </div>
               )}
-              <span className="font-medium text-sm">{p.name}</span>
+              <span className="line-clamp-2 min-h-8 text-[13px] leading-tight font-semibold">{p.name}</span>
               <Price
                 eurCents={p.priceCents}
                 rate={rate}
@@ -123,19 +122,18 @@ export function ProductPicker({
                 referenceCurrency={referenceCurrency}
               />
               {p.trackStock && !outOfStock && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">Stock: {p.stock}</span>
-                  {isLowStock(p) && (
-                    <Badge variant="warning" className="text-[10px] h-4">
-                      bajo
-                    </Badge>
-                  )}
-                </div>
+                <span
+                  className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    isLowStock(p) ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
+                  }`}
+                >
+                  {isLowStock(p) ? `Stock bajo · ${p.stock}` : `Stock ${p.stock}`}
+                </span>
               )}
               {outOfStock && (
-                <Badge variant="destructive" className="text-[10px] h-4">
+                <span className="mt-0.5 inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
                   Agotado
-                </Badge>
+                </span>
               )}
             </button>
           );

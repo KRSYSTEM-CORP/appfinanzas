@@ -424,3 +424,68 @@
   .stat-grid > *:nth-child(3) { animation-delay: 100ms; }
   .stat-grid > *:nth-child(4) { animation-delay: 150ms; }
 }
+
+/* Inventario rows on phones: thumbnail + name and price on top, category and
+   SKU under the name, then stock, status and the actions menu. */
+@media (max-width: 767px) {
+  .product-cards tr:not(:has(> td[colspan])) {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    grid-template-areas:
+      "name name price"
+      "cat sku price"
+      "stock status actions";
+    column-gap: 0.75rem;
+    row-gap: 0.375rem;
+    align-items: center;
+    padding: 0.625rem 0.75rem;
+  }
+  .product-cards td[data-cell] {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    text-align: left;
+  }
+  .product-cards td[data-cell]::before {
+    content: none;
+  }
+  .product-cards td[data-cell="name"] {
+    grid-area: name;
+    font-size: 0.9375rem;
+    line-height: 1.2;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .product-cards td[data-cell="name"] > div > :first-child {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.625rem;
+  }
+  .product-cards td[data-cell="category"] {
+    grid-area: cat;
+    font-size: 0.75rem;
+  }
+  .product-cards td[data-cell="sku"] {
+    grid-area: sku;
+    font-size: 0.75rem;
+    justify-self: end;
+  }
+  .product-cards td[data-cell="sku"]::before {
+    content: "SKU ";
+  }
+  .product-cards td[data-cell="price"] {
+    grid-area: price;
+    align-self: start;
+    text-align: right;
+  }
+  .product-cards td[data-cell="stock"] { grid-area: stock; }
+  .product-cards td[data-cell="stock"]::before {
+    content: "Stock ";
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+  }
+  .product-cards td[data-cell="stock"] > div { display: inline-flex; }
+  .product-cards td[data-cell="status"] { grid-area: status; }
+  .product-cards td[data-cell="actions"] { grid-area: actions; }
+  .product-cards td[data-cell="actions"] > div { justify-content: flex-end; }
+}

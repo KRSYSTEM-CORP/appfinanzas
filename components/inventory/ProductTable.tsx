@@ -226,7 +226,7 @@ export function ProductTable({
       <p className="sm:hidden text-xs text-muted-foreground px-1">Desliza la tabla para ver más →</p>
       <div className="relative rounded-lg border bg-card shadow-xs overflow-hidden">
       <div className="overflow-x-auto">
-        <Table className="table-cards">
+        <Table className="table-cards product-cards">
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
@@ -241,7 +241,7 @@ export function ProductTable({
           <TableBody>
             {filtered.map((p) => (
               <TableRow key={p.id} className={!p.isActive ? "text-destructive" : undefined}>
-                <TableCell data-label="Nombre" className="font-medium whitespace-normal">
+                <TableCell data-label="Nombre" data-cell="name" className="font-medium whitespace-normal">
                   <div className="flex items-center gap-2">
                     {p.imageDataUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -254,9 +254,9 @@ export function ProductTable({
                     {p.name}
                   </div>
                 </TableCell>
-                <TableCell data-label="SKU" className="text-muted-foreground">{p.sku ?? "—"}</TableCell>
-                <TableCell data-label="Categoría" className="text-muted-foreground">{p.category ?? "—"}</TableCell>
-                <TableCell data-label="Precio">
+                <TableCell data-label="SKU" data-cell="sku" className="text-muted-foreground">{p.sku ?? "—"}</TableCell>
+                <TableCell data-label="Categoría" data-cell="category" className="text-muted-foreground">{p.category ?? "—"}</TableCell>
+                <TableCell data-label="Precio" data-cell="price">
                   <Price
                     eurCents={p.priceCents}
                     rate={rate}
@@ -265,24 +265,25 @@ export function ProductTable({
                     referenceCurrency={referenceCurrency}
                   />
                 </TableCell>
-                <TableCell data-label="Stock">
+                <TableCell data-label="Stock" data-cell="stock">
                   <div className="flex items-center gap-2">
                     <span className="tabular-nums">{p.stock}</span>
                     <LowStockBadge product={p} />
                   </div>
                 </TableCell>
-                <TableCell data-label="Estado">
+                <TableCell data-label="Estado" data-cell="status">
                   <Badge variant={p.isActive ? "success" : "destructive"}>
                     {p.isActive ? "Activo" : "Inactivo"}
                   </Badge>
                 </TableCell>
                 {canManage && (
-                  <TableCell data-label="Acciones" className="text-right">
+                  <TableCell data-label="Acciones" data-cell="actions" className="text-right">
                     <div className="flex justify-end items-center gap-1">
                       <Button
                         size="sm"
                         variant="outline"
                         nativeButton={false}
+                        className="max-md:hidden"
                         render={<Link href={`/inventory/${p.id}`} />}
                       >
                         Editar
@@ -299,6 +300,12 @@ export function ProductTable({
                         triggerChildren={<MoreVerticalIcon />}
                         contentClassName="w-48"
                       >
+                        <Link
+                          href={`/inventory/${p.id}`}
+                          className="md:hidden px-2.5 py-2 text-sm rounded-md text-left hover:bg-muted transition-colors"
+                        >
+                          Editar
+                        </Link>
                         <button
                           type="button"
                           disabled={isPending}
