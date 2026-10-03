@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
 
 // A fixed color per metric (never rotated/cycled) — e.g. Finanzas always
@@ -26,14 +27,17 @@ export function StatCard({
   value,
   accent,
   icon: Icon,
+  href,
 }: {
   label: string;
   value: ReactNode;
   accent?: StatCardAccent;
   icon?: ComponentType<{ className?: string }>;
+  // Makes the whole metric a link to the screen behind it.
+  href?: string;
 }) {
   const accentColor = accent ? ACCENT_VAR[accent] : undefined;
-  return (
+  const content = (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2">
         {Icon && (
@@ -54,5 +58,12 @@ export function StatCard({
         {value}
       </div>
     </div>
+  );
+  return href ? (
+    <Link href={href} className="block rounded-md transition-colors duration-150 ease-out hover:bg-muted/50 active:scale-[0.99]">
+      {content}
+    </Link>
+  ) : (
+    content
   );
 }

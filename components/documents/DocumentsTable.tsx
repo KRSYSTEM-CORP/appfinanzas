@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FileTextIcon, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -95,7 +95,7 @@ export function DocumentsTable({
   const [range, setRange] = useState<DateRangeSelection>({ kind: "preset", preset: "month" });
 
   const windows = useMemo(() => selectionToWindows(range), [range]);
-  const inRange = (d: Date) => windows.some((w) => d >= w.start && d < w.end);
+  const inRange = useCallback((d: Date) => windows.some((w) => d >= w.start && d < w.end), [windows]);
 
   const filteredSales = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -112,7 +112,7 @@ export function DocumentsTable({
         controlNumberLabel(sale).toLowerCase().includes(q)
       );
     });
-  }, [sales, query, docType, windows]);
+  }, [sales, query, docType, inRange]);
 
   const filteredQuotes = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -122,7 +122,7 @@ export function DocumentsTable({
       const label = quote.controlNumber != null ? String(quote.controlNumber) : quote.id.slice(-8);
       return !q || name.includes(q) || (quote.customerPhone ?? "").includes(q) || label.toLowerCase().includes(q);
     });
-  }, [quotes, query, windows]);
+  }, [quotes, query, inRange]);
 
   return (
     <div className="flex flex-col gap-3">

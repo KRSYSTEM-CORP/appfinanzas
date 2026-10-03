@@ -71,7 +71,7 @@ export default async function SellersReportPage({
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="table-cards">
               <TableHeader>
                 <TableRow>
                   <TableHead>Vendedor</TableHead>
@@ -85,16 +85,16 @@ export default async function SellersReportPage({
               <TableBody>
                 {overview.map((row) => (
                   <TableRow key={row.userId} className={row.userId === sellerId ? "bg-muted/50" : undefined}>
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.count}</TableCell>
-                    <TableCell className="text-right tabular-nums">{money(row.totalEurCents)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell data-label="Vendedor" className="font-medium">{row.name}</TableCell>
+                    <TableCell data-label="# Ventas" className="text-right tabular-nums">{row.count}</TableCell>
+                    <TableCell data-label="Total facturado" className="text-right tabular-nums">{money(row.totalEurCents)}</TableCell>
+                    <TableCell data-label="% Comisión" className="text-right tabular-nums">
                       {row.commissionPercent != null ? `${row.commissionPercent}%` : "—"}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell data-label="Comisión" className="text-right tabular-nums">
                       {row.commissionPercent != null ? money(row.commissionCents) : "—"}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="Detalle" className="text-right">
                       <Link
                         href={rangeQuery({ seller: row.userId })}
                         className="text-primary underline underline-offset-2 text-sm"

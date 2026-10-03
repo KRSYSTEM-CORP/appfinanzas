@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { formatDate } from "@/lib/format";
+import { formatDateSlash } from "@/lib/format";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { createExpense, deleteExpense } from "@/lib/actions/finance";
 import { todayDateString } from "@/lib/report-types";
@@ -155,7 +155,7 @@ export function ExpensesPanel({
         renderRowMobile={(e) => (
           <MobileRow
             title={e.description}
-            meta={`${formatDate(e.spentAt)} · ${e.category ?? "Sin categoría"}`}
+            meta={`${formatDateSlash(e.spentAt)} · ${e.category ?? "Sin categoría"}`}
             amount={<span className="font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, e.amountCents)}</span>}
           />
         )}
@@ -167,7 +167,7 @@ export function ExpensesPanel({
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{e.description}</span>
               <span className="block truncate text-xs text-muted-foreground">
-                {formatDate(e.spentAt)} · {e.category ?? "Sin categoría"}
+                {formatDateSlash(e.spentAt)} · {e.category ?? "Sin categoría"}
               </span>
             </span>
             <span className="w-28 shrink-0 text-right text-sm font-medium tabular-nums">
@@ -184,7 +184,7 @@ export function ExpensesPanel({
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <div className="flex flex-col gap-0.5">
                 <dt className="text-xs text-muted-foreground">Fecha</dt>
-                <dd className="font-medium">{formatDate(e.spentAt)}</dd>
+                <dd className="font-medium">{formatDateSlash(e.spentAt)}</dd>
               </div>
               <div className="flex flex-col gap-0.5">
                 <dt className="text-xs text-muted-foreground">Monto</dt>

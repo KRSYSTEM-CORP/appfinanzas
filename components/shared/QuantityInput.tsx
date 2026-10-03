@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 // Lets the cashier type a quantity directly instead of only tapping −/+ —
 // much faster for a bulk sale. Keeps its own draft string so the field can
@@ -18,10 +18,13 @@ export function QuantityInput({
   onCommit: (quantity: number) => void;
 }) {
   const [draft, setDraft] = useState(String(quantity));
-
-  useEffect(() => {
+  // Re-sync the draft when the quantity changes from outside (−/+ buttons).
+  // Adjusting state during render avoids an extra effect-driven render pass.
+  const [seenQuantity, setSeenQuantity] = useState(quantity);
+  if (seenQuantity !== quantity) {
+    setSeenQuantity(quantity);
     setDraft(String(quantity));
-  }, [quantity]);
+  }
 
   function commit() {
     const parsed = Math.floor(Number(draft));

@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import type { ReferenceCurrency } from "@prisma/client";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { formatCurrencyCents } from "@/lib/currencies";
-import { formatDate } from "@/lib/format";
+import { formatDateSlash } from "@/lib/format";
 import type { getSalesTaxBook, getPurchasesTaxBook } from "@/lib/actions/tax-book";
 
 type SaleEntry = Awaited<ReturnType<typeof getSalesTaxBook>>[number];
@@ -72,7 +72,7 @@ export function SalesBookList({
       renderRowMobile={(s) => (
         <MobileRow
           title={nameOf(s)}
-          meta={`${formatDate(s.createdAt)} · Nº ${s.invoiceNumber ?? s.controlNumber ?? "—"}`}
+          meta={`${formatDateSlash(s.createdAt)} · Nº ${s.invoiceNumber ?? s.controlNumber ?? "—"}`}
           amount={<span className="font-semibold tabular-nums">{money(s.totalCents)}</span>}
         />
       )}
@@ -82,7 +82,7 @@ export function SalesBookList({
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold">{nameOf(s)}</span>
             <span className="block truncate text-xs text-muted-foreground">
-              {formatDate(s.createdAt)} · Nº {s.invoiceNumber ?? s.controlNumber ?? "—"}
+              {formatDateSlash(s.createdAt)} · Nº {s.invoiceNumber ?? s.controlNumber ?? "—"}
             </span>
           </span>
           <span className="w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums">IVA {money(s.taxCents)}</span>
@@ -96,7 +96,7 @@ export function SalesBookList({
             <p className="text-sm text-muted-foreground">RIF/Cédula {s.customerRif ?? "—"}</p>
           </div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            <Field label="Fecha">{formatDate(s.createdAt)}</Field>
+            <Field label="Fecha">{formatDateSlash(s.createdAt)}</Field>
             <Field label="Nº control">{s.controlNumber ?? "—"}</Field>
             <Field label="Nº factura">{s.invoiceNumber ?? "—"}</Field>
             <Field label="Base imponible">{money(s.baseImponibleCents)}</Field>
@@ -142,7 +142,7 @@ export function PurchasesBookList({
       renderRowMobile={(p) => (
         <MobileRow
           title={supplierOf(p)}
-          meta={`${formatDate(p.createdAt)} · Nº ${p.supplierInvoiceNo ?? p.controlNumber ?? "—"}`}
+          meta={`${formatDateSlash(p.createdAt)} · Nº ${p.supplierInvoiceNo ?? p.controlNumber ?? "—"}`}
           amount={<span className="font-semibold tabular-nums">{money(p.totalCents)}</span>}
         />
       )}
@@ -152,7 +152,7 @@ export function PurchasesBookList({
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold">{supplierOf(p)}</span>
             <span className="block truncate text-xs text-muted-foreground">
-              {formatDate(p.createdAt)} · Nº {p.supplierInvoiceNo ?? p.controlNumber ?? "—"}
+              {formatDateSlash(p.createdAt)} · Nº {p.supplierInvoiceNo ?? p.controlNumber ?? "—"}
             </span>
           </span>
           <span className="w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums">IVA {money(p.taxCents)}</span>
@@ -166,7 +166,7 @@ export function PurchasesBookList({
             <p className="text-sm text-muted-foreground">RIF {p.supplier?.rif ?? "—"}</p>
           </div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            <Field label="Fecha">{formatDate(p.createdAt)}</Field>
+            <Field label="Fecha">{formatDateSlash(p.createdAt)}</Field>
             <Field label="Nº control">{p.controlNumber ?? "—"}</Field>
             <Field label="Factura proveedor">{p.supplierInvoiceNo ?? "—"}</Field>
             <Field label="Base imponible">{money(p.baseImponibleCents)}</Field>

@@ -65,7 +65,7 @@ export function QuoteHistoryTable({
     return [...quotes].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }, [quotes]);
 
-  const now = Date.now();
+  const [now] = useState(() => Date.now());
   function daysPending(createdAt: Date): number {
     return Math.floor((now - createdAt.getTime()) / (1000 * 60 * 60 * 24));
   }

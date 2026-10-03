@@ -89,6 +89,7 @@ export default async function FinancePage({
         />
         <StatCard
           label={`Por cobrar (${receivables.count})`}
+          href="/accounting/receivables"
           accent="warning"
           icon={ClockIcon}
           value={

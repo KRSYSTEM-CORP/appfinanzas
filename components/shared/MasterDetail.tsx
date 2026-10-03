@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRightIcon, XIcon } from "lucide-react";
 
@@ -49,6 +49,45 @@ export function MasterDetail<T extends { id: string }>({
   const sheetItem = sheetOpen ? items.find((i) => i.id === selectedId) : undefined;
   const sheetShown = sheetItem !== undefined;
 
+  // Drag the grip row down to dismiss: the panel follows the finger 1:1 and a
+  // quick flick closes it even when it didn't travel far.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ startY: number; startT: number; dy: number } | null>(null);
+
+  function dragStart(e: ReactPointerEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest("button")) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Capture is only an optimisation; dragging still works without it.
+    }
+    drag.current = { startY: e.clientY, startT: e.timeStamp, dy: 0 };
+    if (panelRef.current) panelRef.current.style.transition = "none";
+  }
+  function dragMove(e: ReactPointerEvent<HTMLDivElement>) {
+    const d = drag.current;
+    if (!d) return;
+    d.dy = Math.max(0, e.clientY - d.startY);
+    if (panelRef.current) panelRef.current.style.transform = `translateY(${d.dy}px)`;
+    if (scrimRef.current) scrimRef.current.style.opacity = String(Math.max(0, 1 - d.dy / 400));
+  }
+  function dragEnd(e: ReactPointerEvent<HTMLDivElement>) {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return;
+    const velocity = d.dy / Math.max(1, e.timeStamp - d.startT);
+    if (d.dy > 120 || (d.dy > 24 && velocity > 0.5)) {
+      setSheetOpen(false);
+      return;
+    }
+    if (panelRef.current) {
+      panelRef.current.style.transition = "transform 220ms var(--ease-ui)";
+      panelRef.current.style.transform = "";
+    }
+    if (scrimRef.current) scrimRef.current.style.opacity = "";
+  }
+
   useEffect(() => {
     if (!sheetShown) return;
     const previous = document.body.style.overflow;
@@ -94,13 +133,20 @@ export function MasterDetail<T extends { id: string }>({
 
       {sheetItem && createPortal(
         <div className="md:hidden fixed inset-0 z-[45]">
-          <div className="sheet-fade absolute inset-0 bg-black/40" onClick={() => setSheetOpen(false)} aria-hidden="true" />
+          <div ref={scrimRef} className="sheet-fade absolute inset-0 bg-black/40" onClick={() => setSheetOpen(false)} aria-hidden="true" />
           <div
+            ref={panelRef}
             role="dialog"
             aria-label={label}
             className="sheet-in absolute bottom-0 left-0 right-0 flex max-h-[88dvh] flex-col rounded-t-2xl border-t bg-popover text-popover-foreground shadow-2xl"
           >
-            <div className="flex items-center justify-between px-4 pt-3">
+            <div
+              className="flex touch-none items-center justify-between px-4 pt-3"
+              onPointerDown={dragStart}
+              onPointerMove={dragMove}
+              onPointerUp={dragEnd}
+              onPointerCancel={dragEnd}
+            >
               <span className="h-1.5 w-10 rounded-full bg-muted-foreground/25" aria-hidden="true" />
               <button
                 type="button"
