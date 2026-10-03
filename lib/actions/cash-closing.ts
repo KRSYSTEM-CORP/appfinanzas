@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { dayBoundsUtc, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
+import { SHOP_TIME_ZONE, dayBoundsUtc, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { closingDateFromString, openDayList } from "@/lib/closed-days";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type PaymentMethod } from "@prisma/client";
@@ -140,22 +140,31 @@ export async function listPendingClosings(range: DateRangeSelection): Promise<Pe
     const openDays = await openDayList(tx, companyId, branchId, windows);
     if (openDays.length === 0) return [];
 
-    const results = await Promise.all(
-      openDays.map(async (day) => {
-        const totals = await tx.sale.aggregate({
-          where: {
-            companyId,
-            ...(branchId ? { branchId } : {}),
-            createdAt: { gte: day.start, lt: day.end },
-            voided: false,
-          },
-          _sum: { totalCents: true },
-          _count: true,
-        });
-        return { date: day.dateStr, totalCents: totals._sum.totalCents ?? 0, salesCount: totals._count };
-      })
-    );
-    return results.filter((r) => r.salesCount > 0);
+    // One grouped query over the whole span instead of one aggregate per open
+    // day: a long range (e.g. 10 months) meant hundreds of sequential queries
+    // on the single transaction connection and blew the transaction timeout.
+    const spanStart = openDays.reduce((m, d) => (d.start < m ? d.start : m), openDays[0].start);
+    const spanEnd = openDays.reduce((m, d) => (d.end > m ? d.end : m), openDays[0].end);
+    const rows = await tx.$queryRaw<{ day: string; total_cents: bigint; sales_count: bigint }[]>`
+      SELECT to_char(s."createdAt" AT TIME ZONE ${SHOP_TIME_ZONE}, 'YYYY-MM-DD') AS day,
+             COALESCE(SUM(s."totalCents"), 0)::bigint AS total_cents,
+             COUNT(*)::bigint AS sales_count
+      FROM "Sale" s
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND s."createdAt" >= ${spanStart} AND s."createdAt" < ${spanEnd}
+        AND s."voided" = false
+      GROUP BY 1
+    `;
+    const byDay = new Map(rows.map((r) => [r.day, r]));
+    const results: PendingClosing[] = [];
+    for (const day of openDays) {
+      const r = byDay.get(day.dateStr);
+      if (r && Number(r.sales_count) > 0) {
+        results.push({ date: day.dateStr, totalCents: Number(r.total_cents), salesCount: Number(r.sales_count) });
+      }
+    }
+    return results;
   });
 }
 
