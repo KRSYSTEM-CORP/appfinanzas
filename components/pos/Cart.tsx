@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { MinusIcon, PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,27 +138,97 @@ export function Cart({
   const isExonerated = total <= 0 && lines.length > 0;
   const itemCount = lines.reduce((sum, l) => sum + l.quantity, 0);
 
-  const checkoutRef = useRef<HTMLDivElement>(null);
-  const [checkoutInView, setCheckoutInView] = useState(false);
+  // Phones: the cart is a bottom sheet opened from a bar showing the total.
+  // From md up the very same element is the inline column next to the catalog,
+  // so there is a single cart instance (and a single set of inputs) either way.
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const open = sheetOpen && lines.length > 0;
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ startY: number; startT: number; dy: number } | null>(null);
 
+  // Lock page scroll behind the sheet (phones only).
   useEffect(() => {
-    const el = checkoutRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(([entry]) => setCheckoutInView(entry.isIntersecting));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+    if (!open || !window.matchMedia("(max-width: 767px)").matches) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
 
-  function scrollToCheckout() {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    checkoutRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+  // Drag the grip row down to dismiss: the sheet follows the finger 1:1 and a
+  // quick flick closes it even when it did not travel far.
+  function dragStart(e: ReactPointerEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest("button")) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Capture is only an optimisation; dragging still works without it.
+    }
+    drag.current = { startY: e.clientY, startT: e.timeStamp, dy: 0 };
+    if (sheetRef.current) sheetRef.current.style.transition = "none";
+  }
+  function dragMove(e: ReactPointerEvent<HTMLDivElement>) {
+    const d = drag.current;
+    if (!d) return;
+    d.dy = Math.max(0, e.clientY - d.startY);
+    if (sheetRef.current) sheetRef.current.style.transform = `translateY(${d.dy}px)`;
+    if (scrimRef.current) scrimRef.current.style.opacity = String(Math.max(0, 1 - d.dy / 400));
+  }
+  function dragEnd(e: ReactPointerEvent<HTMLDivElement>) {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return;
+    const velocity = d.dy / Math.max(1, e.timeStamp - d.startT);
+    const dismiss = d.dy > 120 || (d.dy > 24 && velocity > 0.5);
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = "";
+      sheetRef.current.style.transform = "";
+    }
+    if (scrimRef.current) scrimRef.current.style.opacity = "";
+    if (dismiss) setSheetOpen(false);
   }
 
   return (
-    <div className={`flex flex-col h-full gap-3 ${lines.length > 0 ? "pb-24 md:pb-0" : ""}`}>
+    <>
+    {/* Phones only: scrim behind the sheet. */}
+    {open && (
+      <div
+        ref={scrimRef}
+        className="sheet-fade md:hidden fixed inset-0 z-[44] bg-black/40"
+        onClick={() => setSheetOpen(false)}
+        aria-hidden="true"
+      />
+    )}
+    <div
+      ref={sheetRef}
+      role={open ? "dialog" : undefined}
+      aria-label={open ? "Carrito" : undefined}
+      className={`flex flex-col h-full gap-3 max-md:fixed max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:z-[45] max-md:h-auto max-md:max-h-[88dvh] max-md:overflow-y-auto max-md:rounded-t-2xl max-md:border-t max-md:bg-popover max-md:text-popover-foreground max-md:px-4 max-md:pt-2 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:shadow-2xl max-md:transition-transform max-md:duration-[260ms] max-md:ease-[cubic-bezier(.23,1,.32,1)] motion-reduce:max-md:transition-none ${
+        open ? "max-md:translate-y-0" : "max-md:translate-y-full max-md:invisible"
+      }`}
+    >
+      <div
+        className="md:hidden flex touch-none items-center justify-between pt-1"
+        onPointerDown={dragStart}
+        onPointerMove={dragMove}
+        onPointerUp={dragEnd}
+        onPointerCancel={dragEnd}
+      >
+        <span className="h-1.5 w-10 rounded-full bg-muted-foreground/25" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => setSheetOpen(false)}
+          aria-label="Cerrar carrito"
+          className="flex size-10 items-center justify-center rounded-full text-muted-foreground active:bg-muted"
+        >
+          <XIcon className="size-5" />
+        </button>
+      </div>
       <h2 className="font-semibold">Carrito</h2>
 
-      <div className="flex-1 overflow-y-auto flex flex-col gap-2">
+      <div className="md:flex-1 md:overflow-y-auto flex flex-col gap-2">
         {lines.length === 0 && (
           <p className="text-sm text-muted-foreground py-8 text-center">
             Agrega productos para empezar una venta.
@@ -167,9 +237,11 @@ export function Cart({
         {lines.map((line) => (
           <div
             key={line.productId}
-            className="flex items-center justify-between gap-2 border-b border-dashed border-border pb-2 last:border-b-0"
+            className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-dashed border-border pb-3 last:border-b-0 md:flex-nowrap md:justify-between md:pb-2"
           >
-            <div className="flex-1 min-w-0">
+            {/* Phones: name + remove on the first row, quantity + subtotal on the
+                second (a single row left the name truncated to a few letters). */}
+            <div className="order-1 min-w-0 flex-[1_1_calc(100%_-_3.5rem)] md:flex-1 md:basis-auto">
               <p className="text-sm font-medium truncate">{line.name}</p>
               <p className="font-mono tabular-nums text-xs text-muted-foreground">
                 {exchangeRateEnabled && rate != null
@@ -187,7 +259,7 @@ export function Cart({
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="order-3 flex items-center gap-1 md:order-2">
               <Button
                 type="button"
                 size="icon-sm"
@@ -213,7 +285,7 @@ export function Cart({
                 <PlusIcon />
               </Button>
             </div>
-            <div className="w-28 text-right">
+            <div className="order-4 ml-auto text-right md:order-3 md:ml-0 md:w-28">
               <Price
                 eurCents={line.unitPriceCents * line.quantity}
                 rate={rate}
@@ -226,6 +298,7 @@ export function Cart({
               type="button"
               size="icon-sm"
               variant="ghost"
+              className="order-2 md:order-4"
               aria-label={`Quitar ${line.name} del carrito`}
               onClick={() => onRemove(line.productId)}
             >
@@ -353,7 +426,7 @@ export function Cart({
         </>
       )}
 
-      <div ref={checkoutRef} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button
@@ -367,10 +440,12 @@ export function Cart({
         </Button>
       </div>
 
-      {/* Phones only: the cart sits below the product list, so keep the total
-          and a jump to the checkout button in reach until it is on screen. */}
-      {lines.length > 0 && !checkoutInView && (
-        <div className="md:hidden fixed inset-x-0 bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 border-t glass-bar px-4 py-3">
+    </div>
+
+      {/* Phones only: the total and the way into the cart sheet stay in reach
+          while browsing the catalog. */}
+      {lines.length > 0 && !open && (
+        <div className="md:hidden fixed left-0 right-0 bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 border-t glass-bar px-4 py-3">
           <div className="flex min-w-0 flex-col">
             <span className="text-xs text-muted-foreground">
               {itemCount} {itemCount === 1 ? "artículo" : "artículos"}
@@ -384,11 +459,11 @@ export function Cart({
               size="lg"
             />
           </div>
-          <Button type="button" size="lg" className="shrink-0" onClick={scrollToCheckout}>
-            Ir a cobrar
+          <Button type="button" size="lg" className="shrink-0" onClick={() => setSheetOpen(true)}>
+            Ver carrito
           </Button>
         </div>
       )}
-    </div>
+    </>
   );
 }

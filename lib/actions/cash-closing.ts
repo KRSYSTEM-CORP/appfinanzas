@@ -146,7 +146,7 @@ export async function listPendingClosings(range: DateRangeSelection): Promise<Pe
     const spanStart = openDays.reduce((m, d) => (d.start < m ? d.start : m), openDays[0].start);
     const spanEnd = openDays.reduce((m, d) => (d.end > m ? d.end : m), openDays[0].end);
     const rows = await tx.$queryRaw<{ day: string; total_cents: bigint; sales_count: bigint }[]>`
-      SELECT to_char(s."createdAt" AT TIME ZONE ${SHOP_TIME_ZONE}, 'YYYY-MM-DD') AS day,
+      SELECT to_char(s."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE ${SHOP_TIME_ZONE}, 'YYYY-MM-DD') AS day,
              COALESCE(SUM(s."totalCents"), 0)::bigint AS total_cents,
              COUNT(*)::bigint AS sales_count
       FROM "Sale" s

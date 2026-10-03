@@ -114,6 +114,46 @@ export function selectionToWindows(selection: DateRangeSelection): { start: Date
   return selection.months.map((m) => monthWindowUtc(selection.year, m));
 }
 
+// The period a selection should be compared against, with a label for the UI:
+// - Hoy → ayer; 7 días → los 7 días anteriores;
+// - Este mes (lo que va del mes) → los mismos primeros N días del mes anterior,
+//   so a partial month is never compared with a whole one;
+// - Meses elegidos → los mismos meses del año anterior.
+export function comparisonWindows(
+  selection: DateRangeSelection
+): { windows: { start: Date; end: Date }[]; label: string } | null {
+  const now = new Date();
+  if (selection.kind === "months") {
+    return {
+      windows: selection.months.map((m) => monthWindowUtc(selection.year - 1, m)),
+      label: "vs mismo periodo del año anterior",
+    };
+  }
+  if (selection.preset === "today") {
+    return {
+      windows: [{ start: zonedMidnightUtc(now, SHOP_TIME_ZONE, -1), end: zonedMidnightUtc(now, SHOP_TIME_ZONE, 0) }],
+      label: "vs ayer",
+    };
+  }
+  if (selection.preset === "7d") {
+    return {
+      windows: [{ start: zonedMidnightUtc(now, SHOP_TIME_ZONE, -13), end: zonedMidnightUtc(now, SHOP_TIME_ZONE, -6) }],
+      label: "vs los 7 días anteriores",
+    };
+  }
+  // "month": the first `day` days of the previous calendar month.
+  const { year, month, day } = zonedDateParts(now, SHOP_TIME_ZONE);
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prev = monthWindowUtc(prevYear, prevMonth);
+  const noonOfFirst = new Date(prev.start.getTime() + 12 * 60 * 60 * 1000);
+  const end = zonedMidnightUtc(noonOfFirst, SHOP_TIME_ZONE, day);
+  return {
+    windows: [{ start: prev.start, end: end < prev.end ? end : prev.end }],
+    label: "vs mismo periodo del mes anterior",
+  };
+}
+
 const PRESET_VALUES = new Set(["today", "7d", "month"]);
 
 // Parses `?range=...` (+`&year=`/`&months=` for the "months" kind) back into

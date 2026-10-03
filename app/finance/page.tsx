@@ -14,6 +14,7 @@ import {
   topProducts,
   bottomProducts,
   incomeByCurrency,
+  revenueComparison,
 } from "@/lib/actions/reports";
 import { costOfGoodsSold, expensesTotal, listExpenses } from "@/lib/actions/finance";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
@@ -39,6 +40,7 @@ export default async function FinancePage({
     cogsCents,
     expensesCents,
     expenses,
+    comparison,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency },
   ] = await Promise.all([
     revenueTotals(range),
@@ -50,10 +52,25 @@ export default async function FinancePage({
     costOfGoodsSold(range),
     expensesTotal(range),
     listExpenses(range),
+    revenueComparison(range),
     getExchangeRateInfo(),
   ]);
 
   const netProfitCents = totals.totalEurCents - cogsCents - expensesCents;
+
+  // Only shown when both periods have at least one closed day and a baseline
+  // to compare against — otherwise a percentage would be noise.
+  const revenueDelta =
+    comparison && comparison.currentDays > 0 && comparison.previousDays > 0 && comparison.previousCents > 0
+      ? {
+          pct: Math.round(((comparison.currentCents - comparison.previousCents) / comparison.previousCents) * 100),
+          label: comparison.label,
+          note:
+            comparison.currentDays !== comparison.previousDays
+              ? `${comparison.currentDays} vs ${comparison.previousDays} días con cierre de caja`
+              : undefined,
+        }
+      : undefined;
 
   function currencyDisplayName(code: string): string {
     if (code === "EUR" || code === "USD") return code;
@@ -71,6 +88,7 @@ export default async function FinancePage({
         <StatCard
           label="Ingresos totales"
           accent="primary"
+          delta={revenueDelta}
           icon={TrendingUpIcon}
           value={
             <div className="flex flex-col">

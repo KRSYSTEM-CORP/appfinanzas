@@ -5,6 +5,7 @@ import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { closedDayWindows } from "@/lib/closed-days";
 import {
+  comparisonWindows,
   selectionToWindows,
   SHOP_TIME_ZONE,
   type BottomProductPoint,
@@ -75,6 +76,42 @@ export async function revenueTotals(range: DateRangeSelection) {
       totalVES: Number(vesRow?.ves_total ?? 0),
       count,
       avgEurCents: count > 0 ? Math.round(totalEurCents / count) : 0,
+    };
+  });
+}
+
+// Revenue for the selected period next to the comparable previous one. Like
+// every revenue figure here it only counts days with a cierre de caja, so the
+// number of closed days on each side is returned too: the UI shows it, since a
+// period with fewer closed days will naturally look smaller.
+export async function revenueComparison(range: DateRangeSelection) {
+  const { companyId, branchId } = await requireManager();
+  const comparison = comparisonWindows(range);
+  if (!comparison) return null;
+  const currentWindows = selectionToWindows(range);
+
+  return withTenant(companyId, async (tx) => {
+    async function closedRevenue(windows: { start: Date; end: Date }[]) {
+      const closed = await closedDayWindows(tx, companyId, branchId, windows);
+      if (closed.length === 0) return { cents: 0, days: 0 };
+      const result = await tx.sale.aggregate({
+        _sum: { totalCents: true },
+        where: {
+          companyId,
+          ...(branchId ? { branchId } : {}),
+          OR: closed.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
+          voided: false,
+        },
+      });
+      return { cents: result._sum.totalCents ?? 0, days: closed.length };
+    }
+    const [current, previous] = await Promise.all([closedRevenue(currentWindows), closedRevenue(comparison.windows)]);
+    return {
+      currentCents: current.cents,
+      previousCents: previous.cents,
+      currentDays: current.days,
+      previousDays: previous.days,
+      label: comparison.label,
     };
   });
 }
