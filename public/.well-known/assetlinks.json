@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.krsystem.krpos",
+      "sha256_cert_fingerprints": [
+        "97:D1:6E:1F:69:15:7D:53:8A:CA:5E:31:50:40:4D:B3:C5:49:3D:D9:76:CC:D9:5F:63:6E:48:6A:4F:FA:B2:60"
+      ]
+    }
+  }
+]
