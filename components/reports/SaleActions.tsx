@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { MoreVerticalIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -66,14 +67,22 @@ export function SaleActions({
 
   function handleVoid() {
     startTransition(async () => {
-      await voidSale(saleId);
+      const result = await voidSale(saleId);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
       router.refresh();
     });
   }
 
   function handleDelete() {
     startTransition(async () => {
-      await deleteSale(saleId);
+      const result = await deleteSale(saleId);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
       router.refresh();
     });
   }

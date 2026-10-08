@@ -62,6 +62,12 @@ export function LoginForm({
   const [branchChoices, setBranchChoices] = useState<BranchOption[] | null>(null);
   const [pendingCredentials, setPendingCredentials] = useState<{ email: string; password: string } | null>(null);
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileGeneration, setTurnstileGeneration] = useState(0);
+
+  function resetTurnstile() {
+    setTurnstileToken("");
+    setTurnstileGeneration((generation) => generation + 1);
+  }
 
   // Preview the remembered company's branding right away, same as if the
   // employee had just typed its code themselves.
@@ -98,6 +104,11 @@ export function LoginForm({
 
   function handleSubmit(formData: FormData) {
     setError(null);
+    if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError("Resuelve la verificación de seguridad para continuar.");
+      return;
+    }
+    formData.set("cf-turnstile-response", turnstileToken);
     startTransition(async () => {
       if (mode === "employee") {
         // A single "nombre y apellido" input reads as one username field to
@@ -107,7 +118,10 @@ export function LoginForm({
         formData.set("firstName", firstName);
         formData.set("lastName", lastName);
         const result = await loginEmployee(formData);
-        if (!result.success) setError(result.error);
+        if (!result.success) {
+          setError(result.error);
+          resetTurnstile();
+        }
         return;
       }
 
@@ -115,12 +129,15 @@ export function LoginForm({
       if (result.success) return;
       if ("suspended" in result) {
         setSuspended(true);
+        resetTurnstile();
         return;
       }
       if ("error" in result) {
         setError(result.error);
+        resetTurnstile();
         return;
       }
+      resetTurnstile();
       setPendingCredentials({
         email: String(formData.get("email") ?? ""),
         password: String(formData.get("password") ?? ""),
@@ -131,14 +148,22 @@ export function LoginForm({
 
   function handleBranchPick(branchId: string) {
     if (!pendingCredentials) return;
+    if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError("Resuelve la verificación de seguridad para continuar.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       const formData = new FormData();
       formData.set("email", pendingCredentials.email);
       formData.set("password", pendingCredentials.password);
       formData.set("branchId", branchId);
+      formData.set("cf-turnstile-response", turnstileToken);
       const result = await login(formData);
-      if (!result.success && "error" in result) setError(result.error);
+      if (!result.success && "error" in result) {
+        setError(result.error);
+        resetTurnstile();
+      }
     });
   }
 
@@ -261,9 +286,10 @@ export function LoginForm({
         <p className="text-sm text-destructive text-center">{GOOGLE_ERRORS[authError]}</p>
       )}
 
+      <Turnstile key={turnstileGeneration} onVerify={setTurnstileToken} />
+
       {mode === "owner" && googleConfigured && !branchChoices && (
         <>
-          <Turnstile onVerify={setTurnstileToken} />
           <button
             type="button"
             onClick={handleGoogleClick}

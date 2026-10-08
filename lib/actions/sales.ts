@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Prisma, PaymentStatus } from "@prisma/client";
-import { requireSession } from "@/lib/session";
+import { Prisma, type PaymentStatus } from "@prisma/client";
+import { requireSectionAccess, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { notifyLive, posChannel } from "@/lib/realtime";
 import { SaleSchema, RegisterPaymentSchema } from "@/lib/validations";
@@ -20,6 +20,30 @@ import type { ActionResult } from "@/lib/types";
 export type CompleteSaleResult =
   | { success: true; saleId: string }
   | { success: false; error: string };
+
+// The legacy document numbers are derived from row counts. Locking the
+// branch row makes those sequences safe when several registers write at once.
+async function lockBranchSequence(tx: Prisma.TransactionClient, companyId: string, branchId: string) {
+  await tx.$queryRaw(Prisma.sql`
+    SELECT "id" FROM "Branch"
+    WHERE "id" = ${branchId} AND "companyId" = ${companyId}
+    FOR UPDATE
+  `);
+}
+
+async function lockSale(
+  tx: Prisma.TransactionClient,
+  saleId: string,
+  companyId: string,
+  branchId: string | null
+) {
+  const branchFilter = branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty;
+  await tx.$queryRaw(Prisma.sql`
+    SELECT "id" FROM "Sale"
+    WHERE "id" = ${saleId} AND "companyId" = ${companyId} ${branchFilter}
+    FOR UPDATE
+  `);
+}
 
 export async function completeSale(input: unknown): Promise<CompleteSaleResult> {
   const session = await requireSession();
@@ -47,10 +71,20 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     customerRif,
     note,
     quoteId,
+    idempotencyKey,
   } = parsed.data;
 
   try {
     const saleId = await withTenant(companyId, async (tx) => {
+      await lockBranchSequence(tx, companyId, branchId);
+      if (idempotencyKey) {
+        const existing = await tx.sale.findFirst({
+          where: { companyId, idempotencyKey },
+          select: { id: true },
+        });
+        if (existing) return existing.id;
+      }
+
       const company = await tx.company.findUnique({
         where: { id: companyId },
         select: {
@@ -190,6 +224,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           branchId,
           exchangeRate,
           controlNumber: previousCount + 1,
+          idempotencyKey: idempotencyKey ?? null,
           sellerId: userId,
           sellerName,
           note: note ?? null,
@@ -219,14 +254,27 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         quantityByProductId.set(item.productId, (quantityByProductId.get(item.productId) ?? 0) + item.quantity);
       }
       await Promise.all(
-        Array.from(quantityByProductId, ([productId, quantity]) => {
+        Array.from(quantityByProductId, async ([productId, quantity]) => {
           const product = productById.get(productId)!;
-          if (!product.trackStock) return null;
-          const newStock = product.stock - quantity;
-          return tx.product.updateMany({
-            where: { id: productId, companyId, branchId },
-            data: { stock: newStock, ...(newStock === 0 ? { isActive: false } : {}) },
-          });
+          if (!product.trackStock) return;
+          const updated = await tx.$executeRaw`
+            UPDATE "Product"
+            SET "stock" = "stock" - ${quantity},
+                "isActive" = CASE WHEN "stock" - ${quantity} = 0 THEN false ELSE "isActive" END
+            WHERE "id" = ${productId} AND "companyId" = ${companyId}
+              AND "branchId" = ${branchId} AND "trackStock" = true AND "stock" >= ${quantity}
+          `;
+          if (updated === 0) {
+            const current = await tx.product.findFirst({
+              where: { id: productId, companyId, branchId },
+              select: { name: true, stock: true },
+            });
+            throw new Error(
+              current
+                ? `Stock insuficiente para "${current.name}" (disponible: ${current.stock})`
+                : "Uno de los productos ya no existe"
+            );
+          }
         })
       );
 
@@ -255,6 +303,12 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     void notifyLive(posChannel(companyId), "sale");
     return { success: true, saleId };
   } catch (err) {
+    if (idempotencyKey && err instanceof Error && "code" in err && (err as { code?: string }).code === "P2002") {
+      const existing = await withTenant(companyId, (tx) =>
+        tx.sale.findFirst({ where: { companyId, idempotencyKey }, select: { id: true } })
+      );
+      if (existing) return { success: true, saleId: existing.id };
+    }
     const isDuplicateQuoteLink =
       err instanceof Error && "code" in err && (err as { code?: string }).code === "P2002";
     const message = isDuplicateQuoteLink
@@ -275,29 +329,25 @@ async function restoreStock(tx: Prisma.TransactionClient, saleId: string, compan
   }
   if (quantityByProductId.size === 0) return;
 
-  const products = await tx.product.findMany({
-    where: { id: { in: Array.from(quantityByProductId.keys()) }, companyId, branchId },
-  });
-  const productById = new Map(products.map((p) => [p.id, p]));
-
   await Promise.all(
-    Array.from(quantityByProductId, ([productId, quantity]) => {
-      const product = productById.get(productId);
-      if (!product || !product.trackStock) return null;
-      const newStock = product.stock + quantity;
-      return tx.product.updateMany({
-        where: { id: productId, companyId, branchId },
-        data: { stock: newStock, ...(product.stock === 0 && newStock > 0 ? { isActive: true } : {}) },
-      });
-    })
+    Array.from(quantityByProductId, ([productId, quantity]) =>
+      tx.$executeRaw`
+        UPDATE "Product"
+        SET "stock" = "stock" + ${quantity},
+            "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${quantity} > 0 THEN true ELSE "isActive" END
+        WHERE "id" = ${productId} AND "companyId" = ${companyId}
+          AND "branchId" = ${branchId} AND "trackStock" = true
+      `
+    )
   );
 }
 
 export async function voidSale(saleId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireSession();
+  const { companyId, branchId: sessionBranchId } = await requireSectionAccess("reports");
 
   try {
     await withTenant(companyId, async (tx) => {
+      await lockSale(tx, saleId, companyId, sessionBranchId);
       const sale = await tx.sale.findFirst({
         where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
       });
@@ -320,10 +370,11 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
 }
 
 export async function deleteSale(saleId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireSession();
+  const { companyId, branchId: sessionBranchId } = await requireSectionAccess("reports");
 
   try {
     await withTenant(companyId, async (tx) => {
+      await lockSale(tx, saleId, companyId, sessionBranchId);
       const sale = await tx.sale.findFirst({
         where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
       });
@@ -363,6 +414,7 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
 
   try {
     await withTenant(companyId, async (tx) => {
+      await lockSale(tx, saleId, companyId, sessionBranchId);
       const sale = await tx.sale.findFirst({
         where: {
           id: saleId,
@@ -425,6 +477,8 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
 
       if (!isFullySettled) return;
 
+      await lockBranchSequence(tx, companyId, sale.branchId);
+
       // Progressive, per-branch sequence for the "Recibo de pago" document —
       // independent of controlNumber (the Nota de entrega's own sequence),
       // assigned only now, the moment this credit sale's debt is fully
@@ -477,6 +531,13 @@ export async function getOrCreateInvoiceNumber(saleId: string): Promise<{ invoic
     });
     if (!sale) return null;
     if (sale.invoiceNumber != null) return { invoiceNumber: sale.invoiceNumber };
+
+    await lockBranchSequence(tx, companyId, sale.branchId);
+    const current = await tx.sale.findFirst({
+      where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
+      select: { invoiceNumber: true },
+    });
+    if (current?.invoiceNumber != null) return { invoiceNumber: current.invoiceNumber };
 
     const previousCount = await tx.sale.count({
       where: { branchId: sale.branchId, invoiceNumber: { not: null } },

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { SearchIcon, XIcon } from "lucide-react";
 import type { Product } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -113,14 +114,22 @@ export function ProductTable({
 
   function toggleActive(id: string, isActive: boolean) {
     startTransition(async () => {
-      await setProductActive(id, !isActive);
+      const result = await setProductActive(id, !isActive);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
       router.refresh();
     });
   }
 
   function handleDelete(id: string) {
     startTransition(async () => {
-      await deleteProduct(id);
+      const result = await deleteProduct(id);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
       router.refresh();
     });
   }

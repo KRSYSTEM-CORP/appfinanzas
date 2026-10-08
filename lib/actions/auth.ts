@@ -222,6 +222,16 @@ export type LoginResult =
   | { success: false; needsBranch: true; branches: { id: string; name: string }[] };
 
 export async function login(formData: FormData): Promise<LoginResult> {
+  const ip = await getClientIp();
+  const turnstileToken = formData.get("cf-turnstile-response");
+  const turnstileOk = await verifyTurnstileToken(
+    typeof turnstileToken === "string" ? turnstileToken : "",
+    ip
+  );
+  if (!turnstileOk) {
+    return { success: false, error: "No pudimos verificar que eres humano. Intenta de nuevo." };
+  }
+
   const parsed = LoginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
@@ -313,6 +323,16 @@ export async function login(formData: FormData): Promise<LoginResult> {
 // password, so staff sign in with their company's short loginCode plus their
 // own name+password instead.
 export async function loginEmployee(formData: FormData): Promise<ActionResult> {
+  const ip = await getClientIp();
+  const turnstileToken = formData.get("cf-turnstile-response");
+  const turnstileOk = await verifyTurnstileToken(
+    typeof turnstileToken === "string" ? turnstileToken : "",
+    ip
+  );
+  if (!turnstileOk) {
+    return { success: false, error: "No pudimos verificar que eres humano. Intenta de nuevo." };
+  }
+
   const parsed = EmployeeLoginSchema.safeParse({
     companyCode: formData.get("companyCode"),
     firstName: formData.get("firstName"),

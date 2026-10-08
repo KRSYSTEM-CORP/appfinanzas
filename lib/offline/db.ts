@@ -14,7 +14,8 @@ const CATALOG_STORE_NAME = "catalog";
 // PaymentSplitRow (which carries the raw text amount) so a queued sale
 // re-submits identically to what an online checkout would have sent.
 export type PendingSaleInput = {
-  items: { productId: string; quantity: number }[];
+  items: { productId: string; quantity: number; priceTier?: "RETAIL" | "WHOLESALE" | "BULK" }[];
+  idempotencyKey?: string;
   paymentStatus: PaymentStatus;
   payments: {
     paymentMethod: PaymentMethod;
