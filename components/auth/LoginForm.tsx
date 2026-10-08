@@ -235,6 +235,7 @@ export function LoginForm({
         </div>
         <button
           type="button"
+          aria-pressed={mode === "owner"}
           onClick={() => setSuspended(false)}
           className="text-sm text-muted-foreground underline underline-offset-4"
         >
@@ -246,9 +247,10 @@ export function LoginForm({
 
   return (
     <div className="flex flex-col gap-4 max-w-sm mx-auto">
-      <div className="flex gap-1 rounded-lg border p-1 mx-auto">
+      <div className="mx-auto grid w-full grid-cols-2 gap-1 rounded-xl border bg-card p-1">
         <button
           type="button"
+          aria-pressed={mode === "owner"}
           onClick={() => {
             setMode("owner");
             setError(null);
@@ -256,7 +258,7 @@ export function LoginForm({
             setBranchChoices(null);
             setPendingCredentials(null);
           }}
-          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+          className={`min-h-11 min-w-0 rounded-lg px-2 py-2 text-center text-xs transition-colors sm:text-sm ${
             mode === "owner" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
           }`}
         >
@@ -264,6 +266,7 @@ export function LoginForm({
         </button>
         <button
           type="button"
+          aria-pressed={mode === "employee"}
           onClick={() => {
             setMode("employee");
             setError(null);
@@ -274,7 +277,7 @@ export function LoginForm({
             setBranchChoices(null);
             setPendingCredentials(null);
           }}
-          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+          className={`min-h-11 min-w-0 rounded-lg px-2 py-2 text-center text-xs transition-colors sm:text-sm ${
             mode === "employee" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
           }`}
         >
@@ -354,7 +357,7 @@ export function LoginForm({
         )}
 
         {mode === "owner" ? (
-          <div className="flex flex-col gap-1.5">
+          <div className="flex min-w-0 flex-col gap-1.5">
             <Label htmlFor="email">Correo</Label>
             <Input
               id="email"
@@ -368,13 +371,13 @@ export function LoginForm({
         ) : rememberedCompany && useRemembered ? (
           <>
             <input type="hidden" name="companyCode" value={rememberedCompany.code} />
-            <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-              <span className="text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border bg-card px-3 py-2 text-sm">
+              <span className="min-w-0 flex-1 text-muted-foreground">
                 Negocio: <span className="text-foreground font-medium">{rememberedCompany.companyName ?? "recordado en este dispositivo"}</span>
               </span>
               <button
                 type="button"
-                className="text-xs text-muted-foreground underline underline-offset-4 shrink-0"
+                className="shrink-0 text-xs text-muted-foreground underline underline-offset-4"
                 onClick={() => {
                   setUseRemembered(false);
                   setBranding(NO_BRANDING);
@@ -386,7 +389,7 @@ export function LoginForm({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="fullName">Nombre de usuario</Label>
-              <Input id="fullName" name="fullName" autoComplete="username" required />
+              <Input id="fullName" name="fullName" autoComplete="username" autoCapitalize="words" required />
               <p className="text-xs text-muted-foreground">Escribe nombre y apellido</p>
             </div>
           </>
@@ -394,23 +397,33 @@ export function LoginForm({
           <>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="companyCode">Código de empresa</Label>
-              <Input id="companyCode" name="companyCode" onBlur={handleCompanyCodeBlur} required />
+              <Input
+                id="companyCode"
+                name="companyCode"
+                autoComplete="organization"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                onBlur={handleCompanyCodeBlur}
+                required
+              />
+              <p className="text-xs text-muted-foreground">Solicítalo al administrador de tu negocio.</p>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="fullName">Nombre de usuario</Label>
-              <Input id="fullName" name="fullName" autoComplete="username" required />
+              <Input id="fullName" name="fullName" autoComplete="username" autoCapitalize="words" required />
               <p className="text-xs text-muted-foreground">Escribe nombre y apellido</p>
             </div>
           </>
         )}
 
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <Label htmlFor="password">Contraseña</Label>
             {mode === "owner" && (
               <Link
                 href="/forgot-password"
-                className="text-xs text-muted-foreground underline underline-offset-4"
+                className="shrink-0 text-xs text-muted-foreground underline underline-offset-4"
               >
                 ¿Olvidaste tu contraseña?
               </Link>

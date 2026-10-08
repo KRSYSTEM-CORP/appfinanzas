@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { MoreHorizontalIcon, PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { ProductTable } from "@/components/inventory/ProductTable";
 import { PriceListButton } from "@/components/inventory/PriceListButton";
 import { listAllProducts, listCategories } from "@/lib/actions/products";
@@ -33,17 +35,19 @@ export default async function InventoryPage() {
   const canManage = session.role === "GERENTE" || session.isSuperAdmin;
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-5 p-4 md:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Inventario</h1>
+          <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Gestión de productos</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Inventario</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Encuentra productos y revisa sus existencias y precios.</p>
           {lowStockCount > 0 && (
-            <p className="text-sm text-warning mt-1">
+            <p className="mt-1 hidden text-sm text-warning md:block">
               {lowStockCount} producto{lowStockCount === 1 ? "" : "s"} con stock bajo
             </p>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="hidden flex-wrap gap-2 md:flex">
           <PriceListButton
             products={priceListProducts}
             company={priceListCompany}
@@ -61,6 +65,50 @@ export default async function InventoryPage() {
                 Nuevo producto
               </Button>
             </>
+          )}
+        </div>
+        <div className="flex items-center gap-2 md:hidden">
+          {canManage ? (
+            <>
+              <Button nativeButton={false} render={<Link href="/inventory/new" />} className="flex-1">
+                <PlusIcon data-icon="inline-start" /> Nuevo producto
+              </Button>
+              <ActionMenu
+                trigger={<Button type="button" variant="outline" size="icon" aria-label="Más acciones de inventario" />}
+                triggerChildren={<MoreHorizontalIcon />}
+                contentClassName="md:w-56"
+              >
+                <PriceListButton
+                  products={priceListProducts}
+                  company={priceListCompany}
+                  referenceCurrency={referenceCurrency}
+                  className="w-full justify-start"
+                />
+                <Button
+                  nativeButton={false}
+                  variant="ghost"
+                  render={<Link href="/inventory/update" />}
+                  className="w-full justify-start"
+                >
+                  Actualizar desde Excel
+                </Button>
+                <Button
+                  nativeButton={false}
+                  variant="ghost"
+                  render={<Link href="/inventory/import" />}
+                  className="w-full justify-start"
+                >
+                  Importar desde Excel
+                </Button>
+              </ActionMenu>
+            </>
+          ) : (
+            <PriceListButton
+              products={priceListProducts}
+              company={priceListCompany}
+              referenceCurrency={referenceCurrency}
+              className="w-full justify-start"
+            />
           )}
         </div>
       </div>

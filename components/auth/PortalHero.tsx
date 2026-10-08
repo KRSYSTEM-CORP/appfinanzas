@@ -65,7 +65,7 @@ export function PortalHero() {
 
       <style>{`
         .portal-hero {
-          background: linear-gradient(140deg, #24145e, #4528bd 58%, #6b4bf0);
+          background: linear-gradient(140deg, #211a54 0%, #4435bd 56%, #6655e5 100%);
         }
         .portal-hero-blob-a,
         .portal-hero-blob-b {
@@ -86,7 +86,7 @@ export function PortalHero() {
         .portal-hero-blob-b {
           bottom: -12rem;
           left: -8rem;
-          background: radial-gradient(circle, rgb(174 151 255 / 40%), transparent 70%);
+          background: radial-gradient(circle, rgb(255 118 94 / 25%), rgb(174 151 255 / 16%) 38%, transparent 72%);
           filter: blur(8px);
           animation: portal-glow 10s ease-in-out infinite alternate;
         }

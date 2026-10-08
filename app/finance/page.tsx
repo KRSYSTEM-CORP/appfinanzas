@@ -78,7 +78,7 @@ export default async function FinancePage({
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 md:p-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-semibold">Finanzas</h1>
         <DateRangeSwitcher selection={range} />

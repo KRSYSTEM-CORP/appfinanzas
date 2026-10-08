@@ -85,6 +85,7 @@ export function ProductTable({
       .sort((a, b) => b.stock - a.stock);
   }, [products]);
   const totalStock = categoryTotals.reduce((sum, c) => sum + c.stock, 0);
+  const lowStockCount = products.filter((p) => p.isActive && isLowStock(p)).length;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -136,7 +137,7 @@ export function ProductTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border bg-card shadow-xs overflow-x-auto">
+      <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-xs md:block">
         <div className="px-3 py-2 border-b bg-muted/40 text-sm font-medium">Resumen por categoría</div>
         <Table>
           <TableHeader>
@@ -163,7 +164,7 @@ export function ProductTable({
         </Table>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-sm sm:w-auto sm:flex-1">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
@@ -217,6 +218,42 @@ export function ProductTable({
             : `${filtered.length} de ${products.length} productos`}
         </span>
       </div>
+
+      <div className="grid grid-cols-2 gap-2 md:hidden">
+        <div className="rounded-xl border bg-card px-3.5 py-3">
+          <p className="text-xs text-muted-foreground">Productos</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums">{products.length}</p>
+        </div>
+        <div className="rounded-xl border bg-card px-3.5 py-3">
+          <p className="text-xs text-muted-foreground">Unidades en stock</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums">{totalStock.toLocaleString("es-VE")}</p>
+        </div>
+        {lowStockCount > 0 && (
+          <div className="col-span-2 flex items-center justify-between rounded-xl border border-warning/20 bg-warning/5 px-3.5 py-2.5">
+            <span className="text-sm text-warning">Productos con stock bajo</span>
+            <span className="font-semibold tabular-nums text-warning">{lowStockCount}</span>
+          </div>
+        )}
+      </div>
+
+      <details className="rounded-xl border bg-card md:hidden">
+        <summary className="min-h-11 cursor-pointer list-none px-3.5 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center justify-between gap-3">
+            Resumen por categoría
+            <span className="text-xs font-normal text-muted-foreground">{categoryTotals.length} categorías</span>
+          </span>
+        </summary>
+        <div className="border-t px-3.5">
+          {categoryTotals.map((c) => (
+            <div key={c.category} className="flex min-h-11 items-center justify-between gap-3 border-b last:border-b-0">
+              <span className="min-w-0 truncate text-sm">{c.category}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {c.count} prod. <span className="mx-1" aria-hidden="true">·</span> Stock {c.stock.toLocaleString("es-VE")}
+              </span>
+            </div>
+          ))}
+        </div>
+      </details>
 
       <ProductMasterDetail
         products={filtered}

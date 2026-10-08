@@ -85,14 +85,14 @@ export function CustomerForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-5 max-w-md mx-auto my-8 rounded-xl border bg-card p-6 shadow-sm"
+      className="mx-auto my-4 flex w-full max-w-2xl flex-col gap-5 rounded-2xl border bg-card p-5 shadow-[0_8px_28px_color-mix(in_oklab,var(--foreground)_5%,transparent)] sm:my-6 sm:p-7"
     >
       <div className="flex items-start gap-3">
         <div className="flex items-center justify-center size-9 shrink-0 rounded-lg bg-primary/10 text-primary">
           <UserIcon className="size-4.5" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold leading-tight">Datos del cliente</h2>
+          <h2 className="text-lg font-semibold leading-tight tracking-tight">Datos del cliente</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             Un dato rápido y pasas directo al catálogo.
           </p>
@@ -174,7 +174,7 @@ export function CustomerForm({
       </div>
 
       <Button type="submit" size="lg" className="w-full">
-        Ver catálogo
+        Continuar al catálogo
       </Button>
     </form>
   );

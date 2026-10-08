@@ -199,7 +199,7 @@ export default async function SettingsPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-8 p-6">
+    <div className="flex flex-col gap-8 p-4 md:p-6">
       {((session.role === "GERENTE" || session.isSuperAdmin) ||
         (!session.isExempt && session.nextPaymentDueDate)) && (
         <div className="flex flex-wrap gap-4">

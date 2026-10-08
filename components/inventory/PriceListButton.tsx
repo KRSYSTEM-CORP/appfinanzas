@@ -10,10 +10,12 @@ export function PriceListButton({
   products,
   company,
   referenceCurrency,
+  className,
 }: {
   products: PriceListProduct[];
   company: DeliveryNoteCompany;
   referenceCurrency: ReferenceCurrency;
+  className?: string;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -28,7 +30,7 @@ export function PriceListButton({
   }
 
   return (
-    <Button type="button" variant="outline" disabled={busy} onClick={download}>
+    <Button type="button" variant="outline" disabled={busy} onClick={download} className={className}>
       {busy ? "Generando..." : "Descargar lista de precios"}
     </Button>
   );

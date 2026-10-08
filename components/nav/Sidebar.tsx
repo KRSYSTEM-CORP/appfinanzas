@@ -105,9 +105,9 @@ function NavGroup({
             aria-current={active ? "page" : undefined}
             onClick={onNavigate}
             title={collapsed ? item.label : undefined}
-            className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
+            className={`flex min-h-10 items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition-[background-color,color,box-shadow] duration-150 ease-out ${
               active
-                ? "bg-primary/10 font-medium text-primary"
+                ? "bg-primary/10 font-semibold text-primary shadow-[inset_3px_0_0_var(--primary)]"
                 : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             } ${collapsed ? "justify-center" : ""}`}
           >

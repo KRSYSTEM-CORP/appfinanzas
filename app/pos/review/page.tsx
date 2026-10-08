@@ -11,7 +11,7 @@ export default async function PosReviewPage() {
   await requireManager();
 
   return (
-    <div className="flex flex-col gap-4 p-6 max-w-2xl">
+    <div className="flex flex-col gap-4 p-4 md:p-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-semibold">Ventas pendientes de revisión</h1>
         <p className="text-sm text-muted-foreground mt-1">

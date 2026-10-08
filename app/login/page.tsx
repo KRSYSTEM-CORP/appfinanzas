@@ -19,8 +19,8 @@ export default async function LoginPage({
   const [rememberedCompany, { error, blocked }] = await Promise.all([getRememberedCompany(), searchParams]);
   return (
     <div className="grid lg:grid-cols-2 min-h-full">
-      <div className="flex flex-col gap-6 p-6 py-12 overflow-x-hidden">
-        <div className="w-full max-w-sm mx-auto flex flex-col gap-6 flex-1">
+      <div className="flex flex-col gap-6 p-4 py-8 overflow-x-hidden sm:p-6 sm:py-12">
+        <div className="mx-auto flex w-full min-w-0 max-w-sm flex-1 flex-col gap-6">
           <TrialBadge />
           <div className="text-center flex flex-col items-center gap-3">
             <Image

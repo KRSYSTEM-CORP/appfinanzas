@@ -19,7 +19,7 @@ export default async function CustomersPage() {
   const canManage = session.role === "GERENTE" || session.isSuperAdmin;
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4 p-4 md:p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Clientes</h1>
         <Button nativeButton={false} render={<Link href="/customers/new" />}>

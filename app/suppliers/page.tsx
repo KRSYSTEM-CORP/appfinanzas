@@ -9,7 +9,7 @@ export default async function SuppliersPage() {
   const suppliers = await listSuppliers();
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4 p-4 md:p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Proveedores</h1>
         <Button nativeButton={false} render={<Link href="/suppliers/new" />}>
