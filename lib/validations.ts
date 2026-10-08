@@ -305,6 +305,7 @@ export type CustomerCrmInput = z.infer<typeof CustomerCrmSchema>;
 export const SaleSchema = z
   .object({
     items: z.array(CartItemSchema).min(1, "El carrito está vacío"),
+    idempotencyKey: z.string().uuid().optional(),
     paymentStatus: z.enum(["PAID", "CREDIT"]).default("PAID"),
     // Credit sales aren't paid at checkout, so no payment split applies yet —
     // it's captured later when the customer actually pays (see registerPayment).

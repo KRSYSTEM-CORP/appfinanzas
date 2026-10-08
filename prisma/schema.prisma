@@ -527,7 +527,12 @@ model Sale {
   // never quoted first.
   quoteId               String?        @unique
   quote                 Quote?         @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  // Client-generated key for retry-safe offline sale synchronization. Null
+  // for online sales; unique per company so a lost response cannot create a
+  // second sale when the same queued sale is submitted again.
+  idempotencyKey        String?
 
+  @@unique([companyId, idempotencyKey])
   @@unique([branchId, controlNumber])
   @@unique([branchId, receiptControlNumber])
   @@unique([branchId, invoiceNumber])

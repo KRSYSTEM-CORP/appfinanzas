@@ -12,10 +12,11 @@ import {
 export type { PendingSale, PendingSaleInput, PendingSalePreview };
 
 export async function queueSale(input: PendingSaleInput, preview: PendingSalePreview): Promise<PendingSale> {
+  const localId = crypto.randomUUID();
   const sale: PendingSale = {
-    localId: crypto.randomUUID(),
+    localId,
     queuedAt: new Date().toISOString(),
-    input,
+    input: { ...input, idempotencyKey: input.idempotencyKey ?? localId },
     preview,
   };
   await addPendingSale(sale);
@@ -47,7 +48,11 @@ export async function syncPendingSales(): Promise<SyncResult> {
   let synced = 0;
   for (const sale of pending) {
     try {
-      const result = await completeSale(sale.input);
+      const result = await completeSale({
+        ...sale.input,
+        // Older IndexedDB entries predate server-side idempotency.
+        idempotencyKey: sale.input.idempotencyKey ?? sale.localId,
+      });
       if (result.success) {
         await removePendingSale(sale.localId);
         synced++;
