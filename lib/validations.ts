@@ -390,10 +390,17 @@ export const ResetPasswordSchema = z
 
 export const EmployeeLoginSchema = z.object({
   companyCode: z.string().trim().min(1, "El código de empresa es obligatorio"),
-  firstName: nameField("El nombre es obligatorio"),
-  lastName: nameField("El apellido es obligatorio"),
+  username: z.string().trim().min(1, "El usuario es obligatorio").max(120, "El usuario es demasiado largo"),
   password: z.string().min(1, "La contraseña es obligatoria"),
 });
+
+const employeeUsernameField = z
+  .string()
+  .trim()
+  .min(3, "El usuario debe tener al menos 3 caracteres")
+  .max(32, "El usuario no puede superar 32 caracteres")
+  .regex(/^[a-zA-Z0-9._-]+$/, "Usa solo letras, números, punto, guion o guion bajo")
+  .transform((value) => value.toLowerCase());
 
 const RoleSchema = z.enum(["GERENTE", "VENDEDOR"]);
 
@@ -410,6 +417,7 @@ export const EmployeeSchema = z
   .object({
     firstName: nameField("El nombre es obligatorio"),
     lastName: nameField("El apellido es obligatorio"),
+    loginUsername: employeeUsernameField,
     password: passwordField("La contraseña"),
     role: RoleSchema,
     branchId: branchIdField,
@@ -440,6 +448,10 @@ export const EmployeeUpdateSchema = z
   .object({
     firstName: nameField("El nombre es obligatorio"),
     lastName: nameField("El apellido es obligatorio"),
+    loginUsername: z.preprocess(
+      (value) => (value == null ? "" : value),
+      z.string().trim().transform((value) => (value ? employeeUsernameField.parse(value) : null)),
+    ),
     role: RoleSchema,
     branchId: branchIdField,
     // Empty string means "keep the current password" — only validated as a

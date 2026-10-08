@@ -253,9 +253,12 @@ model User {
   isSuperAdmin        Boolean              @default(false)
   // Null for the original owner account created via signup() (which still
   // logs in with email). Set for employee profiles created from
-  // /employees, who log in with companyCode + firstName + lastName instead.
+  // /employees. The display name is separate from the employee login handle.
   firstName           String?
   lastName            String?
+  // Optional unique login handle for employees. Existing accounts can keep
+  // their name-based sign-in until a manager assigns a username.
+  loginUsername       String?
   // Small JPEG data URL (resized client-side to 256px), same storage pattern as
   // Company.logoDataUrl / Product.imageDataUrl. Shown on the profiles screen.
   photoDataUrl        String?              @db.Text
@@ -293,7 +296,7 @@ model User {
   expenses            Expense[]
   passwordResetTokens PasswordResetToken[]
 
-  @@unique([companyId, firstName, lastName])
+  @@unique([companyId, loginUsername])
   @@index([companyId])
   @@index([branchId])
 }

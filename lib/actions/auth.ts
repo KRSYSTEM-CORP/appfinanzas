@@ -19,6 +19,7 @@ import {
 import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { splitFullName } from "@/lib/name";
 import {
   EmployeeLoginSchema,
   LoginSchema,
@@ -318,10 +319,8 @@ export async function login(formData: FormData): Promise<LoginResult> {
   redirect("/pos");
 }
 
-// Employee login: no email involved — a company's manager creates each
-// employee profile (see lib/actions/employees.ts) with just a name and
-// password, so staff sign in with their company's short loginCode plus their
-// own name+password instead.
+// Employee login: a unique username is preferred. Existing staff can keep
+// signing in with their old full name until a manager assigns a username.
 export async function loginEmployee(formData: FormData): Promise<ActionResult> {
   const ip = await getClientIp();
   const turnstileToken = formData.get("cf-turnstile-response");
@@ -335,8 +334,7 @@ export async function loginEmployee(formData: FormData): Promise<ActionResult> {
 
   const parsed = EmployeeLoginSchema.safeParse({
     companyCode: formData.get("companyCode"),
-    firstName: formData.get("firstName"),
-    lastName: formData.get("lastName"),
+    username: formData.get("username"),
     password: formData.get("password"),
   });
 
@@ -344,9 +342,10 @@ export async function loginEmployee(formData: FormData): Promise<ActionResult> {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const { companyCode, firstName, lastName, password } = parsed.data;
-  const genericError = "Código de empresa, nombre o contraseña incorrectos";
-  const rateLimitKey = `${companyCode.toUpperCase()}:${firstName}:${lastName}`;
+  const { companyCode, username, password } = parsed.data;
+  const genericError = "Código de empresa, usuario o contraseña incorrectos";
+  const normalizedUsername = username.toLowerCase().replace(/\s+/g, " ");
+  const rateLimitKey = `${companyCode.toUpperCase()}:${normalizedUsername}`;
 
   const limit = await checkRateLimit("login-employee", rateLimitKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
   if (!limit.allowed) {
@@ -361,12 +360,26 @@ export async function loginEmployee(formData: FormData): Promise<ActionResult> {
     return { success: false, error: genericError };
   }
 
-  const user = await prisma.user.findFirst({
-    where: {
-      companyId: company.id,
-      firstName: { equals: firstName, mode: "insensitive" },
-      lastName: { equals: lastName, mode: "insensitive" },
-    },
+  // Resolve new unique usernames first. Name-based matching remains available
+  // for existing accounts until their manager sets a username. The legacy
+  // path refuses an ambiguous match rather than silently choosing someone.
+  const user = await withTenant(company.id, async (tx) => {
+    const byUsername = await tx.user.findFirst({
+      where: { companyId: company.id, loginUsername: { equals: normalizedUsername, mode: "insensitive" } },
+    });
+    if (byUsername) return byUsername;
+    const { firstName, lastName } = splitFullName(username);
+    if (!firstName || !lastName) return null;
+    const legacyMatches = await tx.user.findMany({
+      where: {
+        companyId: company.id,
+        loginUsername: null,
+        firstName: { equals: firstName, mode: "insensitive" },
+        lastName: { equals: lastName, mode: "insensitive" },
+      },
+      take: 2,
+    });
+    return legacyMatches.length === 1 ? legacyMatches[0] : null;
   });
   if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
     await recordFailedAttempt("login-employee", rateLimitKey);

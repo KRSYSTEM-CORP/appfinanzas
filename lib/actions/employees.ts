@@ -17,7 +17,7 @@ export async function listEmployees() {
   const { companyId } = await requireManager();
   const users = await withTenant(companyId, (tx) =>
     tx.user.findMany({
-      where: { companyId },
+    where: { companyId },
       orderBy: [{ role: "asc" }, { createdAt: "asc" }],
       omit: { passwordHash: true, googleId: true },
     })
@@ -68,6 +68,7 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
   const parsed = EmployeeSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
+    loginUsername: formData.get("loginUsername"),
     password: formData.get("password"),
     role: formData.get("role"),
     branchId: formData.get("branchId"),
@@ -77,20 +78,12 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const { firstName, lastName, password, role, branchId, allowedSections } = parsed.data;
+  const { firstName, lastName, loginUsername, password, role, branchId, allowedSections } = parsed.data;
 
   const existing = await withTenant(companyId, (tx) =>
-    tx.user.findFirst({
-      where: {
-        companyId,
-        firstName: { equals: firstName, mode: "insensitive" },
-        lastName: { equals: lastName, mode: "insensitive" },
-      },
-    })
+    tx.user.findFirst({ where: { companyId, loginUsername } })
   );
-  if (existing) {
-    return { success: false, error: "Ya existe un empleado con ese nombre y apellido" };
-  }
+  if (existing) return { success: false, error: "Ese usuario ya está asignado a otra persona" };
 
   // A GERENTE has no fixed branch (branchId stays null); a VENDEDOR's
   // branchId was already required by EmployeeSchema, but must still belong
@@ -104,8 +97,9 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
     resolvedBranchId = branch.id;
   }
 
-  await withTenant(companyId, (tx) =>
-    tx.user.create({
+  try {
+    await withTenant(companyId, (tx) =>
+      tx.user.create({
       data: {
         // Employees don't have a real login email — a placeholder keeps the
         // still-globally-unique email column satisfied without ever being
@@ -115,14 +109,21 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
         companyId,
         firstName,
         lastName,
+        loginUsername,
         role,
         branchId: resolvedBranchId,
         status: "ACTIVE",
         allowedSections: role === "VENDEDOR" ? allowedSections : [],
         hasSeenTour: false,
-      },
-    })
-  );
+        },
+      })
+    );
+  } catch (error) {
+    if (error instanceof Error && "code" in error && (error as { code?: string }).code === "P2002") {
+      return { success: false, error: "Ese usuario ya está asignado a otra persona" };
+    }
+    throw error;
+  }
 
   revalidatePath("/employees");
   return { success: true };
@@ -133,6 +134,7 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
   const parsed = EmployeeUpdateSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
+    loginUsername: formData.get("loginUsername"),
     role: formData.get("role"),
     password: formData.get("password"),
     branchId: formData.get("branchId"),
@@ -141,7 +143,7 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
-  const { firstName, lastName, role, password, branchId, allowedSections } = parsed.data;
+  const { firstName, lastName, loginUsername, role, password, branchId, allowedSections } = parsed.data;
 
   let resolvedBranchId: string | null = null;
   if (role === "VENDEDOR") {
@@ -152,7 +154,9 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
     resolvedBranchId = branch.id;
   }
 
-  const result = await withTenant(companyId, async (tx) => {
+  let result: { ok: true } | { ok: false; error: string };
+  try {
+    result = await withTenant(companyId, async (tx) => {
     const target = await tx.user.findFirst({ where: { id: userId, companyId } });
     if (!target) return { ok: false as const, error: "Empleado no encontrado" };
 
@@ -163,16 +167,15 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
       }
     }
 
-    const duplicate = await tx.user.findFirst({
-      where: {
-        companyId,
-        id: { not: userId },
-        firstName: { equals: firstName, mode: "insensitive" },
-        lastName: { equals: lastName, mode: "insensitive" },
-      },
-    });
-    if (duplicate) {
-      return { ok: false as const, error: "Ya existe un empleado con ese nombre y apellido" };
+    if (loginUsername) {
+      const duplicate = await tx.user.findFirst({
+        where: {
+          companyId,
+          id: { not: userId },
+          loginUsername: { equals: loginUsername, mode: "insensitive" },
+        },
+      });
+      if (duplicate) return { ok: false as const, error: "Ese usuario ya está asignado a otra persona" };
     }
 
     await tx.user.update({
@@ -180,6 +183,7 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
       data: {
         firstName,
         lastName,
+        loginUsername,
         role,
         branchId: resolvedBranchId,
         allowedSections: role === "VENDEDOR" ? allowedSections : [],
@@ -187,7 +191,13 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
       },
     });
     return { ok: true as const };
-  });
+    });
+  } catch (error) {
+    if (error instanceof Error && "code" in error && (error as { code?: string }).code === "P2002") {
+      return { success: false, error: "Ese usuario ya está asignado a otra persona" };
+    }
+    throw error;
+  }
 
   if (!result.ok) return { success: false, error: result.error };
   revalidatePath("/employees");
