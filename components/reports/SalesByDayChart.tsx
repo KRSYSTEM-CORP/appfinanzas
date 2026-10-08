@@ -97,7 +97,7 @@ export function SalesByDayChart({
           stroke="var(--chart-1)"
           strokeWidth={2}
           fill="url(#salesByDayFill)"
-          animationDuration={700}
+          animationDuration={240}
           dot={{ r: 3, fill: "var(--chart-1)", strokeWidth: 0 }}
           activeDot={{ r: 5 }}
         />

@@ -57,7 +57,7 @@ export function ProductTour({ steps }: { steps: TourStep[] }) {
           {steps.map((_, i) => (
             <div
               key={i}
-              className={`h-1.5 rounded-full transition-all ${
+              className={`h-1.5 rounded-full transition-[width,background-color] ${
                 i === safeIndex ? "w-6 bg-primary" : "w-1.5 bg-muted"
               }`}
             />

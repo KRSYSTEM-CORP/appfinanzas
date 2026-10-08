@@ -185,6 +185,7 @@ export function EmployeeTable({
   const [isPending, startTransition] = useTransition();
 
   const [fullName, setFullName] = useState("");
+  const [loginUsername, setLoginUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("VENDEDOR");
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
@@ -198,6 +199,7 @@ export function EmployeeTable({
     const formData = new FormData();
     formData.set("firstName", firstName);
     formData.set("lastName", lastName);
+    formData.set("loginUsername", loginUsername);
     formData.set("password", password);
     formData.set("role", role);
     formData.set("branchId", branchId);
@@ -209,6 +211,7 @@ export function EmployeeTable({
         return;
       }
       setFullName("");
+      setLoginUsername("");
       setPassword("");
       setRole("VENDEDOR");
       setBranchId(branches[0]?.id ?? "");
@@ -227,19 +230,32 @@ export function EmployeeTable({
             <DialogHeader>
               <DialogTitle>Nuevo empleado</DialogTitle>
               <DialogDescription>
-                Entrará con el código de empresa, su nombre de usuario y esta contraseña.
+                Entrará con el código de empresa, este usuario y su contraseña. El nombre puede repetirse.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="new-fullName">Nombre de usuario</Label>
+                <Label htmlFor="new-fullName">Nombre y apellido</Label>
                 <Input
                   id="new-fullName"
                   autoComplete="off"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Ej. Nombre y apellido</p>
+                <p className="text-xs text-muted-foreground">Como aparecerá en ventas y reportes.</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="new-loginUsername">Usuario de acceso</Label>
+                <Input
+                  id="new-loginUsername"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  required
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
+                />
+                <p className="text-xs text-muted-foreground">3–32 caracteres: letras, números, punto, guion o guion bajo.</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-password">Contraseña</Label>
@@ -361,6 +377,10 @@ export function EmployeeTable({
                 </dd>
               </div>
               <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">Usuario de acceso</dt>
+                <dd className="font-medium">{u.loginUsername ? `@${u.loginUsername}` : "Nombre actual (pendiente de actualizar)"}</dd>
+              </div>
+              <div className="flex flex-col gap-0.5">
                 <dt className="text-xs text-muted-foreground">Sucursal</dt>
                 <dd className="font-medium">
                   {u.branchId ? (branches.find((b) => b.id === u.branchId)?.name ?? "—") : "Todas"}
@@ -406,6 +426,7 @@ function EmployeeActions({
   const [editOpen, setEditOpen] = useState(false);
 
   const [fullName, setFullName] = useState(joinFullName(u.firstName ?? "", u.lastName ?? ""));
+  const [loginUsername, setLoginUsername] = useState(u.loginUsername ?? "");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>(u.role);
   const [branchId, setBranchId] = useState(u.branchId ?? branches[0]?.id ?? "");
@@ -433,6 +454,7 @@ function EmployeeActions({
     const formData = new FormData();
     formData.set("firstName", firstName);
     formData.set("lastName", lastName);
+    formData.set("loginUsername", loginUsername);
     formData.set("role", role);
     formData.set("password", password);
     formData.set("branchId", branchId);
@@ -466,14 +488,28 @@ function EmployeeActions({
               </DialogHeader>
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`edit-fullName-${u.id}`}>Nombre de usuario</Label>
+                  <Label htmlFor={`edit-fullName-${u.id}`}>Nombre y apellido</Label>
                   <Input
                     id={`edit-fullName-${u.id}`}
                     autoComplete="off"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">Ej. Nombre y apellido</p>
+                  <p className="text-xs text-muted-foreground">Como aparecerá en ventas y reportes.</p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={`edit-loginUsername-${u.id}`}>Usuario de acceso</Label>
+                  <Input
+                    id={`edit-loginUsername-${u.id}`}
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Si queda vacío, seguirá entrando con su nombre actual. Debe ser único en el negocio.
+                  </p>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`edit-password-${u.id}`}>Nueva contraseña (opcional)</Label>
@@ -608,5 +644,3 @@ function EmployeeActions({
     </div>
   );
 }
-
-

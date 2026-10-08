@@ -248,8 +248,14 @@
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-property: color, background-color, border-color, opacity, box-shadow, fill, stroke !important;
+    transition-duration: 100ms !important;
     scroll-behavior: auto !important;
+  }
+  .stat-grid > * {
+    animation-name: card-fade !important;
+    animation-duration: 140ms !important;
+    animation-delay: 0ms !important;
   }
 }
 /* Tables that opt in with .table-cards turn each row into a stacked card on
@@ -434,13 +440,17 @@
     transform: none;
   }
 }
+@keyframes card-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 @media (prefers-reduced-motion: no-preference) {
   .stat-grid > * {
-    animation: card-in 360ms var(--ease-ui) both;
+    animation: card-in 180ms var(--ease-ui) both;
   }
-  .stat-grid > *:nth-child(2) { animation-delay: 50ms; }
-  .stat-grid > *:nth-child(3) { animation-delay: 100ms; }
-  .stat-grid > *:nth-child(4) { animation-delay: 150ms; }
+  .stat-grid > *:nth-child(2) { animation-delay: 30ms; }
+  .stat-grid > *:nth-child(3) { animation-delay: 60ms; }
+  .stat-grid > *:nth-child(4) { animation-delay: 90ms; }
 }
 
 /* Inventario rows on phones: thumbnail + name and price on top, category and
@@ -518,5 +528,5 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.sheet-in { animation: sheet-in 260ms var(--ease-ui) backwards; }
+.sheet-in { animation: sheet-in 230ms var(--ease-ui) backwards; }
 .sheet-fade { animation: sheet-fade 180ms ease-out both; }

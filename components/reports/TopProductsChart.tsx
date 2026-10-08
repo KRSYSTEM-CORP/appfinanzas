@@ -52,7 +52,7 @@ export function TopProductsChart({ data }: { data: TopProductPoint[] }) {
               outerRadius="90%"
               paddingAngle={chartData.length > 1 ? 2 : 0}
               strokeWidth={0}
-              animationDuration={700}
+              animationDuration={240}
             >
               {chartData.map((entry, i) => (
                 <Cell key={entry.productId ?? i} fill={entry.fill} />

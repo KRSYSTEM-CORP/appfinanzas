@@ -53,7 +53,7 @@ export function MasterDetail<T extends { id: string }>({
   // quick flick closes it even when it didn't travel far.
   const panelRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ startY: number; startT: number; dy: number } | null>(null);
+  const drag = useRef<{ startY: number; startT: number; dy: number; baseY: number; baseOpacity: number } | null>(null);
 
   function dragStart(e: ReactPointerEvent<HTMLDivElement>) {
     if ((e.target as HTMLElement).closest("button")) return;
@@ -62,15 +62,28 @@ export function MasterDetail<T extends { id: string }>({
     } catch {
       // Capture is only an optimisation; dragging still works without it.
     }
-    drag.current = { startY: e.clientY, startT: e.timeStamp, dy: 0 };
-    if (panelRef.current) panelRef.current.style.transition = "none";
+    const panel = panelRef.current;
+    const scrim = scrimRef.current;
+    const transform = panel ? getComputedStyle(panel).transform : "none";
+    const baseY = transform !== "none" ? new DOMMatrixReadOnly(transform).m42 : 0;
+    const baseOpacity = scrim ? Number.parseFloat(getComputedStyle(scrim).opacity) : 1;
+    drag.current = { startY: e.clientY, startT: e.timeStamp, dy: 0, baseY, baseOpacity };
+    if (panelRef.current) {
+      panelRef.current.style.animation = "none";
+      panelRef.current.style.transition = "none";
+      panelRef.current.style.transform = `translateY(${baseY}px)`;
+    }
+    if (scrimRef.current) {
+      scrimRef.current.style.animation = "none";
+      scrimRef.current.style.opacity = String(baseOpacity);
+    }
   }
   function dragMove(e: ReactPointerEvent<HTMLDivElement>) {
     const d = drag.current;
     if (!d) return;
     d.dy = Math.max(0, e.clientY - d.startY);
-    if (panelRef.current) panelRef.current.style.transform = `translateY(${d.dy}px)`;
-    if (scrimRef.current) scrimRef.current.style.opacity = String(Math.max(0, 1 - d.dy / 400));
+    if (panelRef.current) panelRef.current.style.transform = `translateY(${d.baseY + d.dy}px)`;
+    if (scrimRef.current) scrimRef.current.style.opacity = String(d.baseOpacity * Math.max(0, 1 - d.dy / 400));
   }
   function dragEnd(e: ReactPointerEvent<HTMLDivElement>) {
     const d = drag.current;

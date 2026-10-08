@@ -16,7 +16,6 @@ import {
   type RememberedCompany,
 } from "@/lib/actions/auth";
 import { deriveBrandVars, BRAND_VAR_NAMES } from "@/lib/theme-color";
-import { splitFullName } from "@/lib/name";
 import { SUSPENDED_WHATSAPP_URL, CONTACT_EMAIL } from "@/lib/legal";
 import { GoogleIcon } from "@/components/auth/GoogleIcon";
 import { Turnstile } from "@/components/auth/Turnstile";
@@ -111,12 +110,7 @@ export function LoginForm({
     formData.set("cf-turnstile-response", turnstileToken);
     startTransition(async () => {
       if (mode === "employee") {
-        // A single "nombre y apellido" input reads as one username field to
-        // a password manager (two side-by-side inputs don't) — split it back
-        // into what loginEmployee() actually expects server-side.
-        const { firstName, lastName } = splitFullName(String(formData.get("fullName") ?? ""));
-        formData.set("firstName", firstName);
-        formData.set("lastName", lastName);
+        formData.set("username", String(formData.get("employeeUsername") ?? ""));
         const result = await loginEmployee(formData);
         if (!result.success) {
           setError(result.error);
@@ -388,9 +382,9 @@ export function LoginForm({
               </button>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="fullName">Nombre de usuario</Label>
-              <Input id="fullName" name="fullName" autoComplete="username" autoCapitalize="words" required />
-              <p className="text-xs text-muted-foreground">Escribe nombre y apellido</p>
+              <Label htmlFor="employeeUsername">Usuario o nombre actual</Label>
+              <Input id="employeeUsername" name="employeeUsername" autoComplete="username" autoCapitalize="none" autoCorrect="off" required />
+              <p className="text-xs text-muted-foreground">Usa el usuario asignado por tu gerente o, por ahora, tu nombre y apellido.</p>
             </div>
           </>
         ) : (
@@ -410,9 +404,9 @@ export function LoginForm({
               <p className="text-xs text-muted-foreground">Solicítalo al administrador de tu negocio.</p>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="fullName">Nombre de usuario</Label>
-              <Input id="fullName" name="fullName" autoComplete="username" autoCapitalize="words" required />
-              <p className="text-xs text-muted-foreground">Escribe nombre y apellido</p>
+              <Label htmlFor="employeeUsername">Usuario o nombre actual</Label>
+              <Input id="employeeUsername" name="employeeUsername" autoComplete="username" autoCapitalize="none" autoCorrect="off" required />
+              <p className="text-xs text-muted-foreground">Usa el usuario asignado por tu gerente o, por ahora, tu nombre y apellido.</p>
             </div>
           </>
         )}
