@@ -46,9 +46,14 @@ export default async function RootLayout({
 }>) {
   const session = await getSession();
   const canManage = session ? session.role === "GERENTE" || session.isSuperAdmin : false;
+  // Billing-blocked managers must still be able to render /blocked and
+  // /billing. listBranches() uses requireSession(), which redirects blocked
+  // sessions back to /blocked; calling it from the root layout caused that
+  // route to redirect to itself until Next displayed a blank error page.
+  const canLoadAppChrome = Boolean(session && !session.billingBlocked);
   const [branding, branches] = await Promise.all([
     session ? getBranding() : Promise.resolve({ logoDataUrl: null, brandColor: null, brandBackground: null }),
-    canManage ? listBranches() : Promise.resolve([]),
+    canManage && canLoadAppChrome ? listBranches() : Promise.resolve([]),
   ]);
   // The accent (buttons/links) applies in both themes, but the company's
   // chosen background and the surface colors derived from it only make sense
@@ -74,13 +79,13 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className={`min-h-full flex flex-col ${session ? "md:h-dvh md:flex-row md:overflow-hidden" : ""}`}>
+      <body className={`min-h-full flex flex-col ${canLoadAppChrome ? "md:h-dvh md:flex-row md:overflow-hidden" : ""}`}>
         {brandCss && <style>{brandCss}</style>}
         <Script id="theme-init" strategy="beforeInteractive">
           {`(function(){try{var s=localStorage.getItem('kr-pos-theme');var d=s?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`}
         </Script>
         <ServiceWorkerRegistration />
-        {session && (
+        {canLoadAppChrome && session && (
           <Sidebar
             companyName={session.companyName}
             logoDataUrl={branding.logoDataUrl}
@@ -98,8 +103,8 @@ export default async function RootLayout({
             currentBranchName={session.branchName}
           />
         )}
-        {session && <KrPosTour hasSeenTour={session.hasSeenTour} />}
-        <main className={`flex-1 min-w-0 ${session ? "md:h-full md:overflow-y-auto max-md:pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))]" : "min-h-0"}`}>{children}</main>
+        {canLoadAppChrome && session && <KrPosTour hasSeenTour={session.hasSeenTour} />}
+        <main className={`flex-1 min-w-0 ${canLoadAppChrome ? "md:h-full md:overflow-y-auto max-md:pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))]" : "min-h-0"}`}>{children}</main>
         <Toaster richColors closeButton position="bottom-right" />
       </body>
     </html>

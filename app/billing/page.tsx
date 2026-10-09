@@ -21,6 +21,15 @@ export default async function BillingPage() {
         </p>
       </div>
 
+      {info.blocked && (
+        <div role="status" className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <span className="font-medium text-destructive">Tu cuenta está bloqueada por suscripción vencida.</span>
+          <span className="text-muted-foreground">
+            Revisa aquí los métodos disponibles, reporta el pago y espera la confirmación de KR System para recuperar el acceso.
+          </span>
+        </div>
+      )}
+
       {info.isExempt ? (
         <Card className="max-w-md">
           <CardContent className="pt-6">
@@ -32,7 +41,7 @@ export default async function BillingPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl">
+        <div id="opciones-de-pago" className="grid scroll-mt-6 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 max-w-5xl">
           <Card>
             <CardHeader>
               <CardTitle>Costo mensual</CardTitle>
@@ -150,9 +159,9 @@ export default async function BillingPage() {
 
       {!info.isExempt && (
         <div className="max-w-3xl">
-          <Card>
+          <Card id="reportar-pago" className="scroll-mt-6">
             <CardHeader>
-              <CardTitle>Reportar pago</CardTitle>
+              <CardTitle>Reportar pago para reactivar la cuenta</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex flex-col gap-2">
