@@ -137,32 +137,49 @@ export function ProductTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-xs md:block">
-        <div className="px-3 py-2 border-b bg-muted/40 text-sm font-medium">Resumen por categoría</div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Categoría</TableHead>
-              <TableHead className="text-right">Productos</TableHead>
-              <TableHead className="text-right">Stock total</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {categoryTotals.map((c) => (
-              <TableRow key={c.category}>
-                <TableCell>{c.category}</TableCell>
-                <TableCell className="text-right text-muted-foreground">{c.count}</TableCell>
-                <TableCell className="text-right font-medium tabular-nums">{c.stock}</TableCell>
-              </TableRow>
-            ))}
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableCell className="font-medium">Total general</TableCell>
-              <TableCell className="text-right text-muted-foreground">{products.length}</TableCell>
-              <TableCell className="text-right font-semibold tabular-nums">{totalStock}</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+      <div className="hidden grid-cols-3 gap-3 md:grid">
+        <div className="rounded-xl border bg-card px-4 py-3">
+          <p className="text-xs text-muted-foreground">Productos en catálogo</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{products.length.toLocaleString("es-VE")}</p>
+        </div>
+        <div className="rounded-xl border bg-card px-4 py-3">
+          <p className="text-xs text-muted-foreground">Unidades registradas</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{totalStock.toLocaleString("es-VE")}</p>
+        </div>
+        <div className={`rounded-xl border px-4 py-3 ${lowStockCount ? "border-warning/25 bg-warning/5" : "bg-card"}`}>
+          <p className="text-xs text-muted-foreground">Productos con stock bajo</p>
+          <p className={`mt-1 text-xl font-semibold tabular-nums ${lowStockCount ? "text-warning" : ""}`}>{lowStockCount.toLocaleString("es-VE")}</p>
+        </div>
       </div>
+
+      <details className="hidden rounded-xl border bg-card md:block">
+        <summary className="min-h-11 cursor-pointer list-none px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center justify-between gap-3">
+            Existencias por categoría
+            <span className="text-xs font-normal text-muted-foreground">{categoryTotals.length} categorías</span>
+          </span>
+        </summary>
+        <div className="overflow-x-auto border-t">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Categoría</TableHead>
+                <TableHead className="text-right">Productos</TableHead>
+                <TableHead className="text-right">Stock total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {categoryTotals.map((c) => (
+                <TableRow key={c.category}>
+                  <TableCell>{c.category}</TableCell>
+                  <TableCell className="text-right text-muted-foreground">{c.count}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">{c.stock.toLocaleString("es-VE")}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </details>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-sm sm:w-auto sm:flex-1">

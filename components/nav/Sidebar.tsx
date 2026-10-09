@@ -10,6 +10,7 @@ import {
   CreditCardIcon,
   EllipsisIcon,
   FileTextIcon,
+  GaugeIcon,
   LogOutIcon,
   MenuIcon,
   PackageIcon,
@@ -52,6 +53,7 @@ const operationItems: NavItem[] = [
 // single "Contabilidad" hub (app/accounting) rather than their own items —
 // same information architecture as before, just relabeled as a group.
 const managementItemsBase: NavItem[] = [
+  { href: "/home", label: "Resumen del negocio", icon: GaugeIcon },
   { href: "/accounting", label: "Contabilidad", icon: CalculatorIcon },
   { href: "/employees", label: "Administración de perfiles", icon: UsersRoundIcon },
 ];
