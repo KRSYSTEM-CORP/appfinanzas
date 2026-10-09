@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { ProductTable } from "@/components/inventory/ProductTable";
 import { PriceListButton } from "@/components/inventory/PriceListButton";
-import { listAllProducts, listCategories } from "@/lib/actions/products";
+import { getInventoryOverview, listAllProducts, listCategories } from "@/lib/actions/products";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
-import { isLowStock } from "@/lib/inventory";
 import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +14,7 @@ export default async function InventoryPage() {
   const [
     session,
     products,
+    inventory,
     { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency },
     categories,
     { logoDataUrl },
@@ -22,12 +22,13 @@ export default async function InventoryPage() {
   ] = await Promise.all([
     requireSectionAccess("inventory"),
     listAllProducts(),
+    getInventoryOverview(),
     getExchangeRateInfo(),
     listCategories(),
     getBranding(),
     getFiscalData(),
   ]);
-  const lowStockCount = products.filter((p) => p.isActive && isLowStock(p)).length;
+  const lowStockCount = inventory.lowStockCount;
   const priceListProducts = products
     .filter((p) => p.isActive)
     .map((p) => ({ name: p.name, category: p.category, priceCents: p.priceCents }));
@@ -125,6 +126,7 @@ export default async function InventoryPage() {
 
       <ProductTable
         products={products}
+        inventory={inventory}
         rate={rate}
         currencyCode={localCurrencyCode}
         exchangeRateEnabled={exchangeRateEnabled}

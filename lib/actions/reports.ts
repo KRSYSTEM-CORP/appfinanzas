@@ -93,9 +93,10 @@ export async function revenueComparison(range: DateRangeSelection) {
   return withTenant(companyId, async (tx) => {
     async function closedRevenue(windows: { start: Date; end: Date }[]) {
       const closed = await closedDayWindows(tx, companyId, branchId, windows);
-      if (closed.length === 0) return { cents: 0, days: 0 };
+      if (closed.length === 0) return { cents: 0, count: 0, days: 0 };
       const result = await tx.sale.aggregate({
         _sum: { totalCents: true },
+        _count: true,
         where: {
           companyId,
           ...(branchId ? { branchId } : {}),
@@ -103,12 +104,14 @@ export async function revenueComparison(range: DateRangeSelection) {
           voided: false,
         },
       });
-      return { cents: result._sum.totalCents ?? 0, days: closed.length };
+      return { cents: result._sum.totalCents ?? 0, count: result._count, days: closed.length };
     }
     const [current, previous] = await Promise.all([closedRevenue(currentWindows), closedRevenue(comparison.windows)]);
     return {
       currentCents: current.cents,
       previousCents: previous.cents,
+      currentCount: current.count,
+      previousCount: previous.count,
       currentDays: current.days,
       previousDays: previous.days,
       label: comparison.label,

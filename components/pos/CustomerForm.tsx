@@ -85,7 +85,7 @@ export function CustomerForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mx-auto my-4 flex w-full max-w-2xl flex-col gap-5 rounded-2xl border bg-card p-5 shadow-[0_8px_28px_color-mix(in_oklab,var(--foreground)_5%,transparent)] sm:my-6 sm:p-7"
+      className="mx-auto my-3 flex w-full max-w-2xl flex-col gap-4 rounded-2xl border bg-card p-4 shadow-[0_8px_28px_color-mix(in_oklab,var(--foreground)_5%,transparent)] min-[400px]:my-4 min-[400px]:gap-5 min-[400px]:p-5 sm:my-6 sm:p-7"
     >
       <div className="flex items-start gap-3">
         <div className="flex items-center justify-center size-9 shrink-0 rounded-lg bg-primary/10 text-primary">
@@ -99,7 +99,7 @@ export function CustomerForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 min-[400px]:gap-4">
         <div className="flex flex-col gap-1.5 relative">
           <Label htmlFor="firstName">Nombre</Label>
           <Input

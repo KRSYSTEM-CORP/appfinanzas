@@ -16,9 +16,8 @@ import { SalesByDayChart } from "@/components/reports/SalesByDayChart";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { Price } from "@/components/money/Price";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
-import { listAllProducts } from "@/lib/actions/products";
+import { getInventoryOverview } from "@/lib/actions/products";
 import { receivablesTotals, revenueComparison, revenueTotals, salesByDay, topProducts } from "@/lib/actions/reports";
-import { isLowStock } from "@/lib/inventory";
 import { parseDateRangeSelection } from "@/lib/report-types";
 import { requireManager } from "@/lib/session";
 import { formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
@@ -39,10 +38,10 @@ export default async function BusinessHome({
 }) {
   const session = await requireManager();
   const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
-  const [{ rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, products, totals, comparison, dailySales, receivables, bestSellers] =
+  const [{ rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, inventory, totals, comparison, dailySales, receivables, bestSellers] =
     await Promise.all([
       getExchangeRateInfo(),
-      listAllProducts(),
+      getInventoryOverview(),
       revenueTotals(range),
       revenueComparison(range),
       salesByDay(range),
@@ -50,9 +49,10 @@ export default async function BusinessHome({
       topProducts(range, 5),
     ]);
 
-  const lowStockCount = products.filter((product) => product.isActive && isLowStock(product)).length;
-  const activeProductCount = products.filter((product) => product.isActive).length;
-  const changePct = comparison && comparison.previousCents > 0
+  const salesChangePct = comparison && comparison.previousCount > 0
+    ? Math.round(((comparison.currentCount - comparison.previousCount) / comparison.previousCount) * 100)
+    : null;
+  const revenueChangePct = comparison && comparison.previousCents > 0
     ? Math.round(((comparison.currentCents - comparison.previousCents) / comparison.previousCents) * 100)
     : null;
   const changeNote = comparison
@@ -88,7 +88,7 @@ export default async function BusinessHome({
           icon={ShoppingBagIcon}
           accent="primary"
           href="/reports"
-          delta={changePct == null ? undefined : { pct: changePct, label: "vs. período anterior", note: changeNote }}
+          delta={salesChangePct == null ? undefined : { pct: salesChangePct, label: "vs. período anterior", note: changeNote }}
         />
         <StatCard
           label={`Ingresos · ${formatPeriodLabel(range).toLowerCase()}`}
@@ -96,7 +96,7 @@ export default async function BusinessHome({
           icon={CircleDollarSignIcon}
           accent="success"
           href="/reports"
-          delta={changePct == null ? undefined : { pct: changePct, label: "vs. período anterior", note: changeNote }}
+          delta={revenueChangePct == null ? undefined : { pct: revenueChangePct, label: "vs. período anterior", note: changeNote }}
         />
         <StatCard
           label="Promedio por venta"
@@ -137,18 +137,18 @@ export default async function BusinessHome({
           <CardContent className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Productos cargados</p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">{activeProductCount}</p>
+                <p className="text-xs text-muted-foreground">Productos activos</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums">{inventory.activeCount.toLocaleString("es-VE")}</p>
               </div>
-              <div className={`rounded-xl p-3 ${lowStockCount ? "bg-warning/10" : "bg-muted/50"}`}>
+              <div className={`rounded-xl p-3 ${inventory.lowStockCount ? "bg-warning/10" : "bg-muted/50"}`}>
                 <p className="text-xs text-muted-foreground">Stock bajo</p>
-                <p className={`mt-1 text-2xl font-semibold tabular-nums ${lowStockCount ? "text-warning" : ""}`}>{lowStockCount}</p>
+                <p className={`mt-1 text-2xl font-semibold tabular-nums ${inventory.lowStockCount ? "text-warning" : ""}`}>{inventory.lowStockCount.toLocaleString("es-VE")}</p>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">Catálogo visible: hasta {products.length} productos cargados.</p>
-            <Button variant={lowStockCount ? "outline" : "secondary"} nativeButton={false} render={<Link href="/inventory" />} className="w-full justify-between">
-              {lowStockCount ? "Revisar existencias" : "Administrar inventario"}
-              {lowStockCount ? <ArrowUpRightIcon /> : <PackageIcon />}
+            <p className="text-xs text-muted-foreground">Catálogo completo: {inventory.totalCount.toLocaleString("es-VE")} productos · {inventory.totalStock.toLocaleString("es-VE")} unidades.</p>
+            <Button variant={inventory.lowStockCount ? "outline" : "secondary"} nativeButton={false} render={<Link href="/inventory" />} className="w-full justify-between">
+              {inventory.lowStockCount ? "Revisar existencias" : "Administrar inventario"}
+              {inventory.lowStockCount ? <ArrowUpRightIcon /> : <PackageIcon />}
             </Button>
           </CardContent>
         </Card>

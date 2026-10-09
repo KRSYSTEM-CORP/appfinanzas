@@ -119,21 +119,21 @@ export function MasterDetail<T extends { id: string }>({
   return (
     <>
       {/* Phones: compact list */}
-      <div className="md:hidden overflow-hidden rounded-lg border bg-card shadow-xs">
+      <div className="md:hidden overflow-hidden rounded-xl border bg-card shadow-xs">
         {header}
-        <div role="listbox" aria-label={label}>
+        <div role="listbox" aria-label={label} aria-orientation="vertical">
           {items.map((item) => (
             <div key={item.id} className="flex items-center border-b last:border-b-0">
               {renderLead && <div className="shrink-0 pl-3">{renderLead(item)}</div>}
               <button
                 type="button"
                 role="option"
-                aria-selected={false}
+                aria-selected={selectedId === item.id && sheetOpen}
                 onClick={() => {
                   setSelectedId(item.id);
                   setSheetOpen(true);
                 }}
-                className="flex min-h-14 min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left transition-colors duration-150 ease-out active:bg-muted/60"
+                className="flex min-h-14 min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left transition-colors duration-150 ease-out active:bg-muted/60 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 {(renderRowMobile ?? renderRow)(item)}
                 <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/60" aria-hidden="true" />
@@ -170,7 +170,7 @@ export function MasterDetail<T extends { id: string }>({
                 <XIcon className="size-5" />
               </button>
             </div>
-            <div className="flex flex-col gap-4 overflow-y-auto px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1">
+            <div className="flex flex-col gap-4 overflow-y-auto overscroll-y-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-1">
               {renderDetail(sheetItem)}
             </div>
           </div>
@@ -179,8 +179,8 @@ export function MasterDetail<T extends { id: string }>({
       )}
 
       {/* Desktop: list + sticky panel */}
-      <div className="hidden md:grid md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-4 items-start">
-        <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
+        <div className="hidden md:grid md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-4 items-start">
+        <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
           {header}
           <div role="listbox" aria-label={label}>
             {items.map((item) => {
@@ -198,7 +198,7 @@ export function MasterDetail<T extends { id: string }>({
                     role="option"
                     aria-selected={active}
                     onClick={() => setSelectedId(item.id)}
-                    className="flex min-w-0 flex-1 items-center gap-3 px-3.5 py-2.5 text-left"
+                    className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-3.5 py-2.5 text-left focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
                     {renderRow(item)}
                   </button>
@@ -208,7 +208,7 @@ export function MasterDetail<T extends { id: string }>({
           </div>
           {footer}
         </div>
-        <aside className="sticky top-4 flex flex-col gap-4 rounded-lg border bg-card p-5 shadow-xs">
+        <aside className="sticky top-4 flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-xs">
           {renderDetail(selected)}
         </aside>
       </div>

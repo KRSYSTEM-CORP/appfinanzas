@@ -329,19 +329,19 @@ export function PosClient({
 
   return (
     <div className="flex flex-col gap-3 h-full">
-      <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-        <div className="text-sm">
+      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2">
+        <div className="min-w-0 text-sm">
           <span className="text-muted-foreground">Cliente: </span>
           <span className="font-medium">
             {customer?.firstName} {customer?.lastName}
           </span>
-          <span className="text-muted-foreground"> · {customer?.phone}</span>
+          <span className="hidden text-muted-foreground min-[420px]:inline"> · {customer?.phone}</span>
         </div>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setStep("customer")}>
+        <Button type="button" size="sm" variant="ghost" className="min-h-11 shrink-0" onClick={() => setStep("customer")}>
           Editar cliente
         </Button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-6 flex-1 min-h-0">
+      <div className={`grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_360px] md:gap-6 md:flex-1 md:min-h-0 ${lines.length ? "pb-[calc(var(--tabbar-h)+5rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>
         <ProductPicker
           products={products}
           rate={rate}
