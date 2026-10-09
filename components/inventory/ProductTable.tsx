@@ -23,13 +23,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ProductMasterDetail } from "@/components/inventory/ProductMasterDetail";
-import { deleteProduct, setProductActive } from "@/lib/actions/products";
+import { deleteProduct, setProductActive, type getInventoryOverview } from "@/lib/actions/products";
 import { isLowStock } from "@/lib/inventory";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import type { ReferenceCurrency } from "@prisma/client";
 
 const ALL_CATEGORIES = "__all__";
-const UNCATEGORIZED = "__uncategorized__";
 
 type StockFilter = "all" | "low" | "positive" | "inactive";
 
@@ -42,6 +41,7 @@ const STOCK_FILTER_LABELS: Record<StockFilter, string> = {
 
 export function ProductTable({
   products,
+  inventory,
   rate,
   currencyCode,
   exchangeRateEnabled,
@@ -51,6 +51,7 @@ export function ProductTable({
   companyId,
 }: {
   products: Product[];
+  inventory: Awaited<ReturnType<typeof getInventoryOverview>>;
   rate: number | null;
   currencyCode: string;
   exchangeRateEnabled: boolean;
@@ -67,25 +68,7 @@ export function ProductTable({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  // Totals reflect the whole inventory (every product, active or not) by
-  // category — a physical stock count doesn't stop being real just because a
-  // product was manually deactivated, so deactivated stock is included here
-  // even though it's excluded from the sellable catalog everywhere else.
-  const categoryTotals = useMemo(() => {
-    const totals = new Map<string, { stock: number; count: number }>();
-    for (const p of products) {
-      const key = p.category?.trim() || UNCATEGORIZED;
-      const entry = totals.get(key) ?? { stock: 0, count: 0 };
-      entry.stock += p.stock;
-      entry.count += 1;
-      totals.set(key, entry);
-    }
-    return Array.from(totals.entries())
-      .map(([key, value]) => ({ category: key === UNCATEGORIZED ? "Sin categoría" : key, ...value }))
-      .sort((a, b) => b.stock - a.stock);
-  }, [products]);
-  const totalStock = categoryTotals.reduce((sum, c) => sum + c.stock, 0);
-  const lowStockCount = products.filter((p) => p.isActive && isLowStock(p)).length;
+  const { categoryTotals, totalStock, lowStockCount, totalCount } = inventory;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -140,7 +123,7 @@ export function ProductTable({
       <div className="hidden grid-cols-3 gap-3 md:grid">
         <div className="rounded-xl border bg-card px-4 py-3">
           <p className="text-xs text-muted-foreground">Productos en catálogo</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{products.length.toLocaleString("es-VE")}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{totalCount.toLocaleString("es-VE")}</p>
         </div>
         <div className="rounded-xl border bg-card px-4 py-3">
           <p className="text-xs text-muted-foreground">Unidades registradas</p>
@@ -231,15 +214,23 @@ export function ProductTable({
         )}
         <span className="text-sm text-muted-foreground ml-auto">
           {filtered.length === products.length
-            ? `${products.length} producto${products.length === 1 ? "" : "s"}`
-            : `${filtered.length} de ${products.length} productos`}
+            ? totalCount > products.length
+              ? `Mostrando ${products.length} de ${totalCount} productos`
+              : `${totalCount} producto${totalCount === 1 ? "" : "s"}`
+            : `${filtered.length} de ${products.length} cargados`}
         </span>
       </div>
+
+      {totalCount > products.length && (
+        <p className="-mt-2 text-xs text-muted-foreground">
+          El listado muestra hasta {products.length} productos; los indicadores y existencias por categoría sí incluyen el catálogo completo.
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-2 md:hidden">
         <div className="rounded-xl border bg-card px-3.5 py-3">
           <p className="text-xs text-muted-foreground">Productos</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">{products.length}</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums">{totalCount.toLocaleString("es-VE")}</p>
         </div>
         <div className="rounded-xl border bg-card px-3.5 py-3">
           <p className="text-xs text-muted-foreground">Unidades en stock</p>
@@ -274,7 +265,7 @@ export function ProductTable({
 
       <ProductMasterDetail
         products={filtered}
-        totalCount={products.length}
+        totalCount={totalCount}
         rate={rate}
         currencyCode={currencyCode}
         exchangeRateEnabled={exchangeRateEnabled}

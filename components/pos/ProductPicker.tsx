@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "@prisma/client";
 import { PackageIcon, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,13 @@ export function ProductPicker({
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
   const [scanError, setScanError] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Focus the catalog search for keyboard users on desktop; on touch devices
+  // opening the catalog must not summon the keyboard and hide the products.
+  useEffect(() => {
+    if (window.matchMedia("(pointer: fine)").matches) searchRef.current?.focus();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -59,12 +66,12 @@ export function ProductPicker({
         <div className="relative flex-1">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
+            ref={searchRef}
             type="search"
             aria-label="Buscar producto por nombre o SKU"
             placeholder="Buscar producto por nombre o SKU..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            autoFocus
             className="pl-8"
           />
         </div>
@@ -72,11 +79,12 @@ export function ProductPicker({
       </div>
       {scanError && <p className="text-sm text-destructive">{scanError}</p>}
       {categories.length > 0 && (
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible md:pb-0">
           <Button
             type="button"
             size="xs"
             variant={category === ALL_CATEGORIES ? "default" : "outline"}
+            className="min-h-10 min-w-max md:min-h-0"
             onClick={() => setCategory(ALL_CATEGORIES)}
           >
             Todas
@@ -87,6 +95,7 @@ export function ProductPicker({
               type="button"
               size="xs"
               variant={category === c ? "default" : "outline"}
+              className="min-h-10 min-w-max md:min-h-0"
               onClick={() => setCategory(c)}
             >
               {c}
@@ -103,7 +112,7 @@ export function ProductPicker({
               type="button"
               disabled={outOfStock}
               onClick={() => onAdd(p)}
-              className="relative flex flex-col items-start gap-1.5 rounded-xl border bg-card p-2.5 text-left shadow-xs transition-all duration-150 ease-out-smooth hover:border-ring/40 hover:shadow-sm active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+            className="relative flex min-h-11 flex-col items-start gap-1.5 rounded-xl border bg-card p-2.5 text-left shadow-xs transition-all duration-150 ease-out-smooth hover:border-ring/40 hover:shadow-sm active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
             >
               {p.imageDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element

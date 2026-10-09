@@ -1,13 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManager, requireSession } from "@/lib/session";
+import { requireManager, requireSectionAccess, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { notifyLive, posChannel } from "@/lib/realtime";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { ProductSchema, ProductUpdateRowSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
-import type { Prisma, TaxCategory } from "@prisma/client";
+import { Prisma, type TaxCategory } from "@prisma/client";
 
 // A short TTL rather than relying purely on invalidation: Product.stock also
 // changes from completeSale/restoreStock/recordPurchase/reverseStock (not
@@ -46,6 +46,46 @@ export async function listAllProducts() {
       })
     )
   );
+}
+
+/** Complete inventory totals for the current company/branch, independent of
+ * the 200-product payload limit used by the interactive catalog screens. */
+export async function getInventoryOverview() {
+  const { companyId, branchId } = await requireSectionAccess("inventory");
+  return withTenant(companyId, async (tx) => {
+    const [rows, categoryRows] = await Promise.all([
+      tx.$queryRaw<{ total_count: bigint; active_count: bigint; low_stock_count: bigint; stock_total: bigint }[]>`
+        SELECT COUNT(*)::bigint AS total_count,
+               COUNT(*) FILTER (WHERE "isActive" = true)::bigint AS active_count,
+               COUNT(*) FILTER (
+                 WHERE "isActive" = true AND "trackStock" = true AND "stock" <= "lowStockThreshold"
+               )::bigint AS low_stock_count,
+               COALESCE(SUM("stock"), 0)::bigint AS stock_total
+        FROM "Product"
+        WHERE "companyId" = ${companyId}
+          ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+      `,
+      tx.product.groupBy({
+        by: ["category"],
+        where: { companyId, ...(branchId ? { branchId } : {}) },
+        _sum: { stock: true },
+        _count: { _all: true },
+        orderBy: { _sum: { stock: "desc" } },
+      }),
+    ]);
+    const totals = rows[0];
+    return {
+      totalCount: Number(totals?.total_count ?? 0),
+      activeCount: Number(totals?.active_count ?? 0),
+      lowStockCount: Number(totals?.low_stock_count ?? 0),
+      totalStock: Number(totals?.stock_total ?? 0),
+      categoryTotals: categoryRows.map((row) => ({
+        category: row.category?.trim() || "Sin categoría",
+        stock: row._sum.stock ?? 0,
+        count: row._count._all,
+      })),
+    };
+  });
 }
 
 // Invalidates both the branch-scoped and "all branches" cache entries for a
@@ -89,10 +129,10 @@ function readProductForm(formData: FormData) {
 }
 
 export async function listCategories(): Promise<string[]> {
-  const { companyId } = await requireSession();
+  const { companyId, branchId } = await requireSession();
   const rows = await withTenant(companyId, (tx) =>
     tx.product.findMany({
-      where: { companyId, category: { not: null } },
+      where: { companyId, ...(branchId ? { branchId } : {}), category: { not: null } },
       select: { category: true },
       distinct: ["category"],
       orderBy: { category: "asc" },

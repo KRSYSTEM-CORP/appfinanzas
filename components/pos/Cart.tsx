@@ -264,6 +264,7 @@ export function Cart({
                 type="button"
                 size="icon-sm"
                 variant="outline"
+                className="max-md:size-11"
                 aria-label="Quitar una unidad"
                 onClick={() => onDecrement(line.productId)}
               >
@@ -278,6 +279,7 @@ export function Cart({
                 type="button"
                 size="icon-sm"
                 variant="outline"
+                className="max-md:size-11"
                 aria-label="Agregar una unidad"
                 disabled={line.quantity >= line.maxStock}
                 onClick={() => onIncrement(line.productId)}
@@ -298,7 +300,7 @@ export function Cart({
               type="button"
               size="icon-sm"
               variant="ghost"
-              className="order-2 md:order-4"
+              className="order-2 max-md:size-11 md:order-4"
               aria-label={`Quitar ${line.name} del carrito`}
               onClick={() => onRemove(line.productId)}
             >
@@ -399,7 +401,7 @@ export function Cart({
                 size="sm"
                 variant={paymentStatus === status ? "default" : "outline"}
                 onClick={() => onPaymentStatusChange(status)}
-                className="flex-1"
+                className="min-h-11 flex-1"
               >
                 {PAYMENT_STATUS_LABELS[status]}
               </Button>
