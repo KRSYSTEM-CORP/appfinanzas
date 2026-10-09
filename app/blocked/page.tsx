@@ -18,7 +18,7 @@ export default async function BlockedPage() {
   const canManageBilling = session.role === "GERENTE" || session.isSuperAdmin;
 
   return (
-    <main className="flex min-h-[100dvh] items-center justify-center bg-muted/30 p-4 py-8 sm:p-8">
+    <section aria-labelledby="blocked-title" className="flex min-h-[100dvh] items-center justify-center bg-muted/30 p-4 py-8 sm:p-8">
       <Card className="w-full max-w-2xl overflow-hidden border-destructive/20 shadow-lg shadow-destructive/5">
         <div className="h-1.5 bg-destructive" aria-hidden="true" />
         <CardContent className="flex flex-col gap-6 p-5 sm:p-8">
@@ -28,7 +28,7 @@ export default async function BlockedPage() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-destructive">Acceso temporalmente pausado</p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Suscripción vencida</h1>
+              <h1 id="blocked-title" className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Suscripción vencida</h1>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 La empresa <span className="font-medium text-foreground">{session.companyName}</span> está bloqueada porque
                 venció el pago de mantenimiento de KR POS.
@@ -82,6 +82,6 @@ export default async function BlockedPage() {
           )}
         </CardContent>
       </Card>
-    </main>
+    </section>
   );
 }
