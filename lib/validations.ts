@@ -438,6 +438,9 @@ export const ExpenseSchema = z.object({
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
   amount: z.coerce.number().positive("El monto debe ser mayor a 0").transform(toCents),
+  // Which currency `amount` is typed in: the reference currency (EUR/USD) or
+  // the company's local currency (Bs.). Converted server-side at today's rate.
+  currency: z.enum(["REFERENCE", "LOCAL"]).default("REFERENCE"),
   spentAt: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida")

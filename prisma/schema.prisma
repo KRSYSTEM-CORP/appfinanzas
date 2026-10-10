@@ -932,7 +932,18 @@ model Expense {
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   description String
   category    String?
+  // Always the reference-currency amount (EUR/USD) — every Finanzas total
+  // sums this column, so an expense entered in local currency is converted
+  // at the rate of the moment it was recorded.
   amountCents Int
+  // True when the owner typed the amount in the local currency (Bs.).
+  enteredInLocal Boolean  @default(false)
+  // Local-currency amount in cents: what was typed when enteredInLocal, or
+  // the equivalent at `exchangeRate` otherwise. Null on expenses recorded
+  // before this existed (or when the company has no exchange rate enabled).
+  localAmountCents Int?
+  // Snapshot of Company.exchangeRate (local per reference unit) at entry.
+  exchangeRate Decimal? @db.Decimal(12, 4)
   spentAt     DateTime @default(now())
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)

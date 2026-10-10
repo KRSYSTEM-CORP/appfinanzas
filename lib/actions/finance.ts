@@ -7,6 +7,7 @@ import { withTenant } from "@/lib/tenant-db";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { closedDayWindows } from "@/lib/closed-days";
 import { ExpenseSchema } from "@/lib/validations";
+import { getExchangeRateInfo } from "@/lib/actions/settings";
 import type { ActionResult } from "@/lib/types";
 
 // Same raw-SQL OR-of-windows builder as lib/actions/reports.ts — kept local
@@ -60,10 +61,33 @@ export async function createExpense(formData: FormData): Promise<ActionResult> {
     description: formData.get("description"),
     category: formData.get("category"),
     amount: formData.get("amount"),
+    currency: formData.get("currency") ?? undefined,
     spentAt: formData.get("spentAt"),
   });
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  }
+
+  // The rate always comes from the server, never the client. Finanzas sums
+  // amountCents in the reference currency, so a local-currency expense is
+  // converted once, at the rate of the day it is recorded.
+  const info = await getExchangeRateInfo();
+  const rate = info.exchangeRateEnabled && info.rate != null && info.rate > 0 ? info.rate : null;
+  const enteredInLocal = parsed.data.currency === "LOCAL";
+
+  let amountCents = parsed.data.amount;
+  let localAmountCents: number | null = null;
+  if (enteredInLocal) {
+    if (rate == null) {
+      return { success: false, error: "No hay una tasa de cambio activa para registrar el gasto en bolívares." };
+    }
+    localAmountCents = parsed.data.amount;
+    amountCents = Math.round(localAmountCents / rate);
+    if (amountCents < 1) {
+      return { success: false, error: "El monto es demasiado pequeño para convertirlo a la divisa referencial." };
+    }
+  } else if (rate != null) {
+    localAmountCents = Math.round(amountCents * rate);
   }
 
   await withTenant(companyId, (tx) =>
@@ -72,7 +96,10 @@ export async function createExpense(formData: FormData): Promise<ActionResult> {
         companyId,
         description: parsed.data.description,
         category: parsed.data.category,
-        amountCents: parsed.data.amount,
+        amountCents,
+        enteredInLocal,
+        localAmountCents,
+        exchangeRate: rate,
         spentAt: parsed.data.spentAt,
         createdById: userId,
       },

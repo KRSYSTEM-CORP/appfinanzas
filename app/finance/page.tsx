@@ -41,7 +41,7 @@ export default async function FinancePage({
     expensesCents,
     expenses,
     comparison,
-    { localCurrencyCode, exchangeRateEnabled, referenceCurrency },
+    { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
     revenueTotals(range),
     receivablesTotals(),
@@ -212,7 +212,12 @@ export default async function FinancePage({
           <CardTitle>Gastos</CardTitle>
         </CardHeader>
         <CardContent>
-          <ExpensesPanel expenses={expenses} referenceCurrency={referenceCurrency} />
+          <ExpensesPanel
+            expenses={expenses.map((e) => ({ ...e, exchangeRate: e.exchangeRate == null ? null : Number(e.exchangeRate) }))}
+            referenceCurrency={referenceCurrency}
+            localCurrencyCode={localCurrencyCode}
+            rate={exchangeRateEnabled && rate != null && rate > 0 ? rate : null}
+          />
         </CardContent>
       </Card>
     </div>
