@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRightIcon, CalendarDaysIcon, CircleAlertIcon, CreditCardIcon } from "lucide-react";
+import { ArrowRightIcon, CalendarDaysIcon, CircleAlertIcon, CreditCardIcon, LogOutIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate, formatUSD } from "@/lib/format";
 import { getSession } from "@/lib/session";
+import { logout } from "@/lib/actions/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +81,12 @@ export default async function BlockedPage() {
               Pídele al gerente de tu empresa que realice o reporte el pago de la suscripción. Los vendedores no pueden gestionar la facturación.
             </p>
           )}
+
+          <form action={logout} className="border-t pt-4">
+            <Button type="submit" size="lg" variant="outline" className="min-h-11 w-full sm:w-auto">
+              <LogOutIcon aria-hidden="true" /> Salir y volver al inicio
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </section>

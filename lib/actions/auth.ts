@@ -20,6 +20,7 @@ import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } 
 import { getClientIp } from "@/lib/request-ip";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { splitFullName } from "@/lib/name";
+import type { Role } from "@prisma/client";
 import {
   EmployeeLoginSchema,
   LoginSchema,
@@ -37,6 +38,10 @@ const RESET_REQUEST_MAX_ATTEMPTS = 3;
 const SIGNUP_RESEND_WINDOW_MS = 10 * 60 * 1000;
 const SIGNUP_RESEND_MAX_ATTEMPTS = 3;
 const TERMS_ERROR = "Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.";
+
+function postLoginPath(role: Role): "/home" | "/pos" {
+  return role === "GERENTE" ? "/home" : "/pos";
+}
 
 function hashResetToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -191,7 +196,7 @@ export async function confirmSignupCode(
   await prisma.signupVerification.delete({ where: { id: verificationId } });
 
   await setSessionCookie({ uid: user.id, cid: company.id, companyName: company.name, bid: branch.id });
-  redirect("/pos");
+  redirect(postLoginPath(user.role));
 }
 
 // "No me llegó el código" — reuses the same verification row (same payload,
@@ -296,7 +301,7 @@ export async function login(formData: FormData): Promise<LoginResult> {
       companyName: user.company.name,
       bid: branch.id,
     });
-    redirect("/pos");
+    redirect(postLoginPath(user.role));
   }
 
   const branches = await withTenant(user.companyId, (tx) =>
@@ -316,7 +321,7 @@ export async function login(formData: FormData): Promise<LoginResult> {
     bid: branches[0]?.id ?? null,
   });
 
-  redirect("/pos");
+  redirect(postLoginPath(user.role));
 }
 
 // Employee login: a unique username is preferred. Existing staff can keep

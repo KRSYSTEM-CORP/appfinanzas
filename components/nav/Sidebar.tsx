@@ -248,7 +248,7 @@ export function Sidebar({
     // The colored KR POS wordmark, transparent background, in both light and
     // dark mode (its blue-to-pink gradient reads on either surface).
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/brand/wordmark-color.png" alt="KR POS" className="h-7 w-auto shrink-0" />
+    <img src="/brand/wordmark-color-transparent.png" alt="KR POS" className="h-7 w-auto shrink-0" />
   );
 
   return (
@@ -270,7 +270,7 @@ export function Sidebar({
                     <img> by ignoring its intrinsic aspect ratio and stretching
                     it to the column's full width. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/brand/wordmark-color.png" alt="KR POS" className="h-5 w-auto shrink-0 self-start" />
+                <img src="/brand/wordmark-color-transparent.png" alt="KR POS" className="h-5 w-auto shrink-0 self-start" />
                 {logoDataUrl && (
                   <>
                     <span className="h-4 w-px bg-sidebar-foreground/15 shrink-0" aria-hidden="true" />
