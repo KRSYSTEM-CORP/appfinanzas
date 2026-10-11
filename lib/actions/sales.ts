@@ -16,6 +16,7 @@ import { decomposeTax, rateForCategory } from "@/lib/tax";
 import { computeItemDiscountCents } from "@/lib/discount";
 import { resolveTierPrice, tierPriceCents } from "@/lib/pricing";
 import type { ActionResult } from "@/lib/types";
+import { recordStockMovement } from "@/lib/stock-movements";
 
 export type CompleteSaleResult =
   | { success: true; saleId: string }
@@ -257,14 +258,15 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         Array.from(quantityByProductId, async ([productId, quantity]) => {
           const product = productById.get(productId)!;
           if (!product.trackStock) return;
-          const updated = await tx.$executeRaw`
+          const stockRows = await tx.$queryRaw<{ stock: number }[]>`
             UPDATE "Product"
             SET "stock" = "stock" - ${quantity},
                 "isActive" = CASE WHEN "stock" - ${quantity} = 0 THEN false ELSE "isActive" END
             WHERE "id" = ${productId} AND "companyId" = ${companyId}
               AND "branchId" = ${branchId} AND "trackStock" = true AND "stock" >= ${quantity}
+            RETURNING "stock"
           `;
-          if (updated === 0) {
+          if (stockRows.length === 0) {
             const current = await tx.product.findFirst({
               where: { id: productId, companyId, branchId },
               select: { name: true, stock: true },
@@ -275,6 +277,12 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
                 : "Uno de los productos ya no existe"
             );
           }
+          const stockAfter = stockRows[0].stock;
+          await recordStockMovement(tx, {
+            companyId, branchId, productId, productName: product.name, actorId: userId, actorName: sellerName,
+            reason: "SALE", sourceType: "sale", sourceId: sale.id,
+            quantityChange: -quantity, stockBefore: stockAfter + quantity, stockAfter,
+          });
         })
       );
 
@@ -320,7 +328,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
   }
 }
 
-async function restoreStock(tx: Prisma.TransactionClient, saleId: string, companyId: string, branchId: string) {
+async function restoreStock(tx: Prisma.TransactionClient, saleId: string, companyId: string, branchId: string, actorId: string, actorName: string) {
   const items = await tx.saleItem.findMany({ where: { saleId } });
   const quantityByProductId = new Map<string, number>();
   for (const item of items) {
@@ -330,20 +338,28 @@ async function restoreStock(tx: Prisma.TransactionClient, saleId: string, compan
   if (quantityByProductId.size === 0) return;
 
   await Promise.all(
-    Array.from(quantityByProductId, ([productId, quantity]) =>
-      tx.$executeRaw`
+    Array.from(quantityByProductId, async ([productId, quantity]) => {
+      const product = await tx.product.findFirst({ where: { id: productId, companyId, branchId }, select: { name: true } });
+      if (!product) return;
+      const rows = await tx.$queryRaw<{ stock: number }[]>`
         UPDATE "Product"
         SET "stock" = "stock" + ${quantity},
             "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${quantity} > 0 THEN true ELSE "isActive" END
         WHERE "id" = ${productId} AND "companyId" = ${companyId}
           AND "branchId" = ${branchId} AND "trackStock" = true
-      `
-    )
+        RETURNING "stock"
+      `;
+      if (rows[0]) await recordStockMovement(tx, {
+        companyId, branchId, productId, productName: product.name, actorId, actorName,
+        reason: "SALE_VOID", sourceType: "sale", sourceId: saleId,
+        quantityChange: quantity, stockBefore: rows[0].stock - quantity, stockAfter: rows[0].stock,
+      });
+    })
   );
 }
 
 export async function voidSale(saleId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireSectionAccess("reports");
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireSectionAccess("reports");
 
   try {
     await withTenant(companyId, async (tx) => {
@@ -354,7 +370,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       if (!sale) throw new Error("Venta no encontrada");
       if (sale.voided) throw new Error("La venta ya está anulada");
 
-      await restoreStock(tx, saleId, companyId, sale.branchId);
+      await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
@@ -370,7 +386,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
 }
 
 export async function deleteSale(saleId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireSectionAccess("reports");
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireSectionAccess("reports");
 
   try {
     await withTenant(companyId, async (tx) => {
@@ -381,7 +397,7 @@ export async function deleteSale(saleId: string): Promise<ActionResult> {
       if (!sale) throw new Error("Venta no encontrada");
 
       if (!sale.voided) {
-        await restoreStock(tx, saleId, companyId, sale.branchId);
+        await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
       }
       await tx.sale.delete({ where: { id: saleId } });
     });
