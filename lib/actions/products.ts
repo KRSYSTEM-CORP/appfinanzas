@@ -9,6 +9,7 @@ import { PRODUCT_LIST_LIMIT, type ListedProduct } from "@/lib/product-image";
 import { ProductSchema, ProductUpdateRowSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type TaxCategory } from "@prisma/client";
+import { recordStockMovement } from "@/lib/stock-movements";
 
 // A short TTL rather than relying purely on invalidation: Product.stock also
 // changes from completeSale/restoreStock/recordPurchase/reverseStock (not
@@ -76,7 +77,8 @@ export async function getInventoryOverview() {
         SELECT COUNT(*)::bigint AS total_count,
                COUNT(*) FILTER (WHERE "isActive" = true)::bigint AS active_count,
                COUNT(*) FILTER (
-                 WHERE "isActive" = true AND "trackStock" = true AND "stock" <= "lowStockThreshold"
+                 WHERE "trackStock" = true AND "stock" <= "lowStockThreshold"
+                   AND ("isActive" = true OR "stock" = 0)
                )::bigint AS low_stock_count,
                COALESCE(SUM("stock"), 0)::bigint AS stock_total
         FROM "Product"
@@ -126,6 +128,23 @@ export async function getProduct(id: string) {
   );
 }
 
+export async function getProductStockMovements(id: string) {
+  const { companyId, branchId } = await requireSectionAccess("inventory");
+  return withTenant(companyId, async (tx) => {
+    const product = await tx.product.findFirst({
+      where: { id, companyId, ...(branchId ? { branchId } : {}) },
+      select: { id: true, name: true, stock: true, branch: { select: { name: true } } },
+    });
+    if (!product) return null;
+    const movements = await tx.stockMovement.findMany({
+      where: { companyId, productId: id, ...(branchId ? { branchId } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    return { product, movements };
+  });
+}
+
 function readProductForm(formData: FormData) {
   return ProductSchema.safeParse({
     name: formData.get("name"),
@@ -161,7 +180,7 @@ export async function listCategories(): Promise<string[]> {
 
 export async function createProduct(formData: FormData): Promise<ActionResult> {
   const session = await requireManager();
-  const { companyId } = session;
+  const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return { success: false, error: 'Selecciona una sucursal antes de crear un producto — no se puede con "Todas las sucursales".' };
   }
@@ -175,8 +194,8 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
   const { price, cost, image, stock, trackStock, wholesalePrice, bulkPrice, ...rest } = parsed.data;
   const resolvedStock = trackStock ? (stock ?? 0) : 0;
   try {
-    await withTenant(companyId, (tx) =>
-      tx.product.create({
+    await withTenant(companyId, async (tx) => {
+      const product = await tx.product.create({
         data: {
           ...rest,
           priceCents: price,
@@ -192,8 +211,13 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
           // the product is simply always available.
           isActive: trackStock ? resolvedStock > 0 : true,
         },
-      })
-    );
+      });
+      if (resolvedStock > 0) await recordStockMovement(tx, {
+        companyId, branchId, productId: product.id, productName: product.name, actorId, actorName,
+        reason: "ADJUSTMENT", sourceType: "product", sourceId: product.id,
+        quantityChange: resolvedStock, stockBefore: 0,
+      });
+    });
   } catch {
     return { success: false, error: "No se pudo crear el producto (¿SKU duplicado?)" };
   }
@@ -272,7 +296,7 @@ export async function quickCreateProduct(input: {
 
 export async function updateProduct(id: string, formData: FormData): Promise<ActionResult> {
   const session = await requireManager();
-  const { companyId } = session;
+  const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return { success: false, error: 'Selecciona una sucursal antes de editar un producto — no se puede con "Todas las sucursales".' };
   }
@@ -287,6 +311,11 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
 
   try {
     const result = await withTenant(companyId, async (tx) => {
+      await tx.$queryRaw`
+        SELECT "id" FROM "Product"
+        WHERE "id" = ${id} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
+        FOR UPDATE
+      `;
       const existing = await tx.product.findFirst({ where: { id, companyId, branchId } });
       if (!existing) return null;
 
@@ -305,7 +334,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
             ? true
             : existing.isActive;
 
-      return tx.product.updateMany({
+      const result = await tx.product.updateMany({
         where: { id, companyId, branchId },
         data: {
           ...rest,
@@ -319,6 +348,12 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
           isActive,
         },
       });
+      if (resolvedStock !== existing.stock) await recordStockMovement(tx, {
+        companyId, branchId, productId: existing.id, productName: existing.name, actorId, actorName,
+        reason: "ADJUSTMENT", sourceType: "product", sourceId: existing.id,
+        quantityChange: resolvedStock - existing.stock, stockBefore: existing.stock,
+      });
+      return result;
     });
     if (!result || result.count === 0) {
       return { success: false, error: "Producto no encontrado" };
@@ -395,7 +430,7 @@ export type BulkImportResult = {
 // stock/price/etc. reconciled (updated) instead of creating a duplicate.
 export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImportResult> {
   const session = await requireManager();
-  const { companyId } = session;
+  const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return {
       created: 0,
@@ -430,10 +465,17 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
       };
 
       try {
+        if (rest.sku) {
+          // Lock an existing SKU before reading its stock snapshot so a
+          // concurrent sale/receipt cannot be overwritten by this import.
+          await tx.$queryRaw`
+            SELECT "id" FROM "Product"
+            WHERE "companyId" = ${companyId} AND "branchId" = ${branchId} AND "sku" = ${rest.sku}
+            FOR UPDATE
+          `;
+        }
         const existing = rest.sku
-          ? await tx.product.findUnique({
-              where: { branchId_sku: { branchId, sku: rest.sku } },
-            })
+          ? await tx.product.findUnique({ where: { branchId_sku: { branchId, sku: rest.sku } } })
           : null;
 
         if (existing) {
@@ -441,10 +483,20 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
             where: { id: existing.id },
             data: { ...rest, ...priceFields },
           });
+          if (resolvedStock !== existing.stock) await recordStockMovement(tx, {
+            companyId, branchId, productId: existing.id, productName: existing.name, actorId, actorName,
+            reason: "IMPORT", sourceType: "product_import", sourceId: existing.id,
+            quantityChange: resolvedStock - existing.stock, stockBefore: existing.stock,
+          });
           updated++;
         } else {
-          await tx.product.create({
+          const createdProduct = await tx.product.create({
             data: { ...rest, ...priceFields, companyId, branchId },
+          });
+          if (resolvedStock > 0) await recordStockMovement(tx, {
+            companyId, branchId, productId: createdProduct.id, productName: createdProduct.name, actorId, actorName,
+            reason: "IMPORT", sourceType: "product_import", sourceId: createdProduct.id,
+            quantityChange: resolvedStock, stockBefore: 0,
           });
           created++;
         }
@@ -493,7 +545,7 @@ export type BulkUpdateResult = {
 // products.
 export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpdateResult> {
   const session = await requireManager();
-  const { companyId } = session;
+  const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return {
       updated: 0,
@@ -531,6 +583,11 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
         bulkPrice,
         bulkMinQty,
       } = parsed.data;
+      await tx.$queryRaw`
+        SELECT "id" FROM "Product"
+        WHERE "id" = ${id} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
+        FOR UPDATE
+      `;
       const existing = await tx.product.findFirst({ where: { id, companyId, branchId } });
       if (!existing) {
         notFound.push({ row: i + 1, label: name ?? sku ?? id });
@@ -562,6 +619,11 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
 
       try {
         await tx.product.update({ where: { id: existing.id }, data });
+        if (stock !== undefined && stock !== existing.stock) await recordStockMovement(tx, {
+          companyId, branchId, productId: existing.id, productName: existing.name, actorId, actorName,
+          reason: "ADJUSTMENT", sourceType: "bulk_update", sourceId: existing.id,
+          quantityChange: stock - existing.stock, stockBefore: existing.stock,
+        });
         updated++;
       } catch {
         failed.push({ row: i + 1, error: "No se pudo actualizar (¿SKU duplicado?)" });

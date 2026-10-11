@@ -8,6 +8,9 @@ import {
   CircleDollarSignIcon,
   PackageIcon,
   ShoppingBagIcon,
+  ClipboardListIcon,
+  FileClockIcon,
+  TriangleAlertIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +24,7 @@ import { receivablesTotals, revenueComparison, revenueTotals, salesByDay, topPro
 import { parseDateRangeSelection } from "@/lib/report-types";
 import { requireManager } from "@/lib/session";
 import { formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { getDashboardTasks } from "@/lib/actions/dashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +42,7 @@ export default async function BusinessHome({
 }) {
   const session = await requireManager();
   const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
-  const [{ rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, inventory, totals, comparison, dailySales, receivables, bestSellers] =
+  const [{ rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, inventory, totals, comparison, dailySales, receivables, bestSellers, tasks] =
     await Promise.all([
       getExchangeRateInfo(),
       getInventoryOverview(),
@@ -47,6 +51,7 @@ export default async function BusinessHome({
       salesByDay(range),
       receivablesTotals(),
       topProducts(range, 5),
+      getDashboardTasks(),
     ]);
 
   const salesChangePct = comparison && comparison.previousCount > 0
@@ -112,6 +117,45 @@ export default async function BusinessHome({
           href="/reports?status=CREDIT"
         />
       </section>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div>
+            <CardTitle>Pendientes de atención</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Accesos rápidos a tareas que podrían requerir seguimiento.</p>
+          </div>
+          <ClipboardListIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+        </CardHeader>
+        <CardContent>
+          {tasks.lowStock.count === 0 && tasks.pendingQuotes === 0 && tasks.pendingClosingCount === 0 ? (
+            <p className="rounded-xl bg-emerald-500/10 p-4 text-sm text-emerald-800 dark:text-emerald-300">No hay pendientes prioritarios ahora. El inventario está en nivel, sin presupuestos por seguir ni cierres atrasados.</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-3">
+              {tasks.lowStock.count > 0 && (
+                <Link href="/inventory" className="rounded-xl border p-4 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <div className="flex items-center gap-2 text-sm font-semibold"><TriangleAlertIcon className="size-4 text-warning" /> {tasks.lowStock.count} productos con stock bajo</div>
+                  <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{tasks.lowStock.products.map((product) => `${product.name} (${product.stock})`).join(" · ")}</p>
+                  <span className="mt-3 inline-flex text-sm font-medium text-primary">Revisar inventario <ArrowRightIcon className="ml-1 size-4" /></span>
+                </Link>
+              )}
+              {tasks.pendingQuotes > 0 && (
+                <Link href="/quotes/history" className="rounded-xl border p-4 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <div className="flex items-center gap-2 text-sm font-semibold"><ClipboardListIcon className="size-4 text-primary" /> {tasks.pendingQuotes} presupuestos por seguir</div>
+                  <p className="mt-2 text-sm text-muted-foreground">Hay propuestas esperando respuesta del cliente.</p>
+                  <span className="mt-3 inline-flex text-sm font-medium text-primary">Ver presupuestos <ArrowRightIcon className="ml-1 size-4" /></span>
+                </Link>
+              )}
+              {tasks.pendingClosings.length > 0 && (
+                <Link href="/reports" className="rounded-xl border p-4 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <div className="flex items-center gap-2 text-sm font-semibold"><FileClockIcon className="size-4 text-warning" /> {tasks.pendingClosingCount} cierres de caja pendientes</div>
+                  <p className="mt-2 text-sm text-muted-foreground">Ventas de los últimos días aún sin cierre.</p>
+                  <span className="mt-3 inline-flex text-sm font-medium text-primary">Ir a reportes <ArrowRightIcon className="ml-1 size-4" /></span>
+                </Link>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.9fr)]">
         <Card>

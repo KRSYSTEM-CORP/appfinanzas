@@ -9,6 +9,7 @@ import { decomposeTax, rateForCategory } from "@/lib/tax";
 import { resolveSalePayments, assertPaymentsMatchTotal, toEurCents } from "@/lib/payment-currency";
 import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
 import type { ActionResult } from "@/lib/types";
+import { recordStockMovement } from "@/lib/stock-movements";
 
 export type CompletePurchaseResult =
   | { success: true; purchaseId: string }
@@ -20,7 +21,7 @@ export type CompletePurchaseResult =
 // latest purchase, same way a real inventory system would.
 export async function createPurchase(input: unknown): Promise<CompletePurchaseResult> {
   const session = await requireManager();
-  const { companyId } = session;
+  const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return {
       success: false,
@@ -220,16 +221,21 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         });
       }
       await Promise.all(
-        Array.from(stockUpdateByProductId, ([productId, { quantity, unitCostCents }]) => {
+        Array.from(stockUpdateByProductId, async ([productId, { quantity, unitCostCents }]) => {
           const product = productById.get(productId)!;
-          const newStock = product.stock + quantity;
-          return tx.product.updateMany({
-            where: { id: productId, companyId, branchId },
-            data: {
-              stock: newStock,
-              costCents: unitCostCents,
-              ...(product.stock === 0 && newStock > 0 ? { isActive: true } : {}),
-            },
+          const rows = await tx.$queryRaw<{ stock: number }[]>`
+            UPDATE "Product"
+            SET "stock" = "stock" + ${quantity},
+                "costCents" = ${unitCostCents},
+                "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${quantity} > 0 THEN true ELSE "isActive" END
+            WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
+            RETURNING "stock"
+          `;
+          if (!rows[0]) throw new Error("Uno de los productos ya no existe en esta sucursal");
+          await recordStockMovement(tx, {
+            companyId, branchId, productId, productName: product.name, actorId, actorName,
+            reason: "PURCHASE", sourceType: "purchase", sourceId: purchase.id,
+            quantityChange: quantity, stockBefore: rows[0].stock - quantity, stockAfter: rows[0].stock,
           });
         })
       );
@@ -246,7 +252,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
   }
 }
 
-async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, companyId: string, branchId: string) {
+async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, companyId: string, branchId: string, actorId: string, actorName: string) {
   const items = await tx.purchaseItem.findMany({ where: { purchaseId } });
   const quantityByProductId = new Map<string, number>();
   for (const item of items) {
@@ -261,13 +267,25 @@ async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, co
   const productById = new Map(products.map((p) => [p.id, p]));
 
   await Promise.all(
-    Array.from(quantityByProductId, ([productId, quantity]) => {
+    Array.from(quantityByProductId, async ([productId, quantity]) => {
       const product = productById.get(productId);
       if (!product) return null;
-      const newStock = Math.max(0, product.stock - quantity);
-      return tx.product.updateMany({
-        where: { id: productId, companyId, branchId },
-        data: { stock: newStock },
+      const rows = await tx.$queryRaw<{ stock: number; stock_before: number }[]>`
+        WITH before_update AS (
+          SELECT "id", "stock" AS stock_before FROM "Product"
+          WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
+          FOR UPDATE
+        ), updated AS (
+          UPDATE "Product" p SET "stock" = GREATEST(p."stock" - ${quantity}, 0)
+          FROM before_update b WHERE p."id" = b."id"
+          RETURNING p."stock", b.stock_before
+        ) SELECT "stock", stock_before FROM updated
+      `;
+      if (!rows[0]) return;
+      await recordStockMovement(tx, {
+        companyId, branchId, productId, productName: product.name, actorId, actorName,
+        reason: "PURCHASE_VOID", sourceType: "purchase", sourceId: purchaseId,
+        quantityChange: rows[0].stock - rows[0].stock_before, stockBefore: rows[0].stock_before, stockAfter: rows[0].stock,
       });
     })
   );
@@ -294,7 +312,7 @@ export async function markPurchasePaid(purchaseId: string): Promise<ActionResult
 }
 
 export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireManager();
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
 
   try {
     await withTenant(companyId, async (tx) => {
@@ -304,7 +322,7 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
       if (!purchase) throw new Error("Compra no encontrada");
       if (purchase.voided) throw new Error("La compra ya está anulada");
 
-      await reverseStock(tx, purchaseId, companyId, purchase.branchId);
+      await reverseStock(tx, purchaseId, companyId, purchase.branchId, actorId, actorName);
       await tx.purchase.update({ where: { id: purchaseId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
@@ -318,7 +336,7 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
 }
 
 export async function deletePurchase(purchaseId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireManager();
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
 
   try {
     await withTenant(companyId, async (tx) => {
@@ -328,7 +346,7 @@ export async function deletePurchase(purchaseId: string): Promise<ActionResult> 
       if (!purchase) throw new Error("Compra no encontrada");
 
       if (!purchase.voided) {
-        await reverseStock(tx, purchaseId, companyId, purchase.branchId);
+        await reverseStock(tx, purchaseId, companyId, purchase.branchId, actorId, actorName);
       }
       await tx.purchase.delete({ where: { id: purchaseId } });
     });
@@ -369,7 +387,7 @@ export type BulkPurchaseResult = {
 // from a spreadsheet instead of a single form submission.
 export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<BulkPurchaseResult> {
   const session = await requireManager();
-  const { companyId } = session;
+  const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return {
       created: 0,
@@ -481,7 +499,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
         const previousCount = await tx.purchase.count({ where: { branchId } });
         const paymentStatus = entries[0].data.paymentStatus ?? "PENDING";
 
-        await tx.purchase.create({
+        const purchase = await tx.purchase.create({
           data: {
             companyId,
             branchId,
@@ -503,14 +521,19 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           if (!item.affectsStock) continue;
           const product = await tx.product.findFirst({ where: { id: item.productId, companyId, branchId } });
           if (!product) continue;
-          const newStock = product.stock + item.quantity;
-          await tx.product.updateMany({
-            where: { id: item.productId, companyId, branchId },
-            data: {
-              stock: newStock,
-              costCents: item.unitCostCents,
-              ...(product.stock === 0 && newStock > 0 ? { isActive: true } : {}),
-            },
+          const stockRows = await tx.$queryRaw<{ stock: number }[]>`
+            UPDATE "Product"
+            SET "stock" = "stock" + ${item.quantity},
+                "costCents" = ${item.unitCostCents},
+                "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${item.quantity} > 0 THEN true ELSE "isActive" END
+            WHERE "id" = ${product.id} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
+            RETURNING "stock"
+          `;
+          if (!stockRows[0]) continue;
+          await recordStockMovement(tx, {
+            companyId, branchId, productId: product.id, productName: product.name, actorId, actorName,
+            reason: "IMPORT", sourceType: "purchase", sourceId: purchase.id,
+            quantityChange: item.quantity, stockBefore: stockRows[0].stock - item.quantity, stockAfter: stockRows[0].stock,
           });
         }
 

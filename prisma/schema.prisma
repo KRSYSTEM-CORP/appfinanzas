@@ -177,6 +177,7 @@ model Company {
   quotes                Quote[]
   suppliers             Supplier[]
   purchases             Purchase[]
+  stockMovements        StockMovement[]
   // Maintenance billing, managed by a KYRA System platform admin from /admin.
   // Activation itself is charged outside the app for now — only the recurring
   // maintenance cycle is tracked here and can block access. Priced in USD —
@@ -222,6 +223,7 @@ model Branch {
   cashClosings CashClosing[]
   users        User[]
   purchases    Purchase[]
+  stockMovements StockMovement[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -397,11 +399,37 @@ model Product {
   saleItems           SaleItem[]
   quoteItems          QuoteItem[]
   purchaseItems       PurchaseItem[]
+  stockMovements      StockMovement[]
 
   @@unique([branchId, sku])
   @@index([companyId, isActive])
   @@index([branchId, isActive])
   @@index([companyId, category])
+}
+
+// Auditable record of each inventory adjustment. Snapshots remain readable
+// if the product or employee is later removed.
+model StockMovement {
+  id             String   @id @default(cuid())
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId       String
+  branch         Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName    String
+  actorId        String?
+  actorName      String
+  reason         String
+  sourceType     String?
+  sourceId       String?
+  quantityChange Int
+  stockBefore    Int
+  stockAfter     Int
+  createdAt      DateTime @default(now())
+
+  @@index([companyId, branchId, createdAt])
+  @@index([productId, createdAt])
 }
 
 model Customer {
