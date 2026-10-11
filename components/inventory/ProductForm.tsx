@@ -102,7 +102,18 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="sku">SKU (opcional)</Label>
             <div className="flex gap-2">
-              <Input id="sku" name="sku" value={sku} onChange={(e) => setSku(e.target.value)} className="flex-1" />
+              <Input
+                id="sku"
+                name="sku"
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                // A hardware scanner finishes with Enter; without this it would
+                // submit the form before the rest of the product is filled in.
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.preventDefault();
+                }}
+                className="flex-1"
+              />
               <BarcodeScannerDialog onDetected={setSku} />
             </div>
           </div>

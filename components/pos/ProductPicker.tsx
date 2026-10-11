@@ -6,7 +6,9 @@ import { PackageIcon, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Price } from "@/components/money/Price";
-import { BarcodeScannerDialog } from "@/components/scanner/BarcodeScannerDialog";
+import { BarcodeScannerDialog, type ScanFeedback } from "@/components/scanner/BarcodeScannerDialog";
+import { findProductByCode, normalizeCode } from "@/lib/barcode";
+import { useBarcodeWedge } from "@/lib/use-barcode-wedge";
 import { isLowStock } from "@/lib/inventory";
 import type { ReferenceCurrency } from "@prisma/client";
 
@@ -31,7 +33,7 @@ export function ProductPicker({
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
-  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanNotice, setScanNotice] = useState<ScanFeedback | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Focus the catalog search for keyboard users on desktop; on touch devices
@@ -50,15 +52,54 @@ export function ProductPicker({
     });
   }, [products, query, category]);
 
-  function handleScan(code: string) {
-    setScanError(null);
-    const match = products.find((p) => p.sku === code);
-    if (!match) {
-      setScanError(`Código no encontrado: ${code}`);
-      return;
-    }
+  // Adds a product found by scan or by Enter in the search box. Scanning must
+  // respect stock the same way tapping a card does (those are disabled when out
+  // of stock) — otherwise a scan could slip an unavailable product into the cart.
+  function addMatch(match: ListedProduct): ScanFeedback {
+    if (match.trackStock && match.stock <= 0) return { ok: false, message: `Sin existencias: ${match.name}` };
     onAdd(match);
+    return { ok: true, message: `Agregado: ${match.name}` };
   }
+
+  // A hardware scanner also types the code into the search box when that has
+  // focus, so the box is cleared after every scan.
+  function report(outcome: ScanFeedback): ScanFeedback {
+    setQuery("");
+    setScanNotice(outcome);
+    return outcome;
+  }
+
+  function handleScan(rawCode: string): ScanFeedback {
+    const match = findProductByCode(products, rawCode);
+    return report(
+      match ? addMatch(match) : { ok: false, message: `Código no encontrado: ${normalizeCode(rawCode)}` }
+    );
+  }
+
+  // Enter in the search box: an exact SKU, or the only product left in the list.
+  function handleSearchEnter() {
+    const q = query.trim();
+    if (!q) return;
+    const match = findProductByCode(products, q) ?? (filtered.length === 1 ? filtered[0] : null);
+    if (match) report(addMatch(match));
+  }
+
+  // Hardware scanners work wherever the cursor is, except inside another text
+  // field (discount, payment, notes) or while a dialog is open.
+  useBarcodeWedge(handleScan, (target) => {
+    if (document.querySelector('[role="dialog"]')) return false;
+    if (target === searchRef.current) return true;
+    const el = target as HTMLElement | null;
+    const editable = !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+    return !editable;
+  });
+
+  // The scan result is a transient notice, not a permanent banner.
+  useEffect(() => {
+    if (!scanNotice) return;
+    const timer = setTimeout(() => setScanNotice(null), 3000);
+    return () => clearTimeout(timer);
+  }, [scanNotice]);
 
   return (
     <div className="flex flex-col gap-3 h-full">
@@ -72,12 +113,27 @@ export function ProductPicker({
             placeholder="Buscar producto por nombre o SKU..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSearchEnter();
+              }
+            }}
             className="pl-8"
           />
         </div>
-        <BarcodeScannerDialog onDetected={handleScan} />
+        <BarcodeScannerDialog onDetected={handleScan} continuous />
       </div>
-      {scanError && <p className="text-sm text-destructive">{scanError}</p>}
+      {scanNotice && (
+        <p
+          role="status"
+          className={`text-sm font-medium ${
+            scanNotice.ok ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"
+          }`}
+        >
+          {scanNotice.message}
+        </p>
+      )}
       {categories.length > 0 && (
         <div className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible md:pb-0">
           <Button
