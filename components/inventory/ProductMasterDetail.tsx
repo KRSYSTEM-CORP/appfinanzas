@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { PackageIcon, PackageSearchIcon } from "lucide-react";
-import type { Product, ReferenceCurrency } from "@prisma/client";
+import type { ReferenceCurrency } from "@prisma/client";
+import { productImageUrl, type ListedProduct } from "@/lib/product-image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -35,7 +36,7 @@ export function ProductMasterDetail({
   onDelete,
   onClearFilters,
 }: {
-  products: Product[];
+  products: ListedProduct[];
   totalCount: number;
   rate: number | null;
   currencyCode: string;
@@ -47,7 +48,7 @@ export function ProductMasterDetail({
   onDelete: (id: string) => void;
   onClearFilters: () => void;
 }) {
-  const priceOf = (p: Product, size?: "sm" | "lg") => (
+  const priceOf = (p: ListedProduct, size?: "sm" | "lg") => (
     <Price
       eurCents={p.priceCents}
       rate={rate}
@@ -97,9 +98,15 @@ export function ProductMasterDetail({
       empty={empty}
       renderRow={(p) => (
         <>
-          {p.imageDataUrl ? (
+          {p.hasImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.imageDataUrl} alt="" className="size-10 shrink-0 rounded-lg border object-cover" />
+            <img
+              src={productImageUrl(p) ?? undefined}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="size-10 shrink-0 rounded-lg border object-cover"
+            />
           ) : (
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
               <PackageIcon className="size-4 text-muted-foreground/50" />
@@ -154,9 +161,13 @@ export function ProductMasterDetail({
       )}
       renderDetail={(selected) => (
         <>
-          {selected.imageDataUrl ? (
+          {selected.hasImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={selected.imageDataUrl} alt="" className="h-32 w-full rounded-xl border object-cover" />
+            <img
+              src={productImageUrl(selected) ?? undefined}
+              alt=""
+              className="h-32 w-full rounded-xl border object-cover"
+            />
           ) : (
             <div className="flex h-32 w-full items-center justify-center rounded-xl bg-muted">
               <PackageIcon className="size-8 text-muted-foreground/50" />

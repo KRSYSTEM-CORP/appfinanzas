@@ -5,6 +5,7 @@ import { requireManager, requireSectionAccess, requireSession } from "@/lib/sess
 import { withTenant } from "@/lib/tenant-db";
 import { notifyLive, posChannel } from "@/lib/realtime";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
+import { PRODUCT_LIST_LIMIT, type ListedProduct } from "@/lib/product-image";
 import { ProductSchema, ProductUpdateRowSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type TaxCategory } from "@prisma/client";
@@ -22,34 +23,51 @@ function productsCacheKey(scope: "active" | "all", companyId: string, branchId: 
   return `products:${scope}:${companyId}:${branchId ?? "all"}`;
 }
 
-export async function listActiveProducts() {
+// The lists never carry the base64 photo (Product.imageDataUrl) — with up to
+// PRODUCT_LIST_LIMIT products that would be tens of MB per page load, per
+// cache entry and per offline snapshot. They return a `hasImage` flag instead,
+// and the UI fetches each photo on demand from /api/products/[id]/image.
+async function fetchProductList(
+  companyId: string,
+  where: Prisma.ProductWhereInput
+): Promise<ListedProduct[]> {
+  return withTenant(companyId, async (tx) => {
+    const [products, withImage] = await Promise.all([
+      tx.product.findMany({
+        where,
+        omit: { imageDataUrl: true },
+        orderBy: { name: "asc" },
+        take: PRODUCT_LIST_LIMIT,
+      }),
+      tx.product.findMany({
+        where: { ...where, imageDataUrl: { not: null } },
+        select: { id: true },
+        orderBy: { name: "asc" },
+        take: PRODUCT_LIST_LIMIT,
+      }),
+    ]);
+    const hasImage = new Set(withImage.map((p) => p.id));
+    return products.map((p) => ({ ...p, hasImage: hasImage.has(p.id) }));
+  });
+}
+
+export async function listActiveProducts(): Promise<ListedProduct[]> {
   const { companyId, branchId } = await requireSession();
   return getOrSetCache(productsCacheKey("active", companyId, branchId), PRODUCTS_CACHE_TTL_SECONDS, () =>
-    withTenant(companyId, (tx) =>
-      tx.product.findMany({
-        where: { companyId, isActive: true, ...(branchId ? { branchId } : {}) },
-        orderBy: { name: "asc" },
-        take: 200,
-      })
-    )
+    fetchProductList(companyId, { companyId, isActive: true, ...(branchId ? { branchId } : {}) })
   );
 }
 
-export async function listAllProducts() {
+export async function listAllProducts(): Promise<ListedProduct[]> {
   const { companyId, branchId } = await requireSession();
   return getOrSetCache(productsCacheKey("all", companyId, branchId), PRODUCTS_CACHE_TTL_SECONDS, () =>
-    withTenant(companyId, (tx) =>
-      tx.product.findMany({
-        where: { companyId, ...(branchId ? { branchId } : {}) },
-        orderBy: { name: "asc" },
-        take: 200,
-      })
-    )
+    fetchProductList(companyId, { companyId, ...(branchId ? { branchId } : {}) })
   );
 }
 
 /** Complete inventory totals for the current company/branch, independent of
- * the 200-product payload limit used by the interactive catalog screens. */
+ * the product-list size limit (PRODUCT_LIST_LIMIT) used by the interactive
+ * catalog screens. */
 export async function getInventoryOverview() {
   const { companyId, branchId } = await requireSectionAccess("inventory");
   return withTenant(companyId, async (tx) => {

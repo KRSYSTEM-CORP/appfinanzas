@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Product, PaymentStatus } from "@prisma/client";
+import type { PaymentStatus } from "@prisma/client";
+import type { ListedProduct } from "@/lib/product-image";
 import { Button } from "@/components/ui/button";
 import { CustomerForm, type CustomerInfo } from "@/components/pos/CustomerForm";
 import { ProductPicker } from "@/components/pos/ProductPicker";
@@ -43,7 +44,7 @@ export function PosClient({
   ivaGeneralRatePercent,
   ivaReducedRatePercent,
 }: {
-  products: Product[];
+  products: ListedProduct[];
   rate: number | null;
   currencyCode: string;
   exchangeRateEnabled: boolean;
@@ -172,7 +173,7 @@ export function PosClient({
   // added (an intentional split), amounts are fully user-controlled.
   useDefaultPaymentRow(total, rate, exchangeRateEnabled, setPaymentRows);
 
-  function addProduct(product: Product) {
+  function addProduct(product: ListedProduct) {
     setError(null);
     addProductToCart(product);
   }

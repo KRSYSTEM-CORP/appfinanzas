@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Product } from "@prisma/client";
+import type { ListedProduct } from "@/lib/product-image";
 import type { CartLine } from "@/components/pos/Cart";
 import { resolveTierPrice, tierPriceCents, type PriceTier, type TieredProduct } from "@/lib/pricing";
 
@@ -15,7 +15,7 @@ export function useCart(initialLines: CartLine[] = []) {
 
   // Unlimited for a product that doesn't track stock — there's no count to
   // cap against.
-  function maxStockFor(product: Product): number {
+  function maxStockFor(product: ListedProduct): number {
     return product.trackStock ? product.stock : Infinity;
   }
 
@@ -30,7 +30,7 @@ export function useCart(initialLines: CartLine[] = []) {
     return resolveTierPrice(product, quantity).priceCents;
   }
 
-  function addProduct(product: Product) {
+  function addProduct(product: ListedProduct) {
     setLines((prev) => {
       const maxStock = maxStockFor(product);
       const existing = prev.find((l) => l.productId === product.id);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Product } from "@prisma/client";
+import { productImageUrl, type ListedProduct } from "@/lib/product-image";
 import { PackageIcon, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,13 +21,13 @@ export function ProductPicker({
   categories,
   onAdd,
 }: {
-  products: Product[];
+  products: ListedProduct[];
   rate: number | null;
   currencyCode: string;
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
   categories: string[];
-  onAdd: (product: Product) => void;
+  onAdd: (product: ListedProduct) => void;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
@@ -114,9 +114,15 @@ export function ProductPicker({
               onClick={() => onAdd(p)}
             className="relative flex min-h-11 flex-col items-start gap-1.5 rounded-xl border bg-card p-2.5 text-left shadow-xs transition-all duration-150 ease-out-smooth hover:border-ring/40 hover:shadow-sm active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
             >
-              {p.imageDataUrl ? (
+              {p.hasImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.imageDataUrl} alt="" className="h-16 w-full rounded-lg object-cover" />
+                <img
+                  src={productImageUrl(p) ?? undefined}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="h-16 w-full rounded-lg object-cover"
+                />
               ) : (
                 <div className="flex h-16 w-full items-center justify-center rounded-lg bg-muted">
                   <PackageIcon className="size-6 text-muted-foreground/50" />

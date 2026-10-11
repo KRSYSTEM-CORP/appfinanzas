@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Product } from "@prisma/client";
+import type { ListedProduct } from "@/lib/product-image";
 import { Button } from "@/components/ui/button";
 import { CustomerForm, type CustomerInfo } from "@/components/pos/CustomerForm";
 import { ProductPicker } from "@/components/pos/ProductPicker";
@@ -25,7 +25,7 @@ export function QuoteClient({
   categories,
   company,
 }: {
-  products: Product[];
+  products: ListedProduct[];
   rate: number | null;
   currencyCode: string;
   exchangeRateEnabled: boolean;
@@ -46,7 +46,7 @@ export function QuoteClient({
 
   const productById = new Map(products.map((p) => [p.id, p]));
 
-  function addProduct(product: Product) {
+  function addProduct(product: ListedProduct) {
     setError(null);
     setLines((prev) => {
       const existing = prev.find((l) => l.productId === product.id);

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import type { Product, PrintPaperSize, ReferenceCurrency } from "@prisma/client";
+import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
+import type { ListedProduct } from "@/lib/product-image";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import { putCatalogSnapshot, type CatalogSnapshot } from "@/lib/offline/db";
 
@@ -45,7 +46,7 @@ export function useCatalogSync(params: {
   companyId: string;
   companyName: string;
   sellerName: string;
-  products: Product[];
+  products: ListedProduct[];
   categories: string[];
   rate: number | null;
   currencyCode: string;

@@ -31,7 +31,7 @@
 // itself, so every open tab falls back to the old plain network-passthrough
 // behavior on its next load without anyone needing to clear site data by
 // hand.
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const CACHE_NAME = `kr-pos-shell-${CACHE_VERSION}`;
 const OFFLINE_SHELL_PATH = "/pos/offline";
 // Any failed navigation to one of these paths is redirected to the offline
@@ -134,6 +134,24 @@ self.addEventListener("fetch", (event) => {
   // keeps the offline shell's chunks warm even if warmShellCache() above
   // missed one (e.g. the very first install raced a slow network).
   if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request).then((res) => {
+            if (res.ok) caches.open(CACHE_NAME).then((c) => cachePut(c, request, res.clone()));
+            return res;
+          })
+      )
+    );
+    return;
+  }
+
+  // Product photos are served by /api/products/[id]/image?v=<updatedAt> and no
+  // longer travel inside the catalog snapshot, so cache them as they are seen
+  // while online — that keeps /pos/offline showing photos. Cache-first is safe:
+  // the ?v= in the URL changes whenever a product's photo does.
+  if (request.method === "GET" && /^\/api\/products\/[^/]+\/image$/.test(url.pathname)) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>

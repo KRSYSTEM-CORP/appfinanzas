@@ -1,5 +1,6 @@
 import { openDB, type IDBPDatabase } from "idb";
-import type { PaymentMethod, PaymentStatus, Product, PrintPaperSize, ReferenceCurrency } from "@prisma/client";
+import type { PaymentMethod, PaymentStatus, PrintPaperSize, ReferenceCurrency } from "@prisma/client";
+import type { ListedProduct } from "@/lib/product-image";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 
 const DB_NAME = "kyra-offline";
@@ -72,7 +73,7 @@ export type CatalogSnapshot = {
   companyName: string;
   sellerName: string;
   savedAt: string;
-  products: Product[];
+  products: ListedProduct[];
   categories: string[];
   rate: number | null;
   currencyCode: string;

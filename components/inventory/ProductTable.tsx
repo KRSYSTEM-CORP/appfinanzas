@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { SearchIcon, XIcon } from "lucide-react";
-import type { Product } from "@prisma/client";
+import type { ListedProduct } from "@/lib/product-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -50,7 +50,7 @@ export function ProductTable({
   canManage,
   companyId,
 }: {
-  products: Product[];
+  products: ListedProduct[];
   inventory: Awaited<ReturnType<typeof getInventoryOverview>>;
   rate: number | null;
   currencyCode: string;
