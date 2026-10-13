@@ -184,7 +184,10 @@ export function ExpensesPanel({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {expenses.length > 0 ? (
-          <div className="flex flex-col gap-0.5" aria-label="Total de gastos del período">
+          <div
+            className="flex flex-col gap-0.5"
+            aria-label={searchQuery ? "Total de gastos encontrados" : "Total de gastos del período"}
+          >
             <p className="text-xs text-muted-foreground">
               {searchQuery ? "Total de gastos encontrados" : "Total del período seleccionado"}
             </p>
