@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { ReceiptTextIcon } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ReceiptTextIcon, SearchIcon, XIcon } from "lucide-react";
 import type { Expense, ReferenceCurrency } from "@prisma/client";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -30,6 +30,59 @@ export type ExpenseRow = Omit<Expense, "exchangeRate"> & { exchangeRate: number 
 
 type EntryCurrency = "REFERENCE" | "LOCAL";
 
+function ExpenseSearch({ query, count }: { query: string; count: number }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentParams = searchParams.toString();
+  const [search, setSearch] = useState(query);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(currentParams);
+      const trimmed = search.trim();
+      if (trimmed) params.set("q", trimmed);
+      else params.delete("q");
+      const nextParams = params.toString();
+      if (nextParams !== currentParams) {
+        router.replace(nextParams ? `${pathname}?${nextParams}` : pathname, { scroll: false });
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [currentParams, pathname, router, search]);
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative w-full sm:max-w-sm">
+        <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Buscar por descripción o categoría"
+          aria-label="Buscar gastos por descripción o categoría"
+          className="pl-9 pr-9"
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Limpiar búsqueda"
+          >
+            <XIcon className="size-4" />
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground" aria-live="polite">
+        {count} {count === 1 ? "gasto" : "gastos"}
+        {query ? " encontrados" : " en el período"}
+      </p>
+    </div>
+  );
+}
+
 function formatRate(rate: number) {
   return rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
@@ -39,6 +92,7 @@ export function ExpensesPanel({
   referenceCurrency,
   localCurrencyCode,
   rate,
+  searchQuery,
 }: {
   expenses: ExpenseRow[];
   referenceCurrency: ReferenceCurrency;
@@ -46,6 +100,7 @@ export function ExpensesPanel({
   // Today's local-per-reference rate, or null when the company has no active
   // rate (then expenses can only be entered in the reference currency).
   rate: number | null;
+  searchQuery: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -129,8 +184,13 @@ export function ExpensesPanel({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {expenses.length > 0 ? (
-          <div className="flex flex-col gap-0.5" aria-label="Total de gastos del período">
-            <p className="text-xs text-muted-foreground">Total del período seleccionado</p>
+          <div
+            className="flex flex-col gap-0.5"
+            aria-label={searchQuery ? "Total de gastos encontrados" : "Total de gastos del período"}
+          >
+            <p className="text-xs text-muted-foreground">
+              {searchQuery ? "Total de gastos encontrados" : "Total del período seleccionado"}
+            </p>
             <p className="text-sm font-semibold tabular-nums">
               {formatCurrencyCents(referenceCurrency, referenceTotal)}
               {withLocal.length > 0 && (
@@ -256,6 +316,8 @@ export function ExpensesPanel({
         </Dialog>
       </div>
 
+      <ExpenseSearch key={searchQuery} query={searchQuery} count={expenses.length} />
+
       {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
 
       <MasterDetail
@@ -263,7 +325,12 @@ export function ExpensesPanel({
         label="Gastos"
         empty={
           <div className="rounded-lg border bg-card shadow-xs">
-            <EmptyState icon={ReceiptTextIcon} title="Sin gastos registrados en este período." className="py-10" />
+            <EmptyState
+              icon={ReceiptTextIcon}
+              title={searchQuery ? "No hay gastos que coincidan con tu búsqueda." : "Sin gastos registrados en este período."}
+              description={searchQuery ? "Prueba con otra descripción o categoría, o limpia la búsqueda." : undefined}
+              className="py-10"
+            />
           </div>
         }
         renderRowMobile={(e) => {

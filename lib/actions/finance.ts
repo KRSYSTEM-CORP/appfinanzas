@@ -44,12 +44,28 @@ export async function costOfGoodsSold(range: DateRangeSelection): Promise<number
   });
 }
 
-export async function listExpenses(range: DateRangeSelection) {
+export async function listExpenses(range: DateRangeSelection, search = "") {
   const { companyId } = await requireManager();
   const windows = selectionToWindows(range);
+  const query = search.trim();
   return withTenant(companyId, (tx) =>
     tx.expense.findMany({
-      where: { companyId, OR: windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
+      where: {
+        companyId,
+        AND: [
+          { OR: windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
+          ...(query
+            ? [
+                {
+                  OR: [
+                    { description: { contains: query, mode: "insensitive" as const } },
+                    { category: { contains: query, mode: "insensitive" as const } },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      },
       orderBy: { spentAt: "desc" },
     })
   );

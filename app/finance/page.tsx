@@ -25,10 +25,11 @@ export const dynamic = "force-dynamic";
 export default async function FinancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; year?: string; months?: string }>;
+  searchParams: Promise<{ range?: string; year?: string; months?: string; q?: string }>;
 }) {
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "7d" });
+  const expenseSearch = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
 
   const [
     totals,
@@ -51,7 +52,7 @@ export default async function FinancePage({
     incomeByCurrency(range),
     costOfGoodsSold(range),
     expensesTotal(range),
-    listExpenses(range),
+    listExpenses(range, expenseSearch),
     revenueComparison(range),
     getExchangeRateInfo(),
   ]);
@@ -81,7 +82,7 @@ export default async function FinancePage({
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-semibold">Finanzas</h1>
-        <DateRangeSwitcher selection={range} />
+        <DateRangeSwitcher selection={range} extraParams={expenseSearch ? { q: expenseSearch } : undefined} />
       </div>
 
       <div className="rounded-lg border bg-card shadow-xs stat-grid divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-4 [&>*]:p-4">
@@ -210,6 +211,9 @@ export default async function FinancePage({
       <Card>
         <CardHeader>
           <CardTitle>Gastos</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Historial del período seleccionado. Usa los filtros superiores para ver hoy, los últimos 7 días, este mes o meses específicos.
+          </p>
         </CardHeader>
         <CardContent>
           <ExpensesPanel
@@ -217,6 +221,7 @@ export default async function FinancePage({
             referenceCurrency={referenceCurrency}
             localCurrencyCode={localCurrencyCode}
             rate={exchangeRateEnabled && rate != null && rate > 0 ? rate : null}
+            searchQuery={expenseSearch}
           />
         </CardContent>
       </Card>
