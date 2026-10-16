@@ -15,6 +15,11 @@ import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 type QuoteWithItems = NonNullable<Awaited<ReturnType<typeof getQuote>>>;
 type Step = "customer" | "cart" | "receipt";
 
+// A quote is a price offer, not a sale: it never takes stock, so a customer
+// can be quoted 10 units of a model with 3 (or 0) on hand. Stock is enforced
+// only when the quote is billed (getQuoteForConversion / completeSale).
+const QUOTE_MAX_QUANTITY = 9999;
+
 export function QuoteClient({
   products,
   rate,
@@ -44,8 +49,6 @@ export function QuoteClient({
   const [completedQuote, setCompletedQuote] = useState<QuoteWithItems | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const productById = new Map(products.map((p) => [p.id, p]));
-
   function addProduct(product: ListedProduct) {
     setError(null);
     setLines((prev) => {
@@ -62,7 +65,7 @@ export function QuoteClient({
           name: product.name,
           unitPriceCents: product.priceCents,
           quantity: 1,
-          maxStock: Math.max(product.stock, 1),
+          maxStock: QUOTE_MAX_QUANTITY,
         },
       ];
     });
@@ -179,12 +182,10 @@ export function QuoteClient({
           referenceCurrency={referenceCurrency}
           categories={categories}
           onAdd={addProduct}
+          allowOutOfStock
         />
         <QuoteCart
-          lines={lines.map((l) => ({
-            ...l,
-            maxStock: Math.max(productById.get(l.productId)?.stock ?? l.maxStock, l.quantity),
-          }))}
+          lines={lines}
           rate={rate}
           currencyCode={currencyCode}
           exchangeRateEnabled={exchangeRateEnabled}

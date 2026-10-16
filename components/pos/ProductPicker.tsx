@@ -22,6 +22,7 @@ export function ProductPicker({
   referenceCurrency,
   categories,
   onAdd,
+  allowOutOfStock = false,
 }: {
   products: ListedProduct[];
   rate: number | null;
@@ -30,6 +31,8 @@ export function ProductPicker({
   referenceCurrency: ReferenceCurrency;
   categories: string[];
   onAdd: (product: ListedProduct) => void;
+  // Presupuestos quote items regardless of stock; the POS must not sell them.
+  allowOutOfStock?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
@@ -56,7 +59,7 @@ export function ProductPicker({
   // respect stock the same way tapping a card does (those are disabled when out
   // of stock) — otherwise a scan could slip an unavailable product into the cart.
   function addMatch(match: ListedProduct): ScanFeedback {
-    if (match.trackStock && match.stock <= 0) return { ok: false, message: `Sin existencias: ${match.name}` };
+    if (!allowOutOfStock && match.trackStock && match.stock <= 0) return { ok: false, message: `Sin existencias: ${match.name}` };
     onAdd(match);
     return { ok: true, message: `Agregado: ${match.name}` };
   }
@@ -161,7 +164,7 @@ export function ProductPicker({
       )}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto pr-1">
         {filtered.map((p) => {
-          const outOfStock = p.trackStock && p.stock <= 0;
+          const outOfStock = !allowOutOfStock && p.trackStock && p.stock <= 0;
           return (
             <button
               key={p.id}
