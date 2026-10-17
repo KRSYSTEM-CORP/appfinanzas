@@ -133,8 +133,7 @@ export function ShareDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Comparte el enlace o deja que el cliente escanee el código — siempre entrega la versión
-            más reciente del documento.
+            Envía el PDF por WhatsApp, copia el enlace o deja que el cliente escanee el código.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center gap-3">
@@ -146,7 +145,7 @@ export function ShareDialog({
             <Input
               readOnly
               value={url}
-              className="flex-1 text-xs"
+              className="min-w-0 flex-1 text-xs"
               onFocus={(e) => e.currentTarget.select()}
             />
             <Button type="button" size="sm" variant="outline" onClick={handleCopy}>
@@ -154,20 +153,26 @@ export function ShareDialog({
             </Button>
           </div>
         </div>
-        {pdfError && <p className="text-sm text-destructive">{pdfError}</p>}
-        {pdfNotice && <p role="status" className="text-sm text-muted-foreground">{pdfNotice}</p>}
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>Cerrar</DialogClose>
+        {/* Stacked full-width actions: three buttons side by side overflowed
+            the dialog's width, on phones and on desktop alike. */}
+        <div className="flex flex-col gap-2">
           {buildPdfBlob ? (
             <>
-              <Button variant="outline" onClick={handleWhatsApp}>Enviar enlace</Button>
-              <Button onClick={handleSendPdf} disabled={!pdfFile}>
+              <Button className="w-full" onClick={handleSendPdf} disabled={!pdfFile}>
                 {pdfFile || pdfError ? "Enviar PDF por WhatsApp" : "Preparando PDF…"}
+              </Button>
+              <Button className="w-full" variant="outline" onClick={handleWhatsApp}>
+                Enviar enlace por WhatsApp
               </Button>
             </>
           ) : (
-            <Button onClick={handleWhatsApp}>Enviar por WhatsApp</Button>
+            <Button className="w-full" onClick={handleWhatsApp}>Enviar por WhatsApp</Button>
           )}
+          {pdfError && <p className="text-sm text-destructive">{pdfError}</p>}
+          {pdfNotice && <p role="status" className="text-sm text-muted-foreground">{pdfNotice}</p>}
+        </div>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>Cerrar</DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>
