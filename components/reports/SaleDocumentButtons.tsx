@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { FileTextIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ActionMenu } from "@/components/ui/action-menu";
 import {
   buildDeliveryNotePDF,
   buildPaymentReceiptPDF,
@@ -117,11 +116,15 @@ export function SaleDocumentButtons({
   }
 
   return (
-    <ActionMenu
-      trigger={<Button size="icon-sm" variant="outline" aria-label="Documentos" />}
-      triggerChildren={<FileTextIcon className="size-4" />}
-      contentClassName="w-72"
-    >
+    // Rendered inline, not inside a popover/drawer: the Imprimir and Compartir
+    // dialogs open in their own portal, and a surrounding popover (desktop) or
+    // Vaul drawer (mobile) treated that as an outside click and closed itself,
+    // unmounting the dialog before it could appear — so "Compartir" did nothing.
+    <section aria-label="Documentos" className="flex flex-col gap-3">
+      <p className="flex items-center gap-1.5 text-sm font-medium">
+        <FileTextIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+        Documentos
+      </p>
       <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <p className="text-xs font-medium text-muted-foreground">Nota de entrega</p>
@@ -154,6 +157,8 @@ export function SaleDocumentButtons({
                 path={`/api/public/sales/${sale.id}?doc=note`}
                 customerPhone={sale.customerPhone}
                 message="Aquí tienes tu nota de entrega:"
+                buildPdfBlob={async () => (await buildNotePdf()).output("blob") as Blob}
+                fileName={`nota-entrega-${controlNumberLabel(sale)}.pdf`}
               />
             </div>
           </div>
@@ -190,6 +195,8 @@ export function SaleDocumentButtons({
                   path={`/api/public/sales/${sale.id}?doc=invoice`}
                   customerPhone={sale.customerPhone}
                   message="Aquí tienes tu factura:"
+                  buildPdfBlob={async () => (await buildInvoicePdf()).output("blob") as Blob}
+                  fileName={`factura-${String(sale.invoiceNumber).padStart(6, "0")}.pdf`}
                 />
               </div>
             </div>
@@ -227,11 +234,13 @@ export function SaleDocumentButtons({
                   path={`/api/public/sales/${sale.id}?doc=receipt`}
                   customerPhone={sale.customerPhone}
                   message="Aquí tienes tu recibo de pago:"
+                  buildPdfBlob={async () => (await buildReceiptPdf()).output("blob") as Blob}
+                  fileName={`recibo-pago-${receiptControlNumberLabel(sale)}.pdf`}
                 />
               </div>
             </div>
           )}
-        </div>
-    </ActionMenu>
+      </div>
+    </section>
   );
 }

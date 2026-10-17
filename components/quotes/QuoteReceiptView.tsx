@@ -204,6 +204,8 @@ export function QuoteReceiptView({
         path={`/api/public/quotes/${quote.id}`}
         customerPhone={quote.customerPhone}
         message="Aquí tienes tu presupuesto:"
+        buildPdfBlob={() => generatePdfBlob()}
+        fileName={`presupuesto-${quote.controlNumber ?? quote.id.slice(-8)}.pdf`}
       />
 
       <Button size="lg" onClick={onNewQuote}>

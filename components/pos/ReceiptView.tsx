@@ -394,6 +394,8 @@ export function ReceiptView({
           path={`/api/public/sales/${sale.id}?doc=note`}
           customerPhone={sale.customerPhone}
           message="Aquí tienes tu nota de entrega:"
+          buildPdfBlob={() => generatePdfBlob()}
+          fileName={`nota-entrega-${controlNumberLabel(sale)}.pdf`}
         />
       )}
 
@@ -441,6 +443,8 @@ export function ReceiptView({
                 path={`/api/public/sales/${sale.id}?doc=invoice`}
                 customerPhone={sale.customerPhone}
                 message="Aquí tienes tu factura:"
+                buildPdfBlob={async () => (await generateInvoicePdfBlob()).blob}
+                fileName={`factura-${String(invoiceNumber ?? 0).padStart(6, "0")}.pdf`}
               />
             </div>
           )}
