@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSession, requireSession, requireManager } from "@/lib/session";
+import { getSession, requireSession, requireManager, setSessionCookie } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { hashPassword, verifyPassword } from "@/lib/password";
@@ -401,7 +401,7 @@ export async function updateFiscalData(formData: FormData): Promise<ActionResult
 // user can only ever update their own row (userId comes from the session,
 // not from form input).
 export async function changeMyPassword(formData: FormData): Promise<ActionResult> {
-  const { userId, companyId } = await requireSession();
+  const { userId, companyId, companyName, branchId } = await requireSession();
   const parsed = ChangePasswordSchema.safeParse({
     currentPassword: formData.get("currentPassword"),
     newPassword: formData.get("newPassword"),
@@ -421,8 +421,14 @@ export async function changeMyPassword(formData: FormData): Promise<ActionResult
   }
 
   await withTenant(companyId, (tx) =>
-    tx.user.update({ where: { id: userId }, data: { passwordHash: hashPassword(parsed.data.newPassword) } })
+    tx.user.update({
+      where: { id: userId },
+      data: { passwordHash: hashPassword(parsed.data.newPassword), tokenVersion: { increment: 1 } },
+    })
   );
+  // The bump above signs out every other device; re-issue this browser's
+  // cookie with the new version so the person who just changed it stays in.
+  await setSessionCookie({ uid: userId, cid: companyId, companyName, bid: branchId });
 
   return { success: true };
 }

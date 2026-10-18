@@ -483,7 +483,7 @@ export async function resetPassword(token: string, formData: FormData): Promise<
   await prisma.$transaction([
     prisma.user.update({
       where: { id: resetToken.userId },
-      data: { passwordHash: hashPassword(parsed.data.password) },
+      data: { passwordHash: hashPassword(parsed.data.password), tokenVersion: { increment: 1 } },
     }),
     prisma.passwordResetToken.update({
       where: { id: resetToken.id },

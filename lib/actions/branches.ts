@@ -1,10 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { requireManager, requireSession } from "@/lib/session";
+import { requireManager, requireSession, setSessionCookie } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { signSessionToken, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/lib/session-token";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import type { ActionResult } from "@/lib/types";
 
@@ -69,19 +67,11 @@ export async function switchBranch(branchId: string | null): Promise<ActionResul
     if (!branch) return { success: false, error: "Sucursal no encontrada" };
   }
 
-  const token = signSessionToken({
+  await setSessionCookie({
     uid: session.userId,
     cid: session.companyId,
     companyName: session.companyName,
     bid: branchId,
-  });
-  const store = await cookies();
-  store.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
   });
 
   revalidatePath("/", "layout");

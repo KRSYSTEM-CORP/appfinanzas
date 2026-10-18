@@ -242,6 +242,10 @@ model User {
   // Null for an account that only ever signed up/logged in with Google (see
   // app/api/auth/google/callback) — nothing to verify a password against.
   passwordHash        String?
+  // Bumped when the password changes; session cookies carry the value they
+  // were issued with (SessionPayload.tv), so older cookies stop working on
+  // every device (audit KRPOS-SEC-006).
+  tokenVersion        Int                  @default(0)
   // Google's stable per-account id ("sub" claim) — set the first time this
   // person uses "Continuar con Google", whether that creates a brand-new
   // company or links onto an existing email/password account.

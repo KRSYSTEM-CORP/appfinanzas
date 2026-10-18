@@ -15,8 +15,11 @@ import {
   type SessionPayload,
 } from "@/lib/session-token";
 
-export async function setSessionCookie(payload: Omit<SessionPayload, "exp">) {
-  const token = signSessionToken(payload);
+export async function setSessionCookie(payload: Omit<SessionPayload, "exp" | "tv">) {
+  // Stamp the user's current tokenVersion so a later password change
+  // invalidates this cookie (see getSession()).
+  const user = await prisma.user.findUnique({ where: { id: payload.uid }, select: { tokenVersion: true } });
+  const token = signSessionToken({ ...payload, tv: user?.tokenVersion ?? 0 });
   const store = await cookies();
   store.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
@@ -94,6 +97,8 @@ export async function getSession(): Promise<Session | null> {
     },
   });
   if (!user || user.companyId !== payload.cid || user.status !== "ACTIVE") return null;
+  // Revoked by a password change/reset after this cookie was issued.
+  if ((payload.tv ?? 0) !== user.tokenVersion) return null;
 
   const isExempt = user.company.isExempt;
   const nextPaymentDueDate = user.company.nextPaymentDueDate;

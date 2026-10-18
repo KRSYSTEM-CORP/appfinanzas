@@ -13,6 +13,9 @@ export type SessionPayload = {
   // against the DB on every request in getSession(), same as everything else
   // in this payload.
   bid: string | null;
+  // User.tokenVersion at sign time; absent on cookies issued before it
+  // existed, which getSession() treats as 0.
+  tv?: number;
   exp: number;
 };
 
