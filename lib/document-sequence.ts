@@ -8,6 +8,7 @@ const SEQUENCES = {
   invoice: { counter: "nextInvoiceNumber", table: "Sale", column: "invoiceNumber" },
   quote: { counter: "nextQuoteNumber", table: "Quote", column: "controlNumber" },
   purchase: { counter: "nextPurchaseNumber", table: "Purchase", column: "controlNumber" },
+  creditNote: { counter: "nextCreditNoteNumber", table: "CreditNote", column: "controlNumber" },
 } as const;
 
 export type DocumentSequence = keyof typeof SEQUENCES;

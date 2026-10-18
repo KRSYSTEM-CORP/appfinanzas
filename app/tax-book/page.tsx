@@ -5,7 +5,7 @@ import { PurchasesBookList, SalesBookList } from "@/components/finance/TaxBookLi
 import { TaxBookExportButton } from "@/components/finance/TaxBookExportButton";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { formatCurrencyCents } from "@/lib/currencies";
-import { getSalesTaxBook, getPurchasesTaxBook } from "@/lib/actions/tax-book";
+import { getSalesTaxBook, getPurchasesTaxBook, getCreditNotesTaxBook } from "@/lib/actions/tax-book";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { parseDateRangeSelection } from "@/lib/report-types";
 
@@ -19,9 +19,10 @@ export default async function TaxBookPage({
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
 
-  const [sales, purchases, { referenceCurrency }] = await Promise.all([
+  const [sales, purchases, creditNotes, { referenceCurrency }] = await Promise.all([
     getSalesTaxBook(range),
     getPurchasesTaxBook(range),
+    getCreditNotesTaxBook(range),
     getExchangeRateInfo(),
   ]);
 
@@ -31,7 +32,11 @@ export default async function TaxBookPage({
       tax: acc.tax + s.taxCents,
       total: acc.total + s.totalCents,
     }),
-    { base: 0, tax: 0, total: 0 }
+    // Notas de crédito subtract from the period's sales.
+    creditNotes.reduce(
+      (acc, n) => ({ base: acc.base - n.baseImponibleCents, tax: acc.tax - n.taxCents, total: acc.total - n.totalCents }),
+      { base: 0, tax: 0, total: 0 }
+    )
   );
   const purchasesTotals = purchases.reduce(
     (acc, p) => ({
@@ -58,6 +63,7 @@ export default async function TaxBookPage({
           <TaxBookExportButton
             sales={sales}
             purchases={purchases}
+            creditNotes={creditNotes}
             rangeLabel={
               range.kind === "preset" ? range.preset : `meses-${range.year}-${range.months.join("-")}`
             }

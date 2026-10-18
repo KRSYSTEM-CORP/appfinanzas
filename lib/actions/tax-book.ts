@@ -16,8 +16,12 @@ export async function getSalesTaxBook(range: DateRangeSelection) {
       where: {
         companyId,
         ...(branchId ? { branchId } : {}),
-        OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
-        voided: false,
+        AND: [
+          { OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })) },
+          // A factura cancelled by a nota de crédito stays in the book; the
+          // note itself is listed separately (getCreditNotesTaxBook).
+          { OR: [{ voided: false }, { creditNote: { isNot: null } }] },
+        ],
       },
       orderBy: { createdAt: "asc" },
       select: {
@@ -52,6 +56,36 @@ export async function getPurchasesTaxBook(range: DateRangeSelection) {
       },
       orderBy: { createdAt: "asc" },
       include: { supplier: true },
+    })
+  );
+}
+
+// Notas de crédito issued in the period (audit KRPOS-FIS-003), each with the
+// factura it cancels — they subtract from the Libro de Ventas.
+export async function getCreditNotesTaxBook(range: DateRangeSelection) {
+  const { companyId, branchId } = await requireManager();
+  const windows = selectionToWindows(range);
+  return withTenant(companyId, (tx) =>
+    tx.creditNote.findMany({
+      where: {
+        companyId,
+        ...(branchId ? { branchId } : {}),
+        OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        createdAt: true,
+        controlNumber: true,
+        reason: true,
+        baseImponibleCents: true,
+        taxCents: true,
+        totalCents: true,
+        igtfCents: true,
+        sale: {
+          select: { invoiceNumber: true, customerFirstName: true, customerLastName: true, customerRif: true },
+        },
+      },
     })
   );
 }

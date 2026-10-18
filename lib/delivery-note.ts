@@ -425,7 +425,10 @@ export async function buildDeliveryNotePDF(
   // different title/sequence — selectable as an alternative document for
   // the same sale (see getOrCreateInvoiceNumber, lib/actions/sales.ts).
   // Not fiscally SENIAT-compliant yet; that's deferred, separate work.
-  variant: "delivery-note" | "invoice" = "delivery-note"
+  variant: "delivery-note" | "invoice" | "credit-note" = "delivery-note",
+  // Required for variant "credit-note": the note's own number, date and
+  // reason; the sale's lines are the ones being credited.
+  creditNote?: { controlNumber: number; createdAt: Date; reason: string }
 ): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "pt", format });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -436,13 +439,20 @@ export async function buildDeliveryNotePDF(
   const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
   const isInvoice = variant === "invoice";
+  const isCreditNote = variant === "credit-note" && creditNote != null;
   const titleBottomY = renderDocumentTitleBlock(
     doc,
-    isInvoice ? "FACTURA" : "NOTA DE ENTREGA",
-    [
-      `Nº de control: ${isInvoice ? invoiceNumberLabel(sale) : controlNumberLabel(sale)}`,
-      `Fecha: ${formatDate(sale.createdAt)}`,
-    ],
+    isCreditNote ? "NOTA DE CRÉDITO" : isInvoice ? "FACTURA" : "NOTA DE ENTREGA",
+    isCreditNote
+      ? [
+          `Nº de control: ${String(creditNote.controlNumber).padStart(6, "0")}`,
+          `Fecha: ${formatDate(creditNote.createdAt)}`,
+          `Afecta la factura Nº ${invoiceNumberLabel(sale)} del ${formatDate(sale.createdAt)}`,
+        ]
+      : [
+          `Nº de control: ${isInvoice ? invoiceNumberLabel(sale) : controlNumberLabel(sale)}`,
+          `Fecha: ${formatDate(sale.createdAt)}`,
+        ],
     margin,
     y,
     pageWidth
@@ -468,7 +478,7 @@ export async function buildDeliveryNotePDF(
     y += 16;
   }
   y += 10;
-  y = renderNote(doc, sale.note, margin, y, pageWidth);
+  y = renderNote(doc, isCreditNote ? `Motivo: ${creditNote.reason}` : sale.note, margin, y, pageWidth);
 
   const rows = sale.items.map((item) => [
     String(item.quantity),
@@ -514,14 +524,27 @@ export async function buildDeliveryNotePDF(
     y += 18;
   }
 
-  y = renderPaymentSection(doc, sale, margin, y, referenceCurrency, currencyCode);
-  y += 10;
+  if (!isCreditNote) {
+    y = renderPaymentSection(doc, sale, margin, y, referenceCurrency, currencyCode);
+    y += 10;
+  }
 
   doc.setDrawColor(200);
   doc.line(margin, y, pageWidth - margin, y);
   y += 20;
 
-  y = renderTotalsSection(doc, sale, margin, pageWidth, y, showLocal, rate, currencyCode, referenceCurrency, "TOTAL A CANCELAR:");
+  y = renderTotalsSection(
+    doc,
+    sale,
+    margin,
+    pageWidth,
+    y,
+    showLocal,
+    rate,
+    currencyCode,
+    referenceCurrency,
+    isCreditNote ? "TOTAL ACREDITADO:" : "TOTAL A CANCELAR:"
+  );
 
   return doc;
 }

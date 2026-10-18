@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MoreVerticalIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ActionMenu } from "@/components/ui/action-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogClose,
@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { voidSale, registerPayment } from "@/lib/actions/sales";
+import { voidSale, registerPayment, issueCreditNote } from "@/lib/actions/sales";
 import {
   PaymentSplitBuilder,
   defaultPaymentSplitRows,
@@ -36,6 +36,7 @@ export function SaleActions({
   exchangeRateEnabled,
   referenceCurrency,
   canManage,
+  hasInvoice,
 }: {
   saleId: string;
   voided: boolean;
@@ -51,6 +52,8 @@ export function SaleActions({
   // Anular is manager-only on the server; sellers only get
   // "Registrar pago".
   canManage: boolean;
+  // A sale with a factura is cancelled with a nota de crédito, not "Anular".
+  hasInvoice: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [payOpen, setPayOpen] = useState(false);
@@ -59,6 +62,9 @@ export function SaleActions({
   );
   const [payError, setPayError] = useState<string | null>(null);
   const router = useRouter();
+  const [creditOpen, setCreditOpen] = useState(false);
+  const [creditReason, setCreditReason] = useState("");
+  const [creditError, setCreditError] = useState<string | null>(null);
 
   const withinRemaining = isPaymentSplitWithinRemaining(
     paymentRows,
@@ -76,6 +82,21 @@ export function SaleActions({
         toast.error(result.error);
         return;
       }
+      router.refresh();
+    });
+  }
+
+  function handleCreditNote() {
+    setCreditError(null);
+    startTransition(async () => {
+      const result = await issueCreditNote(saleId, creditReason);
+      if (!result.success) {
+        setCreditError(result.error);
+        return;
+      }
+      setCreditOpen(false);
+      setCreditReason("");
+      toast.success("Nota de crédito emitida.");
       router.refresh();
     });
   }
@@ -185,42 +206,73 @@ export function SaleActions({
       )}
       </div>
       <div className="flex justify-end">
-      {!canManage ? null : !voided ? (
-        <ActionMenu
-          trigger={<Button size="icon-sm" variant="ghost" disabled={isPending} aria-label="Más acciones" />}
-          triggerChildren={<MoreVerticalIcon />}
+      {/* Inline buttons, not a popover/drawer menu: a dialog opened from
+          inside one closed together with the menu (same bug as Compartir). */}
+      {canManage && !voided && (hasInvoice ? (
+        <Dialog
+          open={creditOpen}
+          onOpenChange={(open) => {
+            setCreditOpen(open);
+            if (!open) setCreditError(null);
+          }}
         >
-          <Dialog>
-            <DialogTrigger
-              render={
-                <button
-                  type="button"
-                  disabled={isPending}
-                  className="px-2.5 py-2 text-sm rounded-md text-left hover:bg-muted transition-colors disabled:opacity-50"
-                />
-              }
-            >
-              Anular
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>¿Anular esta venta?</DialogTitle>
-                <DialogDescription>
-                  El stock de los productos vendidos se repondrá y la venta dejará de contar en
-                  los ingresos y gráficas. Seguirá visible en el historial marcada como
-                  &quot;Anulada&quot;.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                <DialogClose render={<Button disabled={isPending} />} onClick={handleVoid}>
-                  Anular
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </ActionMenu>
-      ) : null}
+          <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
+            Nota de crédito
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Emitir nota de crédito</DialogTitle>
+              <DialogDescription>
+                Esta venta tiene factura, así que se anula con una nota de crédito por el total. El
+                stock se repone y la venta queda marcada como &quot;Anulada&quot; en el historial.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`credit-reason-${saleId}`}>Motivo</Label>
+              <Input
+                id={`credit-reason-${saleId}`}
+                value={creditReason}
+                maxLength={300}
+                placeholder="Ej.: devolución de la mercancía"
+                onChange={(e) => setCreditReason(e.target.value)}
+              />
+              {creditError && <p className="text-sm text-destructive">{creditError}</p>}
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+              <Button
+                variant="destructive"
+                disabled={isPending || creditReason.trim().length < 3}
+                onClick={handleCreditNote}
+              >
+                Emitir nota de crédito
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : (
+        <Dialog>
+          <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
+            Anular
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>¿Anular esta venta?</DialogTitle>
+              <DialogDescription>
+                El stock de los productos vendidos se repondrá y la venta dejará de contar en
+                los ingresos y gráficas. Seguirá visible en el historial marcada como
+                &quot;Anulada&quot;.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+              <DialogClose render={<Button disabled={isPending} />} onClick={handleVoid}>
+                Anular
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ))}
       </div>
     </div>
   );

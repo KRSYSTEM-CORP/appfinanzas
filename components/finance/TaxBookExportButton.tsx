@@ -5,6 +5,17 @@ import { appendSheet, downloadWorkbook, newWorkbook } from "@/lib/spreadsheet";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
 
+type CreditNoteRow = {
+  createdAt: Date;
+  controlNumber: number;
+  reason: string;
+  baseImponibleCents: number;
+  taxCents: number;
+  totalCents: number;
+  igtfCents: number;
+  sale: { invoiceNumber: number | null; customerFirstName: string | null; customerLastName: string | null; customerRif: string | null };
+};
+
 type SaleRow = {
   createdAt: Date;
   controlNumber: number | null;
@@ -33,10 +44,12 @@ type PurchaseRow = {
 export function TaxBookExportButton({
   sales,
   purchases,
+  creditNotes = [],
   rangeLabel,
 }: {
   sales: SaleRow[];
   purchases: PurchaseRow[];
+  creditNotes?: CreditNoteRow[];
   rangeLabel: string;
 }) {
   const [isExporting, setIsExporting] = useState(false);
@@ -61,6 +74,24 @@ export function TaxBookExportButton({
         ]),
       ]);
       appendSheet(wb, salesSheet, "Libro de Ventas");
+
+      if (creditNotes.length > 0) {
+        appendSheet(wb, [
+          ["Fecha", "Nº Nota de crédito", "Factura afectada", "Cliente", "RIF/Cédula", "Motivo", "Base Imponible", "IVA", "Total", "IGTF"],
+          ...creditNotes.map((n) => [
+            formatDate(n.createdAt),
+            n.controlNumber,
+            n.sale.invoiceNumber ?? "",
+            `${n.sale.customerFirstName ?? ""} ${n.sale.customerLastName ?? ""}`.trim(),
+            n.sale.customerRif ?? "",
+            n.reason,
+            -n.baseImponibleCents / 100,
+            -n.taxCents / 100,
+            -n.totalCents / 100,
+            -n.igtfCents / 100,
+          ]),
+        ], "Notas de Crédito");
+      }
 
       const purchasesSheet = ([
         ["Fecha", "Nº Control", "Nº Factura Proveedor", "Proveedor", "RIF", "Base Imponible", "IVA", "IVA Retenido", "Total"],

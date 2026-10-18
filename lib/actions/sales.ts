@@ -390,6 +390,9 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       });
       if (!sale) throw new Error("Venta no encontrada");
       if (sale.voided) throw new Error("La venta ya está anulada");
+      if (sale.invoiceNumber != null) {
+        throw new Error("Esta venta tiene factura: anúlala emitiendo una nota de crédito.");
+      }
 
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
@@ -402,6 +405,61 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
   revalidatePath("/inventory");
   revalidatePath("/pos");
   revalidatePath("/reports");
+  void notifyLive(posChannel(companyId), "sale");
+  return { success: true };
+}
+
+// Emits a nota de crédito for an invoiced sale (audit KRPOS-FIS-003): the
+// fiscal way to cancel a factura already handed to the customer. Always for
+// the full sale — it voids the sale and restores its stock in the same
+// transaction, and gets its own per-branch number.
+export async function issueCreditNote(saleId: string, reason: string): Promise<ActionResult> {
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
+  const trimmed = reason.trim();
+  if (trimmed.length < 3) return { success: false, error: "Escribe el motivo de la nota de crédito." };
+  if (trimmed.length > 300) return { success: false, error: "El motivo es demasiado largo (máximo 300 caracteres)." };
+
+  try {
+    await withTenant(companyId, async (tx) => {
+      await lockSale(tx, saleId, companyId, sessionBranchId);
+      const sale = await tx.sale.findFirst({
+        where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
+        include: { creditNote: { select: { id: true } } },
+      });
+      if (!sale) throw new Error("Venta no encontrada");
+      if (sale.creditNote) throw new Error("Esta venta ya tiene una nota de crédito");
+      if (sale.invoiceNumber == null) throw new Error("Solo se emite nota de crédito sobre una venta con factura. Usa Anular.");
+      if (sale.voided) throw new Error("La venta ya está anulada");
+      if (!sale.branchId) throw new Error("La venta no tiene sucursal");
+
+      const controlNumber = await nextDocumentNumber(tx, sale.branchId, "creditNote");
+      await tx.creditNote.create({
+        data: {
+          companyId,
+          branchId: sale.branchId,
+          saleId: sale.id,
+          controlNumber,
+          reason: trimmed,
+          totalCents: sale.totalCents,
+          baseImponibleCents: sale.baseImponibleCents,
+          taxCents: sale.taxCents,
+          igtfCents: sale.igtfCents,
+          createdById: actorId,
+          createdByName: actorName,
+        },
+      });
+      await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
+      await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "No se pudo emitir la nota de crédito";
+    return { success: false, error: message };
+  }
+
+  revalidatePath("/inventory");
+  revalidatePath("/pos");
+  revalidatePath("/reports");
+  revalidatePath("/documents");
   void notifyLive(posChannel(companyId), "sale");
   return { success: true };
 }
@@ -616,7 +674,7 @@ export async function listRecentSales(
       },
       orderBy: { createdAt: "desc" },
       take: limit,
-      include: { items: true, payments: true },
+      include: { items: true, payments: true, creditNote: { select: { controlNumber: true, createdAt: true, reason: true } } },
     })
   );
 }

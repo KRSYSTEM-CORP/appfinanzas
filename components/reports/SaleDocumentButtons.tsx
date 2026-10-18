@@ -26,7 +26,11 @@ export function SaleDocumentButtons({
   referenceCurrency,
   printPaperSize,
 }: {
-  sale: DeliveryNoteSale & { exchangeRate: number | null; paidExchangeRate: number | null };
+  sale: DeliveryNoteSale & {
+    exchangeRate: number | null;
+    paidExchangeRate: number | null;
+    creditNote?: { controlNumber: number; createdAt: Date; reason: string } | null;
+  };
   company: DeliveryNoteCompany;
   currentRate: number | null;
   currencyCode: string;
@@ -105,6 +109,27 @@ export function SaleDocumentButtons({
     }
   }
 
+  async function downloadCreditNote() {
+    if (!sale.creditNote) return;
+    setBusy(true);
+    try {
+      const doc = await buildDeliveryNotePDF(
+        sale,
+        company,
+        noteRate,
+        currencyCode,
+        exchangeRateEnabled,
+        referenceCurrency,
+        "letter",
+        "credit-note",
+        sale.creditNote
+      );
+      doc.save(`nota-credito-${String(sale.creditNote.controlNumber).padStart(6, "0")}.pdf`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function downloadReceipt() {
     setBusy(true);
     try {
@@ -126,6 +151,18 @@ export function SaleDocumentButtons({
         Documentos
       </p>
       <div className="flex flex-col gap-4">
+          {sale.creditNote && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                Nota de crédito Nº {String(sale.creditNote.controlNumber).padStart(6, "0")}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" disabled={busy} onClick={downloadCreditNote}>
+                  Descargar
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <p className="text-xs font-medium text-muted-foreground">Nota de entrega</p>
             <div className="flex flex-wrap gap-2">

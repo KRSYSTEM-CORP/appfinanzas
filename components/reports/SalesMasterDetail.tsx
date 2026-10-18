@@ -199,6 +199,7 @@ export function SalesMasterDetail({
                 exchangeRateEnabled={exchangeRateEnabled}
                 referenceCurrency={referenceCurrency}
                 canManage={canManage}
+                hasInvoice={s.invoiceNumber != null}
               />
             </div>
           </>

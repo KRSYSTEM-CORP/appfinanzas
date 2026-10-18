@@ -180,6 +180,7 @@ model Company {
   users                 User[]
   products              Product[]
   sales                 Sale[]
+  creditNotes           CreditNote[]
   customers             Customer[]
   quotes                Quote[]
   suppliers             Supplier[]
@@ -217,26 +218,28 @@ model Company {
 // was introduced (see the add_branches migration), so nothing already in
 // production lost access to its own data.
 model Branch {
-  id        String   @id @default(cuid())
-  companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id                   String   @id @default(cuid())
+  companyId            String
+  company              Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name                 String
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
   // Last document number handed out per sequence (see lib/document-sequence.ts).
   // Never derived from count(*): a deleted document must not free its number.
-  nextSaleNumber     Int @default(0)
-  nextReceiptNumber  Int @default(0)
-  nextInvoiceNumber  Int @default(0)
-  nextQuoteNumber    Int @default(0)
-  nextPurchaseNumber Int @default(0)
+  nextSaleNumber       Int      @default(0)
+  nextReceiptNumber    Int      @default(0)
+  nextInvoiceNumber    Int      @default(0)
+  nextQuoteNumber      Int      @default(0)
+  nextPurchaseNumber   Int      @default(0)
+  nextCreditNoteNumber Int      @default(0)
 
-  products     Product[]
-  sales        Sale[]
-  quotes       Quote[]
-  cashClosings CashClosing[]
-  users        User[]
-  purchases    Purchase[]
+  products       Product[]
+  sales          Sale[]
+  quotes         Quote[]
+  cashClosings   CashClosing[]
+  creditNotes    CreditNote[]
+  users          User[]
+  purchases      Purchase[]
   stockMovements StockMovement[]
 
   @@unique([companyId, name])
@@ -373,7 +376,7 @@ model LoginAttempt {
 }
 
 model Product {
-  id                  String         @id @default(cuid())
+  id                  String          @id @default(cuid())
   name                String
   sku                 String?
   category            String?
@@ -382,21 +385,21 @@ model Product {
   // fallback tier below wholesaleMinQty when it's on.
   priceCents          Int
   costCents           Int?
-  stock               Int            @default(0)
-  lowStockThreshold   Int            @default(5)
+  stock               Int             @default(0)
+  lowStockThreshold   Int             @default(5)
   // Off by default so every existing product keeps requiring/tracking a real
   // stock count exactly as before. When off, stock/lowStockThreshold are
   // ignored everywhere (checkout, ProductPicker, isActive-on-zero-stock) —
   // see resolveTierPrice's sibling in lib/pricing.ts for the analogous
   // "off means ignore" pattern used by priceTiersEnabled below.
-  trackStock          Boolean        @default(true)
-  isActive            Boolean        @default(true)
+  trackStock          Boolean         @default(true)
+  isActive            Boolean         @default(true)
   imageDataUrl        String?
   // Quantity-based pricing (detal/mayor/gran mayor) — off by default. Each
   // tier only applies once BOTH its price and its minimum quantity are set;
   // a business can configure just "mayor" without "gran mayor". See
   // resolveTierPrice in lib/pricing.ts for the exact resolution rule.
-  priceTiersEnabled   Boolean        @default(false)
+  priceTiersEnabled   Boolean         @default(false)
   wholesalePriceCents Int?
   wholesaleMinQty     Int?
   bulkPriceCents      Int?
@@ -404,16 +407,16 @@ model Product {
   // IVA treatment for this product — see TaxCategory. Defaults to GENERAL
   // (the standard rate) so every product created before this feature existed
   // is treated the same way checkout already implicitly assumed.
-  taxCategory         TaxCategory    @default(GENERAL)
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  taxCategory         TaxCategory     @default(GENERAL)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
   companyId           String
-  company             Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company             Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // Each branch has its own independent catalog — a product belongs to
   // exactly one branch, not shared/counted across the company's other
   // branches (see the plan doc for why: confirmed with the user).
   branchId            String
-  branch              Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch              Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
   saleItems           SaleItem[]
   quoteItems          QuoteItem[]
   purchaseItems       PurchaseItem[]
@@ -532,7 +535,7 @@ model Sale {
   // Sequential per-company number for the "Nota de entrega" document.
   // IGTF collected on the foreign-currency payments (lib/igtf.ts), on top of
   // totalCents. 0 when the company isn't an IGTF agent.
-  igtfCents             Int       @default(0)
+  igtfCents             Int            @default(0)
   controlNumber         Int?
   // Sequential per-company number for the "Recibo de pago" document —
   // independent of controlNumber above. Only assigned the moment a CREDIT
@@ -560,6 +563,7 @@ model Sale {
   branchId              String
   branch                Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   items                 SaleItem[]
+  creditNote            CreditNote?
   // Breakdown when the customer split payment across multiple methods (e.g.
   // half cash USD, half Pago Móvil in Bs). The singular paymentMethod/
   // paymentReference/paidInForeignCurrency fields above still mirror the
@@ -976,27 +980,27 @@ model PagoMovilOrder {
 // A manually logged business expense (Finanzas), used together with revenue
 // and Product.costCents to estimate net profit for a date range.
 model Expense {
-  id          String   @id @default(cuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  description String
-  category    String?
+  id               String   @id @default(cuid())
+  companyId        String
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  description      String
+  category         String?
   // Always the reference-currency amount (EUR/USD) — every Finanzas total
   // sums this column, so an expense entered in local currency is converted
   // at the rate of the moment it was recorded.
-  amountCents Int
+  amountCents      Int
   // True when the owner typed the amount in the local currency (Bs.).
-  enteredInLocal Boolean  @default(false)
+  enteredInLocal   Boolean  @default(false)
   // Local-currency amount in cents: what was typed when enteredInLocal, or
   // the equivalent at `exchangeRate` otherwise. Null on expenses recorded
   // before this existed (or when the company has no exchange rate enabled).
   localAmountCents Int?
   // Snapshot of Company.exchangeRate (local per reference unit) at entry.
-  exchangeRate Decimal? @db.Decimal(12, 4)
-  spentAt     DateTime @default(now())
-  createdById String?
-  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
+  exchangeRate     Decimal? @db.Decimal(12, 4)
+  spentAt          DateTime @default(now())
+  createdById      String?
+  createdBy        User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
 
   @@index([companyId, spentAt])
 }
@@ -1029,34 +1033,34 @@ model CashClosing {
 // (e.g. Pago Móvil/transfer details). Not scoped by company, so it's
 // deliberately outside Row-Level Security, like User/Company.
 model PlatformSettings {
-  id                        String   @id
+  id                            String    @id
   // Extra free-text notes shown under the Binance details below (e.g. "solo
   // horario laboral", "confirma por WhatsApp antes de enviar") — the QR/ID
   // pair are the actual payment instructions now, this is just supplementary.
-  paymentInstructions       String?  @db.Text
+  paymentInstructions           String?   @db.Text
   // Binance Pay QR code, shown on /billing so a company can scan it to pay
   // the subscription — same base64 data-URL pattern as Company.logoDataUrl,
   // uploaded via PlatformSettingsForm (resizeImageToDataUrl).
-  binanceQrDataUrl          String?  @db.Text
+  binanceQrDataUrl              String?   @db.Text
   // Binance Pay ID / UID, shown alongside the QR as a manual fallback for
   // whoever can't scan it.
-  binanceId                 String?
+  binanceId                     String?
   // Pago Móvil details for paying the subscription in Bolívares — the
   // second rail alongside Binance/USDT above. Same manual-report-then-
   // super-admin-approves flow as Binance; there's no bank webhook wired up,
   // this is just where to send it (see /billing and PaymentReportForm's
   // BILLING_PAYMENT_METHODS, which accepts "CARD" — this app's enum name
   // for Pago Móvil, see PAYMENT_METHOD_LABELS).
-  pagoMovilBank             String?
-  pagoMovilPhone            String?
+  pagoMovilBank                 String?
+  pagoMovilPhone                String?
   // Cédula or RIF the Pago Móvil account is registered under.
-  pagoMovilId               String?
+  pagoMovilId                   String?
   // Applied to Company.monthlyFeeUsdCents automatically when a super admin
   // approves a new signup and leaves the fee field blank (see approveUser
   // in lib/actions/admin.ts) — a single platform-wide price for every new
   // company, editable here without touching already-onboarded companies'
   // own (possibly custom) monthlyFeeUsdCents.
-  defaultMonthlyFeeUsdCents Int?
+  defaultMonthlyFeeUsdCents     Int?
   // Bolívares per 1 USD, used only to show the subscription's Bs-equivalent
   // price for Pago Móvil (see getPlatformExchangeRateInfo, lib/actions/
   // billing.ts) — the subscription itself is always billed in USD/USDT, so
@@ -1069,5 +1073,31 @@ model PlatformSettings {
   // Settings.
   platformExchangeRate          Decimal?  @db.Decimal(12, 4)
   platformExchangeRateUpdatedAt DateTime?
-  updatedAt                 DateTime @updatedAt
+  updatedAt                     DateTime  @updatedAt
+}
+
+// Nota de crédito (audit KRPOS-FIS-003): the fiscal way to cancel an issued
+// factura. Always for the whole sale — issuing one voids the sale and puts
+// its stock back. Numbered per branch with its own monotonic counter
+// (Branch.nextCreditNoteNumber), never count() + 1.
+model CreditNote {
+  id                 String   @id @default(cuid())
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branchId           String
+  branch             Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  saleId             String   @unique
+  sale               Sale     @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  controlNumber      Int
+  reason             String
+  totalCents         Int
+  baseImponibleCents Int
+  taxCents           Int
+  igtfCents          Int      @default(0)
+  createdById        String?
+  createdByName      String?
+  createdAt          DateTime @default(now())
+
+  @@unique([branchId, controlNumber])
+  @@index([companyId, createdAt])
 }
