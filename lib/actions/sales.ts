@@ -338,10 +338,14 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       );
       if (existing) return { success: true, saleId: existing.id };
     }
-    const isDuplicateQuoteLink =
+    const isUniqueViolation =
       err instanceof Error && "code" in err && (err as { code?: string }).code === "P2002";
-    const message = isDuplicateQuoteLink
-      ? "Este presupuesto ya fue facturado"
+    // Only a sale coming from a quote can collide on the quote link; any
+    // other unique clash must not be reported as "already invoiced".
+    const message = isUniqueViolation
+      ? quoteId
+        ? "Este presupuesto ya fue facturado"
+        : "No se pudo asignar el número de la venta. Inténtalo de nuevo."
       : err instanceof Error
         ? err.message
         : "No se pudo completar la venta";
