@@ -31,7 +31,11 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    // Only the headers proven safe with Cloudflare Turnstile on /login: the
+    // CSP, X-Frame-Options and Permissions-Policy broke the login challenge
+    // (error 600010) in production and are disabled until re-tested.
+    const safe = securityHeaders.filter((h) => h.key === "X-Content-Type-Options");
+    return [{ source: "/:path*", headers: safe }];
   },
   // Default is 1MB — raised for the payment-proof image upload (a resized,
   // compressed photo can still run a couple MB as base64).
