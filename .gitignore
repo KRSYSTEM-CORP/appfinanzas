@@ -54,3 +54,6 @@ next-env.d.ts
 /android/local.properties
 /android/app/src/main/assets/public
 /ios/App/App/public
+test-results/
+playwright-report/
+.playwright-mcp/

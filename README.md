@@ -34,3 +34,12 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Pruebas
+
+- **Unitarias (Vitest):** `npm test` — IVA, descuentos, pagos mixtos e IGTF. No usan base de datos.
+- **E2E (Playwright):** contra la app local apuntando a la **base de pruebas**, nunca a producción.
+  1. Base de pruebas en `.env.pruebas` (y el rol `app_runtime` en `.env.pruebas.runtime`), con `npx prisma migrate deploy` y `npx tsx prisma/seed-pruebas.ts`.
+  2. `set -a; . ./.env.pruebas; . ./.env.pruebas.runtime; set +a; npm run dev -- -p 3003`
+  3. En otra terminal: `npx playwright install chromium` (una vez) y `npm run test:e2e`.
+- **CI:** `.github/workflows/ci.yml` corre eslint, tsc, Vitest y `npm audit` en cada PR y en `main`.
