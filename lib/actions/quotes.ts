@@ -86,7 +86,7 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
         },
       });
 
-      const previousCount = await tx.quote.count({ where: { branchId } });
+      const previousCount = (await tx.quote.aggregate({ where: { branchId }, _max: { controlNumber: true } }))._max.controlNumber ?? 0;
 
       const quote = await tx.quote.create({
         data: {

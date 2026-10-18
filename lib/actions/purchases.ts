@@ -171,7 +171,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         assertPaymentsMatchTotal(resolvedPayments, amountOwedCents, referenceCurrency);
       }
 
-      const previousCount = await tx.purchase.count({ where: { branchId } });
+      const previousCount = (await tx.purchase.aggregate({ where: { branchId }, _max: { controlNumber: true } }))._max.controlNumber ?? 0;
 
       const purchase = await tx.purchase.create({
         data: {
@@ -496,7 +496,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           ? Math.round((taxTotalCents * (company.ivaWithholdingPercent ?? 75)) / 100)
           : 0;
 
-        const previousCount = await tx.purchase.count({ where: { branchId } });
+        const previousCount = (await tx.purchase.aggregate({ where: { branchId }, _max: { controlNumber: true } }))._max.controlNumber ?? 0;
         const paymentStatus = entries[0].data.paymentStatus ?? "PENDING";
 
         const purchase = await tx.purchase.create({

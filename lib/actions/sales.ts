@@ -193,7 +193,9 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         },
       });
 
-      const previousCount = await tx.sale.count({ where: { branchId } });
+      // MAX, not count(): a deleted document must never free its number (a count
+      // repeats it and the @@unique on the branch blocks every new sale).
+      const previousCount = (await tx.sale.aggregate({ where: { branchId }, _max: { controlNumber: true } }))._max.controlNumber ?? 0;
       // The singular fields mirror the first payment split so any code that
       // only needs a quick summary (older reports, receipts) still has one —
       // the full breakdown lives in `payments`.
@@ -317,10 +319,14 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       );
       if (existing) return { success: true, saleId: existing.id };
     }
-    const isDuplicateQuoteLink =
+    const isUniqueViolation =
       err instanceof Error && "code" in err && (err as { code?: string }).code === "P2002";
-    const message = isDuplicateQuoteLink
-      ? "Este presupuesto ya fue facturado"
+    // Only a sale coming from a quote can collide on the quote link; any
+    // other unique clash must not be reported as "already invoiced".
+    const message = isUniqueViolation
+      ? quoteId
+        ? "Este presupuesto ya fue facturado"
+        : "No se pudo asignar el número de la venta. Inténtalo de nuevo."
       : err instanceof Error
         ? err.message
         : "No se pudo completar la venta";
@@ -499,9 +505,7 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
       // independent of controlNumber (the Nota de entrega's own sequence),
       // assigned only now, the moment this credit sale's debt is fully
       // collected (possibly across several abonos).
-      const previousReceiptCount = await tx.sale.count({
-        where: { branchId: sale.branchId, receiptControlNumber: { not: null } },
-      });
+      const previousReceiptCount = (await tx.sale.aggregate({ where: { branchId: sale.branchId }, _max: { receiptControlNumber: true } }))._max.receiptControlNumber ?? 0;
 
       await tx.sale.update({
         where: { id: saleId },
@@ -555,9 +559,7 @@ export async function getOrCreateInvoiceNumber(saleId: string): Promise<{ invoic
     });
     if (current?.invoiceNumber != null) return { invoiceNumber: current.invoiceNumber };
 
-    const previousCount = await tx.sale.count({
-      where: { branchId: sale.branchId, invoiceNumber: { not: null } },
-    });
+    const previousCount = (await tx.sale.aggregate({ where: { branchId: sale.branchId }, _max: { invoiceNumber: true } }))._max.invoiceNumber ?? 0;
     const invoiceNumber = previousCount + 1;
     await tx.sale.update({ where: { id: saleId }, data: { invoiceNumber } });
     return { invoiceNumber };
