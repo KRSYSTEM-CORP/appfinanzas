@@ -75,6 +75,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     note,
     quoteId,
     idempotencyKey,
+    offlineExchangeRate,
   } = parsed.data;
 
   try {
@@ -105,7 +106,20 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       if (exchangeRateEnabled && company?.exchangeRate == null) {
         throw new Error("Configura la tasa de cambio antes de completar una venta.");
       }
-      const exchangeRate = company?.exchangeRate ?? null;
+      // A sale queued offline keeps the rate the customer was quoted at the
+      // counter, not the one in effect when the queue syncs (audit
+      // KRPOS-BIZ-001). It comes from the client, so it's only trusted
+      // within a sane band around today's rate.
+      const companyRate = company?.exchangeRate != null ? Number(company.exchangeRate) : null;
+      const useOfflineRate =
+        exchangeRateEnabled &&
+        offlineExchangeRate != null &&
+        companyRate != null &&
+        offlineExchangeRate >= companyRate * 0.5 &&
+        offlineExchangeRate <= companyRate * 2;
+      const exchangeRate = useOfflineRate
+        ? new Prisma.Decimal(offlineExchangeRate.toFixed(4))
+        : (company?.exchangeRate ?? null);
       const rate = exchangeRate != null ? Number(exchangeRate) : null;
       const referenceCurrency = company?.referenceCurrency ?? "EUR";
       const ivaGeneralRatePercent = company?.ivaGeneralRatePercent ?? 16;

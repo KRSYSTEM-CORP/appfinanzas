@@ -247,7 +247,7 @@ export function PosClient({
     };
 
     async function queueOfflineSale(customerInfo: CustomerInfo) {
-      await queueSale(saleInput, {
+      await queueSale({ ...saleInput, offlineExchangeRate: rate ?? undefined }, {
         totalCents: total,
         items: lines.map((l) => ({
           productName: productById.get(l.productId)?.name ?? l.name,

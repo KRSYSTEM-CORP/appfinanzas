@@ -32,6 +32,8 @@ export type PendingSaleInput = {
   customerRif?: string;
   note?: string;
   quoteId?: string;
+  // Rate at the counter when the sale was queued (see SaleSchema).
+  offlineExchangeRate?: number;
 };
 
 // Enough to render a "pending" receipt immediately, before the real Sale

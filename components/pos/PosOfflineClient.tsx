@@ -152,7 +152,7 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
     };
 
     startTransition(async () => {
-      await queueSale(saleInput, {
+      await queueSale({ ...saleInput, offlineExchangeRate: snapshot.rate ?? undefined }, {
         totalCents: total,
         items: lines.map((l) => ({
           productName: productById.get(l.productId)?.name ?? l.name,

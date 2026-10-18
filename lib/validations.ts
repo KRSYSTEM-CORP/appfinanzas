@@ -324,6 +324,10 @@ export const SaleSchema = z
     // and completeSale, lib/actions/sales.ts) — links Sale.quoteId and
     // flips the quote's status to CONVERTED in the same transaction.
     quoteId: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    // Exchange rate shown at the counter when this sale was rung up offline
+    // and queued (audit KRPOS-BIZ-001); completeSale uses it instead of the
+    // rate in effect when the queue syncs, within sanity bounds.
+    offlineExchangeRate: z.number().positive().optional(),
   })
   .merge(CustomerSchema)
   .superRefine((data, ctx) => {
