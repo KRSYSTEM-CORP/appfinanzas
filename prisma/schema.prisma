@@ -216,6 +216,13 @@ model Branch {
   name      String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+  // Last document number handed out per sequence (see lib/document-sequence.ts).
+  // Never derived from count(*): a deleted document must not free its number.
+  nextSaleNumber     Int @default(0)
+  nextReceiptNumber  Int @default(0)
+  nextInvoiceNumber  Int @default(0)
+  nextQuoteNumber    Int @default(0)
+  nextPurchaseNumber Int @default(0)
 
   products     Product[]
   sales        Sale[]

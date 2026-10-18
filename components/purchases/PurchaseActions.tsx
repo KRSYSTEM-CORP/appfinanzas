@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { markPurchasePaid, voidPurchase, deletePurchase } from "@/lib/actions/purchases";
+import { markPurchasePaid, voidPurchase } from "@/lib/actions/purchases";
 
 export function PurchaseActions({
   purchaseId,
@@ -42,13 +42,6 @@ export function PurchaseActions({
   function handleVoid() {
     startTransition(async () => {
       await voidPurchase(purchaseId);
-      router.refresh();
-    });
-  }
-
-  function handleDelete() {
-    startTransition(async () => {
-      await deletePurchase(purchaseId);
       router.refresh();
     });
   }
@@ -94,62 +87,8 @@ export function PurchaseActions({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            <Dialog>
-              <DialogTrigger
-                render={
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    className="px-2.5 py-2 text-sm rounded-md text-left text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                  />
-                }
-              >
-                Eliminar
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>¿Eliminar esta compra?</DialogTitle>
-                  <DialogDescription>
-                    Esta acción es irreversible. El stock revertido por esta compra se restará y
-                    la compra desaparecerá por completo del historial.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                  <DialogClose
-                    render={<Button variant="destructive" disabled={isPending} />}
-                    onClick={handleDelete}
-                  >
-                    Eliminar
-                  </DialogClose>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </ActionMenu>
-        ) : (
-          <Dialog>
-            <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
-              Eliminar
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>¿Eliminar esta compra?</DialogTitle>
-                <DialogDescription>
-                  Esta acción es irreversible. La compra desaparecerá por completo del historial.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                <DialogClose
-                  render={<Button variant="destructive" disabled={isPending} />}
-                  onClick={handleDelete}
-                >
-                  Eliminar
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
+        ) : null}
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

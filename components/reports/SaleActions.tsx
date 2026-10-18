@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { voidSale, deleteSale, registerPayment } from "@/lib/actions/sales";
+import { voidSale, registerPayment } from "@/lib/actions/sales";
 import {
   PaymentSplitBuilder,
   defaultPaymentSplitRows,
@@ -48,7 +48,7 @@ export function SaleActions({
   currencyCode: string;
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
-  // Anular / Eliminar are manager-only on the server; sellers only get
+  // Anular is manager-only on the server; sellers only get
   // "Registrar pago".
   canManage: boolean;
 }) {
@@ -72,17 +72,6 @@ export function SaleActions({
   function handleVoid() {
     startTransition(async () => {
       const result = await voidSale(saleId);
-      if (!result.success) {
-        toast.error(result.error);
-        return;
-      }
-      router.refresh();
-    });
-  }
-
-  function handleDelete() {
-    startTransition(async () => {
-      const result = await deleteSale(saleId);
       if (!result.success) {
         toast.error(result.error);
         return;
@@ -230,63 +219,8 @@ export function SaleActions({
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Dialog>
-            <DialogTrigger
-              render={
-                <button
-                  type="button"
-                  disabled={isPending}
-                  className="px-2.5 py-2 text-sm rounded-md text-left text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                />
-              }
-            >
-              Eliminar
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>¿Eliminar esta venta?</DialogTitle>
-                <DialogDescription>
-                  Esta acción es irreversible. El stock de los productos vendidos se repondrá y
-                  la venta desaparecerá por completo del historial y los reportes.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-                <DialogClose
-                  render={<Button variant="destructive" disabled={isPending} />}
-                  onClick={handleDelete}
-                >
-                  Eliminar
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </ActionMenu>
-      ) : (
-        <Dialog>
-          <DialogTrigger render={<Button size="sm" variant="destructive" disabled={isPending} />}>
-            Eliminar
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>¿Eliminar esta venta?</DialogTitle>
-              <DialogDescription>
-                Esta acción es irreversible. La venta desaparecerá por completo del historial y los
-                reportes.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-              <DialogClose
-                render={<Button variant="destructive" disabled={isPending} />}
-                onClick={handleDelete}
-              >
-                Eliminar
-              </DialogClose>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      ) : null}
       </div>
     </div>
   );

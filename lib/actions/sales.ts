@@ -1,5 +1,6 @@
 "use server";
 
+import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
 import { Prisma, type PaymentStatus } from "@prisma/client";
 import { requireManager, requireSession } from "@/lib/session";
@@ -193,7 +194,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         },
       });
 
-      const previousCount = await tx.sale.count({ where: { branchId } });
+      const controlNumber = await nextDocumentNumber(tx, branchId, "sale");
       // The singular fields mirror the first payment split so any code that
       // only needs a quick summary (older reports, receipts) still has one —
       // the full breakdown lives in `payments`.
@@ -224,7 +225,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           companyId,
           branchId,
           exchangeRate,
-          controlNumber: previousCount + 1,
+          controlNumber,
           idempotencyKey: idempotencyKey ?? null,
           sellerId: userId,
           sellerName,
@@ -385,32 +386,16 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
   return { success: true };
 }
 
-export async function deleteSale(saleId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
-
-  try {
-    await withTenant(companyId, async (tx) => {
-      await lockSale(tx, saleId, companyId, sessionBranchId);
-      const sale = await tx.sale.findFirst({
-        where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
-      });
-      if (!sale) throw new Error("Venta no encontrada");
-
-      if (!sale.voided) {
-        await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
-      }
-      await tx.sale.delete({ where: { id: saleId } });
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo eliminar la venta";
-    return { success: false, error: message };
-  }
-
-  revalidatePath("/inventory");
-  revalidatePath("/pos");
-  revalidatePath("/reports");
-  void notifyLive(posChannel(companyId), "sale");
-  return { success: true };
+// Fiscal documents are never physically deleted (audit KRPOS-DB-001/DB-002):
+// deleting one lost a numbered document the SENIAT can ask for. Anular
+// (voided) keeps it in the history and reverses its effect on stock. Kept
+// as an action so an old client calling it gets a clear answer.
+export async function deleteSale(): Promise<ActionResult> {
+  await requireManager();
+  return {
+    success: false,
+    error: "Las ventas no se eliminan porque son documentos fiscales. Usa Anular: queda en el historial y se revierte el stock.",
+  };
 }
 
 // Registers an abono (partial or full) toward a CREDIT sale's outstanding
@@ -499,9 +484,7 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
       // independent of controlNumber (the Nota de entrega's own sequence),
       // assigned only now, the moment this credit sale's debt is fully
       // collected (possibly across several abonos).
-      const previousReceiptCount = await tx.sale.count({
-        where: { branchId: sale.branchId, receiptControlNumber: { not: null } },
-      });
+      const receiptControlNumber = await nextDocumentNumber(tx, sale.branchId, "receipt");
 
       await tx.sale.update({
         where: { id: saleId },
@@ -515,7 +498,7 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
           // settled, since a credit sale can be collected days (or several
           // abonos) after the original sale/rate snapshot.
           paidExchangeRate: company?.exchangeRate ?? null,
-          receiptControlNumber: previousReceiptCount + 1,
+          receiptControlNumber,
         },
       });
     });
@@ -555,10 +538,7 @@ export async function getOrCreateInvoiceNumber(saleId: string): Promise<{ invoic
     });
     if (current?.invoiceNumber != null) return { invoiceNumber: current.invoiceNumber };
 
-    const previousCount = await tx.sale.count({
-      where: { branchId: sale.branchId, invoiceNumber: { not: null } },
-    });
-    const invoiceNumber = previousCount + 1;
+    const invoiceNumber = await nextDocumentNumber(tx, sale.branchId, "invoice");
     await tx.sale.update({ where: { id: saleId }, data: { invoiceNumber } });
     return { invoiceNumber };
   });

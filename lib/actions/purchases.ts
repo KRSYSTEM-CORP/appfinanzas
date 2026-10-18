@@ -1,5 +1,6 @@
 "use server";
 
+import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
 import type { Prisma, TaxCategory } from "@prisma/client";
 import { requireManager } from "@/lib/session";
@@ -171,7 +172,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         assertPaymentsMatchTotal(resolvedPayments, amountOwedCents, referenceCurrency);
       }
 
-      const previousCount = await tx.purchase.count({ where: { branchId } });
+      const controlNumber = await nextDocumentNumber(tx, branchId, "purchase");
 
       const purchase = await tx.purchase.create({
         data: {
@@ -180,7 +181,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
           supplierId: supplierId ?? null,
           manualSupplierName: manualSupplierName ?? null,
           supplierInvoiceNo: supplierInvoiceNo ?? null,
-          controlNumber: previousCount + 1,
+          controlNumber,
           totalCents,
           baseImponibleCents,
           taxCents: taxTotalCents,
@@ -335,29 +336,16 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
   return { success: true };
 }
 
-export async function deletePurchase(purchaseId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
-
-  try {
-    await withTenant(companyId, async (tx) => {
-      const purchase = await tx.purchase.findFirst({
-        where: { id: purchaseId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
-      });
-      if (!purchase) throw new Error("Compra no encontrada");
-
-      if (!purchase.voided) {
-        await reverseStock(tx, purchaseId, companyId, purchase.branchId, actorId, actorName);
-      }
-      await tx.purchase.delete({ where: { id: purchaseId } });
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo eliminar la compra";
-    return { success: false, error: message };
-  }
-
-  revalidatePath("/inventory");
-  revalidatePath("/purchases");
-  return { success: true };
+// Fiscal documents are never physically deleted (audit KRPOS-DB-001/DB-002):
+// deleting one lost a numbered document the SENIAT can ask for. Anular
+// (voided) keeps it in the history and reverses its effect on stock. Kept
+// as an action so an old client calling it gets a clear answer.
+export async function deletePurchase(): Promise<ActionResult> {
+  await requireManager();
+  return {
+    success: false,
+    error: "Las compras no se eliminan porque son documentos fiscales. Usa Anular: queda en el historial y se revierte el stock.",
+  };
 }
 
 export type BulkPurchaseRow = {
@@ -496,7 +484,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           ? Math.round((taxTotalCents * (company.ivaWithholdingPercent ?? 75)) / 100)
           : 0;
 
-        const previousCount = await tx.purchase.count({ where: { branchId } });
+        const controlNumber = await nextDocumentNumber(tx, branchId, "purchase");
         const paymentStatus = entries[0].data.paymentStatus ?? "PENDING";
 
         const purchase = await tx.purchase.create({
@@ -505,7 +493,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
             branchId,
             supplierId: supplier.id,
             supplierInvoiceNo: entries[0].data.supplierInvoiceNo ?? null,
-            controlNumber: previousCount + 1,
+            controlNumber,
             totalCents,
             baseImponibleCents,
             taxCents: taxTotalCents,

@@ -1,5 +1,6 @@
 "use server";
 
+import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
@@ -86,7 +87,7 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
         },
       });
 
-      const previousCount = await tx.quote.count({ where: { branchId } });
+      const controlNumber = await nextDocumentNumber(tx, branchId, "quote");
 
       const quote = await tx.quote.create({
         data: {
@@ -99,7 +100,7 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
           branchId,
           exchangeRate: company?.exchangeRate ?? null,
           useLocalCurrency: resolvedUseLocalCurrency,
-          controlNumber: previousCount + 1,
+          controlNumber,
           sellerId: userId,
           sellerName,
           note: note ?? null,
