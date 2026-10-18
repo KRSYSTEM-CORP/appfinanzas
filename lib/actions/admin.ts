@@ -243,11 +243,25 @@ export async function deleteCompany(companyId: string): Promise<ActionResult> {
     });
     if (!company || company.users.length === 0) return false;
     if (!company.users.every((u) => u.status === "SUSPENDED")) return false;
+    // Fiscal documents are never deleted (audit KRPOS-DB-002; the FKs
+    // RESTRICT it too): a company that already invoiced stays suspended.
+    const [sales, purchases, closings] = await Promise.all([
+      tx.sale.count({ where: { companyId } }),
+      tx.purchase.count({ where: { companyId } }),
+      tx.cashClosing.count({ where: { companyId } }),
+    ]);
+    if (sales + purchases + closings > 0) return "has-documents" as const;
 
     await tx.company.delete({ where: { id: companyId } });
     return true;
   });
 
+  if (deleted === "has-documents") {
+    return {
+      success: false,
+      error: "Esta empresa tiene ventas, compras o cierres registrados (documentos fiscales) y no se puede eliminar. Déjala suspendida.",
+    };
+  }
   if (!deleted) {
     return { success: false, error: "Solo se pueden eliminar empresas denegadas o suspendidas" };
   }

@@ -553,12 +553,12 @@ model Sale {
   voided                Boolean        @default(false)
   voidedAt              DateTime?
   companyId             String
-  company               Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company               Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
   // Which branch's register this sale happened at — each branch numbers its
   // own controlNumber/receiptControlNumber/invoiceNumber sequence, same as a
   // physically separate cash register would.
   branchId              String
-  branch                Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch                Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   items                 SaleItem[]
   // Breakdown when the customer split payment across multiple methods (e.g.
   // half cash USD, half Pago Móvil in Bs). The singular paymentMethod/
@@ -755,9 +755,9 @@ model Supplier {
 model Purchase {
   id                 String                @id @default(cuid())
   companyId          String
-  company            Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company            Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
   branchId           String
-  branch             Branch                @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch             Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
   // Null when this purchase used a manual, one-off supplier name instead of
   // a real Supplier record (see manualSupplierName) — exactly one of the two
   // is ever set, enforced by PurchaseSchema, not the database.
@@ -1010,9 +1010,9 @@ model Expense {
 model CashClosing {
   id          String   @id @default(cuid())
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
   branchId    String
-  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
   closingDate DateTime @db.Date
   totalCents  Int
   salesCount  Int
