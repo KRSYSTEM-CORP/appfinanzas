@@ -40,6 +40,9 @@ export default async function ReportsPage({
     listPendingClosings(range),
   ]);
   const company = { name: session.companyName, logoDataUrl, ...fiscalData };
+  // Closing the register and voiding/deleting sales are manager-only on the
+  // server (KRPOS-SEC-002/004); hide those controls for sellers too.
+  const canManage = session.role === "GERENTE" || session.isSuperAdmin;
   const localCurrencyName = getCurrency(localCurrencyCode).name.split(" (")[0];
 
   return (
@@ -68,6 +71,7 @@ export default async function ReportsPage({
               company={company}
               branchName={session.branchName}
               printPaperSize={printPaperSize}
+              canClose={canManage}
             />
           </CardContent>
         </Card>
@@ -88,6 +92,7 @@ export default async function ReportsPage({
             currencyCode={localCurrencyCode}
             exchangeRateEnabled={exchangeRateEnabled}
             referenceCurrency={referenceCurrency}
+            canClose={canManage}
           />
         </CardContent>
       </Card>
@@ -110,6 +115,7 @@ export default async function ReportsPage({
             exchangeRateEnabled={exchangeRateEnabled}
             referenceCurrency={referenceCurrency}
             printPaperSize={printPaperSize}
+            canManage={canManage}
           />
         </CardContent>
       </Card>

@@ -26,6 +26,7 @@ export function CashClosingPanel({
   company,
   branchName,
   printPaperSize,
+  canClose,
 }: {
   initialSummary: CashClosingSummary;
   todayStr: string;
@@ -36,6 +37,7 @@ export function CashClosingPanel({
   company: DeliveryNoteCompany;
   branchName: string | null;
   printPaperSize: PrintPaperSize;
+  canClose: boolean;
 }) {
   const router = useRouter();
   const [date, setDate] = useState(todayStr);
@@ -185,6 +187,8 @@ export function CashClosingPanel({
           Cerrada el {formatDate(summary.closed.closedAt)}
           {summary.closed.note && ` — ${summary.closed.note}`}
         </p>
+      ) : !canClose ? (
+        <p className="text-sm text-muted-foreground">Pendiente de cierre — solo el gerente puede cerrar la caja.</p>
       ) : (
         <div className="flex flex-col gap-2 max-w-sm">
           <Label htmlFor="closing-note">Nota (opcional)</Label>

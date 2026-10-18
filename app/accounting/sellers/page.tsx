@@ -167,6 +167,7 @@ export default async function SellersReportPage({
                 exchangeRateEnabled={exchangeRateEnabled}
                 referenceCurrency={referenceCurrency}
                 printPaperSize={printPaperSize}
+                canManage={session.role === "GERENTE" || session.isSuperAdmin}
                 showSellerColumn={false}
                 emptyLabel="Sin ventas en este período."
               />

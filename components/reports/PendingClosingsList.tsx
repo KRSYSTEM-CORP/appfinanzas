@@ -15,6 +15,7 @@ export function PendingClosingsList({
   currencyCode,
   exchangeRateEnabled,
   referenceCurrency,
+  canClose,
 }: {
   pendingDays: PendingClosing[];
   hasBranchSelected: boolean;
@@ -22,6 +23,7 @@ export function PendingClosingsList({
   currencyCode: string;
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
+  canClose: boolean;
 }) {
   const router = useRouter();
   const [closingDate, setClosingDate] = useState<string | null>(null);
@@ -70,14 +72,14 @@ export function PendingClosingsList({
                 exchangeRateEnabled={exchangeRateEnabled}
                 referenceCurrency={referenceCurrency}
               />
-              <Button
+              {canClose && <Button
                 size="sm"
                 variant="outline"
                 disabled={!hasBranchSelected || (isPending && closingDate === day.date)}
                 onClick={() => handleClose(day.date)}
               >
                 {isPending && closingDate === day.date ? "Cerrando..." : "Cerrar caja"}
-              </Button>
+              </Button>}
             </div>
           </div>
         ))}

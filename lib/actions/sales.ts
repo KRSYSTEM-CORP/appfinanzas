@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { Prisma, type PaymentStatus } from "@prisma/client";
-import { requireSectionAccess, requireSession } from "@/lib/session";
+import { requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { notifyLive, posChannel } from "@/lib/realtime";
 import { SaleSchema, RegisterPaymentSchema } from "@/lib/validations";
@@ -359,7 +359,7 @@ async function restoreStock(tx: Prisma.TransactionClient, saleId: string, compan
 }
 
 export async function voidSale(saleId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireSectionAccess("reports");
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
 
   try {
     await withTenant(companyId, async (tx) => {
@@ -386,7 +386,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
 }
 
 export async function deleteSale(saleId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireSectionAccess("reports");
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
 
   try {
     await withTenant(companyId, async (tx) => {

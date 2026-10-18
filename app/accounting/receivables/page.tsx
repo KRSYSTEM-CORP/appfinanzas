@@ -83,6 +83,7 @@ export default async function ReceivablesPage({
         exchangeRateEnabled={exchangeRateEnabled}
         referenceCurrency={referenceCurrency}
         printPaperSize={printPaperSize}
+        canManage={session.role === "GERENTE" || session.isSuperAdmin}
         emptyLabel="No hay ventas a crédito pendientes de cobro en este período."
       />
     </div>

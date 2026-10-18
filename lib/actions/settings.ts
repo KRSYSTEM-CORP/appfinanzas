@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSession, requireSession } from "@/lib/session";
+import { getSession, requireSession, requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { hashPassword, verifyPassword } from "@/lib/password";
@@ -97,7 +97,7 @@ async function computeExchangeRateInfo(companyId: string): Promise<ExchangeRateI
 }
 
 export async function updatePrintPaperSize(formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
   const parsed = PrintPaperSizeSchema.safeParse({
     printPaperSize: formData.get("printPaperSize"),
   });
@@ -119,7 +119,7 @@ export async function updatePrintPaperSize(formData: FormData): Promise<ActionRe
 }
 
 export async function updateReferenceCurrencySettings(formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
   const parsed = ReferenceCurrencySettingsSchema.safeParse({
     exchangeRateEnabled: formData.get("exchangeRateEnabled"),
     referenceCurrency: formData.get("referenceCurrency"),
@@ -178,7 +178,7 @@ export async function getIvaSettings(): Promise<IvaSettingsInfo> {
 }
 
 export async function updateIvaSettings(formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
   const parsed = IvaSettingsSchema.safeParse({
     ivaGeneralRatePercent: formData.get("ivaGeneralRatePercent"),
     ivaReducedRatePercent: formData.get("ivaReducedRatePercent"),
@@ -197,7 +197,7 @@ export async function updateIvaSettings(formData: FormData): Promise<ActionResul
 }
 
 export async function updateLocalCurrency(formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
   const parsed = LocalCurrencySchema.safeParse({
     localCurrencyCode: formData.get("localCurrencyCode"),
   });
@@ -224,7 +224,7 @@ export async function updateLocalCurrency(formData: FormData): Promise<ActionRes
 }
 
 export async function updateExchangeRate(formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
   const parsed = ExchangeRateSchema.safeParse({ rate: formData.get("rate") });
 
   if (!parsed.success) {
@@ -251,7 +251,7 @@ export async function updateExchangeRate(formData: FormData): Promise<ActionResu
 // app/api/cron/bcv-rate/route.ts, so this button is just for "I don't want
 // to wait for tonight's run."
 export async function fetchAndUpdateBcvRate(): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
 
   const company = await withTenant(companyId, (tx) =>
     tx.company.findUnique({ where: { id: companyId }, select: { localCurrencyCode: true, referenceCurrency: true } })
@@ -315,7 +315,7 @@ export async function getBranding(): Promise<BrandingInfo> {
 }
 
 export async function updateBranding(formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
   const parsed = BrandingSchema.safeParse({
     logoDataUrl: formData.get("logoDataUrl") || undefined,
     brandColor: formData.get("brandColor") || undefined,
@@ -367,7 +367,7 @@ export async function getFiscalData(): Promise<FiscalData> {
 }
 
 export async function updateFiscalData(formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireManager();
   const parsed = FiscalDataSchema.safeParse({
     fiscalLegalName: formData.get("fiscalLegalName") || undefined,
     fiscalRif: formData.get("fiscalRif") || undefined,

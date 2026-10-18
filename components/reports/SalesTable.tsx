@@ -24,6 +24,7 @@ export function SalesTable({
   exchangeRateEnabled,
   referenceCurrency,
   printPaperSize,
+  canManage,
   showSellerColumn = true,
   emptyLabel = DEFAULT_EMPTY_LABEL,
 }: {
@@ -35,6 +36,7 @@ export function SalesTable({
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
   printPaperSize: PrintPaperSize;
+  canManage: boolean;
   showSellerColumn?: boolean;
   emptyLabel?: string;
 }) {
@@ -59,6 +61,7 @@ export function SalesTable({
       exchangeRateEnabled={exchangeRateEnabled}
       referenceCurrency={referenceCurrency}
       printPaperSize={printPaperSize}
+      canManage={canManage}
       showSellerColumn={showSellerColumn}
       empty={
         <EmptyState

@@ -35,6 +35,7 @@ export function SaleActions({
   currencyCode,
   exchangeRateEnabled,
   referenceCurrency,
+  canManage,
 }: {
   saleId: string;
   voided: boolean;
@@ -47,6 +48,9 @@ export function SaleActions({
   currencyCode: string;
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
+  // Anular / Eliminar are manager-only on the server; sellers only get
+  // "Registrar pago".
+  canManage: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [payOpen, setPayOpen] = useState(false);
@@ -192,7 +196,7 @@ export function SaleActions({
       )}
       </div>
       <div className="flex justify-end">
-      {!voided ? (
+      {!canManage ? null : !voided ? (
         <ActionMenu
           trigger={<Button size="icon-sm" variant="ghost" disabled={isPending} aria-label="Más acciones" />}
           triggerChildren={<MoreVerticalIcon />}

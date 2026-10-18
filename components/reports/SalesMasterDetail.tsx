@@ -27,6 +27,7 @@ export function SalesMasterDetail({
   exchangeRateEnabled,
   referenceCurrency,
   printPaperSize,
+  canManage,
   showSellerColumn,
   empty,
 }: {
@@ -39,6 +40,7 @@ export function SalesMasterDetail({
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
   printPaperSize: PrintPaperSize;
+  canManage: boolean;
   showSellerColumn: boolean;
   empty: ReactNode;
 }) {
@@ -196,6 +198,7 @@ export function SalesMasterDetail({
                 currencyCode={localCurrencyCode}
                 exchangeRateEnabled={exchangeRateEnabled}
                 referenceCurrency={referenceCurrency}
+                canManage={canManage}
               />
             </div>
           </>
