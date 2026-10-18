@@ -5,6 +5,7 @@ import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { listQuotes } from "@/lib/actions/quotes";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { parseDateRangeSelection, selectionToWindows } from "@/lib/report-types";
+import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export default async function QuoteHistoryPage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string }>;
 }) {
+  await requireSectionAccess("quotes");
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
 

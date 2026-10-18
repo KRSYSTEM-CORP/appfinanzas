@@ -2,7 +2,7 @@
 
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
-import { requireSession } from "@/lib/session";
+import { requireSectionAccess, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { QuoteSchema, type QuoteInput } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
@@ -119,7 +119,7 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
 }
 
 export async function getQuote(quoteId: string) {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireSectionAccess(["quotes", "documents"]);
   const quote = await withTenant(companyId, (tx) =>
     tx.quote.findFirst({
       where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) },
@@ -219,7 +219,7 @@ export async function getQuoteForConversion(quoteId: string): Promise<
 // `windows` is optional (same pattern as listRecentSales) — omitted by
 // callers like the Documentos page that do their own client-side filtering.
 export async function listQuotes(limit = 200, windows?: { start: Date; end: Date }[]) {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireSectionAccess(["quotes", "documents"]);
   const quotes = await withTenant(companyId, (tx) =>
     tx.quote.findMany({
       where: {

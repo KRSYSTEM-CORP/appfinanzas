@@ -190,10 +190,13 @@ export async function requireManager(): Promise<Session> {
 // allowedSections array means "no restriction configured," so this only
 // ever narrows access down from "everything," never locks out a seller who
 // was never touched by this feature.
-export async function requireSectionAccess(section: AppSection): Promise<Session> {
+// Passing several sections lets in a seller who has ANY of them (e.g. a
+// quote's PDF is reachable from both Presupuestos and Documentos).
+export async function requireSectionAccess(section: AppSection | AppSection[]): Promise<Session> {
   const session = await requireSession();
   if (session.role === "GERENTE" || session.isSuperAdmin) return session;
-  if (session.allowedSections.length === 0 || session.allowedSections.includes(section)) return session;
+  const sections = Array.isArray(section) ? section : [section];
+  if (session.allowedSections.length === 0 || sections.some((s) => session.allowedSections.includes(s))) return session;
   redirect("/pos");
 }
 

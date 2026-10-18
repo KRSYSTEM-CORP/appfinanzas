@@ -13,6 +13,7 @@ import {
   listQuotesForCustomer,
 } from "@/lib/actions/customers";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
+import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export default async function CustomerCrmPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireSectionAccess("customers");
   const { id } = await params;
   const customer = await getCustomer(id);
   if (!customer) notFound();

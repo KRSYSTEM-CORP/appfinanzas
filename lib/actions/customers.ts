@@ -1,14 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManager, requireSession } from "@/lib/session";
+import { requireManager, requireSession, requireSectionAccess } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { CustomerRecordSchema, CustomerCrmSchema } from "@/lib/validations";
 import { dayBoundsUtc, todayDateString } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
 
 export async function listCustomers(query?: string) {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireSectionAccess("customers");
   const q = query?.trim();
   return withTenant(companyId, (tx) =>
     tx.customer.findMany({
@@ -61,7 +61,7 @@ export async function findCustomerByPhone(phone: string) {
 }
 
 export async function getCustomer(id: string) {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireSectionAccess("customers");
   return withTenant(companyId, (tx) => tx.customer.findFirst({ where: { id, companyId } }));
 }
 
@@ -70,7 +70,7 @@ export async function getCustomer(id: string) {
 // customer instead of a date range, and company-wide (not branch-scoped),
 // since a customer can buy at any of the company's branches.
 export async function getCustomerStats(customerId: string) {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireSectionAccess("customers");
   return withTenant(companyId, async (tx) => {
     const result = await tx.sale.aggregate({
       _sum: { totalCents: true },
@@ -87,7 +87,7 @@ export async function getCustomerStats(customerId: string) {
 }
 
 export async function listSalesForCustomer(customerId: string, limit = 10) {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireSectionAccess("customers");
   return withTenant(companyId, (tx) =>
     tx.sale.findMany({
       where: { customerId, companyId },
@@ -102,7 +102,7 @@ export async function listSalesForCustomer(customerId: string, limit = 10) {
 // quote back to a specific customer, same informal link Sale.customerId
 // itself is reconciled from at checkout (see completeSale's customer upsert).
 export async function listQuotesForCustomer(phone: string) {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireSectionAccess("customers");
   const p = phone.trim();
   if (!p) return [];
   return withTenant(companyId, (tx) =>
@@ -119,7 +119,7 @@ export async function listQuotesForCustomer(phone: string) {
 // must be computed in the shop's own timezone (see dayBoundsUtc), not the
 // server's, or a reminder set for "today" could show up a day late/early.
 export async function listCustomersToContact() {
-  const { companyId } = await requireSession();
+  const { companyId } = await requireSectionAccess("customers");
   const { end: startOfTomorrow } = dayBoundsUtc(todayDateString());
   return withTenant(companyId, (tx) =>
     tx.customer.findMany({
