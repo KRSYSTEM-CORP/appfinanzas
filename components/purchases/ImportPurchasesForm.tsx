@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
+import { appendSheet, downloadWorkbook, newWorkbook, readFirstSheet } from "@/lib/spreadsheet";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -67,10 +67,8 @@ type ParsedRow = {
   error: string | null;
 };
 
-function parseWorkbook(buffer: ArrayBuffer): ParsedRow[] {
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+async function parseWorkbook(buffer: ArrayBuffer): Promise<ParsedRow[]> {
+  const raw = await readFirstSheet(buffer);
 
   return raw.map((rawRow, index) => {
     const mapped: Record<string, unknown> = {};
@@ -87,9 +85,9 @@ function parseWorkbook(buffer: ArrayBuffer): ParsedRow[] {
   });
 }
 
-function downloadTemplate() {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([
+async function downloadTemplate() {
+  const wb = newWorkbook();
+  const ws = ([
     [
       "Proveedor",
       "Nº factura proveedor",
@@ -104,8 +102,8 @@ function downloadTemplate() {
     ["Distribuidora Central", "F-00123", "CAM-001", 20, 6.5, "General", "Contado", "Sí", ""],
     ["Distribuidora Central", "F-00123", "PAN-002", 10, 3.2, "General", "Contado", "Sí", ""],
   ]);
-  XLSX.utils.book_append_sheet(wb, ws, "Compras");
-  XLSX.writeFile(wb, "plantilla-compras.xlsx");
+  appendSheet(wb, ws, "Compras");
+  await downloadWorkbook(wb, "plantilla-compras.xlsx");
 }
 
 export function ImportPurchasesForm() {
@@ -124,7 +122,7 @@ export function ImportPurchasesForm() {
     setResult(null);
     try {
       const buffer = await file.arrayBuffer();
-      const parsed = parseWorkbook(buffer);
+      const parsed = await parseWorkbook(buffer);
       if (parsed.length === 0) {
         setFileError("El archivo no tiene filas de compras.");
         setRows([]);
@@ -183,7 +181,7 @@ export function ImportPurchasesForm() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx"
             onChange={handleFile}
             className="hidden"
           />

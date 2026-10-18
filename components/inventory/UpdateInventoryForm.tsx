@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
+import { appendSheet, downloadWorkbook, newWorkbook, readFirstSheet } from "@/lib/spreadsheet";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -78,10 +78,8 @@ type ParsedRow = {
   error: string | null;
 };
 
-function parseWorkbook(buffer: ArrayBuffer): ParsedRow[] {
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+async function parseWorkbook(buffer: ArrayBuffer): Promise<ParsedRow[]> {
+  const raw = await readFirstSheet(buffer);
 
   return raw.map((rawRow, index) => {
     const mapped: Record<string, unknown> = {};
@@ -111,8 +109,8 @@ export function UpdateInventoryForm() {
     setIsExporting(true);
     try {
       const products = await listAllProducts();
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([
+      const wb = newWorkbook();
+      const ws = ([
         [
           "ID",
           "SKU",
@@ -148,8 +146,8 @@ export function UpdateInventoryForm() {
           p.bulkMinQty ?? "",
         ]),
       ]);
-      XLSX.utils.book_append_sheet(wb, ws, "Inventario");
-      XLSX.writeFile(wb, "inventario-actual.xlsx");
+      appendSheet(wb, ws, "Inventario");
+      await downloadWorkbook(wb, "inventario-actual.xlsx");
     } finally {
       setIsExporting(false);
     }
@@ -163,7 +161,7 @@ export function UpdateInventoryForm() {
     setResult(null);
     try {
       const buffer = await file.arrayBuffer();
-      const parsed = parseWorkbook(buffer);
+      const parsed = await parseWorkbook(buffer);
       if (parsed.length === 0) {
         setFileError("El archivo no tiene filas de productos.");
         setRows([]);
@@ -223,7 +221,7 @@ export function UpdateInventoryForm() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx"
             onChange={handleFile}
             className="hidden"
           />

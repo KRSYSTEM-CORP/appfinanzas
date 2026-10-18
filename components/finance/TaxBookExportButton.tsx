@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import * as XLSX from "xlsx";
+import { appendSheet, downloadWorkbook, newWorkbook } from "@/lib/spreadsheet";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/format";
 
@@ -40,12 +40,12 @@ export function TaxBookExportButton({
 }) {
   const [isExporting, setIsExporting] = useState(false);
 
-  function handleExport() {
+  async function handleExport() {
     setIsExporting(true);
     try {
-      const wb = XLSX.utils.book_new();
+      const wb = newWorkbook();
 
-      const salesSheet = XLSX.utils.aoa_to_sheet([
+      const salesSheet = ([
         ["Fecha", "Nº Control", "Nº Factura", "Cliente", "RIF/Cédula", "Base Imponible", "IVA", "Total"],
         ...sales.map((s) => [
           formatDate(s.createdAt),
@@ -58,9 +58,9 @@ export function TaxBookExportButton({
           s.totalCents / 100,
         ]),
       ]);
-      XLSX.utils.book_append_sheet(wb, salesSheet, "Libro de Ventas");
+      appendSheet(wb, salesSheet, "Libro de Ventas");
 
-      const purchasesSheet = XLSX.utils.aoa_to_sheet([
+      const purchasesSheet = ([
         ["Fecha", "Nº Control", "Nº Factura Proveedor", "Proveedor", "RIF", "Base Imponible", "IVA", "IVA Retenido", "Total"],
         ...purchases.map((p) => [
           formatDate(p.createdAt),
@@ -74,9 +74,9 @@ export function TaxBookExportButton({
           p.totalCents / 100,
         ]),
       ]);
-      XLSX.utils.book_append_sheet(wb, purchasesSheet, "Libro de Compras");
+      appendSheet(wb, purchasesSheet, "Libro de Compras");
 
-      XLSX.writeFile(wb, `libro-iva-${rangeLabel}.xlsx`);
+      await downloadWorkbook(wb, `libro-iva-${rangeLabel}.xlsx`);
     } finally {
       setIsExporting(false);
     }
