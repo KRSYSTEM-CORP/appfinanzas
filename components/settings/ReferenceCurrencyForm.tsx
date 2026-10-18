@@ -94,6 +94,12 @@ export function ReferenceCurrencyForm({
         <p className="text-xs text-muted-foreground">
           Todos tus productos se guardan y calculan internamente en esta moneda de referencia.
         </p>
+        {referenceCurrency === "EUR" && (
+          <p className="text-xs text-warning">
+            Con referencia en EUR, los pagos en dólares (Zelle, Binance, PayPal o divisas) se cuentan
+            1 a 1 como euros, sin tasa EUR/USD. Si cobras en dólares, usa USD como referencia.
+          </p>
+        )}
       </div>
 
       <Button type="submit" disabled={isPending || !dirty} className="self-start">

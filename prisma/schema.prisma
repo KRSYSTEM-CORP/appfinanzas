@@ -125,7 +125,10 @@ model Company {
   exchangeRateEnabled   Boolean           @default(true)
   // See ReferenceCurrency above. Defaults to EUR to preserve the meaning of
   // every company's already-stored prices from before this field existed.
-  referenceCurrency     ReferenceCurrency @default(EUR)
+  // USD by default (audit KRPOS-FIS-002): payments in dollars (Zelle, Binance,
+  // divisas) are counted 1:1 against the reference currency, which is only
+  // exact when the reference is USD.
+  referenceCurrency     ReferenceCurrency @default(USD)
   // Local currency per 1 referenceCurrency unit. Set by the shop owner and
   // updated daily. Only meaningful when exchangeRateEnabled is true.
   exchangeRate          Decimal?          @db.Decimal(12, 4)
