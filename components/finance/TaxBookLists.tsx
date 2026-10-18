@@ -101,6 +101,7 @@ export function SalesBookList({
             <Field label="Nº factura">{s.invoiceNumber ?? "—"}</Field>
             <Field label="Base imponible">{money(s.baseImponibleCents)}</Field>
             <Field label="IVA">{money(s.taxCents)}</Field>
+            {s.igtfCents > 0 && <Field label="IGTF">{money(s.igtfCents)}</Field>}
             <Field label="Total" wide>
               <span className="text-lg font-semibold">{money(s.totalCents)}</span>
             </Field>

@@ -14,6 +14,8 @@ export function IvaSettingsForm({ initial }: { initial: IvaSettingsInfo }) {
   const [ivaReducedRatePercent, setIvaReducedRatePercent] = useState(String(initial.ivaReducedRatePercent));
   const [isIvaWithholdingAgent, setIsIvaWithholdingAgent] = useState(initial.isIvaWithholdingAgent);
   const [ivaWithholdingPercent, setIvaWithholdingPercent] = useState(String(initial.ivaWithholdingPercent));
+  const [isIgtfAgent, setIsIgtfAgent] = useState(initial.isIgtfAgent);
+  const [igtfRatePercent, setIgtfRatePercent] = useState(String(initial.igtfRatePercent));
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
@@ -24,6 +26,8 @@ export function IvaSettingsForm({ initial }: { initial: IvaSettingsInfo }) {
       formData.set("ivaReducedRatePercent", ivaReducedRatePercent);
       formData.set("isIvaWithholdingAgent", String(isIvaWithholdingAgent));
       formData.set("ivaWithholdingPercent", ivaWithholdingPercent);
+      formData.set("isIgtfAgent", String(isIgtfAgent));
+      formData.set("igtfRatePercent", igtfRatePercent);
       const result = await updateIvaSettings(formData);
       if (result.success) {
         toast.success("Configuración de IVA guardada.");
@@ -108,8 +112,50 @@ export function IvaSettingsForm({ initial }: { initial: IvaSettingsInfo }) {
         </div>
       )}
 
+      <div className="flex flex-col gap-1.5">
+        <Label>¿Eres agente de percepción de IGTF?</Label>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={!isIgtfAgent ? "default" : "outline"}
+            onClick={() => setIsIgtfAgent(false)}
+            className="flex-1"
+          >
+            No
+          </Button>
+          <Button
+            type="button"
+            variant={isIgtfAgent ? "default" : "outline"}
+            onClick={() => setIsIgtfAgent(true)}
+            className="flex-1"
+          >
+            Sí
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Si lo activas, a cada pago en divisas (Zelle, Binance, PayPal o efectivo en divisas) se le
+          calcula el IGTF, que se cobra aparte del total y aparece desglosado en la factura y en el
+          Libro de Ventas. Confírmalo con tu contador antes de activarlo.
+        </p>
+      </div>
+
+      {isIgtfAgent && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="igtfRatePercent">Alícuota de IGTF (%)</Label>
+          <Input
+            id="igtfRatePercent"
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            value={igtfRatePercent}
+            onChange={(e) => setIgtfRatePercent(e.target.value)}
+          />
+        </div>
+      )}
+
       <Button type="submit" disabled={isPending}>
-        {isPending ? "Guardando..." : "Guardar configuración de IVA"}
+        {isPending ? "Guardando..." : "Guardar configuración de impuestos"}
       </Button>
     </form>
   );

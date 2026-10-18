@@ -660,6 +660,8 @@ export const IvaSettingsSchema = z.object({
   ivaReducedRatePercent: z.coerce.number().int().min(0).max(100),
   isIvaWithholdingAgent: z.enum(["true", "false"]).transform((v) => v === "true"),
   ivaWithholdingPercent: z.coerce.number().int().min(0).max(100),
+  isIgtfAgent: z.enum(["true", "false"]).transform((v) => v === "true"),
+  igtfRatePercent: z.coerce.number().int().min(0).max(100),
 });
 
 export type IvaSettingsInput = z.infer<typeof IvaSettingsSchema>;

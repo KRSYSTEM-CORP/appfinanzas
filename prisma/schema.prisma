@@ -129,6 +129,10 @@ model Company {
   // divisas) are counted 1:1 against the reference currency, which is only
   // exact when the reference is USD.
   referenceCurrency     ReferenceCurrency @default(USD)
+  // IGTF agent (see lib/igtf.ts): when true, payments in foreign currency
+  // carry igtfRatePercent on top of the sale total.
+  isIgtfAgent           Boolean           @default(false)
+  igtfRatePercent       Int               @default(3)
   // Local currency per 1 referenceCurrency unit. Set by the shop owner and
   // updated daily. Only meaningful when exchangeRateEnabled is true.
   exchangeRate          Decimal?          @db.Decimal(12, 4)
@@ -526,6 +530,9 @@ model Sale {
   // Only set when payment is registered for a credit sale.
   paidExchangeRate      Decimal?       @db.Decimal(12, 4)
   // Sequential per-company number for the "Nota de entrega" document.
+  // IGTF collected on the foreign-currency payments (lib/igtf.ts), on top of
+  // totalCents. 0 when the company isn't an IGTF agent.
+  igtfCents             Int       @default(0)
   controlNumber         Int?
   // Sequential per-company number for the "Recibo de pago" document —
   // independent of controlNumber above. Only assigned the moment a CREDIT

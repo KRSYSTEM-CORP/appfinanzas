@@ -15,6 +15,7 @@ type SaleRow = {
   baseImponibleCents: number;
   taxCents: number;
   totalCents: number;
+  igtfCents?: number;
 };
 
 type PurchaseRow = {
@@ -46,7 +47,7 @@ export function TaxBookExportButton({
       const wb = newWorkbook();
 
       const salesSheet = ([
-        ["Fecha", "Nº Control", "Nº Factura", "Cliente", "RIF/Cédula", "Base Imponible", "IVA", "Total"],
+        ["Fecha", "Nº Control", "Nº Factura", "Cliente", "RIF/Cédula", "Base Imponible", "IVA", "Total", "IGTF"],
         ...sales.map((s) => [
           formatDate(s.createdAt),
           s.controlNumber ?? "",
@@ -56,6 +57,7 @@ export function TaxBookExportButton({
           s.baseImponibleCents / 100,
           s.taxCents / 100,
           s.totalCents / 100,
+          (s.igtfCents ?? 0) / 100,
         ]),
       ]);
       appendSheet(wb, salesSheet, "Libro de Ventas");

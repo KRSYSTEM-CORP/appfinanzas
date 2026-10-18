@@ -1,5 +1,6 @@
 "use server";
 
+import { computeIgtfCents } from "@/lib/igtf";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
 import { Prisma, type PaymentStatus } from "@prisma/client";
@@ -96,6 +97,8 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           referenceCurrency: true,
           ivaGeneralRatePercent: true,
           ivaReducedRatePercent: true,
+          isIgtfAgent: true,
+          igtfRatePercent: true,
         },
       });
       const exchangeRateEnabled = company?.exchangeRateEnabled ?? true;
@@ -226,6 +229,9 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           branchId,
           exchangeRate,
           controlNumber,
+          igtfCents: isPaid && company?.isIgtfAgent
+            ? computeIgtfCents(resolvedPayments, localCurrencyCode, company.igtfRatePercent)
+            : 0,
           idempotencyKey: idempotencyKey ?? null,
           sellerId: userId,
           sellerName,
@@ -434,6 +440,8 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
           localCurrencyCode: true,
           exchangeRateEnabled: true,
           referenceCurrency: true,
+          isIgtfAgent: true,
+          igtfRatePercent: true,
         },
       });
       const rate = company?.exchangeRate != null ? Number(company.exchangeRate) : null;
@@ -475,6 +483,13 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
           exchangeRate: company?.exchangeRate ?? null,
         })),
       });
+      // IGTF accrues per abono, on whatever part of it was paid in divisas.
+      if (company?.isIgtfAgent) {
+        const igtfCents = computeIgtfCents(resolvedPayments, localCurrencyCode, company.igtfRatePercent);
+        if (igtfCents > 0) {
+          await tx.sale.update({ where: { id: sale.id }, data: { igtfCents: { increment: igtfCents } } });
+        }
+      }
 
       if (!isFullySettled) return;
 

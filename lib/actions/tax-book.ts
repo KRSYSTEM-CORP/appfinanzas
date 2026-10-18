@@ -31,6 +31,7 @@ export async function getSalesTaxBook(range: DateRangeSelection) {
         baseImponibleCents: true,
         taxCents: true,
         totalCents: true,
+        igtfCents: true,
       },
     })
   );

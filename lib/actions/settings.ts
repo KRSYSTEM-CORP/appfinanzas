@@ -154,6 +154,8 @@ export type IvaSettingsInfo = {
   ivaReducedRatePercent: number;
   isIvaWithholdingAgent: boolean;
   ivaWithholdingPercent: number;
+  isIgtfAgent: boolean;
+  igtfRatePercent: number;
 };
 
 export async function getIvaSettings(): Promise<IvaSettingsInfo> {
@@ -166,6 +168,8 @@ export async function getIvaSettings(): Promise<IvaSettingsInfo> {
         ivaReducedRatePercent: true,
         isIvaWithholdingAgent: true,
         ivaWithholdingPercent: true,
+        isIgtfAgent: true,
+        igtfRatePercent: true,
       },
     })
   );
@@ -174,6 +178,8 @@ export async function getIvaSettings(): Promise<IvaSettingsInfo> {
     ivaReducedRatePercent: company?.ivaReducedRatePercent ?? 8,
     isIvaWithholdingAgent: company?.isIvaWithholdingAgent ?? false,
     ivaWithholdingPercent: company?.ivaWithholdingPercent ?? 75,
+    isIgtfAgent: company?.isIgtfAgent ?? false,
+    igtfRatePercent: company?.igtfRatePercent ?? 3,
   };
 }
 
@@ -184,6 +190,8 @@ export async function updateIvaSettings(formData: FormData): Promise<ActionResul
     ivaReducedRatePercent: formData.get("ivaReducedRatePercent"),
     isIvaWithholdingAgent: formData.get("isIvaWithholdingAgent"),
     ivaWithholdingPercent: formData.get("ivaWithholdingPercent"),
+    isIgtfAgent: formData.get("isIgtfAgent") ?? "false",
+    igtfRatePercent: formData.get("igtfRatePercent") ?? "3",
   });
 
   if (!parsed.success) {

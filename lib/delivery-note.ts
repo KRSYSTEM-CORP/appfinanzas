@@ -34,6 +34,8 @@ export type DeliveryNoteSale = {
   // purely informational on the printed document; totalCents/baseImponibleCents/
   // taxCents above are already computed on the post-discount amount.
   discountCents?: number;
+  // IGTF charged on top of totalCents (see lib/igtf.ts); 0/unset = none.
+  igtfCents?: number;
   paymentMethod: PaymentMethod | null;
   paymentStatus: PaymentStatus;
   paymentReference: string | null;
@@ -392,10 +394,22 @@ function renderTotalsSection(
     y += 20;
   }
 
+  const igtfCents = sale.igtfCents ?? 0;
+  if (igtfCents > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Total de la venta:", margin, y);
+    doc.text(money(sale.totalCents), pageWidth - margin, y, { align: "right" });
+    y += 18;
+    doc.text("IGTF (pagos en divisas):", margin, y);
+    doc.text(money(igtfCents), pageWidth - margin, y, { align: "right" });
+    y += 20;
+  }
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.text(totalLabel, margin, y);
-  doc.text(money(sale.totalCents), pageWidth - margin, y, { align: "right" });
+  doc.text(money(sale.totalCents + igtfCents), pageWidth - margin, y, { align: "right" });
   return y;
 }
 
