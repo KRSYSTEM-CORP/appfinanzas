@@ -32,6 +32,7 @@ export function PosClient({
   currencyCode,
   exchangeRateEnabled,
   referenceCurrency,
+  igtfRatePercent = null,
   printPaperSize,
   categories,
   company,
@@ -49,6 +50,8 @@ export function PosClient({
   currencyCode: string;
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
+  // Set only for IGTF agents (see lib/igtf.ts).
+  igtfRatePercent?: number | null;
   printPaperSize: PrintPaperSize;
   categories: string[];
   company: DeliveryNoteCompany;
@@ -365,6 +368,7 @@ export function PosClient({
           currencyCode={currencyCode}
           exchangeRateEnabled={exchangeRateEnabled}
           referenceCurrency={referenceCurrency}
+          igtfRatePercent={igtfRatePercent}
           paymentStatus={paymentStatus}
           onPaymentStatusChange={setPaymentStatus}
           paymentRows={paymentRows}

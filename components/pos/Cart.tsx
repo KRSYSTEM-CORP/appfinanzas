@@ -13,6 +13,7 @@ import { PaymentSplitBuilder, type PaymentSplitRow } from "@/components/payments
 import { PAYMENT_STATUS_LABELS } from "@/lib/format";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import { computeItemDiscountCents } from "@/lib/discount";
+import { resolvePaymentCurrency } from "@/lib/payment-currency";
 import { resolveTierPrice, PRICE_TIER_LABELS, type PriceTier, type TieredProduct } from "@/lib/pricing";
 import type { PaymentStatus, ReferenceCurrency } from "@prisma/client";
 
@@ -83,6 +84,7 @@ export function Cart({
   currencyCode,
   exchangeRateEnabled,
   referenceCurrency,
+  igtfRatePercent = null,
   paymentStatus,
   onPaymentStatusChange,
   paymentRows,
@@ -105,6 +107,7 @@ export function Cart({
   currencyCode: string;
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
+  igtfRatePercent?: number | null;
   paymentStatus: PaymentStatus;
   onPaymentStatusChange: (status: PaymentStatus) => void;
   paymentRows: PaymentSplitRow[];
@@ -419,7 +422,27 @@ export function Cart({
               referenceCurrency={referenceCurrency}
               idPrefix="checkout"
             />
-          ) : (
+          ) : null}
+          {paymentStatus === "PAID" && igtfRatePercent != null && (() => {
+            // Same rule as the server (lib/igtf.ts): IGTF on what's paid in
+            // divisas, collected on top of the total.
+            const foreignCents = paymentRows
+              .filter(
+                (r) =>
+                  resolvePaymentCurrency(r.paymentMethod, r.paidInForeignCurrency, currencyCode, exchangeRateEnabled, referenceCurrency) !==
+                  currencyCode
+              )
+              .reduce((sum, r) => sum + Math.round((Number(r.amount.replace(",", ".")) || 0) * 100), 0);
+            const igtfCents = Math.round((foreignCents * igtfRatePercent) / 100);
+            if (igtfCents <= 0) return null;
+            return (
+              <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+                IGTF ({igtfRatePercent}%) a cobrar aparte por el pago en divisas:{" "}
+                <span className="font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, igtfCents)}</span>
+              </p>
+            );
+          })()}
+          {paymentStatus === "PAID" ? null : (
             <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
               Esta venta quedará pendiente de cobro. El método de pago y la moneda se registrarán
               cuando el cliente pague, desde la sección de Reportes.

@@ -21,7 +21,7 @@ export default async function PosPage({
     categories,
     { logoDataUrl },
     fiscalData,
-    { ivaGeneralRatePercent, ivaReducedRatePercent },
+    { ivaGeneralRatePercent, ivaReducedRatePercent, isIgtfAgent, igtfRatePercent },
   ] = await Promise.all([
     requireSession(),
     listActiveProducts(),
@@ -81,6 +81,7 @@ export default async function PosPage({
           branchName={branchName}
           ivaGeneralRatePercent={ivaGeneralRatePercent}
           ivaReducedRatePercent={ivaReducedRatePercent}
+          igtfRatePercent={isIgtfAgent ? igtfRatePercent : null}
         />
       </div>
     </div>
