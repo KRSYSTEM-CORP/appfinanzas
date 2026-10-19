@@ -34,12 +34,12 @@ const nextConfig: NextConfig = {
     // Only the headers proven safe with Cloudflare Turnstile on /login: the
     // CSP, X-Frame-Options and Permissions-Policy broke the login challenge
     // (error 600010) in production and are disabled until re-tested.
-    // Report-only CSP and Referrer-Policy can't block anything (the referrer
-    // value is the browser default), so they're back; X-Frame-Options and
-    // Permissions-Policy stay off until tested against Turnstile in Safari.
-    const safe = securityHeaders.filter((h) =>
-      ["X-Content-Type-Options", "Referrer-Policy", "Content-Security-Policy-Report-Only"].includes(h.key)
-    );
+    // All security headers on. They were briefly off while a login failure
+    // was investigated; it turned out to be the automated browser, not the
+    // headers. Turnstile's iframe is cross-origin, so X-Frame-Options (which
+    // only stops OTHER sites from framing KR POS) and a Permissions-Policy
+    // that limits camera/mic/location don't affect it.
+    const safe = securityHeaders;
     return [{ source: "/:path*", headers: safe }];
   },
   // Default is 1MB — raised for the payment-proof image upload (a resized,
