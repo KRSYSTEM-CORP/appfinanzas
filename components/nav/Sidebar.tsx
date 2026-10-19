@@ -93,7 +93,7 @@ function NavGroup({
   return (
     <div className="flex flex-col gap-0.5">
       {!collapsed && (
-        <span className="px-2.5 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-sidebar-foreground/45">
+        <span className="px-2.5 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-sidebar-foreground/70">
           {title}
         </span>
       )}
@@ -230,7 +230,7 @@ export function Sidebar({
   const branchControl = canManage ? (
     <BranchSwitcher branches={branches} currentBranchId={currentBranchId} />
   ) : (
-    currentBranchName && <span className="text-xs text-sidebar-foreground/60 truncate">{currentBranchName}</span>
+    currentBranchName && <span className="text-xs text-sidebar-foreground/70 truncate">{currentBranchName}</span>
   );
 
   const nav = (collapsedRail: boolean, onNavigate: () => void) => (
@@ -283,7 +283,7 @@ export function Sidebar({
                   </>
                 )}
               </div>
-              <span className="text-xs text-sidebar-foreground/60 truncate max-w-[180px]">{companyName}</span>
+              <span className="text-xs text-sidebar-foreground/70 truncate max-w-[180px]">{companyName}</span>
             </div>
           )}
         </div>
@@ -295,7 +295,7 @@ export function Sidebar({
           {!collapsed && (
             <div className="flex flex-col leading-tight min-w-0 px-0.5">
               <span className="text-sm font-medium truncate">{sellerName}</span>
-              <span className="text-xs text-sidebar-foreground/60">{ROLE_LABELS[role]}</span>
+              <span className="text-xs text-sidebar-foreground/70">{ROLE_LABELS[role]}</span>
             </div>
           )}
           <button
@@ -311,7 +311,7 @@ export function Sidebar({
             {!collapsed && (
               <>
                 <span className="flex-1 text-left">Buscar</span>
-                <kbd className="rounded border px-1 text-[11px] text-sidebar-foreground/50">Ctrl K</kbd>
+                <kbd className="rounded border px-1 text-[11px] text-sidebar-foreground/70">Ctrl K</kbd>
               </>
             )}
           </button>
@@ -325,7 +325,7 @@ export function Sidebar({
             type="button"
             onClick={toggleCollapsed}
             aria-label={collapsed ? "Expandir barra lateral" : "Contraer barra lateral"}
-            className="flex items-center justify-center rounded-lg p-1.5 text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors self-stretch"
+            className="flex items-center justify-center rounded-lg p-1.5 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors self-stretch"
           >
             {collapsed ? <PanelLeftOpenIcon className="size-4" /> : <PanelLeftCloseIcon className="size-4" />}
           </button>
@@ -373,7 +373,7 @@ export function Sidebar({
               {branchControl}
               <div className="flex flex-col leading-tight min-w-0 px-0.5">
                 <span className="text-sm font-medium truncate">{sellerName}</span>
-                <span className="text-xs text-sidebar-foreground/60">{ROLE_LABELS[role]}</span>
+                <span className="text-xs text-sidebar-foreground/70">{ROLE_LABELS[role]}</span>
               </div>
               <ThemeToggle />
               <form action={logout}>

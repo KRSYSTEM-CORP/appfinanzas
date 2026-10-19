@@ -150,7 +150,7 @@ export function DocumentsTable({
             />
           </div>
           <Select value={docType} onValueChange={(v) => setDocType((v as DocType) ?? "delivery_note")}>
-            <SelectTrigger>
+            <SelectTrigger aria-label="Tipo de documento">
               <SelectValue placeholder="Tipo de documento">
                 {(value: string | null) => DOC_TYPE_LABELS[(value as DocType) ?? "delivery_note"]}
               </SelectValue>
