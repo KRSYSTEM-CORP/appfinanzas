@@ -34,7 +34,7 @@ export function BranchSwitcher({
       onValueChange={(v) => v && handleChange(v)}
       disabled={isPending}
     >
-      <SelectTrigger size="sm">
+      <SelectTrigger size="sm" aria-label="Sucursal">
         <SelectValue placeholder="Sucursal">
           {(value: string | null) =>
             !value || value === ALL_VALUE

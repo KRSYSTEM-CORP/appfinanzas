@@ -112,6 +112,7 @@ export function CashClosingPanel({
       <div className="flex items-center gap-3 flex-wrap">
         <Input
           type="date"
+          aria-label="Día del cierre de caja"
           value={date}
           max={todayStr}
           onChange={(e) => handleDateChange(e.target.value)}

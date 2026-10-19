@@ -84,10 +84,11 @@
   --muted-foreground: #625f73;
   --accent: #efedfb;
   --accent-foreground: #392f91;
-  --destructive: #d03b3b;
-  --success: #168158;
+  /* Darkened for WCAG AA contrast (≥4.5:1) as text and on tinted badges. */
+  --destructive: #b42a2a;
+  --success: #0f6b47;
   --success-foreground: #ffffff;
-  --warning: #a66b0b;
+  --warning: #8a5706;
   --warning-foreground: #ffffff;
   --border: #e5e3ed;
   --input: #dedce8;

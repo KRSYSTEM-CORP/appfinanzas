@@ -44,7 +44,7 @@ export function PurchaseMasterDetail({
           <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
             <ShoppingBagIcon className="size-4 text-muted-foreground/60" />
           </span>
-          <span className={`min-w-0 flex-1 ${p.voided ? "opacity-60" : ""}`}>
+          <span className={`min-w-0 flex-1 ${p.voided ? "opacity-75" : ""}`}>
             <span className="block truncate text-sm font-semibold">{supplierOf(p)}</span>
             <span className="block truncate text-xs text-muted-foreground">
               Nº {p.controlNumber ?? "—"} · {formatDate(p.createdAt)}
