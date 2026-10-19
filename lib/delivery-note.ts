@@ -425,7 +425,7 @@ export async function buildDeliveryNotePDF(
   // different title/sequence — selectable as an alternative document for
   // the same sale (see getOrCreateInvoiceNumber, lib/actions/sales.ts).
   // Not fiscally SENIAT-compliant yet; that's deferred, separate work.
-  variant: "delivery-note" | "invoice" | "credit-note" = "delivery-note",
+  variant: "delivery-note" | "invoice" | "credit-note" | "debit-note" = "delivery-note",
   // Required for variant "credit-note": the note's own number, date and
   // reason; the sale's lines are the ones being credited.
   creditNote?: { controlNumber: number; createdAt: Date; reason: string }
@@ -439,10 +439,13 @@ export async function buildDeliveryNotePDF(
   const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
   const isInvoice = variant === "invoice";
-  const isCreditNote = variant === "credit-note" && creditNote != null;
+  const isDebitNote = variant === "debit-note" && creditNote != null;
+  // Credit and debit notes share the layout: own number/date, reference to
+  // the factura, the reason, no payment section.
+  const isCreditNote = (variant === "credit-note" || isDebitNote) && creditNote != null;
   const titleBottomY = renderDocumentTitleBlock(
     doc,
-    isCreditNote ? "NOTA DE CRÉDITO" : isInvoice ? "FACTURA" : "NOTA DE ENTREGA",
+    isDebitNote ? "NOTA DE DÉBITO" : isCreditNote ? "NOTA DE CRÉDITO" : isInvoice ? "FACTURA" : "NOTA DE ENTREGA",
     isCreditNote
       ? [
           `Nº de control: ${String(creditNote.controlNumber).padStart(6, "0")}`,
@@ -543,7 +546,7 @@ export async function buildDeliveryNotePDF(
     rate,
     currencyCode,
     referenceCurrency,
-    isCreditNote ? "TOTAL ACREDITADO:" : "TOTAL A CANCELAR:"
+    isDebitNote ? "TOTAL A CANCELAR:" : isCreditNote ? "TOTAL ACREDITADO:" : "TOTAL A CANCELAR:"
   );
 
   return doc;
@@ -665,4 +668,36 @@ export async function buildPaymentReceiptPDF(
   y = renderTotalsSection(doc, sale, margin, pageWidth, y, showLocal, rate, currencyCode, referenceCurrency, "TOTAL PAGADO:");
 
   return doc;
+}
+
+// A nota de débito printed with the factura's header data and a single line
+// for the extra charge.
+export async function buildDebitNotePDF(
+  sale: DeliveryNoteSale,
+  note: { controlNumber: number; createdAt: Date; reason: string; totalCents: number; baseImponibleCents: number; taxCents: number },
+  company: DeliveryNoteCompany,
+  rate: number | null,
+  currencyCode: string,
+  exchangeRateEnabled: boolean,
+  referenceCurrency: ReferenceCurrency
+): Promise<jsPDF> {
+  return buildDeliveryNotePDF(
+    {
+      ...sale,
+      items: [{ productName: note.reason, quantity: 1, unitPriceCents: note.totalCents, subtotalCents: note.totalCents }],
+      totalCents: note.totalCents,
+      baseImponibleCents: note.baseImponibleCents,
+      taxCents: note.taxCents,
+      discountCents: 0,
+      igtfCents: 0,
+    },
+    company,
+    rate,
+    currencyCode,
+    exchangeRateEnabled,
+    referenceCurrency,
+    "letter",
+    "debit-note",
+    { controlNumber: note.controlNumber, createdAt: note.createdAt, reason: note.reason }
+  );
 }

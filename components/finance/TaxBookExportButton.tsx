@@ -16,6 +16,8 @@ type CreditNoteRow = {
   sale: { invoiceNumber: number | null; customerFirstName: string | null; customerLastName: string | null; customerRif: string | null };
 };
 
+type DebitNoteRow = Omit<CreditNoteRow, "igtfCents">;
+
 type SaleRow = {
   createdAt: Date;
   controlNumber: number | null;
@@ -45,11 +47,13 @@ export function TaxBookExportButton({
   sales,
   purchases,
   creditNotes = [],
+  debitNotes = [],
   rangeLabel,
 }: {
   sales: SaleRow[];
   purchases: PurchaseRow[];
   creditNotes?: CreditNoteRow[];
+  debitNotes?: DebitNoteRow[];
   rangeLabel: string;
 }) {
   const [isExporting, setIsExporting] = useState(false);
@@ -75,6 +79,22 @@ export function TaxBookExportButton({
       ]);
       appendSheet(wb, salesSheet, "Libro de Ventas");
 
+      if (debitNotes.length > 0) {
+        appendSheet(wb, [
+          ["Fecha", "Nº Nota de débito", "Factura afectada", "Cliente", "RIF/Cédula", "Motivo", "Base Imponible", "IVA", "Total"],
+          ...debitNotes.map((n) => [
+            formatDate(n.createdAt),
+            n.controlNumber,
+            n.sale.invoiceNumber ?? "",
+            `${n.sale.customerFirstName ?? ""} ${n.sale.customerLastName ?? ""}`.trim(),
+            n.sale.customerRif ?? "",
+            n.reason,
+            n.baseImponibleCents / 100,
+            n.taxCents / 100,
+            n.totalCents / 100,
+          ]),
+        ], "Notas de Débito");
+      }
       if (creditNotes.length > 0) {
         appendSheet(wb, [
           ["Fecha", "Nº Nota de crédito", "Factura afectada", "Cliente", "RIF/Cédula", "Motivo", "Base Imponible", "IVA", "Total", "IGTF"],

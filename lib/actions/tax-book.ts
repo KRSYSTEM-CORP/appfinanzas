@@ -89,3 +89,31 @@ export async function getCreditNotesTaxBook(range: DateRangeSelection) {
     })
   );
 }
+
+// Notas de débito issued in the period: they add to the Libro de Ventas.
+export async function getDebitNotesTaxBook(range: DateRangeSelection) {
+  const { companyId, branchId } = await requireManager();
+  const windows = selectionToWindows(range);
+  return withTenant(companyId, (tx) =>
+    tx.debitNote.findMany({
+      where: {
+        companyId,
+        ...(branchId ? { branchId } : {}),
+        OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        createdAt: true,
+        controlNumber: true,
+        reason: true,
+        baseImponibleCents: true,
+        taxCents: true,
+        totalCents: true,
+        sale: {
+          select: { invoiceNumber: true, customerFirstName: true, customerLastName: true, customerRif: true },
+        },
+      },
+    })
+  );
+}

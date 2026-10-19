@@ -96,7 +96,7 @@ async function loadSellerSales(
       voided: false,
     },
     orderBy: { createdAt: "desc" },
-    include: { items: true, payments: true, creditNote: { select: { controlNumber: true, createdAt: true, reason: true } } },
+    include: { items: true, payments: true, creditNote: { select: { controlNumber: true, createdAt: true, reason: true } }, debitNotes: { select: { controlNumber: true, createdAt: true, reason: true, totalCents: true, baseImponibleCents: true, taxCents: true }, orderBy: { controlNumber: "asc" } } },
   });
 }
 

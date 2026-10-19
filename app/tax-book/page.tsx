@@ -5,7 +5,7 @@ import { PurchasesBookList, SalesBookList } from "@/components/finance/TaxBookLi
 import { TaxBookExportButton } from "@/components/finance/TaxBookExportButton";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { formatCurrencyCents } from "@/lib/currencies";
-import { getSalesTaxBook, getPurchasesTaxBook, getCreditNotesTaxBook } from "@/lib/actions/tax-book";
+import { getSalesTaxBook, getPurchasesTaxBook, getCreditNotesTaxBook, getDebitNotesTaxBook } from "@/lib/actions/tax-book";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { parseDateRangeSelection } from "@/lib/report-types";
 
@@ -19,10 +19,11 @@ export default async function TaxBookPage({
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
 
-  const [sales, purchases, creditNotes, { referenceCurrency }] = await Promise.all([
+  const [sales, purchases, creditNotes, debitNotes, { referenceCurrency }] = await Promise.all([
     getSalesTaxBook(range),
     getPurchasesTaxBook(range),
     getCreditNotesTaxBook(range),
+    getDebitNotesTaxBook(range),
     getExchangeRateInfo(),
   ]);
 
@@ -32,9 +33,13 @@ export default async function TaxBookPage({
       tax: acc.tax + s.taxCents,
       total: acc.total + s.totalCents,
     }),
-    // Notas de crédito subtract from the period's sales.
-    creditNotes.reduce(
-      (acc, n) => ({ base: acc.base - n.baseImponibleCents, tax: acc.tax - n.taxCents, total: acc.total - n.totalCents }),
+    // Notas de débito add to the period's sales; notas de crédito subtract.
+    [...debitNotes.map((n) => ({ sign: 1, n })), ...creditNotes.map((n) => ({ sign: -1, n }))].reduce(
+      (acc, { sign, n }) => ({
+        base: acc.base + sign * n.baseImponibleCents,
+        tax: acc.tax + sign * n.taxCents,
+        total: acc.total + sign * n.totalCents,
+      }),
       { base: 0, tax: 0, total: 0 }
     )
   );
@@ -64,6 +69,7 @@ export default async function TaxBookPage({
             sales={sales}
             purchases={purchases}
             creditNotes={creditNotes}
+            debitNotes={debitNotes}
             rangeLabel={
               range.kind === "preset" ? range.preset : `meses-${range.year}-${range.months.join("-")}`
             }

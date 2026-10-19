@@ -21,13 +21,14 @@ import type { PaymentMethod, PaymentStatus, PrintPaperSize, QuoteStatus, Referen
 // document any sale always gets), "Facturas"/"Recibos" narrow to sales that
 // actually had that document requested, and "Presupuestos" is a completely
 // different underlying list (Quote, not Sale).
-type DocType = "delivery_note" | "invoice" | "receipt" | "credit_note" | "quote";
+type DocType = "delivery_note" | "invoice" | "receipt" | "credit_note" | "debit_note" | "quote";
 
 const DOC_TYPE_LABELS: Record<DocType, string> = {
   delivery_note: "Notas de entrega",
   invoice: "Facturas",
   receipt: "Recibos de pago",
   credit_note: "Notas de crédito",
+  debit_note: "Notas de débito",
   quote: "Presupuestos",
 };
 
@@ -46,6 +47,7 @@ type DocumentSale = {
   paidExchangeRate: number | null;
   voided: boolean;
   creditNote: { controlNumber: number; createdAt: Date; reason: string } | null;
+  debitNotes: { controlNumber: number; createdAt: Date; reason: string; totalCents: number; baseImponibleCents: number; taxCents: number }[];
   customerFirstName: string | null;
   customerLastName: string | null;
   customerPhone: string | null;
@@ -104,6 +106,8 @@ export function DocumentsTable({
     return sales.filter((sale) => {
       if (docType === "credit_note") {
         if (!sale.creditNote) return false;
+      } else if (docType === "debit_note") {
+        if (sale.debitNotes.length === 0) return false;
       } else if (sale.voided) {
         return false;
       }

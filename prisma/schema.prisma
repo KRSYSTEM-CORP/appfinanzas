@@ -181,6 +181,7 @@ model Company {
   products              Product[]
   sales                 Sale[]
   creditNotes           CreditNote[]
+  debitNotes            DebitNote[]
   customers             Customer[]
   quotes                Quote[]
   suppliers             Supplier[]
@@ -232,12 +233,14 @@ model Branch {
   nextQuoteNumber      Int      @default(0)
   nextPurchaseNumber   Int      @default(0)
   nextCreditNoteNumber Int      @default(0)
+  nextDebitNoteNumber  Int      @default(0)
 
   products       Product[]
   sales          Sale[]
   quotes         Quote[]
   cashClosings   CashClosing[]
   creditNotes    CreditNote[]
+  debitNotes     DebitNote[]
   users          User[]
   purchases      Purchase[]
   stockMovements StockMovement[]
@@ -564,6 +567,7 @@ model Sale {
   branch                Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   items                 SaleItem[]
   creditNote            CreditNote?
+  debitNotes            DebitNote[]
   // Breakdown when the customer split payment across multiple methods (e.g.
   // half cash USD, half Pago Móvil in Bs). The singular paymentMethod/
   // paymentReference/paidInForeignCurrency fields above still mirror the
@@ -1100,4 +1104,30 @@ model CreditNote {
 
   @@unique([branchId, controlNumber])
   @@index([companyId, createdAt])
+}
+
+// Nota de débito: an extra charge on an already-issued factura (a cost the
+// invoice missed, a price correction upward). Amount is tax-inclusive and
+// decomposed with the company's general IVA rate. Own per-branch counter
+// (Branch.nextDebitNoteNumber).
+model DebitNote {
+  id                 String   @id @default(cuid())
+  companyId          String
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branchId           String
+  branch             Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  saleId             String
+  sale               Sale     @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  controlNumber      Int
+  reason             String
+  totalCents         Int
+  baseImponibleCents Int
+  taxCents           Int
+  createdById        String?
+  createdByName      String?
+  createdAt          DateTime @default(now())
+
+  @@unique([branchId, controlNumber])
+  @@index([companyId, createdAt])
+  @@index([saleId])
 }

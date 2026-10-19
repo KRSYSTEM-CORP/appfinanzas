@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   buildDeliveryNotePDF,
   buildPaymentReceiptPDF,
+  buildDebitNotePDF,
   controlNumberLabel,
   receiptControlNumberLabel,
   type DeliveryNoteCompany,
@@ -30,6 +31,7 @@ export function SaleDocumentButtons({
     exchangeRate: number | null;
     paidExchangeRate: number | null;
     creditNote?: { controlNumber: number; createdAt: Date; reason: string } | null;
+    debitNotes?: { controlNumber: number; createdAt: Date; reason: string; totalCents: number; baseImponibleCents: number; taxCents: number }[];
   };
   company: DeliveryNoteCompany;
   currentRate: number | null;
@@ -130,6 +132,16 @@ export function SaleDocumentButtons({
     }
   }
 
+  async function downloadDebitNote(note: { controlNumber: number; createdAt: Date; reason: string; totalCents: number; baseImponibleCents: number; taxCents: number }) {
+    setBusy(true);
+    try {
+      const doc = await buildDebitNotePDF(sale, note, company, noteRate, currencyCode, exchangeRateEnabled, referenceCurrency);
+      doc.save(`nota-debito-${String(note.controlNumber).padStart(6, "0")}.pdf`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function downloadReceipt() {
     setBusy(true);
     try {
@@ -151,6 +163,18 @@ export function SaleDocumentButtons({
         Documentos
       </p>
       <div className="flex flex-col gap-4">
+          {(sale.debitNotes ?? []).map((note) => (
+            <div key={note.controlNumber} className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                Nota de débito Nº {String(note.controlNumber).padStart(6, "0")}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => downloadDebitNote(note)}>
+                  Descargar
+                </Button>
+              </div>
+            </div>
+          ))}
           {sale.creditNote && (
             <div className="flex flex-col gap-2">
               <p className="text-xs font-medium text-muted-foreground">

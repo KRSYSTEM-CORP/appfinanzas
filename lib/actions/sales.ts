@@ -468,6 +468,57 @@ export async function issueCreditNote(saleId: string, reason: string): Promise<A
   return { success: true };
 }
 
+// Emits a nota de débito on an invoiced sale: an extra charge (tax-inclusive
+// amount) the factura missed. Decomposed with the company's general IVA rate;
+// several can exist per sale. Doesn't touch stock or the sale's payments.
+export async function issueDebitNote(saleId: string, reason: string, amount: number): Promise<ActionResult> {
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
+  const trimmed = reason.trim();
+  if (trimmed.length < 3) return { success: false, error: "Escribe el motivo de la nota de débito." };
+  if (trimmed.length > 300) return { success: false, error: "El motivo es demasiado largo (máximo 300 caracteres)." };
+  const totalCents = Math.round(amount * 100);
+  if (!Number.isFinite(totalCents) || totalCents <= 0) return { success: false, error: "Ingresa un monto mayor a 0." };
+
+  try {
+    await withTenant(companyId, async (tx) => {
+      await lockSale(tx, saleId, companyId, sessionBranchId);
+      const sale = await tx.sale.findFirst({
+        where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
+      });
+      if (!sale) throw new Error("Venta no encontrada");
+      if (sale.invoiceNumber == null) throw new Error("Solo se emite nota de débito sobre una venta con factura.");
+      if (sale.voided) throw new Error("La venta está anulada");
+      if (!sale.branchId) throw new Error("La venta no tiene sucursal");
+
+      const company = await tx.company.findUnique({ where: { id: companyId }, select: { ivaGeneralRatePercent: true } });
+      const { baseCents, taxCents } = decomposeTax(totalCents, "GENERAL", company?.ivaGeneralRatePercent ?? 16);
+      const controlNumber = await nextDocumentNumber(tx, sale.branchId, "debitNote");
+      await tx.debitNote.create({
+        data: {
+          companyId,
+          branchId: sale.branchId,
+          saleId: sale.id,
+          controlNumber,
+          reason: trimmed,
+          totalCents,
+          baseImponibleCents: baseCents,
+          taxCents,
+          createdById: actorId,
+          createdByName: actorName,
+        },
+      });
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "No se pudo emitir la nota de débito";
+    return { success: false, error: message };
+  }
+
+  revalidatePath("/reports");
+  revalidatePath("/documents");
+  revalidatePath("/tax-book");
+  return { success: true };
+}
+
 // Fiscal documents are never physically deleted (audit KRPOS-DB-001/DB-002):
 // deleting one lost a numbered document the SENIAT can ask for. Anular
 // (voided) keeps it in the history and reverses its effect on stock. Kept
@@ -678,7 +729,7 @@ export async function listRecentSales(
       },
       orderBy: { createdAt: "desc" },
       take: limit,
-      include: { items: true, payments: true, creditNote: { select: { controlNumber: true, createdAt: true, reason: true } } },
+      include: { items: true, payments: true, creditNote: { select: { controlNumber: true, createdAt: true, reason: true } }, debitNotes: { select: { controlNumber: true, createdAt: true, reason: true, totalCents: true, baseImponibleCents: true, taxCents: true }, orderBy: { controlNumber: "asc" } } },
     })
   );
 }
