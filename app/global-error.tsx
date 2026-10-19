@@ -8,12 +8,25 @@ import { useEffect } from "react";
 // uses inline styles instead of the app's CSS.
 export default function GlobalError({
   error,
-  reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
   useEffect(() => {
+    // An open tab (or the installed app) still running JS from a previous
+    // deploy calls Server Actions that no longer exist ("Failed to find
+    // Server Action"). Reloading fetches the current version; the session
+    // flag stops a reload loop if the error is something else.
+    if (/server action/i.test(error.message)) {
+      try {
+        const last = Number(sessionStorage.getItem("kr-stale-reload") ?? 0);
+        if (Date.now() - last > 60_000) {
+          sessionStorage.setItem("kr-stale-reload", String(Date.now()));
+          window.location.reload();
+          return;
+        }
+      } catch {}
+    }
     Sentry.captureException(error);
   }, [error]);
 
@@ -40,7 +53,12 @@ export default function GlobalError({
           </p>
           <button
             type="button"
-            onClick={reset}
+            onClick={() => {
+              try {
+                sessionStorage.removeItem("kr-stale-reload");
+              } catch {}
+              window.location.reload();
+            }}
             style={{
               border: 0,
               borderRadius: "9999px",
