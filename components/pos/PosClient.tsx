@@ -223,7 +223,12 @@ export function PosClient({
   function checkout() {
     if (!customer) return;
     setError(null);
+    // One key per checkout, sent on the online attempt AND kept in the
+    // offline queue: if the server saved the sale but the response never
+    // arrived, the queued retry resolves to that same sale instead of
+    // creating (and charging, and discounting stock for) a second one.
     const saleInput: PendingSaleInput = {
+      idempotencyKey: crypto.randomUUID(),
       items: lines.map((l) => ({
         productId: l.productId,
         quantity: l.quantity,
@@ -272,12 +277,23 @@ export function PosClient({
         await queueOfflineSale(customer);
         return;
       }
+      let result: Awaited<ReturnType<typeof completeSale>>;
       try {
-        const result = await completeSale(saleInput);
-        if (!result.success) {
-          setError(result.error);
-          return;
-        }
+        result = await completeSale(saleInput);
+      } catch {
+        // A network-shaped failure mid-submit — queue it rather than risk
+        // losing the sale. The idempotency key above makes the later sync
+        // return the same sale if the server had actually saved it.
+        await queueOfflineSale(customer);
+        return;
+      }
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      // The sale IS saved from here on: a failure loading the receipt must
+      // never send it to the offline queue again.
+      try {
         const sale = await getSaleReceipt(result.saleId);
         if (sale) setCompletedSale(sale);
         setPendingSync(false);
@@ -290,11 +306,9 @@ export function PosClient({
         // is the only thing on screen.
         router.replace("/pos");
       } catch {
-        // A network-shaped failure mid-submit — queue it rather than risk
-        // losing the sale; if it turns out the server had actually received
-        // it, syncing later will surface a duplicate the seller can spot and
-        // delete from Reportes (safer than silently dropping a real sale).
-        await queueOfflineSale(customer);
+        setCompletedSale(buildReceiptPreview(customer));
+        setPendingSync(false);
+        setStep("receipt");
       }
     });
   }
