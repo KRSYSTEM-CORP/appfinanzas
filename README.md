@@ -43,4 +43,5 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
   2. `set -a; . ./.env.pruebas; . ./.env.pruebas.runtime; set +a; npm run dev -- -p 3003`
   3. En otra terminal: `npx playwright install chromium` (una vez) y `npm run test:e2e`.
 - **Integración:** `npm run test:integration` corre las acciones de venta reales (venta, números de control, reintentos, notas de crédito, abonos) contra una base de pruebas. Necesita `DATABASE_URL` (rol `app_runtime`) y `DIRECT_URL` (dueño) de la base de pruebas; se niega a correr contra producción.
+- **Vista previa:** cada pull request genera un enlace de Vercel que usa la **base de pruebas** (empresa PRUEBA1), nunca los datos reales. Entra con correo y contraseña; Google y Cloudflare Turnstile no están activos ahí.
 - **CI:** `.github/workflows/ci.yml` corre eslint, tsc, Vitest y `npm audit` en cada PR y en `main`. `.github/workflows/integration.yml` crea en cada PR una copia temporal de la base de pruebas en Neon (secreto `NEON_API_KEY`), corre las pruebas de integración y la borra.
