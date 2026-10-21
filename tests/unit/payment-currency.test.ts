@@ -44,3 +44,20 @@ describe("pagos mixtos", () => {
     expect(() => assertPaymentsWithinRemaining(payments, 500, "USD")).toThrow();
   });
 });
+
+describe("abonos hasta saldar", () => {
+  const usd = (amount: number) =>
+    resolveSalePayments([{ paymentMethod: "ZELLE" as const, amount, paidInForeignCurrency: false }], "VES", 97.5, true, "USD");
+  it("varios abonos suman el saldo y el último lo cierra exacto", () => {
+    let remaining = 3000;
+    remaining -= assertPaymentsWithinRemaining(usd(1000), remaining, "USD");
+    remaining -= assertPaymentsWithinRemaining(usd(1500), remaining, "USD");
+    expect(remaining).toBe(500);
+    remaining -= assertPaymentsWithinRemaining(usd(500), remaining, "USD");
+    expect(remaining).toBe(0);
+  });
+  it("no deja abonar 0 ni más del saldo", () => {
+    expect(() => assertPaymentsWithinRemaining(usd(0), 1000, "USD")).toThrow();
+    expect(() => assertPaymentsWithinRemaining(usd(1001), 1000, "USD")).toThrow();
+  });
+});
