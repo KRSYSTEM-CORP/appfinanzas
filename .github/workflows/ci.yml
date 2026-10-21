@@ -5,6 +5,12 @@ on:
   push:
     branches: [main]
 
+# prisma.config.ts requires DIRECT_URL even for `prisma generate` (run by
+# npm ci's postinstall). Placeholder only: nothing here connects to it.
+env:
+  DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
 jobs:
   checks:
     runs-on: ubuntu-latest
