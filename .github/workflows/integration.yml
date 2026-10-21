@@ -11,6 +11,10 @@ on:
 env:
   # kr-pos-pruebas (test database). Override with a repo variable if it moves.
   NEON_PROJECT_ID: ${{ vars.NEON_TEST_PROJECT_ID || 'long-leaf-66607790' }}
+  # Placeholder for `prisma generate` during npm ci; the test steps below
+  # override both with the temporary branch's real URLs.
+  DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
 
 jobs:
   integration:
