@@ -1,0 +1,62 @@
+name: Integración
+
+# Runs the integration tests (tests/integration) against a throwaway copy of
+# the TEST database (Neon project kr-pos-pruebas), never production: each run
+# branches the test DB, applies the migrations, tests and deletes the branch.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  # kr-pos-pruebas (test database). Override with a repo variable if it moves.
+  NEON_PROJECT_ID: ${{ vars.NEON_TEST_PROJECT_ID || 'long-leaf-66607790' }}
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Crear copia temporal de la base de pruebas
+        id: branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch_name: ci-${{ github.run_id }}-${{ github.run_attempt }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Conexión con el rol app_runtime (respeta RLS)
+        id: runtime
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          url=$(npx -y neonctl@2 connection-string ${{ steps.branch.outputs.branch_id }} \
+            --project-id "$NEON_PROJECT_ID" --role-name app_runtime --database-name neondb --pooled)
+          echo "::add-mask::$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Migraciones
+        env:
+          DATABASE_URL: ${{ steps.branch.outputs.db_url }}
+          DIRECT_URL: ${{ steps.branch.outputs.db_url }}
+        run: npx prisma migrate deploy
+
+      - name: Pruebas de integración
+        env:
+          DATABASE_URL: ${{ steps.runtime.outputs.url }}
+          DIRECT_URL: ${{ steps.branch.outputs.db_url }}
+        run: npm run test:integration
+
+      - name: Borrar la copia temporal
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ steps.branch.outputs.branch_id }}
+          api_key: ${{ secrets.NEON_API_KEY }}
