@@ -15,7 +15,8 @@
     "cap:ios": "cap open ios",
     "cap:android": "cap open android",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
