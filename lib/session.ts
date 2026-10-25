@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -69,7 +70,13 @@ export type Session = {
   hasSeenTour: boolean;
 };
 
-export async function getSession(): Promise<Session | null> {
+// Memoized per request (React cache): a page renders the layout, the
+// metadata and several data loaders in parallel, and each one guards itself
+// with requireSession(). Without this every guard re-ran the user + branch
+// queries — ~9 round trips per page load for the same answer.
+export const getSession = cache(readSession);
+
+async function readSession(): Promise<Session | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
