@@ -1,0 +1,47 @@
+name: Migración en producción
+
+# If a pull request adds a Prisma migration, this check stays red until the
+# owner runs it in production and adds the label "migracion-aplicada".
+# Merging code that reads a column production doesn't have yet breaks those
+# pages (it happened with 20261026120000_lifetime_payment).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  migraciones:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Revisar si el PR trae migraciones
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          APPLIED: ${{ contains(github.event.pull_request.labels.*.name, 'migracion-aplicada') }}
+        run: |
+          new=$(git diff --name-only --diff-filter=A "$BASE" "$HEAD" -- 'prisma/migrations/*/migration.sql' | sed 's#prisma/migrations/##; s#/migration.sql##')
+          if [ -z "$new" ]; then
+            echo "Este PR no trae migraciones." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "## Este PR trae migraciones"
+            echo
+            echo "$new" | sed 's/^/- `/; s/$/`/'
+            echo
+            echo "Antes de unirlo, córrelas en producción:"
+            echo
+            echo '```bash'
+            echo 'cd "/Users/ar/Desktop/KR SYSTEM/APP NEW" && set -a && . ./.env && set +a && npx prisma migrate deploy'
+            echo '```'
+            echo
+            echo 'Luego agrega al PR la etiqueta **migracion-aplicada** y esta revisión se pone en verde.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$APPLIED" = "true" ]; then
+            echo "Etiqueta migracion-aplicada presente: OK."
+            exit 0
+          fi
+          echo "::error::Este PR trae migraciones. Córrelas en producción y agrega la etiqueta 'migracion-aplicada' antes de unirlo."
+          exit 1
