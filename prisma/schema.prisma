@@ -900,6 +900,10 @@ model PaymentReport {
   proofImageDataUrl String?             @db.Text
   note              String?
   status            PaymentReportStatus @default(PENDING)
+  // One-time lifetime payment (lib/billing.ts LIFETIME_PRICE_USD_CENTS):
+  // approving it exempts the company from monthly fees instead of extending
+  // the due date.
+  isLifetime        Boolean             @default(false)
   reviewedById      String?
   reviewedAt        DateTime?
   reviewNote        String?

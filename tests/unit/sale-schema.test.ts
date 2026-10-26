@@ -54,3 +54,12 @@ describe("RegisterPaymentSchema (abonos)", () => {
     expect(RegisterPaymentSchema.safeParse({ payments: [{ paymentMethod: "CASH", amount: 5 }] }).success).toBe(true);
   });
 });
+
+import { PaymentReportSchema } from "@/lib/validations";
+describe("PaymentReportSchema (pago único)", () => {
+  it("exige al menos el precio del pago único", () => {
+    expect(PaymentReportSchema.safeParse({ lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 239.99, reference: "R" }] }).success).toBe(false);
+    expect(PaymentReportSchema.safeParse({ lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 240, reference: "R" }] }).success).toBe(true);
+    expect(PaymentReportSchema.safeParse({ lines: [{ paymentMethod: "BINANCE", amount: 25, reference: "R" }] }).success).toBe(true);
+  });
+});

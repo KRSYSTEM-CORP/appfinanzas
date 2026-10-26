@@ -1,12 +1,13 @@
 "use client";
 
+import { LIFETIME_PRICE_USD_CENTS } from "@/lib/billing";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { submitPaymentReport } from "@/lib/actions/billing";
-import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_REQUIRING_REFERENCE, formatUSDT } from "@/lib/format";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS_REQUIRING_REFERENCE, formatUSD, formatUSDT } from "@/lib/format";
 import { formatLocalCurrency } from "@/lib/currencies";
 import type { PaymentMethod } from "@prisma/client";
 
@@ -41,6 +42,9 @@ export function PaymentReportForm({
   const router = useRouter();
   const [lines, setLines] = useState<ReportLine[]>([{ paymentMethod: "BINANCE", amount: "", reference: "" }]);
   const [note, setNote] = useState("");
+  // "monthly" extends the due date; "lifetime" is the one-time payment that
+  // exempts the company from monthly fees once approved.
+  const [plan, setPlan] = useState<"monthly" | "lifetime">("monthly");
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
@@ -88,7 +92,7 @@ export function PaymentReportForm({
     }
 
     startTransition(async () => {
-      const result = await submitPaymentReport({ lines: resolvedLines, note });
+      const result = await submitPaymentReport({ lines: resolvedLines, note, lifetime: plan === "lifetime" });
       if (!result.success) {
         setError(result.error);
         return;
@@ -102,6 +106,35 @@ export function PaymentReportForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 max-w-sm">
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium">¿Qué estás pagando?</span>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            className="flex-1"
+            variant={plan === "monthly" ? "default" : "outline"}
+            onClick={() => setPlan("monthly")}
+          >
+            Mensualidad
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="flex-1"
+            variant={plan === "lifetime" ? "default" : "outline"}
+            onClick={() => setPlan("lifetime")}
+          >
+            Pago único ({formatUSD(LIFETIME_PRICE_USD_CENTS)})
+          </Button>
+        </div>
+        {plan === "lifetime" && (
+          <p className="text-xs text-muted-foreground">
+            Reporta {formatUSD(LIFETIME_PRICE_USD_CENTS)} en total. Al confirmarlo, tu empresa queda
+            exonerada de las mensualidades.
+          </p>
+        )}
+      </div>
       {lines.map((line, i) => {
         const currency = fieldCurrency(line.paymentMethod);
         return (
