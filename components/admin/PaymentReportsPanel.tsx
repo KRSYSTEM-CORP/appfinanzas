@@ -42,6 +42,7 @@ type PendingReport = {
   companyId: string;
   proofImageDataUrl: string | null;
   note: string | null;
+  isLifetime: boolean;
   createdAt: Date;
   company: { name: string };
   lines: PendingReportLine[];
@@ -392,6 +393,11 @@ function PendingReportDetail({
         <div className="col-span-2 flex flex-col gap-0.5">
           <dt className="text-xs text-muted-foreground">Total</dt>
           <dd className="text-lg font-semibold tabular-nums">{formatUSD(totalUsdCents)}</dd>
+          {r.isLifetime && (
+            <dd className="text-sm font-medium text-primary">
+              Pago único de por vida: al aprobarlo, la empresa queda exonerada de las mensualidades.
+            </dd>
+          )}
         </div>
         <div className="col-span-2 flex flex-col gap-1">
           <dt className="text-xs text-muted-foreground">Métodos de pago</dt>

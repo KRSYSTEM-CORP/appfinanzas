@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LIFETIME_PRICE_USD_CENTS } from "@/lib/billing";
 import { Badge } from "@/components/ui/badge";
 import { PaymentHistoryList } from "@/components/billing/PaymentHistoryList";
 import { PaymentReportForm } from "@/components/billing/PaymentReportForm";
@@ -33,10 +34,10 @@ export default async function BillingPage() {
       {info.isExempt ? (
         <Card className="max-w-md">
           <CardContent className="pt-6">
-            <Badge variant="outline">Exonerada</Badge>
+            <Badge variant="outline">Plan sin mensualidades</Badge>
             <p className="text-sm text-muted-foreground mt-2">
-              Tu empresa está exonerada de todo cobro de mantenimiento por el super admin. No
-              necesitas reportar pagos.
+              Tu empresa no paga mensualidades (pago único de por vida o exoneración de KR System).
+              No necesitas reportar pagos.
             </p>
           </CardContent>
         </Card>
@@ -66,6 +67,24 @@ export default async function BillingPage() {
                   Cuenta bloqueada por pago
                 </Badge>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-primary/40">
+            <CardHeader>
+              <CardTitle>Pago único de por vida</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <span className="text-2xl font-semibold">{formatUSD(LIFETIME_PRICE_USD_CENTS)}</span>
+              {info.platformRate != null && (
+                <span className="text-sm text-muted-foreground">
+                  ≈ Bs. {((LIFETIME_PRICE_USD_CENTS / 100) * info.platformRate).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )}
+              <span className="text-sm text-muted-foreground">
+                Pagas una sola vez y, cuando confirmemos el pago, tu empresa queda exonerada de las
+                mensualidades para siempre. Elige &quot;Pago único&quot; al reportarlo abajo.
+              </span>
             </CardContent>
           </Card>
 

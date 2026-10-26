@@ -13,6 +13,9 @@ export const TRIAL_DAYS = 14;
 // configured, but a brand-new deployment's PlatformSettings row may not
 // exist yet.
 export const FALLBACK_MONTHLY_FEE_USD_CENTS = 2500; // $25.00
+// One-time "de por vida" payment: once a super admin approves a report for at
+// least this amount, the company is exempted from monthly fees for good.
+export const LIFETIME_PRICE_USD_CENTS = 24000; // $240.00
 
 // Fixed id of the single PlatformSettings row (global config, not per-company).
 export const PLATFORM_SETTINGS_ID = "platform";

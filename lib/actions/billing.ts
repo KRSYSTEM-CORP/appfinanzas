@@ -167,6 +167,7 @@ export async function submitPaymentReport(input: unknown): Promise<ActionResult>
         companyId,
         reportedById: userId,
         note: parsed.data.note,
+        isLifetime: parsed.data.lifetime,
         lines: {
           create: parsed.data.lines.map((line) => ({
             paymentMethod: line.paymentMethod,
