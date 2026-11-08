@@ -47,7 +47,7 @@ export function PrintableCashClosing({
         {company.fiscalRif && <p className="text-xs">RIF: {company.fiscalRif}</p>}
       </div>
       <div className="my-2 border-t border-dashed border-black" />
-      <p className="text-center font-bold">CIERRE DE CAJA</p>
+      <p className="text-center font-bold">CORTE Z · CIERRE DE CAJA</p>
       <p className="text-center text-xs">Fecha: {formatDateOnly(summary.date)}</p>
       {branchName && <p className="text-center text-xs">Sucursal: {branchName}</p>}
       <div className="my-2 border-t border-dashed border-black" />
@@ -76,6 +76,35 @@ export function PrintableCashClosing({
       <div className="flex justify-between">
         <span>Nº de ventas:</span>
         <span>{summary.salesCount}</span>
+      </div>
+      <div className="flex justify-between">
+        <span>Pagadas ({summary.paidCount}):</span>
+        <span>{money(summary.paidCents)}</span>
+      </div>
+      <div className="flex justify-between">
+        <span>A crédito ({summary.creditCount}):</span>
+        <span>{money(summary.creditCents)}</span>
+      </div>
+
+      <div className="my-2 border-t border-dashed border-black" />
+      <p className="font-bold">Caja Chica</p>
+      <div className="flex justify-between">
+        <span>Apertura:</span>
+        <span>{money(summary.openingCents ?? 0)}</span>
+      </div>
+      <div className="flex justify-between">
+        <span>Ventas en efectivo:</span>
+        <span>{money(summary.cashSalesCents)}</span>
+      </div>
+      {summary.outflows.map((o) => (
+        <div key={o.id} className="flex justify-between">
+          <span>Salida: {o.concept}</span>
+          <span>−{money(o.amountCents)}</span>
+        </div>
+      ))}
+      <div className="flex justify-between font-bold">
+        <span>Efectivo esperado:</span>
+        <span>{money(summary.expectedCashCents)}</span>
       </div>
 
       {summary.byMethod.length > 0 && (
