@@ -30,6 +30,8 @@ export type PayrollPaymentRow = {
   id: string;
   employeeId: string;
   employeeName: string;
+  nationalId: string | null;
+  position: string | null;
   period: string;
   grossCents: number;
   deductionsCents: number;
@@ -57,7 +59,7 @@ export async function listPayroll(): Promise<{ employees: PayrollEmployeeRow[]; 
         where: { companyId },
         orderBy: { paidAt: "desc" },
         take: 100,
-        include: { employee: { select: { name: true } } },
+        include: { employee: { select: { name: true, nationalId: true, position: true } } },
       }),
     ]);
     return {
@@ -74,6 +76,8 @@ export async function listPayroll(): Promise<{ employees: PayrollEmployeeRow[]; 
         id: p.id,
         employeeId: p.employeeId,
         employeeName: p.employee.name,
+        nationalId: p.employee.nationalId,
+        position: p.employee.position,
         period: p.period,
         grossCents: p.grossCents,
         deductionsCents: p.deductionsCents,

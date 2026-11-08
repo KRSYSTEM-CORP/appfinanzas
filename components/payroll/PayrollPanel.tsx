@@ -20,6 +20,8 @@ import { formatCurrencyCents } from "@/lib/currencies";
 import { formatDate, PAYMENT_METHOD_LABELS } from "@/lib/format";
 import { resizeImageToDataUrl } from "@/lib/image-utils";
 import { computeFortnight, periodLabel } from "@/lib/payroll";
+import { buildPayrollReceiptPDF } from "@/lib/payroll-receipt-pdf";
+import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import {
   getPayrollProof,
   payPayroll,
@@ -37,7 +39,9 @@ export function PayrollPanel({
   payments,
   currentPeriod,
   referenceCurrency,
+  company,
 }: {
+  company: DeliveryNoteCompany;
   employees: PayrollEmployeeRow[];
   payments: PayrollPaymentRow[];
   currentPeriod: string;
@@ -62,6 +66,13 @@ export function PayrollPanel({
     startTransition(async () => {
       await setPayrollEmployeeActive(e.id, !e.active);
       router.refresh();
+    });
+  }
+
+  function downloadReceipt(p: PayrollPaymentRow) {
+    startTransition(async () => {
+      const doc = await buildPayrollReceiptPDF(p, company, referenceCurrency);
+      doc.save(`recibo-nomina-${p.employeeName.replace(/\s+/g, "-").toLowerCase()}-${p.period}.pdf`);
     });
   }
 
@@ -177,6 +188,9 @@ export function PayrollPanel({
                       <td className="py-1.5 pr-3">{PAYMENT_METHOD_LABELS[p.paymentMethod]}</td>
                       <td className="py-1.5">
                         {p.reference ?? "—"}
+                        <Button size="xs" variant="link" disabled={isPending} onClick={() => downloadReceipt(p)}>
+                          Recibo PDF
+                        </Button>
                         {p.hasProof && (
                           <Button size="xs" variant="link" onClick={() => viewProof(p.id)}>
                             Ver comprobante

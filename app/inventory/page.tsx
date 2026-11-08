@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { ProductTable } from "@/components/inventory/ProductTable";
 import { PriceListButton } from "@/components/inventory/PriceListButton";
+import { InternalUseButton } from "@/components/inventory/InternalUseButton";
 import { getInventoryOverview, listAllProducts, listCategories } from "@/lib/actions/products";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
 import { requireSectionAccess } from "@/lib/session";
@@ -56,6 +57,11 @@ export default async function InventoryPage() {
           />
           {canManage && (
             <>
+              <InternalUseButton
+                products={products
+                  .filter((p) => p.trackStock && p.stock > 0)
+                  .map((p) => ({ id: p.id, name: p.name, stock: p.stock }))}
+              />
               <Button variant="outline" nativeButton={false} render={<Link href="/inventory/update" />}>
                 Actualizar desde Excel
               </Button>

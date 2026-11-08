@@ -647,3 +647,43 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
   void notifyLive(posChannel(companyId), "product");
   return { updated, notFound, failed };
 }
+
+// Consumo interno: mercancía que sale del inventario para uso de la propia
+// empresa (no es una venta). Descuenta el stock y queda en el historial de
+// movimientos del producto.
+export async function registerInternalUse(productId: string, quantity: number, note?: string): Promise<ActionResult> {
+  const session = await requireManager();
+  const { companyId, userId: actorId, sellerName: actorName } = session;
+  if (!session.branchId) {
+    return { success: false, error: 'Selecciona una sucursal — no se puede con "Todas las sucursales".' };
+  }
+  const branchId = session.branchId;
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    return { success: false, error: "La cantidad debe ser un número entero mayor a 0" };
+  }
+
+  try {
+    await withTenant(companyId, async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId} FOR UPDATE`;
+      const product = await tx.product.findFirst({ where: { id: productId, companyId, branchId } });
+      if (!product) throw new Error("Producto no encontrado");
+      if (!product.trackStock) throw new Error("Este producto no lleva control de existencias");
+      if (product.stock < quantity) throw new Error(`Solo hay ${product.stock} en existencia`);
+      const after = product.stock - quantity;
+      await tx.product.update({ where: { id: product.id }, data: { stock: after, isActive: after > 0 } });
+      await recordStockMovement(tx, {
+        companyId, branchId, productId: product.id, productName: product.name, actorId, actorName,
+        reason: "INTERNAL_USE", sourceType: note?.trim() ? `note:${note.trim().slice(0, 120)}` : "internal_use",
+        quantityChange: -quantity, stockBefore: product.stock,
+      });
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar el consumo" };
+  }
+
+  await invalidateProductsCache(companyId, branchId);
+  revalidatePath("/inventory");
+  revalidatePath("/pos");
+  void notifyLive(posChannel(companyId), "product");
+  return { success: true };
+}
