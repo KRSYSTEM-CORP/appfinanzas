@@ -213,6 +213,10 @@ model Company {
   isExempt              Boolean           @default(false)
   // Meta de ganancia neta mensual (divisa referencial), editable desde Finanzas.
   profitGoalCents       Int?
+  // Deducciones de nómina en % sobre el sueldo base (editables en Nómina).
+  payrollIvssPct        Float             @default(4)
+  payrollParoPct        Float             @default(0.5)
+  payrollFaovPct        Float             @default(1)
   plan                  PlanTier          @default(CORPORATIVO)
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?

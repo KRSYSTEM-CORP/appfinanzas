@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAccountingPlan } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { computeFortnight, isValidPeriod } from "@/lib/payroll";
+import { computeFortnight, isValidPeriod, type PayrollRates } from "@/lib/payroll";
 import type { ActionResult } from "@/lib/types";
 import type { PaymentMethod } from "@prisma/client";
 
@@ -50,10 +50,14 @@ async function requirePayrollManager() {
   return session;
 }
 
-export async function listPayroll(): Promise<{ employees: PayrollEmployeeRow[]; payments: PayrollPaymentRow[] }> {
+export async function listPayroll(): Promise<{
+  employees: PayrollEmployeeRow[];
+  payments: PayrollPaymentRow[];
+  rates: PayrollRates;
+}> {
   const { companyId } = await requirePayrollManager();
   return withTenant(companyId, async (tx) => {
-    const [employees, payments] = await Promise.all([
+    const [employees, payments, company] = await Promise.all([
       tx.payrollEmployee.findMany({ where: { companyId }, orderBy: [{ active: "desc" }, { name: "asc" }] }),
       tx.payrollPayment.findMany({
         where: { companyId },
@@ -61,8 +65,17 @@ export async function listPayroll(): Promise<{ employees: PayrollEmployeeRow[]; 
         take: 100,
         include: { employee: { select: { name: true, nationalId: true, position: true } } },
       }),
+      tx.company.findUnique({
+        where: { id: companyId },
+        select: { payrollIvssPct: true, payrollParoPct: true, payrollFaovPct: true },
+      }),
     ]);
     return {
+      rates: {
+        ivssPct: company?.payrollIvssPct ?? 4,
+        paroPct: company?.payrollParoPct ?? 0.5,
+        faovPct: company?.payrollFaovPct ?? 1,
+      },
       employees: employees.map((e) => ({
         id: e.id,
         name: e.name,
@@ -155,7 +168,15 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
     await withTenant(companyId, async (tx) => {
       const employee = await tx.payrollEmployee.findFirst({ where: { id: d.employeeId, companyId, active: true } });
       if (!employee) throw new Error("Empleado no encontrado");
-      const calc = computeFortnight(employee.baseCents, employee.foodBonusCents, d.advanceCents);
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+        select: { payrollIvssPct: true, payrollParoPct: true, payrollFaovPct: true },
+      });
+      const calc = computeFortnight(employee.baseCents, employee.foodBonusCents, d.advanceCents, {
+        ivssPct: company?.payrollIvssPct ?? 4,
+        paroPct: company?.payrollParoPct ?? 0.5,
+        faovPct: company?.payrollFaovPct ?? 1,
+      });
       const expense = await tx.expense.create({
         data: {
           companyId,
@@ -190,5 +211,29 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
   }
   revalidatePath("/payroll");
   revalidatePath("/finance");
+  return { success: true };
+}
+
+const RatesSchema = z.object({
+  ivssPct: z.number().min(0, "No puede ser negativo").max(30, "Máximo 30 %"),
+  paroPct: z.number().min(0, "No puede ser negativo").max(30, "Máximo 30 %"),
+  faovPct: z.number().min(0, "No puede ser negativo").max(30, "Máximo 30 %"),
+});
+
+export async function savePayrollRates(input: unknown): Promise<ActionResult> {
+  const { companyId } = await requirePayrollManager();
+  const parsed = RatesSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  await withTenant(companyId, (tx) =>
+    tx.company.update({
+      where: { id: companyId },
+      data: {
+        payrollIvssPct: parsed.data.ivssPct,
+        payrollParoPct: parsed.data.paroPct,
+        payrollFaovPct: parsed.data.faovPct,
+      },
+    })
+  );
+  revalidatePath("/payroll");
   return { success: true };
 }

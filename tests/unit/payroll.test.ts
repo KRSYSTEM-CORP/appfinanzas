@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { computeFortnight, isValidPeriod, periodFor, periodLabel } from "@/lib/payroll";
+import {
+  accruedProvisionCents,
+  computeFortnight,
+  isValidPeriod,
+  monthlyProvisionCents,
+  periodFor,
+  periodLabel,
+} from "@/lib/payroll";
 
 describe("nómina quincenal", () => {
   it("calcula bruto, deducciones y neto", () => {
@@ -19,5 +26,17 @@ describe("nómina quincenal", () => {
     expect(isValidPeriod("2026-11-2")).toBe(true);
     expect(isValidPeriod("2026-13-1")).toBe(false);
     expect(periodLabel("2026-11-2")).toBe("2.ª quincena de noviembre 2026");
+  });
+  it("usa los porcentajes de la empresa", () => {
+    // 10 % de deducción sobre la mitad del sueldo base (100) = 10
+    const c = computeFortnight(20000, 0, 0, { ivssPct: 5, paroPct: 2, faovPct: 3 });
+    expect(c.deductionsCents).toBe(1000);
+    expect(c.netCents).toBe(10000 - 1000);
+  });
+  it("calcula las provisiones", () => {
+    expect(monthlyProvisionCents(12000)).toBe(1000);
+    expect(accruedProvisionCents(12000, 10)).toBe(10000);
+    expect(accruedProvisionCents(12000, 20)).toBe(12000);
+    expect(accruedProvisionCents(12000, 0)).toBe(0);
   });
 });
