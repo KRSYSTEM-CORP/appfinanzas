@@ -9,6 +9,7 @@ import { closedDayWindows } from "@/lib/closed-days";
 import { ExpenseSchema } from "@/lib/validations";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import type { ActionResult } from "@/lib/types";
+import type { CategoryMargin } from "@/lib/breakeven";
 
 // Same raw-SQL OR-of-windows builder as lib/actions/reports.ts — kept local
 // rather than shared since each file's Prisma import differs only in this
@@ -148,4 +149,50 @@ export async function expensesTotal(range: DateRangeSelection): Promise<number> 
     });
     return result._sum.amountCents ?? 0;
   });
+}
+
+// Ventas y costo por categoría del período, para el punto de equilibrio. Las
+// ventas sin categoría se agrupan en "Sin categoría".
+export async function categoryMargins(range: DateRangeSelection): Promise<CategoryMargin[]> {
+  const { companyId, branchId } = await requireManager();
+  const requestedWindows = selectionToWindows(range);
+
+  return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return [];
+    const rows = await tx.$queryRaw<{ category: string; revenue: bigint; cogs: bigint | null }[]>`
+      SELECT COALESCE(NULLIF(si."category", ''), 'Sin categoría') AS category,
+             SUM(si."subtotalCents")::bigint AS revenue,
+             SUM(CASE WHEN p."costCents" IS NOT NULL THEN si."quantity" * p."costCents" ELSE 0 END)::bigint AS cogs
+      FROM "SaleItem" si
+      JOIN "Sale" s ON s.id = si."saleId"
+      LEFT JOIN "Product" p ON p.id = si."productId"
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND ${windowsSql('s."createdAt"', windows)}
+        AND s."voided" = false
+      GROUP BY 1
+    `;
+    return rows.map((r) => ({ category: r.category, revenueCents: Number(r.revenue), cogsCents: Number(r.cogs ?? 0) }));
+  });
+}
+
+export async function getProfitGoal(): Promise<number | null> {
+  const { companyId } = await requireManager();
+  const company = await withTenant(companyId, (tx) =>
+    tx.company.findUnique({ where: { id: companyId }, select: { profitGoalCents: true } })
+  );
+  return company?.profitGoalCents ?? null;
+}
+
+export async function setProfitGoal(amountCents: number | null): Promise<ActionResult> {
+  const { companyId } = await requireManager();
+  if (amountCents != null && (!Number.isInteger(amountCents) || amountCents < 0)) {
+    return { success: false, error: "La meta no puede ser negativa" };
+  }
+  await withTenant(companyId, (tx) =>
+    tx.company.update({ where: { id: companyId }, data: { profitGoalCents: amountCents } })
+  );
+  revalidatePath("/finance");
+  return { success: true };
 }

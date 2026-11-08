@@ -211,6 +211,8 @@ model Company {
   // bolívares (for VES companies paying via Pago Móvil) is platform-wide
   // (see PlatformSettings), not per company.
   isExempt              Boolean           @default(false)
+  // Meta de ganancia neta mensual (divisa referencial), editable desde Finanzas.
+  profitGoalCents       Int?
   plan                  PlanTier          @default(CORPORATIVO)
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?
