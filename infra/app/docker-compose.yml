@@ -1,0 +1,46 @@
+# Servidor de la APP: Next.js + Caddy (HTTPS). Se copia a /opt/kr/ del servidor.
+# Variables: /opt/kr/app.env (ver app.env.example) y TAG (versión de la imagen).
+name: kr
+services:
+  app:
+    image: ghcr.io/krsystem-corp/appfinanzas:${TAG:-latest}
+    restart: unless-stopped
+    env_file: ./app.env
+    ports:
+      - "127.0.0.1:3000:3000" # solo para las tareas programadas del propio servidor
+    networks: [web]
+    mem_limit: 1536m
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [web]
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  # Migraciones: NO corren solas. Se lanzan a mano y con aprobación:
+  #   TAG=<version> docker compose --profile tools run --rm migrate
+  migrate:
+    image: ghcr.io/krsystem-corp/appfinanzas-migrate:${TAG:-latest}
+    profiles: [tools]
+    env_file: ./app.env
+    networks: [web]
+
+networks:
+  web:
+volumes:
+  caddy_data:
+  caddy_config:
