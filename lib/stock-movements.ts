@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
-export type StockMovementReason = "SALE" | "SALE_VOID" | "PURCHASE" | "PURCHASE_VOID" | "ADJUSTMENT" | "IMPORT" | "INTERNAL_USE";
+export type StockMovementReason = "SALE" | "SALE_VOID" | "PURCHASE" | "PURCHASE_VOID" | "ADJUSTMENT" | "IMPORT" | "INTERNAL_USE" | "TRANSFER_OUT" | "TRANSFER_IN";
 
 export async function recordStockMovement(
   tx: Prisma.TransactionClient,
