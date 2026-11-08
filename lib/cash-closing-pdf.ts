@@ -26,7 +26,7 @@ export async function buildCashClosingPDF(
 
   const titleBottomY = renderDocumentTitleBlock(
     doc,
-    "CIERRE DE CAJA",
+    "CORTE Z · CIERRE DE CAJA",
     [`Fecha: ${formatDateOnly(summary.date)}`, ...(branchName ? [`Sucursal: ${branchName}`] : [])],
     margin,
     y,
@@ -75,7 +75,48 @@ export async function buildCashClosingPDF(
   doc.setFont("helvetica", "normal");
   doc.text("Número de ventas:", margin, y);
   doc.text(String(summary.salesCount), pageWidth - margin, y, { align: "right" });
+  y += 18;
+  doc.text(`Pagadas (${summary.paidCount}):`, margin, y);
+  doc.text(money(summary.paidCents), pageWidth - margin, y, { align: "right" });
+  y += 18;
+  doc.text(`A crédito (${summary.creditCount}):`, margin, y);
+  doc.text(money(summary.creditCents), pageWidth - margin, y, { align: "right" });
   y += 26;
+
+  // Caja Chica: efectivo del día.
+  doc.setFont("helvetica", "bold");
+  doc.text("Caja Chica", margin, y);
+  y += 16;
+  doc.setFont("helvetica", "normal");
+  for (const [label, value] of [
+    ["Apertura:", money(summary.openingCents ?? 0)],
+    ["Ventas en efectivo:", money(summary.cashSalesCents)],
+    ["Salidas:", `−${money(summary.outflowsCents)}`],
+  ]) {
+    doc.text(label, margin, y);
+    doc.text(value, pageWidth - margin, y, { align: "right" });
+    y += 16;
+  }
+  doc.setFont("helvetica", "bold");
+  doc.text("Efectivo esperado:", margin, y);
+  doc.text(money(summary.expectedCashCents), pageWidth - margin, y, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  y += 18;
+  if (summary.outflows.length > 0) {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [["Salida", "Monto"]],
+      body: summary.outflows.map((o) => [o.concept, money(o.amountCents)]),
+      theme: "grid",
+      headStyles: { fillColor: [30, 41, 59] },
+      styles: { fontSize: 10, cellPadding: 6 },
+      columnStyles: { 1: { halign: "right" } },
+    });
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 20;
+  } else {
+    y += 8;
+  }
 
   if (summary.byMethod.length > 0) {
     const rows = summary.byMethod.map((m) => [PAYMENT_METHOD_LABELS[m.paymentMethod], money(m.totalCents)]);
