@@ -12,6 +12,11 @@ export type CashClosingSummary = {
   date: string;
   totalCents: number;
   salesCount: number;
+  // Desglose de lo vendido: ya cobrado vs. a crédito (por cobrar).
+  paidCents: number;
+  paidCount: number;
+  creditCents: number;
+  creditCount: number;
   byMethod: { paymentMethod: PaymentMethod; totalCents: number }[];
   closed: { closedAt: Date; note: string | null } | null;
 };
@@ -28,8 +33,14 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
   const closingDate = closingDateFromString(dateStr);
 
   return withTenant(companyId, async (tx) => {
-    const [totals, byMethodRows, closings, activeBranchCount] = await Promise.all([
+    const [totals, byStatus, byMethodRows, closings, activeBranchCount] = await Promise.all([
       tx.sale.aggregate({
+        where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: start, lt: end }, voided: false },
+        _sum: { totalCents: true },
+        _count: true,
+      }),
+      tx.sale.groupBy({
+        by: ["paymentStatus"],
         where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: start, lt: end }, voided: false },
         _sum: { totalCents: true },
         _count: true,
@@ -73,6 +84,10 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
       date: dateStr,
       totalCents: totals._sum.totalCents ?? 0,
       salesCount: totals._count,
+      paidCents: byStatus.find((r) => r.paymentStatus === "PAID")?._sum.totalCents ?? 0,
+      paidCount: byStatus.find((r) => r.paymentStatus === "PAID")?._count ?? 0,
+      creditCents: byStatus.find((r) => r.paymentStatus === "CREDIT")?._sum.totalCents ?? 0,
+      creditCount: byStatus.find((r) => r.paymentStatus === "CREDIT")?._count ?? 0,
       byMethod: byMethodRows.map((r) => ({ paymentMethod: r.paymentMethod, totalCents: Number(r.total_cents) })),
       closed,
     };
