@@ -123,7 +123,7 @@ export async function sendPaymentReportEmail(
       <p><strong>${escapeHtml(companyName)}</strong> reportó un pago de suscripción por <strong>${amount}</strong>.</p>
       ${contactHtml}
       <p>
-        <a href="${reviewUrl}" style="display: inline-block; background: #4f3ddb; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+        <a href="${reviewUrl}" style="display: inline-block; background: #433ddd; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
           Revisar y aprobar
         </a>
       </p>
@@ -142,7 +142,7 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
       <h2>Recupera tu contraseña</h2>
       <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en KR POS.</p>
       <p>
-        <a href="${resetUrl}" style="display: inline-block; background: #4f3ddb; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+        <a href="${resetUrl}" style="display: inline-block; background: #433ddd; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
           Crear nueva contraseña
         </a>
       </p>

@@ -107,7 +107,7 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
             </dl>
             <div className="flex flex-wrap items-center gap-2 border-t pt-4">
               <Button variant="outline" nativeButton={false} render={<Link href={`/customers/${c.id}/crm`} />}>
-                CRM
+                Marketing
               </Button>
               {canManage && (
                 <Button variant="outline" nativeButton={false} render={<Link href={`/customers/${c.id}`} />}>
