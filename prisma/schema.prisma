@@ -1329,9 +1329,21 @@ model LearningVideo {
   id          String   @id @default(cuid())
   title       String
   description String?
-  url         String
+  // O un enlace (YouTube/Vimeo) o un archivo MP4 en R2 (r2Key); uno de los dos.
+  url         String?
+  r2Key       String?
   position    Int
   createdAt   DateTime @default(now())
 
   @@index([position])
+}
+
+// Qué videos ya vio cada usuario (avance de Learning). Es por usuario, no por empresa.
+model LearningProgress {
+  userId    String
+  videoId   String
+  watchedAt DateTime @default(now())
+
+  @@id([userId, videoId])
+  @@index([videoId])
 }

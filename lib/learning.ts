@@ -1,6 +1,9 @@
 // Solo el dueño de la plataforma puede agregar o quitar videos de Learning.
 export const LEARNING_ADMIN_EMAIL = "rledezma2001@gmail.com";
 export const MAX_LEARNING_VIDEOS = 10;
+// Videos MP4 subidos a R2. Tutoriales cortos: tope de 300 MB por archivo.
+export const MAX_LEARNING_UPLOAD_BYTES = 300 * 1024 * 1024;
+export const LEARNING_KEY_REGEX = /^learning\/[A-Za-z0-9-]{8,80}\.mp4$/;
 
 export type VideoEmbed = { kind: "youtube" | "vimeo"; embedUrl: string } | null;
 
