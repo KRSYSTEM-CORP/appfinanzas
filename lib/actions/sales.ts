@@ -65,6 +65,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
   const {
     items,
     paymentStatus,
+    channel,
     payments,
     discountPercent,
     customerFirstName,
@@ -225,6 +226,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           discountCents: discountTotalCents,
           paymentMethod: firstPayment?.paymentMethod ?? null,
           paymentStatus,
+          channel,
           paidAt: isPaid ? new Date() : null,
           // For credit sales, the customer hasn't decided currency yet — that's
           // captured later when payment is registered. Otherwise true if ANY

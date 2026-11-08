@@ -21,7 +21,7 @@ import { buildPendingReceipt } from "@/lib/offline/pending-receipt";
 import { useCart } from "@/lib/pos/use-cart";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
-import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
+import type { PrintPaperSize, ReferenceCurrency, SaleChannel } from "@prisma/client";
 
 type SaleWithItems = NonNullable<Awaited<ReturnType<typeof getSaleReceipt>>>;
 type Step = "customer" | "cart" | "receipt";
@@ -145,6 +145,7 @@ export function PosClient({
     defaultPaymentSplitRows(0, rate, exchangeRateEnabled)
   );
   const [note, setNote] = useState("");
+  const [channel, setChannel] = useState<SaleChannel>("MOSTRADOR");
   const [discountPercent, setDiscountPercent] = useState("0");
   const [error, setError] = useState<string | null>(null);
   // Either a real, server-confirmed sale, or a locally-built stand-in for one
@@ -235,6 +236,7 @@ export function PosClient({
         priceTier: l.priceTierOverride ?? undefined,
       })),
       paymentStatus: exonerated ? "PAID" : paymentStatus,
+      channel,
       payments:
         !exonerated && paymentStatus === "PAID"
           ? paymentRows.map((r) => ({
@@ -394,6 +396,8 @@ export function PosClient({
           onRemove={remove}
           note={note}
           onNoteChange={setNote}
+          channel={channel}
+          onChannelChange={setChannel}
           discountPercent={discountPercent}
           onDiscountPercentChange={setDiscountPercent}
           onCheckout={checkout}

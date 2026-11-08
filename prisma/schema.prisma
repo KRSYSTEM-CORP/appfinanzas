@@ -20,6 +20,14 @@ enum PaymentMethod {
   TRANSFER
 }
 
+// Canal por el que entró la venta.
+enum SaleChannel {
+  MOSTRADOR
+  DELIVERY
+  PICKUP
+  ONLINE
+}
+
 enum PaymentStatus {
   PAID
   CREDIT
@@ -539,6 +547,7 @@ model Sale {
   // Whether the sale was paid at checkout or sold on credit (to be collected
   // later). paidAt is set when a CREDIT sale is later marked as paid.
   paymentStatus         PaymentStatus  @default(PAID)
+  channel               SaleChannel    @default(MOSTRADOR)
   paidAt                DateTime?
   // Exchange rate in effect on the day a CREDIT sale was actually collected
   // (vs. exchangeRate, the rate when the sale/credit was originally granted).
