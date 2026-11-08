@@ -1,5 +1,6 @@
 "use server";
 
+import { userLimitError } from "@/lib/plan-limits";
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
@@ -64,7 +65,7 @@ export async function setEmployeePhoto(userId: string, dataUrl: string | null): 
 }
 
 export async function createEmployee(formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireManager();
+  const { companyId, plan } = await requireManager();
   const parsed = EmployeeSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
@@ -84,6 +85,9 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
     tx.user.findFirst({ where: { companyId, loginUsername } })
   );
   if (existing) return { success: false, error: "Ese usuario ya está asignado a otra persona" };
+
+  const limitMsg = await withTenant(companyId, (tx) => userLimitError(tx, companyId, plan));
+  if (limitMsg) return { success: false, error: limitMsg };
 
   // A GERENTE has no fixed branch (branchId stays null); a VENDEDOR's
   // branchId was already required by EmployeeSchema, but must still belong

@@ -1,3 +1,4 @@
+import { getPlan, type PlanId } from "@/lib/plans";
 import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
@@ -56,6 +57,8 @@ export type Session = {
   // Custom per-company features a platform admin enabled for this company
   // (lib/features.ts) — only ids still present in the registry.
   enabledFeatures: string[];
+  // Plan de suscripción (lib/plans.ts).
+  plan: PlanId;
   // The branch this session is currently scoped to — null means "every
   // branch" (a GERENTE/owner viewing consolidated data, see switchBranch()
   // in lib/actions/branches.ts). A VENDEDOR is always pinned to their own
@@ -99,6 +102,7 @@ async function readSession(): Promise<Session | null> {
           nextPaymentDueDate: true,
           localCurrencyCode: true,
           enabledFeatures: true,
+          plan: true,
         },
       },
     },
@@ -145,6 +149,7 @@ async function readSession(): Promise<Session | null> {
     sellerName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email,
     allowedSections: user.allowedSections,
     enabledFeatures: user.company.enabledFeatures.filter(isKnownFeature),
+    plan: user.company.plan,
     branchId,
     branchName: branch?.name ?? null,
     hasSeenTour: user.hasSeenTour,
@@ -211,6 +216,14 @@ export async function requireSectionAccess(section: AppSection | AppSection[]): 
 // company has it enabled gets through, everyone else is bounced to /pos as if
 // the page didn't exist. Deliberately no super-admin bypass — an admin turns
 // a feature on for their own company to try it, same as any customer would.
+// Contabilidad solo existe en Pyme y Corporativo; Emprende vuelve a /billing
+// para ver los planes.
+export async function requireAccountingPlan(): Promise<Session> {
+  const session = await requireSession();
+  if (!getPlan(session.plan).accounting && !session.isSuperAdmin) redirect("/billing?plan=contabilidad");
+  return session;
+}
+
 export async function requireFeature(featureId: string): Promise<Session> {
   const session = await requireSession();
   if (!hasFeature(session.enabledFeatures, featureId)) redirect("/pos");

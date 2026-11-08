@@ -33,6 +33,14 @@ enum UserStatus {
   SUSPENDED
 }
 
+// Plan de suscripción de la empresa (ver lib/plans.ts). Las empresas que ya
+// existían antes de los planes quedan en CORPORATIVO para no perder nada.
+enum PlanTier {
+  EMPRENDE
+  PYME
+  CORPORATIVO
+}
+
 enum PaymentReportStatus {
   PENDING
   APPROVED
@@ -195,6 +203,7 @@ model Company {
   // bolívares (for VES companies paying via Pago Móvil) is platform-wide
   // (see PlatformSettings), not per company.
   isExempt              Boolean           @default(false)
+  plan                  PlanTier          @default(CORPORATIVO)
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?
   payments              Payment[]

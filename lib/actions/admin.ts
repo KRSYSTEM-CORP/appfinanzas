@@ -1,5 +1,6 @@
 "use server";
 
+import { PLANS, type PlanId } from "@/lib/plans";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -59,6 +60,7 @@ export async function listAllCompanies() {
         isExempt: true,
         nextPaymentDueDate: true,
         monthlyFeeUsdCents: true,
+        plan: true,
         enabledFeatures: true,
         createdAt: true,
         users: {
@@ -118,6 +120,19 @@ export async function approveUser(userId: string, billing: unknown): Promise<Act
     return { success: false, error: "Usuario no encontrado o ya fue procesado" };
   }
   revalidatePath("/admin");
+  return { success: true };
+}
+
+// Cambia el plan de una empresa y alinea su mensualidad con el precio del plan.
+export async function setCompanyPlan(companyId: string, plan: string): Promise<ActionResult> {
+  await requireSuperAdmin();
+  if (!(plan in PLANS)) return { success: false, error: "Plan inválido" };
+  const def = PLANS[plan as PlanId];
+  await withSuperAdmin((tx) =>
+    tx.company.update({ where: { id: companyId }, data: { plan: def.id, monthlyFeeUsdCents: def.priceUsdCents } })
+  );
+  revalidatePath("/admin");
+  revalidatePath("/billing");
   return { success: true };
 }
 

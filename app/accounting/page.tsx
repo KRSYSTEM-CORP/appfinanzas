@@ -1,3 +1,4 @@
+import { requireAccountingPlan } from "@/lib/session";
 import { AccountingHub } from "@/components/accounting/AccountingHub";
 
 const sections = [
@@ -33,7 +34,8 @@ const sections = [
   },
 ];
 
-export default function AccountingPage() {
+export default async function AccountingPage() {
+  await requireAccountingPlan();
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <h1 className="text-2xl font-semibold">Contabilidad</h1>
