@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Price } from "@/components/money/Price";
 import { QuantityInput } from "@/components/shared/QuantityInput";
+import { PaymentAccountsList } from "@/components/payments/PaymentAccountsList";
+import type { PaymentAccountRow } from "@/lib/actions/payment-accounts";
 import { PaymentSplitBuilder, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { PAYMENT_STATUS_LABELS, SALE_CHANNEL_LABELS } from "@/lib/format";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
@@ -98,6 +100,7 @@ export function Cart({
   onNoteChange,
   channel,
   onChannelChange,
+  paymentAccounts = [],
   discountPercent,
   onDiscountPercentChange,
   onCheckout,
@@ -123,6 +126,8 @@ export function Cart({
   onNoteChange: (note: string) => void;
   channel: SaleChannel;
   onChannelChange: (channel: SaleChannel) => void;
+  // Cuentas de cobro de la empresa, para dárselas al cliente al pagar.
+  paymentAccounts?: PaymentAccountRow[];
   discountPercent: string;
   onDiscountPercentChange: (value: string) => void;
   onCheckout: () => void;
@@ -406,6 +411,17 @@ export function Cart({
           ))}
         </div>
       </div>
+
+      {paymentAccounts.length > 0 && !isExonerated && (
+        <details className="rounded-lg border bg-card p-2.5">
+          <summary className="cursor-pointer text-sm font-medium">
+            Datos para cobrar ({paymentAccounts.length})
+          </summary>
+          <div className="mt-2">
+            <PaymentAccountsList accounts={paymentAccounts} />
+          </div>
+        </details>
+      )}
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="sale-note">Nota (opcional)</Label>

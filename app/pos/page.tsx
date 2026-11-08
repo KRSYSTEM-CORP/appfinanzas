@@ -4,6 +4,7 @@ import { OfflineSyncBanner } from "@/components/pos/OfflineSyncBanner";
 import { listActiveProducts, listCategories } from "@/lib/actions/products";
 import { getQuoteForConversion } from "@/lib/actions/quotes";
 import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from "@/lib/actions/settings";
+import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export default async function PosPage({
     { logoDataUrl },
     fiscalData,
     { ivaGeneralRatePercent, ivaReducedRatePercent, isIgtfAgent, igtfRatePercent },
+    paymentAccounts,
   ] = await Promise.all([
     requireSession(),
     listActiveProducts(),
@@ -30,6 +32,7 @@ export default async function PosPage({
     getBranding(),
     getFiscalData(),
     getIvaSettings(),
+    listPaymentAccounts(true),
   ]);
   const company = { name: companyName, logoDataUrl, ...fiscalData };
 
@@ -65,6 +68,7 @@ export default async function PosPage({
       )}
       <div className="flex-1 min-h-0">
         <PosClient
+          paymentAccounts={paymentAccounts}
           products={products}
           rate={rate}
           currencyCode={localCurrencyCode}
