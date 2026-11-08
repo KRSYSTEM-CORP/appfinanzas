@@ -1,5 +1,6 @@
 "use server";
 
+import { productLimitError } from "@/lib/plan-limits";
 import { revalidatePath } from "next/cache";
 import { requireManager, requireSectionAccess, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
@@ -193,6 +194,8 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
 
   const { price, cost, image, stock, trackStock, wholesalePrice, bulkPrice, ...rest } = parsed.data;
   const resolvedStock = trackStock ? (stock ?? 0) : 0;
+  const limitMsg = await withTenant(companyId, (tx) => productLimitError(tx, companyId, session.plan));
+  if (limitMsg) return { success: false, error: limitMsg };
   try {
     await withTenant(companyId, async (tx) => {
       const product = await tx.product.create({
@@ -262,6 +265,8 @@ export async function quickCreateProduct(input: {
     return { success: false, error: "El precio no puede ser negativo" };
   }
 
+  const limitMsg = await withTenant(companyId, (tx) => productLimitError(tx, companyId, session.plan));
+  if (limitMsg) return { success: false, error: limitMsg };
   let product;
   try {
     product = await withTenant(companyId, (tx) =>
@@ -490,6 +495,11 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
           });
           updated++;
         } else {
+          const limitMsg = await productLimitError(tx, companyId, session.plan);
+          if (limitMsg) {
+            failed.push({ row: i + 1, error: limitMsg });
+            continue;
+          }
           const createdProduct = await tx.product.create({
             data: { ...rest, ...priceFields, companyId, branchId },
           });

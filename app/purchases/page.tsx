@@ -1,3 +1,4 @@
+import { requireAccountingPlan } from "@/lib/session";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ export default async function PurchasesPage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string }>;
 }) {
+  await requireAccountingPlan();
   const params = await searchParams;
   // Whole current year by default so an unpaid purchase from a few months ago
   // doesn't silently drop out of view.

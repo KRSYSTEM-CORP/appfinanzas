@@ -1,6 +1,8 @@
+import { requireAccountingPlan } from "@/lib/session";
 import { ImportPurchasesForm } from "@/components/purchases/ImportPurchasesForm";
 
-export default function ImportPurchasesPage() {
+export default async function ImportPurchasesPage() {
+  await requireAccountingPlan();
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <div>

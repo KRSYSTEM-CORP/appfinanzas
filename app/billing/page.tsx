@@ -6,11 +6,17 @@ import { PaymentReportForm } from "@/components/billing/PaymentReportForm";
 import { getBillingInfo, listMyPaymentReports } from "@/lib/actions/billing";
 import { formatDate, formatUSD, formatUSDT } from "@/lib/format";
 import { formatLocalCurrency } from "@/lib/currencies";
+import { getPlan } from "@/lib/plans";
 import { WHATSAPP_PHONE } from "@/lib/legal";
 
 export const dynamic = "force-dynamic";
 
-export default async function BillingPage() {
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plan?: string }>;
+}) {
+  const { plan: planParam } = await searchParams;
   const [info, reports] = await Promise.all([getBillingInfo(), listMyPaymentReports()]);
 
   return (
@@ -21,6 +27,13 @@ export default async function BillingPage() {
           Costo mensual de la plataforma, cómo pagarlo y el estado de tus reportes de pago.
         </p>
       </div>
+
+      {planParam === "contabilidad" && (
+        <div role="status" className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
+          La Contabilidad está incluida en los planes <b>Pyme</b> y <b>Corporativo</b>. Escríbenos por WhatsApp para
+          subir de plan.
+        </div>
+      )}
 
       {info.blocked && (
         <div role="status" className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
@@ -45,12 +58,21 @@ export default async function BillingPage() {
         <div id="opciones-de-pago" className="grid scroll-mt-6 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 max-w-5xl">
           <Card>
             <CardHeader>
-              <CardTitle>Costo mensual</CardTitle>
+              <CardTitle>Plan {getPlan(info.plan).label}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
-              {info.monthlyFeeUsdCents != null ? (
+              {info.amountDueUsdCents != null ? (
                 <>
-                  <span className="text-2xl font-semibold">{formatUSD(info.monthlyFeeUsdCents)}</span>
+                  <span className="text-2xl font-semibold">{formatUSD(info.amountDueUsdCents)}</span>
+                  {info.monthlyFeeUsdCents != null && info.amountDueUsdCents < info.monthlyFeeUsdCents && (
+                    <span className="text-sm text-muted-foreground">
+                      Precio de bienvenida: solo el primer mes. Desde el segundo mes,{" "}
+                      {formatUSD(info.monthlyFeeUsdCents)}.
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    El pago de la suscripción se calcula a la tasa dólar BCV del día.
+                  </span>
                 </>
               ) : (
                 <span className="text-sm text-muted-foreground">
@@ -93,10 +115,10 @@ export default async function BillingPage() {
               <CardTitle>Cómo pagar — Binance (USDT)</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {info.monthlyFeeUsdCents != null && (
+              {info.amountDueUsdCents != null && (
                 <p className="text-sm">
                   <span className="text-muted-foreground">Monto a pagar: </span>
-                  <span className="font-medium">{formatUSDT(info.monthlyFeeUsdCents)}</span>
+                  <span className="font-medium">{formatUSDT(info.amountDueUsdCents ?? info.monthlyFeeUsdCents)}</span>
                 </p>
               )}
               {info.binanceQrDataUrl || info.binanceId ? (
@@ -204,7 +226,7 @@ export default async function BillingPage() {
                 </a>
               </div>
               <PaymentReportForm
-                monthlyFeeUsdCents={info.monthlyFeeUsdCents}
+                monthlyFeeUsdCents={info.amountDueUsdCents ?? info.monthlyFeeUsdCents}
                 monthlyFeeLocalAmount={info.monthlyFeeLocalAmount}
                 platformRate={info.platformRate}
               />

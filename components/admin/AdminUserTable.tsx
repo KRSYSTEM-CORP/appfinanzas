@@ -1,5 +1,7 @@
 "use client";
 
+import { formatUSD } from "@/lib/format";
+import { PLANS } from "@/lib/plans";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Building2Icon } from "lucide-react";
@@ -32,6 +34,7 @@ import {
   renewSubscriptionManually,
   setCompanyExempt,
   setCompanyFeatures,
+  setCompanyPlan,
   deleteCompany,
 } from "@/lib/actions/admin";
 
@@ -59,7 +62,7 @@ type AdminCompanyUser = Pick<
 >;
 type AdminCompany = Pick<
   Company,
-  "id" | "name" | "isExempt" | "nextPaymentDueDate" | "monthlyFeeUsdCents" | "enabledFeatures" | "createdAt"
+  "id" | "name" | "isExempt" | "nextPaymentDueDate" | "monthlyFeeUsdCents" | "plan" | "enabledFeatures" | "createdAt"
 > & { users: AdminCompanyUser[] };
 
 function addDaysISO(from: Date, days: number): string {
@@ -488,6 +491,25 @@ function AdminCompanyDetail({
         </>
       )}
     </div>
+      </div>
+      <div className="flex flex-col gap-1.5 border-t pt-4">
+        <label htmlFor={`plan-${company.id}`} className="text-xs font-medium text-muted-foreground">
+          Plan de suscripción
+        </label>
+        <select
+          id={`plan-${company.id}`}
+          className="h-9 w-fit rounded-md border bg-background px-2 text-sm"
+          value={company.plan}
+          disabled={isPending}
+          onChange={(e) => run(() => setCompanyPlan(company.id, e.target.value))}
+        >
+          {Object.values(PLANS).map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label} · {formatUSD(p.priceUsdCents)}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">Cambiar el plan también ajusta la mensualidad al precio del plan.</p>
       </div>
       {FEATURES.length > 0 && (
         <div className="flex flex-col gap-1.5 border-t pt-4">

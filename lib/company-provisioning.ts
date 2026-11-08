@@ -1,9 +1,9 @@
+import { PLANS } from "@/lib/plans";
 import "server-only";
 import { randomInt } from "crypto";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { withSuperAdmin } from "@/lib/tenant-db";
-import { PLATFORM_SETTINGS_ID, TRIAL_DAYS, FALLBACK_MONTHLY_FEE_USD_CENTS } from "@/lib/billing";
+import { TRIAL_DAYS } from "@/lib/billing";
 
 // Alta de una empresa nueva con su primera sucursal y su dueño (GERENTE). La
 // usan tanto el signup por correo/clave (lib/actions/auth.ts) como el
@@ -31,7 +31,6 @@ export type NewOwner = {
 };
 
 export async function createCompanyWithOwner(companyName: string, owner: NewOwner) {
-  const settings = await prisma.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } });
   const trialEnd = new Date();
   trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
 
@@ -45,7 +44,8 @@ export async function createCompanyWithOwner(companyName: string, owner: NewOwne
           data: {
             name: companyName,
             loginCode: generateLoginCode(),
-            monthlyFeeUsdCents: settings?.defaultMonthlyFeeUsdCents ?? FALLBACK_MONTHLY_FEE_USD_CENTS,
+            plan: "EMPRENDE",
+            monthlyFeeUsdCents: PLANS.EMPRENDE.priceUsdCents,
             nextPaymentDueDate: trialEnd,
           },
         });

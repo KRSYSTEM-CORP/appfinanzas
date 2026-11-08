@@ -1,3 +1,4 @@
+import { requireAccountingPlan } from "@/lib/session";
 import { ClockIcon, UsersIcon } from "lucide-react";
 import { StatCard } from "@/components/reports/StatCard";
 import { SalesTable } from "@/components/reports/SalesTable";
@@ -18,6 +19,7 @@ export default async function ReceivablesPage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string }>;
 }) {
+  await requireAccountingPlan();
   const session = await requireSectionAccess("reports");
   const params = await searchParams;
   // Whole current year by default so an old unpaid sale doesn't drop out of view.

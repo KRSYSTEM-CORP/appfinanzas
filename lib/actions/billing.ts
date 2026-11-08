@@ -1,5 +1,6 @@
 "use server";
 
+import { PLANS, amountDueUsdCents as amountDueUsdCentsFor, type PlanId } from "@/lib/plans";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -76,6 +77,9 @@ export type BillingInfo = {
   companyName: string;
   isExempt: boolean;
   monthlyFeeUsdCents: number | null;
+  plan: PlanId;
+  // Lo que toca pagar hoy (el primer mes de Emprende vale $10 si aún no hay un pago aprobado).
+  amountDueUsdCents: number | null;
   // monthlyFeeUsdCents converted to Bolívares at KR System's own platform
   // rate (see getPlatformExchangeRateInfo above) — null only if that rate
   // has never been set yet (e.g. brand new install, BCV unreachable on
@@ -104,7 +108,7 @@ export async function getBillingInfo(): Promise<BillingInfo> {
     withTenant(companyId, (tx) =>
       tx.company.findUnique({
         where: { id: companyId },
-        select: { isExempt: true, monthlyFeeUsdCents: true, nextPaymentDueDate: true },
+        select: { isExempt: true, monthlyFeeUsdCents: true, nextPaymentDueDate: true, plan: true },
       })
     ),
     // Global config, not scoped to any company — read directly, same as the
@@ -116,14 +120,29 @@ export async function getBillingInfo(): Promise<BillingInfo> {
   const isExempt = company?.isExempt ?? false;
   const nextPaymentDueDate = company?.nextPaymentDueDate ?? null;
 
+  const plan = (company?.plan ?? "CORPORATIVO") as PlanId;
+  const hasApproved =
+    (await withTenant(companyId, (tx) =>
+      tx.paymentReport.count({ where: { companyId, status: "APPROVED" } })
+    )) > 0;
   const monthlyFeeUsdCents = company?.monthlyFeeUsdCents ?? null;
+  // Solo los planes con precio de lista usan la promoción; una tarifa
+  // personalizada que puso el administrador se respeta tal cual.
+  const amountDueUsdCents =
+    monthlyFeeUsdCents == null
+      ? null
+      : monthlyFeeUsdCents === PLANS[plan].priceUsdCents
+        ? amountDueUsdCentsFor(plan, hasApproved)
+        : monthlyFeeUsdCents;
   const monthlyFeeLocalAmount =
-    platformRate.rate != null && monthlyFeeUsdCents != null ? (monthlyFeeUsdCents / 100) * platformRate.rate : null;
+    platformRate.rate != null && amountDueUsdCents != null ? (amountDueUsdCents / 100) * platformRate.rate : null;
 
   return {
     companyName,
     isExempt,
     monthlyFeeUsdCents,
+    plan,
+    amountDueUsdCents,
     monthlyFeeLocalAmount,
     platformRate: platformRate.rate,
     nextPaymentDueDate,

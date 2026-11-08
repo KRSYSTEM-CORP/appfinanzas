@@ -1,3 +1,4 @@
+import { requireAccountingPlan } from "@/lib/session";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -25,6 +26,7 @@ export default async function SellersReportPage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string; seller?: string }>;
 }) {
+  await requireAccountingPlan();
   const params = await searchParams;
   const sellerId = params.seller;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "7d" });

@@ -1,3 +1,4 @@
+import { requireAccountingPlan } from "@/lib/session";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { SupplierTable } from "@/components/suppliers/SupplierTable";
@@ -6,6 +7,7 @@ import { listSuppliers } from "@/lib/actions/suppliers";
 export const dynamic = "force-dynamic";
 
 export default async function SuppliersPage() {
+  await requireAccountingPlan();
   const suppliers = await listSuppliers();
 
   return (
