@@ -13,6 +13,8 @@ const reasonLabels: Record<string, string> = {
   ADJUSTMENT: "Ajuste manual",
   IMPORT: "Importación",
   INTERNAL_USE: "Consumo interno",
+  TRANSFER_OUT: "Traspaso enviado",
+  TRANSFER_IN: "Traspaso recibido",
 };
 
 function formatDate(date: Date) {

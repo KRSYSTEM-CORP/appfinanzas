@@ -227,6 +227,7 @@ model Company {
   expenses              Expense[]
   cashClosings          CashClosing[]
   cashOpenings          CashOpening[]
+  branchTransfers       BranchTransfer[]
   paymentAccounts       PaymentAccount[]
   payrollEmployees      PayrollEmployee[]
   payrollPayments       PayrollPayment[]
@@ -268,6 +269,8 @@ model Branch {
   quotes         Quote[]
   cashClosings   CashClosing[]
   cashOpenings   CashOpening[]
+  transfersOut   BranchTransfer[] @relation("TransferFrom")
+  transfersIn    BranchTransfer[] @relation("TransferTo")
   cashOutflows   CashOutflow[]
   creditNotes    CreditNote[]
   debitNotes     DebitNote[]
@@ -1276,4 +1279,34 @@ model PaymentAccount {
   createdAt     DateTime           @default(now())
 
   @@index([companyId, active])
+}
+
+// Traspaso de mercancía entre dos sucursales de la misma empresa: saca stock de
+// una y lo suma en la otra, y queda en el historial de movimientos de cada producto.
+model BranchTransfer {
+  id            String               @id @default(cuid())
+  companyId     String
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromBranchId  String
+  fromBranch    Branch               @relation("TransferFrom", fields: [fromBranchId], references: [id], onDelete: Restrict)
+  toBranchId    String
+  toBranch      Branch               @relation("TransferTo", fields: [toBranchId], references: [id], onDelete: Restrict)
+  note          String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime             @default(now())
+  items         BranchTransferItem[]
+
+  @@index([companyId, createdAt])
+}
+
+model BranchTransferItem {
+  id          String         @id @default(cuid())
+  transferId  String
+  transfer    BranchTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  productName String
+  sku         String?
+  quantity    Int
+
+  @@index([transferId])
 }

@@ -57,6 +57,9 @@ export default async function InventoryPage() {
           />
           {canManage && (
             <>
+              <Button variant="outline" nativeButton={false} render={<Link href="/inventory/transfers" />}>
+                Traspasos
+              </Button>
               <InternalUseButton
                 products={products
                   .filter((p) => p.trackStock && p.stock > 0)
