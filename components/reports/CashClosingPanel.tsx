@@ -12,6 +12,7 @@ import { getDailyClosingSummary, closeCashRegister, type CashClosingSummary } fr
 import { buildCashClosingPDF } from "@/lib/cash-closing-pdf";
 import { pdfFormatForPaperSize } from "@/lib/print-paper-sizes";
 import { PrintDialog } from "@/components/print/PrintDialog";
+import { CajaChicaCard } from "@/components/reports/CajaChicaCard";
 import { PrintableCashClosing } from "@/components/print/PrintableCashClosing";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
@@ -187,6 +188,16 @@ export function CashClosingPanel({
             />
           </div>
         </div>
+
+        <CajaChicaCard
+          summary={summary}
+          canEdit={canClose && !summary.closed}
+          rate={rate}
+          currencyCode={currencyCode}
+          exchangeRateEnabled={exchangeRateEnabled}
+          referenceCurrency={referenceCurrency}
+          onChanged={() => startTransition(async () => setSummary(await getDailyClosingSummary(date)))}
+        />
 
         {summary.byMethod.length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-lg border bg-card shadow-xs p-3">
