@@ -28,6 +28,11 @@ const sections = [
     description: "Órdenes de compra, cuentas por pagar y estado de cada una.",
   },
   {
+    href: "/payroll",
+    title: "Nómina",
+    description: "Empleados, pago por quincena con comprobante e historial de pagos.",
+  },
+  {
     href: "/tax-book",
     title: "Libro de Contabilidad",
     description: "Libro de compras y ventas para la declaración de IVA.",
