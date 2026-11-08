@@ -42,6 +42,11 @@ export function PaymentReportForm({
   const router = useRouter();
   const [lines, setLines] = useState<ReportLine[]>([{ paymentMethod: "BINANCE", amount: "", reference: "" }]);
   const [note, setNote] = useState("");
+  // Contact data (name and phone required, email optional) and the proof image.
+  const [reporterName, setReporterName] = useState("");
+  const [reporterPhone, setReporterPhone] = useState("");
+  const [reporterEmail, setReporterEmail] = useState("");
+  const [proof, setProof] = useState<{ dataUrl: string; name: string } | null>(null);
   // "monthly" extends the due date; "lifetime" is the one-time payment that
   // exempts the company from monthly fees once approved.
   const [plan, setPlan] = useState<"monthly" | "lifetime">("monthly");
@@ -77,6 +82,32 @@ export function PaymentReportForm({
     return (bs / platformRate).toFixed(2);
   }
 
+  // Shrinks the chosen photo (max 1280 px, JPEG) so the stored data URL and
+  // the email attachment stay small even for a phone-camera screenshot.
+  function handleProofFile(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("El comprobante debe ser una imagen (JPG, PNG o WebP).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setProof({ dataUrl: canvas.toDataURL("image/jpeg", 0.82), name: file.name });
+        setError(null);
+        setSubmitted(false);
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -91,14 +122,28 @@ export function PaymentReportForm({
       resolvedLines.push({ paymentMethod: line.paymentMethod, amount, reference: line.reference });
     }
 
+    if (!proof) {
+      setError("Adjunta el comprobante del pago.");
+      return;
+    }
+
     startTransition(async () => {
-      const result = await submitPaymentReport({ lines: resolvedLines, note, lifetime: plan === "lifetime" });
+      const result = await submitPaymentReport({
+        lines: resolvedLines,
+        note,
+        lifetime: plan === "lifetime",
+        reporterName,
+        reporterPhone,
+        reporterEmail,
+        proofImageDataUrl: proof.dataUrl,
+      });
       if (!result.success) {
         setError(result.error);
         return;
       }
       setLines([{ paymentMethod: "BINANCE", amount: "", reference: "" }]);
       setNote("");
+      setProof(null);
       setSubmitted(true);
       router.refresh();
     });
@@ -200,6 +245,37 @@ export function PaymentReportForm({
       </Button>
 
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor="report-name">Nombre *</Label>
+        <Input id="report-name" autoComplete="name" required value={reporterName} onChange={(e) => setReporterName(e.target.value)} />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="report-phone">Teléfono *</Label>
+          <Input
+            id="report-phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            required
+            placeholder="0412-000-0000"
+            value={reporterPhone}
+            onChange={(e) => setReporterPhone(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="report-email">Correo (opcional)</Label>
+          <Input id="report-email" type="email" autoComplete="email" value={reporterEmail} onChange={(e) => setReporterEmail(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="report-proof">Comprobante de pago *</Label>
+        <Input id="report-proof" type="file" accept="image/*" onChange={(e) => handleProofFile(e.target.files?.[0])} />
+        <p className="text-xs text-muted-foreground">
+          {proof ? `Adjunto: ${proof.name}` : "Foto o captura del pago móvil o de la transferencia (JPG, PNG o WebP)."}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="report-note">Nota (opcional)</Label>
         <Input
           id="report-note"
@@ -215,8 +291,8 @@ export function PaymentReportForm({
       {error && <p className="text-sm text-destructive">{error}</p>}
       {submitted && !error && (
         <p className="text-sm text-muted-foreground">
-          Reporte enviado. No olvides enviar también el comprobante por WhatsApp — el super admin lo
-          revisará y tu cuenta se desbloqueará al ser aprobado.
+          Reporte enviado: el comprobante llegó al correo del administrador. Si quieres, envíalo también por
+          WhatsApp para que lo confirmemos más rápido. Tu cuenta se desbloqueará al ser aprobado.
         </p>
       )}
       <Button type="submit" disabled={isPending}>

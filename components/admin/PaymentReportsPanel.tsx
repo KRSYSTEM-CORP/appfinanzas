@@ -42,6 +42,9 @@ type PendingReport = {
   companyId: string;
   proofImageDataUrl: string | null;
   note: string | null;
+  reporterName: string | null;
+  reporterPhone: string | null;
+  reporterEmail: string | null;
   isLifetime: boolean;
   createdAt: Date;
   company: { name: string };
@@ -408,6 +411,26 @@ function PendingReportDetail({
                 {line.reference && <span className="font-normal text-muted-foreground"> ({line.reference})</span>}
               </span>
             ))}
+          </dd>
+        </div>
+        <div className="col-span-2 flex flex-col gap-1">
+          <dt className="text-xs text-muted-foreground">Contacto</dt>
+          <dd className="font-medium">
+            {r.reporterName ?? "—"}
+            {r.reporterPhone && (
+              <>
+                {" · "}
+                <a
+                  href={`https://wa.me/${r.reporterPhone.replace(/\D/g, "").replace(/^0/, "58")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline underline-offset-4"
+                >
+                  {r.reporterPhone}
+                </a>
+              </>
+            )}
+            {r.reporterEmail && <span className="block font-normal text-muted-foreground">{r.reporterEmail}</span>}
           </dd>
         </div>
         <div className="col-span-2 flex flex-col gap-1">

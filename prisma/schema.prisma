@@ -899,6 +899,11 @@ model PaymentReport {
   // so a future schema change never needs a backfill.
   proofImageDataUrl String?             @db.Text
   note              String?
+  // Who is reporting and how to reach them (the super admin can write them
+  // on WhatsApp). Nullable: reports made before these fields existed.
+  reporterName      String?
+  reporterPhone     String?
+  reporterEmail     String?
   status            PaymentReportStatus @default(PENDING)
   // One-time lifetime payment (lib/billing.ts LIFETIME_PRICE_USD_CENTS):
   // approving it exempts the company from monthly fees instead of extending

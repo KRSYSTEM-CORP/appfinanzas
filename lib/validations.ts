@@ -537,6 +537,24 @@ const PaymentReportLineSchema = z.object({
 export const PaymentReportSchema = z
   .object({
     lines: z.array(PaymentReportLineSchema),
+    // Contact data of whoever reports the payment: name and phone are
+    // required (the super admin confirms by WhatsApp), email is optional.
+    reporterName: z.string().trim().min(2, "Escribe tu nombre"),
+    reporterPhone: z
+      .string()
+      .trim()
+      .refine((v) => v.replace(/\D/g, "").length >= 10, "Escribe un teléfono válido (obligatorio)"),
+    reporterEmail: z
+      .string()
+      .trim()
+      .optional()
+      .transform((v) => (v === "" ? undefined : v))
+      .refine((v) => v === undefined || z.string().email().safeParse(v).success, "El correo no es válido"),
+    // Proof-of-payment image (data URL), required — kept small client-side.
+    proofImageDataUrl: z
+      .string()
+      .regex(/^data:image\/(png|jpe?g|webp);base64,/, "Adjunta el comprobante del pago (imagen)")
+      .max(2_500_000, "La imagen es muy pesada (máx. 2 MB)"),
     // The company chose the one-time lifetime plan instead of a monthly fee.
     lifetime: z.boolean().default(false),
     // No longer collected in-app — the comprobante is sent by WhatsApp

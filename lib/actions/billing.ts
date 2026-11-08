@@ -167,6 +167,10 @@ export async function submitPaymentReport(input: unknown): Promise<ActionResult>
         companyId,
         reportedById: userId,
         note: parsed.data.note,
+        reporterName: parsed.data.reporterName,
+        reporterPhone: parsed.data.reporterPhone,
+        reporterEmail: parsed.data.reporterEmail,
+        proofImageDataUrl: parsed.data.proofImageDataUrl,
         isLifetime: parsed.data.lifetime,
         lines: {
           create: parsed.data.lines.map((line) => ({
@@ -190,7 +194,15 @@ export async function submitPaymentReport(input: unknown): Promise<ActionResult>
     const admins = await withSuperAdmin((tx) =>
       tx.user.findMany({ where: { isSuperAdmin: true }, select: { email: true } })
     );
-    await Promise.allSettled(admins.map((a) => sendPaymentReportEmail(a.email, companyName, totalUsdCents)));
+    await Promise.allSettled(admins.map((a) =>
+        sendPaymentReportEmail(a.email, companyName, totalUsdCents, {
+          name: parsed.data.reporterName,
+          phone: parsed.data.reporterPhone,
+          email: parsed.data.reporterEmail,
+          references: parsed.data.lines.map((l) => l.reference).filter((r): r is string => !!r),
+          proofImageDataUrl: parsed.data.proofImageDataUrl,
+        })
+      ));
   } catch (err) {
     console.error("[billing] failed to notify admins of payment report:", err);
   }

@@ -16,6 +16,7 @@ vi.mock("@/lib/email", () => ({ sendPaymentReportEmail: async () => {}, sendAnno
 vi.mock("@/lib/cache", () => ({ getOrSetCache: async (_k: string, _t: number, f: () => unknown) => f(), invalidateCache: async () => {} }));
 
 const { submitPaymentReport } = await import("@/lib/actions/billing");
+const CONTACT = { reporterName: "Ana Pérez", reporterPhone: "0412-555-0000", proofImageDataUrl: "data:image/jpeg;base64,/9j/4AAQSkZJRg==" };
 const { approvePaymentReport } = await import("@/lib/actions/admin");
 
 let wasExempt = false;
@@ -30,12 +31,12 @@ afterAll(async () => {
 
 describe("pago único de por vida", () => {
   it("rechaza reportar menos del precio", async () => {
-    const r = await submitPaymentReport({ lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 100, reference: "X1" }] });
+    const r = await submitPaymentReport({ ...CONTACT, lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 100, reference: "X1" }] });
     expect(r.success).toBe(false);
   });
 
   it("al aprobarlo, la empresa queda exonerada de las mensualidades", async () => {
-    const r = await submitPaymentReport({ lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 240, reference: "LIFE-TEST" }] });
+    const r = await submitPaymentReport({ ...CONTACT, lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 240, reference: "LIFE-TEST" }] });
     expect(r.success).toBe(true);
     const report = await owner.paymentReport.findFirstOrThrow({
       where: { companyId: ctx.companyId, isLifetime: true, status: "PENDING" },
