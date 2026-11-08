@@ -11,6 +11,7 @@ export type PayrollReceiptData = {
   position: string | null;
   period: string;
   grossCents: number;
+  commissionCents?: number;
   deductionsCents: number;
   advanceCents: number;
   netCents: number;
@@ -59,7 +60,8 @@ export async function buildPayrollReceiptPDF(
   if (data.position) row("Cargo", data.position);
   y += 8;
   doc.line(margin, y - 8, pageWidth - margin, y - 8);
-  row("Asignaciones (sueldo y bono de la quincena)", money(data.grossCents));
+  row("Asignaciones (sueldo, bono y comisión de la quincena)", money(data.grossCents));
+  if ((data.commissionCents ?? 0) > 0) row("   de las cuales, comisión por ventas", money(data.commissionCents ?? 0));
   row("Deducciones de ley", `−${money(data.deductionsCents)}`);
   if (data.advanceCents > 0) row("Adelanto descontado", `−${money(data.advanceCents)}`);
   y += 4;

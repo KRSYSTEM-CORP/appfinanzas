@@ -1220,6 +1220,10 @@ model PayrollEmployee {
   position       String?
   baseCents      Int
   foodBonusCents Int              @default(0)
+  // Comisión sobre lo que esta persona vendió en la quincena (% de sus ventas).
+  // `userId` es el usuario del sistema que firma sus ventas (opcional).
+  commissionPct  Float            @default(0)
+  userId         String?
   active         Boolean          @default(true)
   createdAt      DateTime         @default(now())
   payments       PayrollPayment[]
@@ -1239,6 +1243,7 @@ model PayrollPayment {
   grossCents       Int
   deductionsCents  Int
   advanceCents     Int             @default(0)
+  commissionCents  Int             @default(0)
   netCents         Int
   paymentMethod    PaymentMethod
   reference        String?
