@@ -1310,3 +1310,17 @@ model BranchTransferItem {
 
   @@index([transferId])
 }
+
+// Video de la sección Learning. Es contenido de la plataforma (igual para todas
+// las empresas), por eso no lleva companyId ni RLS, como PlatformSettings. Solo
+// el administrador de la plataforma los agrega; máximo 10.
+model LearningVideo {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  url         String
+  position    Int
+  createdAt   DateTime @default(now())
+
+  @@index([position])
+}
