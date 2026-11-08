@@ -16,7 +16,14 @@ const LOGO_URL = `${APP_URL}/icons/icon-512.png`;
 // bodyHtml is just the email-specific content — the logo header, container,
 // and "KR POS — By KR System" footer are shared here so every email carries
 // the same branding without each sender repeating that markup.
-async function send(to: string, subject: string, bodyHtml: string): Promise<boolean> {
+type EmailAttachment = { filename: string; content: string };
+
+async function send(
+  to: string,
+  subject: string,
+  bodyHtml: string,
+  attachments?: EmailAttachment[],
+): Promise<boolean> {
   const html = `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
       <img src="${LOGO_URL}" alt="KR POS" width="48" height="48" style="display: block; margin: 0 auto 20px; border-radius: 10px;" />
@@ -29,7 +36,7 @@ async function send(to: string, subject: string, bodyHtml: string): Promise<bool
     return true;
   }
   try {
-    await resend.emails.send({ from: FROM, to, subject, html });
+    await resend.emails.send({ from: FROM, to, subject, html, ...(attachments?.length ? { attachments } : {}) });
     return true;
   } catch (err) {
     console.error(`[email] failed to send to ${to}:`, err);
@@ -69,29 +76,60 @@ export async function sendSignupCodeEmail(to: string, code: string): Promise<voi
   );
 }
 
+export type PaymentReportContact = {
+  name: string;
+  phone: string;
+  email?: string;
+  references: string[];
+  proofImageDataUrl?: string;
+};
+
 export async function sendPaymentReportEmail(
   to: string,
   companyName: string,
   totalUsdCents: number,
+  contact?: PaymentReportContact,
 ): Promise<void> {
   const amount = (totalUsdCents / 100).toLocaleString("es-VE", {
     style: "currency",
     currency: "USD",
   });
   const reviewUrl = `${APP_URL}/admin`;
+  const phoneDigits = contact?.phone.replace(/\D/g, "") ?? "";
+  const waUrl = phoneDigits
+    ? `https://wa.me/${phoneDigits.replace(/^0/, "58")}?text=${encodeURIComponent(
+        `Hola ${contact?.name ?? ""}, recibimos tu comprobante de pago de la suscripción de ${companyName}.`,
+      )}`
+    : null;
+  const contactHtml = contact
+    ? `
+      <ul style="padding-left: 18px; color: #333;">
+        <li>Nombre: <strong>${escapeHtml(contact.name)}</strong></li>
+        <li>Teléfono: <strong>${escapeHtml(contact.phone)}</strong></li>
+        ${contact.email ? `<li>Correo: <strong>${escapeHtml(contact.email)}</strong></li>` : ""}
+        ${contact.references.length ? `<li>Referencia: <strong>${contact.references.map(escapeHtml).join(", ")}</strong></li>` : ""}
+      </ul>
+      ${waUrl ? `<p><a href="${waUrl}">Escribirle por WhatsApp</a></p>` : ""}`
+    : "";
+  const proof = contact?.proofImageDataUrl?.match(/^data:image\/(png|jpe?g|webp);base64,(.+)$/);
+  const attachments = proof
+    ? [{ filename: `comprobante-${companyName.replace(/[^\w-]+/g, "-")}.${proof[1] === "jpeg" ? "jpg" : proof[1]}`, content: proof[2] }]
+    : undefined;
   await send(
     to,
     `Nuevo pago reportado — ${companyName}`,
     `
       <h2>Nuevo pago reportado</h2>
       <p><strong>${escapeHtml(companyName)}</strong> reportó un pago de suscripción por <strong>${amount}</strong>.</p>
+      ${contactHtml}
       <p>
         <a href="${reviewUrl}" style="display: inline-block; background: #4f3ddb; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
           Revisar y aprobar
         </a>
       </p>
-      <p>El acceso de la empresa se restablece automáticamente en cuanto apruebes el pago.</p>
+      <p>El comprobante va adjunto. El acceso de la empresa se restablece automáticamente en cuanto apruebes el pago.</p>
     `,
+    attachments,
   );
 }
 

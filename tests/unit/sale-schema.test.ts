@@ -56,10 +56,32 @@ describe("RegisterPaymentSchema (abonos)", () => {
 });
 
 import { PaymentReportSchema } from "@/lib/validations";
+const CONTACT = {
+  reporterName: "Ana Pérez",
+  reporterPhone: "0412-555-0000",
+  proofImageDataUrl: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+};
 describe("PaymentReportSchema (pago único)", () => {
-  it("exige al menos el precio del pago único", () => {
-    expect(PaymentReportSchema.safeParse({ lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 239.99, reference: "R" }] }).success).toBe(false);
-    expect(PaymentReportSchema.safeParse({ lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 240, reference: "R" }] }).success).toBe(true);
-    expect(PaymentReportSchema.safeParse({ lines: [{ paymentMethod: "BINANCE", amount: 25, reference: "R" }] }).success).toBe(true);
+  it("exige el monto exacto del pago único", () => {
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 239.99, reference: "R" }] }).success).toBe(false);
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 240, reference: "R" }] }).success).toBe(true);
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, lines: [{ paymentMethod: "BINANCE", amount: 25, reference: "R" }] }).success).toBe(true);
   });
 });
+
+describe("PaymentReportSchema (contacto y comprobante)", () => {
+  const lines = [{ paymentMethod: "BINANCE", amount: 25, reference: "R" }];
+  it("nombre, teléfono y comprobante son obligatorios", () => {
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, reporterName: "", lines }).success).toBe(false);
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, reporterPhone: "0412", lines }).success).toBe(false);
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, proofImageDataUrl: "", lines }).success).toBe(false);
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, proofImageDataUrl: "data:text/plain;base64,AA==", lines }).success).toBe(false);
+  });
+  it("el correo es opcional pero, si se escribe, debe ser válido", () => {
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, lines }).success).toBe(true);
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, reporterEmail: "", lines }).success).toBe(true);
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, reporterEmail: "ana@correo.com", lines }).success).toBe(true);
+    expect(PaymentReportSchema.safeParse({ ...CONTACT, reporterEmail: "no-es-correo", lines }).success).toBe(false);
+  });
+});
+
