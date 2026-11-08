@@ -83,7 +83,7 @@ const companyItemsBase: NavItem[] = [
 // "Contabilidad" item, but a user can still land on any of those routes
 // directly (e.g. a bookmark) — this keeps it highlighted while on any of
 // them, not just on /accounting itself.
-const ACCOUNTING_SUBPATHS = ["/accounting", "/finance", "/suppliers", "/purchases", "/tax-book"];
+const ACCOUNTING_SUBPATHS = ["/accounting", "/finance", "/suppliers", "/purchases", "/tax-book", "/payroll"];
 
 function isLinkActive(pathname: string, href: string) {
   if (href === "/accounting") {

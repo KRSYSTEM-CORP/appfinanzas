@@ -223,6 +223,8 @@ model Company {
   expenses              Expense[]
   cashClosings          CashClosing[]
   cashOpenings          CashOpening[]
+  payrollEmployees      PayrollEmployee[]
+  payrollPayments       PayrollPayment[]
   cashOutflows          CashOutflow[]
   branches              Branch[]
   // Custom, per-company sections/improvements a platform admin switches on
@@ -1197,4 +1199,46 @@ model CashOutflow {
   createdAt   DateTime @default(now())
 
   @@index([companyId, branchId, date])
+}
+
+// Persona a la que la empresa le paga nómina (no tiene que usar el sistema).
+// Montos en la divisa referencial.
+model PayrollEmployee {
+  id             String           @id @default(cuid())
+  companyId      String
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name           String
+  nationalId     String?
+  position       String?
+  baseCents      Int
+  foodBonusCents Int              @default(0)
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  payments       PayrollPayment[]
+
+  @@index([companyId, active])
+}
+
+// Pago de una quincena a un empleado. `period` es "AAAA-MM-1" o "AAAA-MM-2".
+// Al registrarse crea también un Expense (categoría Nómina) para Finanzas.
+model PayrollPayment {
+  id               String          @id @default(cuid())
+  companyId        String
+  company          Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeId       String
+  employee         PayrollEmployee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  period           String
+  grossCents       Int
+  deductionsCents  Int
+  advanceCents     Int             @default(0)
+  netCents         Int
+  paymentMethod    PaymentMethod
+  reference        String?
+  proofDataUrl     String?         @db.Text
+  expenseId        String?
+  paidById         String
+  paidAt           DateTime        @default(now())
+
+  @@unique([employeeId, period])
+  @@index([companyId, period])
 }
