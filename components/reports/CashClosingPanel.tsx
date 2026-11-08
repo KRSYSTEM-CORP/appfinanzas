@@ -164,6 +164,30 @@ export function CashClosingPanel({
           </div>
         </div>
 
+        <div className="flex flex-col gap-1.5 rounded-lg border bg-card shadow-xs p-3 sm:col-span-2">
+          <span className="text-sm text-muted-foreground">Estado de cobro</span>
+          <div className="flex items-center justify-between text-sm">
+            <span>Pagadas ({summary.paidCount})</span>
+            <Price
+              eurCents={summary.paidCents}
+              rate={rate}
+              currencyCode={currencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+            />
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span>A crédito ({summary.creditCount})</span>
+            <Price
+              eurCents={summary.creditCents}
+              rate={rate}
+              currencyCode={currencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+            />
+          </div>
+        </div>
+
         {summary.byMethod.length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-lg border bg-card shadow-xs p-3">
             <span className="text-sm text-muted-foreground">Por método de pago</span>
