@@ -7,7 +7,7 @@ import { periodFor } from "@/lib/payroll";
 export const dynamic = "force-dynamic";
 
 export default async function PayrollPage() {
-  const [{ employees, payments }, { referenceCurrency }, { companyName }, { logoDataUrl }, fiscalData] = await Promise.all([
+  const [{ employees, payments, rates }, { referenceCurrency }, { companyName }, { logoDataUrl }, fiscalData] = await Promise.all([
     listPayroll(),
     getExchangeRateInfo(),
     requireSession(),
@@ -30,6 +30,8 @@ export default async function PayrollPage() {
         currentPeriod={periodFor(new Date())}
         referenceCurrency={referenceCurrency}
         company={company}
+        rates={rates}
+        monthsElapsed={new Date().getMonth() + 1}
       />
     </div>
   );

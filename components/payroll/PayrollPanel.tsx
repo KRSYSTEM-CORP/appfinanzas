@@ -19,13 +19,20 @@ import {
 import { formatCurrencyCents } from "@/lib/currencies";
 import { formatDate, PAYMENT_METHOD_LABELS } from "@/lib/format";
 import { resizeImageToDataUrl } from "@/lib/image-utils";
-import { computeFortnight, periodLabel } from "@/lib/payroll";
+import {
+  accruedProvisionCents,
+  computeFortnight,
+  monthlyProvisionCents,
+  periodLabel,
+  type PayrollRates,
+} from "@/lib/payroll";
 import { buildPayrollReceiptPDF } from "@/lib/payroll-receipt-pdf";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import {
   getPayrollProof,
   payPayroll,
   savePayrollEmployee,
+  savePayrollRates,
   setPayrollEmployeeActive,
   type PayrollEmployeeRow,
   type PayrollPaymentRow,
@@ -40,7 +47,11 @@ export function PayrollPanel({
   currentPeriod,
   referenceCurrency,
   company,
+  rates,
+  monthsElapsed,
 }: {
+  rates: PayrollRates;
+  monthsElapsed: number;
   company: DeliveryNoteCompany;
   employees: PayrollEmployeeRow[];
   payments: PayrollPaymentRow[];
@@ -58,7 +69,9 @@ export function PayrollPanel({
   const paidThisPeriod = new Set(payments.filter((p) => p.period === currentPeriod).map((p) => p.employeeId));
   const active = employees.filter((e) => e.active);
   const pending = active.filter((e) => !paidThisPeriod.has(e.id));
-  const pendingNet = pending.reduce((a, e) => a + computeFortnight(e.baseCents, e.foodBonusCents).netCents, 0);
+  const pendingNet = pending.reduce((a, e) => a + computeFortnight(e.baseCents, e.foodBonusCents, 0, rates).netCents, 0);
+  const provisioned = active.reduce((a, e) => a + accruedProvisionCents(e.baseCents, monthsElapsed), 0);
+  const monthlyTotal = active.reduce((a, e) => a + 2 * monthlyProvisionCents(e.baseCents), 0);
   const paidNet = payments.filter((p) => p.period === currentPeriod).reduce((a, p) => a + p.netCents, 0);
 
   function toggleActive(e: PayrollEmployeeRow) {
@@ -116,7 +129,7 @@ export function PayrollPanel({
           ) : (
             <div className="flex flex-col divide-y">
               {employees.map((e) => {
-                const calc = computeFortnight(e.baseCents, e.foodBonusCents);
+                const calc = computeFortnight(e.baseCents, e.foodBonusCents, 0, rates);
                 const paid = paidThisPeriod.has(e.id);
                 return (
                   <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
@@ -152,11 +165,29 @@ export function PayrollPanel({
               })}
             </div>
           )}
-          <p className="mt-3 text-xs text-muted-foreground">
-            Deducciones de ejemplo sobre el sueldo base: IVSS 4 %, paro forzoso 0,5 % y FAOV 1 %.
-          </p>
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <RatesCard rates={rates} />
+        <Card>
+          <CardHeader>
+            <CardTitle>Provisiones</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 text-sm">
+            <p className="text-muted-foreground">
+              Lo que ya deberías ir apartando para utilidades y vacaciones ({monthsElapsed} de 12 meses). Cada una acumula
+              un mes de sueldo base al año, de ejemplo.
+            </p>
+            <ProvisionRow label="Utilidades" value={money(provisioned)} />
+            <ProvisionRow label="Vacaciones" value={money(provisioned)} />
+            <p className="text-xs text-muted-foreground">
+              Cada mes suman {money(monthlyTotal)} entre las dos, con {active.length}{" "}
+              {active.length === 1 ? "empleado activo" : "empleados activos"}.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
@@ -221,6 +252,7 @@ export function PayrollPanel({
         <PayDialog
           employee={paying}
           period={currentPeriod}
+          rates={rates}
           money={money}
           onClose={() => setPaying(null)}
           onPaid={() => {
@@ -326,12 +358,14 @@ function EmployeeDialog({
 function PayDialog({
   employee,
   period,
+  rates,
   money,
   onClose,
   onPaid,
 }: {
   employee: PayrollEmployeeRow;
   period: string;
+  rates: PayrollRates;
   money: (c: number) => string;
   onClose: () => void;
   onPaid: () => void;
@@ -342,7 +376,7 @@ function PayDialog({
   const [proof, setProof] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const calc = computeFortnight(employee.baseCents, employee.foodBonusCents, Math.round(Number(advance || "0") * 100));
+  const calc = computeFortnight(employee.baseCents, employee.foodBonusCents, Math.round(Number(advance || "0") * 100), rates);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -440,5 +474,80 @@ function Row({ a, b, bold }: { a: string; b: string; bold?: boolean }) {
       <span className={bold ? "" : "text-muted-foreground"}>{a}</span>
       <span className="tabular-nums">{b}</span>
     </div>
+  );
+}
+
+function ProvisionRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-md bg-muted/50 px-2.5 py-1.5">
+      <span>{label}</span>
+      <span className="font-semibold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function RatesCard({ rates }: { rates: PayrollRates }) {
+  const router = useRouter();
+  const [ivss, setIvss] = useState(String(rates.ivssPct));
+  const [paro, setParo] = useState(String(rates.paroPct));
+  const [faov, setFaov] = useState(String(rates.faovPct));
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  function save(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSaved(false);
+    startTransition(async () => {
+      const result = await savePayrollRates({
+        ivssPct: Number(ivss),
+        paroPct: Number(paro),
+        faovPct: Number(faov),
+      });
+      if (result.success) {
+        setSaved(true);
+        router.refresh();
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Deducciones de ley</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={save} className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Porcentaje sobre el sueldo base. Cámbialos si la ley vigente es otra; se aplica a los pagos nuevos.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <Field id="rt-ivss" label="IVSS (%)">
+              <Input id="rt-ivss" type="number" min="0" max="30" step="0.1" inputMode="decimal" value={ivss} onChange={(e) => setIvss(e.target.value)} />
+            </Field>
+            <Field id="rt-paro" label="Paro forzoso (%)">
+              <Input id="rt-paro" type="number" min="0" max="30" step="0.1" inputMode="decimal" value={paro} onChange={(e) => setParo(e.target.value)} />
+            </Field>
+            <Field id="rt-faov" label="FAOV (%)">
+              <Input id="rt-faov" type="number" min="0" max="30" step="0.1" inputMode="decimal" value={faov} onChange={(e) => setFaov(e.target.value)} />
+            </Field>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button type="submit" size="sm" disabled={isPending}>
+              Guardar porcentajes
+            </Button>
+            {saved && <span className="text-sm text-success">Guardado</span>}
+            {error && (
+              <span role="alert" className="text-sm text-destructive">
+                {error}
+              </span>
+            )}
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
