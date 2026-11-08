@@ -20,6 +20,7 @@ import {
   SettingsIcon,
   ShieldIcon,
   ShoppingCartIcon,
+  SparklesIcon,
   UsersIcon,
   UsersRoundIcon,
   XIcon,
@@ -45,6 +46,7 @@ const NAV_TONES: Record<string, string> = {
   "/settings": "#6e6e73",
   "/billing": "#c2410c",
   "/admin": "#1d4ed8",
+  "/assistant": "#6655e5",
 };
 
 const COLLAPSE_KEY = "kr-pos-sidebar-collapsed";
@@ -71,6 +73,7 @@ const operationItems: NavItem[] = [
 const managementItemsBase: NavItem[] = [
   { href: "/home", label: "Resumen del negocio", icon: GaugeIcon },
   { href: "/accounting", label: "Contabilidad", icon: CalculatorIcon },
+  { href: "/assistant", label: "Asistente IA", icon: SparklesIcon },
   { href: "/employees", label: "Administración de perfiles", icon: UsersRoundIcon },
 ];
 

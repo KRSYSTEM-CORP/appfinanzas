@@ -217,6 +217,12 @@ model Company {
   payrollIvssPct        Float             @default(4)
   payrollParoPct        Float             @default(0.5)
   payrollFaovPct        Float             @default(1)
+  // Asistente IA: créditos comprados/otorgados (no vencen), consumo del mes y tope diario de consultas.
+  aiCreditsExtra        Int               @default(0)
+  aiCreditsUsed         Int               @default(0)
+  aiPeriod              String?
+  aiAskDay              String?
+  aiAskCount            Int               @default(0)
   plan                  PlanTier          @default(CORPORATIVO)
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?

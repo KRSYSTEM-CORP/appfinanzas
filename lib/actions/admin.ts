@@ -136,6 +136,17 @@ export async function setCompanyPlan(companyId: string, plan: string): Promise<A
   return { success: true };
 }
 
+// Otorga créditos de IA extra a una empresa (no vencen). Solo super admin.
+export async function grantAiCredits(companyId: string, amount: number): Promise<ActionResult> {
+  await requireSuperAdmin();
+  if (!Number.isInteger(amount) || amount < 1 || amount > 100_000) {
+    return { success: false, error: "La cantidad debe ser un número entero entre 1 y 100.000" };
+  }
+  await withSuperAdmin((tx) => tx.company.update({ where: { id: companyId }, data: { aiCreditsExtra: { increment: amount } } }));
+  revalidatePath("/admin");
+  return { success: true };
+}
+
 export async function denyUser(userId: string): Promise<ActionResult> {
   await requireSuperAdmin();
   const result = await withSuperAdmin((tx) =>
