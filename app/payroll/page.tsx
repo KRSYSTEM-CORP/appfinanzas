@@ -1,12 +1,20 @@
 import { PayrollPanel } from "@/components/payroll/PayrollPanel";
 import { listPayroll } from "@/lib/actions/payroll";
-import { getExchangeRateInfo } from "@/lib/actions/settings";
+import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
+import { requireSession } from "@/lib/session";
 import { periodFor } from "@/lib/payroll";
 
 export const dynamic = "force-dynamic";
 
 export default async function PayrollPage() {
-  const [{ employees, payments }, { referenceCurrency }] = await Promise.all([listPayroll(), getExchangeRateInfo()]);
+  const [{ employees, payments }, { referenceCurrency }, { companyName }, { logoDataUrl }, fiscalData] = await Promise.all([
+    listPayroll(),
+    getExchangeRateInfo(),
+    requireSession(),
+    getBranding(),
+    getFiscalData(),
+  ]);
+  const company = { name: companyName, logoDataUrl, ...fiscalData };
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div>
@@ -21,6 +29,7 @@ export default async function PayrollPage() {
         payments={payments}
         currentPeriod={periodFor(new Date())}
         referenceCurrency={referenceCurrency}
+        company={company}
       />
     </div>
   );

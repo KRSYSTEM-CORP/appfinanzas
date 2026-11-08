@@ -1,6 +1,8 @@
 "use client";
 
-import { ShoppingBagIcon } from "lucide-react";
+import { useState } from "react";
+import { SearchIcon, ShoppingBagIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import type { ReferenceCurrency } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
@@ -20,7 +22,17 @@ export function PurchaseMasterDetail({
   purchases: Purchase[];
   referenceCurrency: ReferenceCurrency;
 }) {
+  const [query, setQuery] = useState("");
   const supplierOf = (p: Purchase) => p.supplier?.name ?? p.manualSupplierName ?? "—";
+  // Busca por proveedor, nº de control, factura del proveedor o producto comprado.
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? purchases.filter((p) =>
+        [supplierOf(p), p.controlNumber, p.supplierInvoiceNo, ...p.items.map((i) => i.productName)]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      )
+    : purchases;
   const statusBadge = (p: Purchase) => (
     <Badge variant={p.paymentStatus === "PAID" ? "success" : "destructive"}>
       {PURCHASE_PAYMENT_STATUS_LABELS[p.paymentStatus]}
@@ -28,8 +40,25 @@ export function PurchaseMasterDetail({
   );
 
   return (
+    <div className="flex flex-col gap-3">
+      <div className="relative max-w-sm">
+        <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="search"
+          aria-label="Buscar compras"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar por proveedor, factura o producto…"
+          className="h-9 pl-8"
+        />
+      </div>
+      {q && (
+        <p className="text-xs text-muted-foreground" aria-live="polite">
+          {filtered.length} {filtered.length === 1 ? "compra encontrada" : "compras encontradas"}
+        </p>
+      )}
     <MasterDetail
-      items={purchases}
+      items={filtered}
       label="Compras"
       renderRowMobile={(p) => (
         <MobileRow
@@ -127,5 +156,6 @@ export function PurchaseMasterDetail({
         </div>
       }
     />
+    </div>
   );
 }

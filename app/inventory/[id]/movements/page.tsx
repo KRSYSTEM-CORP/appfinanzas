@@ -12,6 +12,7 @@ const reasonLabels: Record<string, string> = {
   PURCHASE_VOID: "Anulación de compra",
   ADJUSTMENT: "Ajuste manual",
   IMPORT: "Importación",
+  INTERNAL_USE: "Consumo interno",
 };
 
 function formatDate(date: Date) {
