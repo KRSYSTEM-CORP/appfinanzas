@@ -10,12 +10,12 @@ import { Separator } from "@/components/ui/separator";
 import { Price } from "@/components/money/Price";
 import { QuantityInput } from "@/components/shared/QuantityInput";
 import { PaymentSplitBuilder, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
-import { PAYMENT_STATUS_LABELS } from "@/lib/format";
+import { PAYMENT_STATUS_LABELS, SALE_CHANNEL_LABELS } from "@/lib/format";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import { computeItemDiscountCents } from "@/lib/discount";
 import { resolvePaymentCurrency } from "@/lib/payment-currency";
 import { resolveTierPrice, PRICE_TIER_LABELS, type PriceTier, type TieredProduct } from "@/lib/pricing";
-import type { PaymentStatus, ReferenceCurrency } from "@prisma/client";
+import type { PaymentStatus, ReferenceCurrency, SaleChannel } from "@prisma/client";
 
 export type CartLine = {
   productId: string;
@@ -96,6 +96,8 @@ export function Cart({
   onRemove,
   note,
   onNoteChange,
+  channel,
+  onChannelChange,
   discountPercent,
   onDiscountPercentChange,
   onCheckout,
@@ -119,6 +121,8 @@ export function Cart({
   onRemove: (productId: string) => void;
   note: string;
   onNoteChange: (note: string) => void;
+  channel: SaleChannel;
+  onChannelChange: (channel: SaleChannel) => void;
   discountPercent: string;
   onDiscountPercentChange: (value: string) => void;
   onCheckout: () => void;
@@ -382,6 +386,25 @@ export function Cart({
           size="lg"
           className="items-end"
         />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label id="sale-channel-label">Canal de venta</Label>
+        <div role="radiogroup" aria-labelledby="sale-channel-label" className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+          {(Object.keys(SALE_CHANNEL_LABELS) as SaleChannel[]).map((ch) => (
+            <Button
+              key={ch}
+              type="button"
+              role="radio"
+              aria-checked={channel === ch}
+              size="sm"
+              variant={channel === ch ? "default" : "outline"}
+              onClick={() => onChannelChange(ch)}
+            >
+              {SALE_CHANNEL_LABELS[ch]}
+            </Button>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">

@@ -288,6 +288,8 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
           onRemove={remove}
           note={note}
           onNoteChange={setNote}
+          channel="MOSTRADOR"
+          onChannelChange={() => {}}
           discountPercent={discountPercent}
           onDiscountPercentChange={setDiscountPercent}
           onCheckout={checkout}

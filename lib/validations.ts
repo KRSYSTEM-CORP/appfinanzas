@@ -308,6 +308,7 @@ export const SaleSchema = z
     items: z.array(CartItemSchema).min(1, "El carrito está vacío"),
     idempotencyKey: z.string().uuid().optional(),
     paymentStatus: z.enum(["PAID", "CREDIT"]).default("PAID"),
+    channel: z.enum(["MOSTRADOR", "DELIVERY", "PICKUP", "ONLINE"]).default("MOSTRADOR"),
     // Credit sales aren't paid at checkout, so no payment split applies yet —
     // it's captured later when the customer actually pays (see registerPayment).
     payments: z.array(PaymentSplitSchema).default([]),

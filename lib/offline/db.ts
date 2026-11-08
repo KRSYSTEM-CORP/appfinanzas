@@ -18,6 +18,7 @@ export type PendingSaleInput = {
   items: { productId: string; quantity: number; priceTier?: "RETAIL" | "WHOLESALE" | "BULK" }[];
   idempotencyKey?: string;
   paymentStatus: PaymentStatus;
+  channel?: "MOSTRADOR" | "DELIVERY" | "PICKUP" | "ONLINE";
   payments: {
     paymentMethod: PaymentMethod;
     amount: string;

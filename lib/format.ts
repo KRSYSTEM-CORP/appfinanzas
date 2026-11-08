@@ -22,6 +22,13 @@ export const PAYMENT_METHODS_REQUIRING_REFERENCE: PaymentMethod[] = [
   "TRANSFER",
 ];
 
+export const SALE_CHANNEL_LABELS = {
+  MOSTRADOR: "Mostrador",
+  DELIVERY: "Delivery",
+  PICKUP: "Pick-up",
+  ONLINE: "Online",
+} as const;
+
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   PAID: "Pagada",
   CREDIT: "A crédito",
