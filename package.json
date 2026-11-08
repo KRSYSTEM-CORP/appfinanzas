@@ -39,7 +39,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.24.0",
-    "next": "16.4.2",
+    "next": "^16.4.5",
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
     "qrcode": "^1.5.4",
@@ -58,6 +58,7 @@
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.4.2",
+    "@opennextjs/cloudflare": "^1.20.16",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
@@ -70,7 +71,8 @@
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "wrangler": "^4.158.0"
   },
   "allowScripts": {
     "@prisma/engines@7.8.0": true,
