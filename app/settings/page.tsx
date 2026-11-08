@@ -10,6 +10,8 @@ import { ChangePasswordForm } from "@/components/settings/ChangePasswordForm";
 import { BcvRateButton } from "@/components/settings/BcvRateButton";
 import { BranchesForm } from "@/components/settings/BranchesForm";
 import { IvaSettingsForm } from "@/components/settings/IvaSettingsForm";
+import { PaymentAccountsForm } from "@/components/settings/PaymentAccountsForm";
+import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { SettingsTabs, type SettingsSection } from "@/components/settings/SettingsTabs";
 import { Separator } from "@/components/ui/separator";
 import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from "@/lib/actions/settings";
@@ -45,12 +47,14 @@ export default async function SettingsPage() {
     fiscalData,
     branches,
     ivaSettings,
+    paymentAccounts,
   ] = await Promise.all([
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
     canManage ? listBranches() : Promise.resolve([]),
     getIvaSettings(),
+    canManage ? listPaymentAccounts(false) : Promise.resolve([]),
   ]);
   const stale = isStale(updatedAt);
   const referenceSymbol = referenceCurrency === "USD" ? "$1" : "€1";
@@ -167,6 +171,19 @@ export default async function SettingsPage() {
                   ).
                 </p>
                 <IvaSettingsForm initial={ivaSettings} />
+              </div>
+            ),
+          } satisfies SettingsSection,
+          {
+            id: "cobros",
+            label: "Datos para cobrar",
+            content: (
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
+                <p className="text-sm text-muted-foreground">
+                  Tus pagos móviles, cuentas, Zelle o Binance. Aparecen en el punto de venta, con el logo
+                  del banco, para que se los des al cliente con un toque.
+                </p>
+                <PaymentAccountsForm accounts={paymentAccounts} />
               </div>
             ),
           } satisfies SettingsSection,

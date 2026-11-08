@@ -21,12 +21,14 @@ import { buildPendingReceipt } from "@/lib/offline/pending-receipt";
 import { useCart } from "@/lib/pos/use-cart";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
+import type { PaymentAccountRow } from "@/lib/actions/payment-accounts";
 import type { PrintPaperSize, ReferenceCurrency, SaleChannel } from "@prisma/client";
 
 type SaleWithItems = NonNullable<Awaited<ReturnType<typeof getSaleReceipt>>>;
 type Step = "customer" | "cart" | "receipt";
 
 export function PosClient({
+  paymentAccounts = [],
   products,
   rate,
   currencyCode,
@@ -45,6 +47,7 @@ export function PosClient({
   ivaGeneralRatePercent,
   ivaReducedRatePercent,
 }: {
+  paymentAccounts?: PaymentAccountRow[];
   products: ListedProduct[];
   rate: number | null;
   currencyCode: string;
@@ -398,6 +401,7 @@ export function PosClient({
           onNoteChange={setNote}
           channel={channel}
           onChannelChange={setChannel}
+          paymentAccounts={paymentAccounts}
           discountPercent={discountPercent}
           onDiscountPercentChange={setDiscountPercent}
           onCheckout={checkout}

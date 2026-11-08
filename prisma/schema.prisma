@@ -223,6 +223,7 @@ model Company {
   expenses              Expense[]
   cashClosings          CashClosing[]
   cashOpenings          CashOpening[]
+  paymentAccounts       PaymentAccount[]
   payrollEmployees      PayrollEmployee[]
   payrollPayments       PayrollPayment[]
   cashOutflows          CashOutflow[]
@@ -1241,4 +1242,34 @@ model PayrollPayment {
 
   @@unique([employeeId, period])
   @@index([companyId, period])
+}
+
+enum PaymentAccountKind {
+  PAGO_MOVIL
+  TRANSFER
+  ZELLE
+  BINANCE
+  PAYPAL
+}
+
+// Datos que el cliente necesita para pagarle a la empresa (varios pagos móviles,
+// cuentas, Zelle, etc.). Se muestran en el POS con el logo del banco.
+model PaymentAccount {
+  id            String             @id @default(cuid())
+  companyId     String
+  company       Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  kind          PaymentAccountKind
+  // Clave del logo (ver lib/payment-accounts.ts) y nombre del banco o servicio.
+  bankKey       String?
+  bankName      String?
+  holder        String?
+  // Teléfono (pago móvil), número de cuenta, correo (Zelle/PayPal) o ID (Binance).
+  accountNumber String
+  // Cédula o RIF del titular.
+  docId         String?
+  note          String?
+  active        Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+
+  @@index([companyId, active])
 }
