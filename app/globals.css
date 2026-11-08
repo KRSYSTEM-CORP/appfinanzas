@@ -76,14 +76,14 @@
   --card-foreground: #1e1b2e;
   --popover: #ffffff;
   --popover-foreground: #1e1b2e;
-  --primary: #4f3ddb;
+  --primary: #433ddd;
   --primary-foreground: #ffffff;
-  --secondary: #efedfb;
-  --secondary-foreground: #392f91;
+  --secondary: #ecebfc;
+  --secondary-foreground: #2c2790;
   --muted: #f1f0f6;
   --muted-foreground: #625f73;
-  --accent: #efedfb;
-  --accent-foreground: #392f91;
+  --accent: #ecebfc;
+  --accent-foreground: #2c2790;
   /* Darkened for WCAG AA contrast (≥4.5:1) as text and on tinted badges. */
   --destructive: #b42a2a;
   --success: #0f6b47;
@@ -92,7 +92,7 @@
   --warning-foreground: #ffffff;
   --border: #e5e3ed;
   --input: #dedce8;
-  --ring: #4f3ddb;
+  --ring: #433ddd;
   --chart-1: #2a78d6;
   --chart-2: #1baf7a;
   --chart-3: #eda100;
@@ -101,12 +101,12 @@
   --radius: 0.75rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #262338;
-  --sidebar-primary: #4f3ddb;
+  --sidebar-primary: #433ddd;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #efedfb;
-  --sidebar-accent-foreground: #392f91;
+  --sidebar-accent: #ecebfc;
+  --sidebar-accent-foreground: #2c2790;
   --sidebar-border: #e8e6ef;
-  --sidebar-ring: #4f3ddb;
+  --sidebar-ring: #433ddd;
 }
 
 /* Dark mode: a user-level preference (see components/nav/ThemeToggle.tsx),
@@ -123,7 +123,7 @@
   --card-foreground: #f3f1ec;
   --popover: #1a191c;
   --popover-foreground: #f3f1ec;
-  --primary: #8d7ef5;
+  --primary: #7b76ff;
   --primary-foreground: #121113;
   --secondary: #262432;
   --secondary-foreground: #cdc8f5;
@@ -138,20 +138,20 @@
   --warning-foreground: #0b0b0b;
   --border: rgba(255, 255, 255, 0.1);
   --input: rgba(255, 255, 255, 0.14);
-  --ring: #8d7ef5;
+  --ring: #7b76ff;
   --chart-1: #5b9ee8;
   --chart-2: #3fcf9b;
   --chart-3: #f0b94a;
   --chart-4: #52d152;
-  --chart-5: #8d7ef5;
+  --chart-5: #7b76ff;
   --sidebar: #18171a;
   --sidebar-foreground: #f3f1ec;
-  --sidebar-primary: #8d7ef5;
+  --sidebar-primary: #7b76ff;
   --sidebar-primary-foreground: #121113;
   --sidebar-accent: #262432;
   --sidebar-accent-foreground: #cdc8f5;
   --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #8d7ef5;
+  --sidebar-ring: #7b76ff;
 }
 
 @layer base {

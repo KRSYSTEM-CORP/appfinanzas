@@ -31,6 +31,22 @@ import { ThemeToggle } from "@/components/nav/ThemeToggle";
 import { CommandPalette, type PaletteItem } from "@/components/nav/CommandPalette";
 import type { Role } from "@prisma/client";
 
+// Color propio de cada módulo (icono en baldosa tintada), igual que el rediseño.
+const NAV_TONES: Record<string, string> = {
+  "/home": "#433ddd",
+  "/pos": "#0f9d9a",
+  "/quotes": "#7a3ff2",
+  "/inventory": "#ff9f0a",
+  "/customers": "#e0409a",
+  "/reports": "#d6407f",
+  "/documents": "#6655e5",
+  "/accounting": "#1d4ed8",
+  "/employees": "#0f7a8a",
+  "/settings": "#6e6e73",
+  "/billing": "#c2410c",
+  "/admin": "#1d4ed8",
+};
+
 const COLLAPSE_KEY = "kr-pos-sidebar-collapsed";
 const ROLE_LABELS: Record<Role, string> = { GERENTE: "Gerente", VENDEDOR: "Vendedor" };
 
@@ -107,13 +123,18 @@ function NavGroup({
             aria-current={active ? "page" : undefined}
             onClick={onNavigate}
             title={collapsed ? item.label : undefined}
-            className={`flex min-h-10 items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition-[background-color,color,box-shadow] duration-150 ease-out ${
+            className={`group/nav flex min-h-11 items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm transition-[background-color,color,box-shadow] duration-150 ease-out ${
               active
-                ? "bg-primary/10 font-semibold text-primary shadow-[inset_3px_0_0_var(--primary)]"
+                ? "bg-primary/10 font-semibold text-primary"
                 : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             } ${collapsed ? "justify-center" : ""}`}
           >
-            <Icon className="size-4 shrink-0" />
+            <span
+              style={{ "--mc": NAV_TONES[item.href] ?? "var(--primary)" } as React.CSSProperties}
+              className="grid size-8 shrink-0 place-items-center rounded-[11px] bg-[color-mix(in_srgb,var(--mc)_16%,transparent)] text-[var(--mc)] transition-transform duration-150 group-hover/nav:scale-105"
+            >
+              <Icon className="size-[18px]" />
+            </span>
             <span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span>
           </Link>
         );
