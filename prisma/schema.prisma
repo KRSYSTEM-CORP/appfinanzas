@@ -217,6 +217,12 @@ model Company {
   payrollIvssPct        Float             @default(4)
   payrollParoPct        Float             @default(0.5)
   payrollFaovPct        Float             @default(1)
+  // Asistente IA: créditos comprados/otorgados (no vencen), consumo del mes y tope diario de consultas.
+  aiCreditsExtra        Int               @default(0)
+  aiCreditsUsed         Int               @default(0)
+  aiPeriod              String?
+  aiAskDay              String?
+  aiAskCount            Int               @default(0)
   plan                  PlanTier          @default(CORPORATIVO)
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?
@@ -1220,6 +1226,10 @@ model PayrollEmployee {
   position       String?
   baseCents      Int
   foodBonusCents Int              @default(0)
+  // Comisión sobre lo que esta persona vendió en la quincena (% de sus ventas).
+  // `userId` es el usuario del sistema que firma sus ventas (opcional).
+  commissionPct  Float            @default(0)
+  userId         String?
   active         Boolean          @default(true)
   createdAt      DateTime         @default(now())
   payments       PayrollPayment[]
@@ -1239,6 +1249,7 @@ model PayrollPayment {
   grossCents       Int
   deductionsCents  Int
   advanceCents     Int             @default(0)
+  commissionCents  Int             @default(0)
   netCents         Int
   paymentMethod    PaymentMethod
   reference        String?

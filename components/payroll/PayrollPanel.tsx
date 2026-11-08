@@ -33,6 +33,7 @@ import {
   payPayroll,
   savePayrollEmployee,
   savePayrollRates,
+  type PayrollSeller,
   setPayrollEmployeeActive,
   type PayrollEmployeeRow,
   type PayrollPaymentRow,
@@ -48,8 +49,10 @@ export function PayrollPanel({
   referenceCurrency,
   company,
   rates,
+  sellers,
   monthsElapsed,
 }: {
+  sellers: PayrollSeller[];
   rates: PayrollRates;
   monthsElapsed: number;
   company: DeliveryNoteCompany;
@@ -69,7 +72,7 @@ export function PayrollPanel({
   const paidThisPeriod = new Set(payments.filter((p) => p.period === currentPeriod).map((p) => p.employeeId));
   const active = employees.filter((e) => e.active);
   const pending = active.filter((e) => !paidThisPeriod.has(e.id));
-  const pendingNet = pending.reduce((a, e) => a + computeFortnight(e.baseCents, e.foodBonusCents, 0, rates).netCents, 0);
+  const pendingNet = pending.reduce((a, e) => a + computeFortnight(e.baseCents, e.foodBonusCents, 0, rates, e.commissionCentsNow).netCents, 0);
   const provisioned = active.reduce((a, e) => a + accruedProvisionCents(e.baseCents, monthsElapsed), 0);
   const monthlyTotal = active.reduce((a, e) => a + 2 * monthlyProvisionCents(e.baseCents), 0);
   const paidNet = payments.filter((p) => p.period === currentPeriod).reduce((a, p) => a + p.netCents, 0);
@@ -129,7 +132,7 @@ export function PayrollPanel({
           ) : (
             <div className="flex flex-col divide-y">
               {employees.map((e) => {
-                const calc = computeFortnight(e.baseCents, e.foodBonusCents, 0, rates);
+                const calc = computeFortnight(e.baseCents, e.foodBonusCents, 0, rates, e.commissionCentsNow);
                 const paid = paidThisPeriod.has(e.id);
                 return (
                   <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
@@ -141,7 +144,9 @@ export function PayrollPanel({
                     </div>
                     <div className="text-right text-sm">
                       <p className="font-semibold tabular-nums">{money(calc.netCents)}</p>
-                      <p className="text-xs text-muted-foreground">neto por quincena</p>
+                      <p className="text-xs text-muted-foreground">
+                        neto por quincena{e.commissionCentsNow > 0 ? ` (incl. comisión ${money(e.commissionCentsNow)})` : ""}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1.5">
                       {!e.active ? (
@@ -241,6 +246,7 @@ export function PayrollPanel({
         <EmployeeDialog
           key={editing === "new" ? "new" : editing.id}
           employee={editing === "new" ? null : editing}
+          sellers={sellers}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -278,10 +284,12 @@ export function PayrollPanel({
 
 function EmployeeDialog({
   employee,
+  sellers,
   onClose,
   onSaved,
 }: {
   employee: PayrollEmployeeRow | null;
+  sellers: PayrollSeller[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -290,6 +298,8 @@ function EmployeeDialog({
   const [position, setPosition] = useState(employee?.position ?? "");
   const [base, setBase] = useState(employee ? String(employee.baseCents / 100) : "");
   const [food, setFood] = useState(employee ? String(employee.foodBonusCents / 100) : "0");
+  const [commission, setCommission] = useState(employee ? String(employee.commissionPct) : "0");
+  const [userId, setUserId] = useState(employee?.userId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -303,6 +313,8 @@ function EmployeeDialog({
           position,
           baseCents: Math.round(Number(base) * 100),
           foodBonusCents: Math.round(Number(food || "0") * 100),
+          commissionPct: Number(commission || "0"),
+          userId,
         },
         employee?.id
       );
@@ -338,6 +350,30 @@ function EmployeeDialog({
               <Input id="pe-food" type="number" min="0" step="0.01" inputMode="decimal" value={food} onChange={(e) => setFood(e.target.value)} />
             </Field>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field id="pe-user" label="Vendedor en el sistema (opcional)">
+              <select
+                id="pe-user"
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+              >
+                <option value="">Sin vendedor</option>
+                {sellers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field id="pe-comm" label="Comisión (% de sus ventas)">
+              <Input id="pe-comm" type="number" min="0" max="100" step="0.1" inputMode="decimal" value={commission} onChange={(e) => setCommission(e.target.value)} />
+            </Field>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            La comisión es un porcentaje de lo que esa persona vendió en la quincena (sin ventas anuladas). Se suma a sus
+            asignaciones; las deducciones de ley se calculan solo sobre el sueldo base.
+          </p>
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
@@ -376,7 +412,13 @@ function PayDialog({
   const [proof, setProof] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const calc = computeFortnight(employee.baseCents, employee.foodBonusCents, Math.round(Number(advance || "0") * 100), rates);
+  const calc = computeFortnight(
+    employee.baseCents,
+    employee.foodBonusCents,
+    Math.round(Number(advance || "0") * 100),
+    rates,
+    employee.commissionCentsNow
+  );
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -413,6 +455,7 @@ function PayDialog({
         <div className="flex flex-col gap-3">
           <div className="rounded-lg border p-3 text-sm">
             <Row a="Asignaciones" b={money(calc.grossCents)} />
+            {calc.commissionCents > 0 && <Row a="   incluye comisión por ventas" b={money(calc.commissionCents)} />}
             <Row a="Deducciones" b={`−${money(calc.deductionsCents)}`} />
             <Row a="Adelanto" b={`−${money(calc.advanceCents)}`} />
             <Row a="Neto a pagar" b={money(calc.netCents)} bold />

@@ -6,6 +6,8 @@ import {
   monthlyProvisionCents,
   periodFor,
   periodLabel,
+  commissionFor,
+  periodDateRange,
 } from "@/lib/payroll";
 
 describe("nómina quincenal", () => {
@@ -38,5 +40,21 @@ describe("nómina quincenal", () => {
     expect(accruedProvisionCents(12000, 10)).toBe(10000);
     expect(accruedProvisionCents(12000, 20)).toBe(12000);
     expect(accruedProvisionCents(12000, 0)).toBe(0);
+  });
+  it("suma la comisión a las asignaciones sin tocar las deducciones", () => {
+    // base 200 → quincena 100; comisión 3 % de 1.000 = 30; deducciones 5,5 % de 100
+    const c = computeFortnight(20000, 0, 0, undefined, commissionFor(100000, 3));
+    expect(c.commissionCents).toBe(3000);
+    expect(c.grossCents).toBe(10000 + 3000);
+    expect(c.deductionsCents).toBe(550);
+    expect(c.netCents).toBe(13000 - 550);
+  });
+  it("calcula la comisión y las fechas de la quincena", () => {
+    expect(commissionFor(0, 5)).toBe(0);
+    expect(commissionFor(50000, 0)).toBe(0);
+    expect(commissionFor(33333, 3)).toBe(1000);
+    expect(periodDateRange("2026-11-1")).toEqual({ from: "2026-11-01", to: "2026-11-15" });
+    expect(periodDateRange("2026-11-2")).toEqual({ from: "2026-11-16", to: "2026-11-30" });
+    expect(periodDateRange("2028-02-2")).toEqual({ from: "2028-02-16", to: "2028-02-29" });
   });
 });
