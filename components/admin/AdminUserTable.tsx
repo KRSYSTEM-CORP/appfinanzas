@@ -35,6 +35,7 @@ import {
   setCompanyExempt,
   setCompanyFeatures,
   setCompanyPlan,
+  grantAiCredits,
   deleteCompany,
 } from "@/lib/actions/admin";
 
@@ -510,6 +511,33 @@ function AdminCompanyDetail({
           ))}
         </select>
         <p className="text-xs text-muted-foreground">Cambiar el plan también ajusta la mensualidad al precio del plan.</p>
+        <form
+          className="mt-2 flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const input = e.currentTarget.elements.namedItem("aiCredits") as HTMLInputElement;
+            const amount = Math.floor(Number(input.value));
+            if (amount > 0) run(() => grantAiCredits(company.id, amount));
+            input.value = "";
+          }}
+        >
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`ai-${company.id}`} className="text-xs font-medium text-muted-foreground">
+              Créditos de IA extra (no vencen)
+            </label>
+            <input
+              id={`ai-${company.id}`}
+              name="aiCredits"
+              type="number"
+              min="1"
+              step="1"
+              className="h-9 w-32 rounded-md border bg-background px-2 text-sm"
+            />
+          </div>
+          <Button type="submit" size="sm" variant="outline" disabled={isPending}>
+            Otorgar
+          </Button>
+        </form>
       </div>
       {FEATURES.length > 0 && (
         <div className="flex flex-col gap-1.5 border-t pt-4">

@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAccountingPlan } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { computeFortnight, isValidPeriod, type PayrollRates } from "@/lib/payroll";
+import { commissionFor, computeFortnight, isValidPeriod, periodDateRange, type PayrollRates } from "@/lib/payroll";
+import { dayBoundsUtc } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
-import type { PaymentMethod } from "@prisma/client";
+import type { PaymentMethod, Prisma } from "@prisma/client";
 
 const EmployeeSchema = z.object({
   name: z.string().trim().min(2, "El nombre es obligatorio"),
@@ -14,6 +15,8 @@ const EmployeeSchema = z.object({
   position: z.string().trim().optional(),
   baseCents: z.number().int().min(1, "El sueldo base debe ser mayor a 0"),
   foodBonusCents: z.number().int().min(0, "El bono no puede ser negativo").default(0),
+  commissionPct: z.number().min(0, "La comisión no puede ser negativa").max(100, "Máximo 100 %").default(0),
+  userId: z.string().trim().optional(),
 });
 
 export type PayrollEmployeeRow = {
@@ -23,8 +26,14 @@ export type PayrollEmployeeRow = {
   position: string | null;
   baseCents: number;
   foodBonusCents: number;
+  commissionPct: number;
+  userId: string | null;
+  // Comisión estimada de la quincena en curso (según lo que ya vendió).
+  commissionCentsNow: number;
   active: boolean;
 };
+
+export type PayrollSeller = { id: string; name: string };
 
 export type PayrollPaymentRow = {
   id: string;
@@ -36,12 +45,30 @@ export type PayrollPaymentRow = {
   grossCents: number;
   deductionsCents: number;
   advanceCents: number;
+  commissionCents: number;
   netCents: number;
   paymentMethod: PaymentMethod;
   reference: string | null;
   hasProof: boolean;
   paidAt: Date;
 };
+
+// Total vendido (sin ventas anuladas) por un usuario en una quincena.
+async function salesTotalForPeriod(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  userId: string,
+  period: string
+): Promise<number> {
+  const { from, to } = periodDateRange(period);
+  const start = dayBoundsUtc(from).start;
+  const end = dayBoundsUtc(to).end;
+  const agg = await tx.sale.aggregate({
+    where: { companyId, sellerId: userId, voided: false, createdAt: { gte: start, lt: end } },
+    _sum: { totalCents: true },
+  });
+  return agg._sum.totalCents ?? 0;
+}
 
 async function requirePayrollManager() {
   // Contabilidad (Pyme y Corporativo) y solo gerente.
@@ -50,14 +77,15 @@ async function requirePayrollManager() {
   return session;
 }
 
-export async function listPayroll(): Promise<{
+export async function listPayroll(currentPeriod?: string): Promise<{
   employees: PayrollEmployeeRow[];
   payments: PayrollPaymentRow[];
   rates: PayrollRates;
+  sellers: PayrollSeller[];
 }> {
   const { companyId } = await requirePayrollManager();
   return withTenant(companyId, async (tx) => {
-    const [employees, payments, company] = await Promise.all([
+    const [employees, payments, company, users] = await Promise.all([
       tx.payrollEmployee.findMany({ where: { companyId }, orderBy: [{ active: "desc" }, { name: "asc" }] }),
       tx.payrollPayment.findMany({
         where: { companyId },
@@ -69,8 +97,26 @@ export async function listPayroll(): Promise<{
         where: { id: companyId },
         select: { payrollIvssPct: true, payrollParoPct: true, payrollFaovPct: true },
       }),
+      tx.user.findMany({
+        where: { companyId, status: "ACTIVE" },
+        select: { id: true, firstName: true, lastName: true, email: true },
+        orderBy: { createdAt: "asc" },
+      }),
     ]);
+    const commissionNow = new Map<string, number>();
+    if (currentPeriod && isValidPeriod(currentPeriod)) {
+      for (const e of employees) {
+        if (e.userId && e.commissionPct > 0) {
+          const sold = await salesTotalForPeriod(tx, companyId, e.userId, currentPeriod);
+          commissionNow.set(e.id, commissionFor(sold, e.commissionPct));
+        }
+      }
+    }
     return {
+      sellers: users.map((u) => ({
+        id: u.id,
+        name: u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email,
+      })),
       rates: {
         ivssPct: company?.payrollIvssPct ?? 4,
         paroPct: company?.payrollParoPct ?? 0.5,
@@ -83,6 +129,9 @@ export async function listPayroll(): Promise<{
         position: e.position,
         baseCents: e.baseCents,
         foodBonusCents: e.foodBonusCents,
+        commissionPct: e.commissionPct,
+        userId: e.userId,
+        commissionCentsNow: commissionNow.get(e.id) ?? 0,
         active: e.active,
       })),
       payments: payments.map((p) => ({
@@ -95,6 +144,7 @@ export async function listPayroll(): Promise<{
         grossCents: p.grossCents,
         deductionsCents: p.deductionsCents,
         advanceCents: p.advanceCents,
+        commissionCents: p.commissionCents,
         netCents: p.netCents,
         paymentMethod: p.paymentMethod,
         reference: p.reference,
@@ -123,8 +173,14 @@ export async function savePayrollEmployee(input: unknown, id?: string): Promise<
     position: parsed.data.position || null,
     baseCents: parsed.data.baseCents,
     foodBonusCents: parsed.data.foodBonusCents,
+    commissionPct: parsed.data.commissionPct,
+    userId: parsed.data.userId || null,
   };
   await withTenant(companyId, async (tx) => {
+    if (data.userId) {
+      const user = await tx.user.findFirst({ where: { id: data.userId, companyId }, select: { id: true } });
+      if (!user) throw new Error("El usuario elegido no pertenece a tu empresa");
+    }
     if (id) await tx.payrollEmployee.updateMany({ where: { id, companyId }, data });
     else await tx.payrollEmployee.create({ data: { ...data, companyId } });
   });
@@ -172,11 +228,12 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
         where: { id: companyId },
         select: { payrollIvssPct: true, payrollParoPct: true, payrollFaovPct: true },
       });
+      const sold = employee.userId ? await salesTotalForPeriod(tx, companyId, employee.userId, d.period) : 0;
       const calc = computeFortnight(employee.baseCents, employee.foodBonusCents, d.advanceCents, {
         ivssPct: company?.payrollIvssPct ?? 4,
         paroPct: company?.payrollParoPct ?? 0.5,
         faovPct: company?.payrollFaovPct ?? 1,
-      });
+      }, commissionFor(sold, employee.commissionPct));
       const expense = await tx.expense.create({
         data: {
           companyId,
@@ -194,6 +251,7 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
           grossCents: calc.grossCents,
           deductionsCents: calc.deductionsCents,
           advanceCents: calc.advanceCents,
+          commissionCents: calc.commissionCents,
           netCents: calc.netCents,
           paymentMethod: d.paymentMethod,
           reference: d.reference || null,
