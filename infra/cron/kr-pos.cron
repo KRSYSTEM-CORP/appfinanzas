@@ -1,0 +1,5 @@
+# Instalar en /etc/cron.d/kr-pos (mismos horarios que vercel.json, en UTC).
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+0 4 * * *  deploy /usr/local/bin/kr-cron.sh /api/cron/bcv-rate       >> /var/log/kr-cron.log 2>&1
+0 8 1 * *  deploy /usr/local/bin/kr-cron.sh /api/cron/db-size-check   >> /var/log/kr-cron.log 2>&1

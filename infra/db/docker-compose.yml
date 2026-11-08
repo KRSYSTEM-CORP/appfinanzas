@@ -1,0 +1,25 @@
+# Servidor de la BASE DE DATOS: PostgreSQL 17, solo accesible por la red privada.
+# Se copia a /opt/kr-db/. Variables en /opt/kr-db/db.env (ver db.env.example).
+name: kr-db
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    env_file: ./db.env
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "hba_file=/etc/postgresql/pg_hba.conf"]
+    ports:
+      - "${DB_PRIVATE_IP}:5432:5432" # SOLO la IP privada, nunca 0.0.0.0
+    volumes:
+      - /var/lib/kr-pg:/var/lib/postgresql/data
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./init:/docker-entrypoint-initdb.d:ro
+    shm_size: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }

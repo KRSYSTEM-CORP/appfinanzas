@@ -1,0 +1,17 @@
+node_modules
+.next
+.open-next
+.git
+.github
+.claude
+.env
+.env.*
+!.env.example
+docs
+tests
+auditoria-2026-10-17
+graphify-out
+infra
+*.md
+coverage
+playwright-report
