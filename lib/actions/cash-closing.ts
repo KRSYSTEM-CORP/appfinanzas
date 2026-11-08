@@ -8,8 +8,17 @@ import { closingDateFromString, openDayList } from "@/lib/closed-days";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type PaymentMethod } from "@prisma/client";
 
+export type CashOutflowRow = { id: string; concept: string; amountCents: number; createdAt: Date };
+
 export type CashClosingSummary = {
   date: string;
+  // Caja Chica: efectivo de apertura, efectivo cobrado en ventas, salidas y
+  // efectivo esperado en caja (apertura + ventas en efectivo − salidas).
+  openingCents: number | null;
+  cashSalesCents: number;
+  outflows: CashOutflowRow[];
+  outflowsCents: number;
+  expectedCashCents: number;
   totalCents: number;
   salesCount: number;
   // Desglose de lo vendido: ya cobrado vs. a crédito (por cobrar).
@@ -33,7 +42,7 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
   const closingDate = closingDateFromString(dateStr);
 
   return withTenant(companyId, async (tx) => {
-    const [totals, byStatus, byMethodRows, closings, activeBranchCount] = await Promise.all([
+    const [totals, byStatus, byMethodRows, closings, activeBranchCount, openings, outflows] = await Promise.all([
       tx.sale.aggregate({
         where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: start, lt: end }, voided: false },
         _sum: { totalCents: true },
@@ -63,7 +72,16 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
         orderBy: { closedAt: "desc" },
       }),
       branchId ? Promise.resolve(1) : tx.branch.count({ where: { companyId, isActive: true } }),
+      tx.cashOpening.findMany({ where: { companyId, date: closingDate, ...(branchId ? { branchId } : {}) } }),
+      tx.cashOutflow.findMany({
+        where: { companyId, date: closingDate, ...(branchId ? { branchId } : {}) },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, concept: true, amountCents: true, createdAt: true },
+      }),
     ]);
+    const openingCents = openings.length > 0 ? openings.reduce((a, o) => a + o.amountCents, 0) : null;
+    const cashSalesCents = Number(byMethodRows.find((r) => r.paymentMethod === "CASH")?.total_cents ?? 0);
+    const outflowsCents = outflows.reduce((a, o) => a + o.amountCents, 0);
 
     // In consolidated view the day only counts as "closed" once every active
     // branch has closed it — otherwise sales from a still-open branch could
@@ -82,6 +100,11 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
 
     return {
       date: dateStr,
+      openingCents,
+      cashSalesCents,
+      outflows,
+      outflowsCents,
+      expectedCashCents: (openingCents ?? 0) + cashSalesCents - outflowsCents,
       totalCents: totals._sum.totalCents ?? 0,
       salesCount: totals._count,
       paidCents: byStatus.find((r) => r.paymentStatus === "PAID")?._sum.totalCents ?? 0,
@@ -194,4 +217,76 @@ export async function listCashClosings() {
       take: 30,
     })
   );
+}
+
+async function requireOpenBranchDay(dateStr: string) {
+  const session = await requireManager();
+  if (!session.branchId) {
+    return { ok: false, error: 'Selecciona una sucursal — no se puede con "Todas las sucursales".' } as const;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { ok: false, error: "Fecha inválida" } as const;
+  const closingDate = closingDateFromString(dateStr);
+  const closed = await withTenant(session.companyId, (tx) =>
+    tx.cashClosing.findUnique({
+      where: { branchId_closingDate: { branchId: session.branchId as string, closingDate } },
+      select: { id: true },
+    })
+  );
+  if (closed) return { ok: false, error: "Ese día ya fue cerrado." } as const;
+  return { ok: true, session, branchId: session.branchId as string, closingDate } as const;
+}
+
+// Fija (o corrige) el efectivo con el que abre la caja ese día.
+export async function setCashOpening(dateStr: string, amountCents: number): Promise<ActionResult> {
+  const ctx = await requireOpenBranchDay(dateStr);
+  if (!ctx.ok) return { success: false, error: ctx.error };
+  if (!Number.isInteger(amountCents) || amountCents < 0) {
+    return { success: false, error: "El monto de apertura no puede ser negativo" };
+  }
+  const { session, branchId, closingDate } = ctx;
+  await withTenant(session.companyId, (tx) =>
+    tx.cashOpening.upsert({
+      where: { branchId_date: { branchId, date: closingDate } },
+      create: { companyId: session.companyId, branchId, date: closingDate, amountCents, setById: session.userId },
+      update: { amountCents, setById: session.userId },
+    })
+  );
+  revalidatePath("/reports");
+  return { success: true };
+}
+
+export async function addCashOutflow(dateStr: string, concept: string, amountCents: number): Promise<ActionResult> {
+  const ctx = await requireOpenBranchDay(dateStr);
+  if (!ctx.ok) return { success: false, error: ctx.error };
+  const text = concept.trim();
+  if (!text) return { success: false, error: "Escribe el concepto de la salida" };
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    return { success: false, error: "El monto debe ser mayor a 0" };
+  }
+  const { session, branchId, closingDate } = ctx;
+  await withTenant(session.companyId, (tx) =>
+    tx.cashOutflow.create({
+      data: {
+        companyId: session.companyId,
+        branchId,
+        date: closingDate,
+        concept: text,
+        amountCents,
+        createdById: session.userId,
+      },
+    })
+  );
+  revalidatePath("/reports");
+  return { success: true };
+}
+
+export async function deleteCashOutflow(dateStr: string, id: string): Promise<ActionResult> {
+  const ctx = await requireOpenBranchDay(dateStr);
+  if (!ctx.ok) return { success: false, error: ctx.error };
+  const { session, branchId, closingDate } = ctx;
+  await withTenant(session.companyId, (tx) =>
+    tx.cashOutflow.deleteMany({ where: { id, companyId: session.companyId, branchId, date: closingDate } })
+  );
+  revalidatePath("/reports");
+  return { success: true };
 }

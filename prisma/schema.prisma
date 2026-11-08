@@ -220,6 +220,8 @@ model Company {
   pagoMovilOrders       PagoMovilOrder[]
   expenses              Expense[]
   cashClosings          CashClosing[]
+  cashOpenings          CashOpening[]
+  cashOutflows          CashOutflow[]
   branches              Branch[]
   // Custom, per-company sections/improvements a platform admin switches on
   // from /admin for ONE company only (see lib/features.ts) — every other
@@ -256,6 +258,8 @@ model Branch {
   sales          Sale[]
   quotes         Quote[]
   cashClosings   CashClosing[]
+  cashOpenings   CashOpening[]
+  cashOutflows   CashOutflow[]
   creditNotes    CreditNote[]
   debitNotes     DebitNote[]
   users          User[]
@@ -1157,4 +1161,38 @@ model DebitNote {
   @@unique([branchId, controlNumber])
   @@index([companyId, createdAt])
   @@index([saleId])
+}
+
+// Efectivo con el que arranca la caja de una sucursal en un día (Caja Chica).
+// Montos en la divisa referencial, como el resto de la contabilidad.
+model CashOpening {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  date        DateTime @db.Date
+  amountCents Int
+  setById     String
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@unique([branchId, date])
+  @@index([companyId, date])
+}
+
+// Salida de efectivo de la Caja Chica (pago de un gasto menor, retiro, etc.).
+model CashOutflow {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  date        DateTime @db.Date
+  concept     String
+  amountCents Int
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([companyId, branchId, date])
 }
