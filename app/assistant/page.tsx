@@ -1,11 +1,12 @@
 import { AssistantChat } from "@/components/assistant/AssistantChat";
-import { getAssistantStatus } from "@/lib/actions/assistant";
+import { BuyCredits } from "@/components/assistant/BuyCredits";
+import { getAssistantStatus, listAssistantHistory, listMyCreditRequests } from "@/lib/actions/assistant";
 import { AI_APPLY_COST } from "@/lib/assistant";
 
 export const dynamic = "force-dynamic";
 
 export default async function AssistantPage() {
-  const status = await getAssistantStatus();
+  const [status, history, requests] = await Promise.all([getAssistantStatus(), listAssistantHistory(), listMyCreditRequests()]);
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div>
@@ -15,7 +16,8 @@ export default async function AssistantPage() {
           ajustar precios) solo se cobra si confirmas: {AI_APPLY_COST} créditos.
         </p>
       </div>
-      <AssistantChat status={status} applyCost={AI_APPLY_COST} />
+      <BuyCredits requests={requests} />
+      <AssistantChat status={status} applyCost={AI_APPLY_COST} history={history} />
     </div>
   );
 }

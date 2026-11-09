@@ -17,7 +17,7 @@ import {
   incomeByCurrency,
   revenueComparison,
 } from "@/lib/actions/reports";
-import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, getProfitGoal } from "@/lib/actions/finance";
+import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, productMargins, getProfitGoal } from "@/lib/actions/finance";
 import { BreakevenCard } from "@/components/finance/BreakevenCard";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { parseDateRangeSelection } from "@/lib/report-types";
@@ -46,6 +46,7 @@ export default async function FinancePage({
     expenses,
     comparison,
     categories,
+    products,
     goalCents,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
@@ -60,6 +61,7 @@ export default async function FinancePage({
     listExpenses(range, expenseSearch),
     revenueComparison(range),
     categoryMargins(range),
+    productMargins(range),
     getProfitGoal(),
     getExchangeRateInfo(),
   ]);
@@ -166,6 +168,7 @@ export default async function FinancePage({
         cogsCents={cogsCents}
         expensesCents={expensesCents}
         categories={categories}
+        products={products}
         goalCents={goalCents}
         referenceCurrency={referenceCurrency}
       />

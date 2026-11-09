@@ -3,12 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/reports/StatCard";
 import { AdminUserTable } from "@/components/admin/AdminUserTable";
 import { PlatformSettingsForm, PlatformExchangeRateForm, PendingReportsTable } from "@/components/admin/PaymentReportsPanel";
+import { CreditRequestsPanel } from "@/components/admin/CreditRequestsPanel";
 import { AnnouncementForm } from "@/components/admin/AnnouncementForm";
 import {
   listAllCompanies,
   listPendingPaymentReports,
   getPlatformSettings,
   listAnnouncementRecipients,
+  listPendingCreditRequests,
 } from "@/lib/actions/admin";
 import { getPlatformExchangeRateInfo } from "@/lib/actions/billing";
 import { getSession } from "@/lib/session";
@@ -23,12 +25,13 @@ export default async function AdminPage() {
   if (!session) redirect("/api/auth/clear-session");
   if (!session.isSuperAdmin) redirect("/pos");
 
-  const [companies, pendingReports, platformSettings, platformExchangeRate, announcementRecipients] = await Promise.all([
+  const [companies, pendingReports, platformSettings, platformExchangeRate, announcementRecipients, creditRequests] = await Promise.all([
     listAllCompanies(),
     listPendingPaymentReports(),
     getPlatformSettings(),
     getPlatformExchangeRateInfo(),
     listAnnouncementRecipients(),
+    listPendingCreditRequests(),
   ]);
   // Each company's own status is its owner account's status (users[0] —
   // see listAllCompanies()), same semantics as before this was grouped.
@@ -81,6 +84,15 @@ export default async function AdminPage() {
         </CardHeader>
         <CardContent>
           <PendingReportsTable reports={pendingReports} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Compras de créditos IA pendientes ({creditRequests.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CreditRequestsPanel requests={creditRequests} />
         </CardContent>
       </Card>
 

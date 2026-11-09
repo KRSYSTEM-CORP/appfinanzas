@@ -5,6 +5,19 @@ import { PLANS, type PlanId } from "@/lib/plans";
 // propuesta cuesta créditos, solo si el usuario confirma.
 export const AI_APPLY_COST = 5;
 
+// Paquetes de créditos extra (no vencen). Precio en dólares.
+export const AI_PACKS = [
+  { credits: 50, priceCents: 500 },
+  { credits: 100, priceCents: 900 },
+  { credits: 250, priceCents: 2000 },
+  { credits: 500, priceCents: 3500 },
+  { credits: 1000, priceCents: 6000 },
+] as const;
+
+export function findPack(credits: number) {
+  return AI_PACKS.find((p) => p.credits === credits) ?? null;
+}
+
 export function dailyAskCap(plan: PlanId): number {
   return plan === "EMPRENDE" ? 15 : plan === "PYME" ? 50 : 100;
 }

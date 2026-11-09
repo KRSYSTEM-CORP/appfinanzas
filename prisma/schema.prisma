@@ -234,6 +234,8 @@ model Company {
   cashClosings          CashClosing[]
   cashOpenings          CashOpening[]
   branchTransfers       BranchTransfer[]
+  assistantEntries      AssistantEntry[]
+  aiCreditRequests      AiCreditRequest[]
   paymentAccounts       PaymentAccount[]
   payrollEmployees      PayrollEmployee[]
   payrollPayments       PayrollPayment[]
@@ -1240,23 +1242,23 @@ model PayrollEmployee {
 // Pago de una quincena a un empleado. `period` es "AAAA-MM-1" o "AAAA-MM-2".
 // Al registrarse crea también un Expense (categoría Nómina) para Finanzas.
 model PayrollPayment {
-  id               String          @id @default(cuid())
-  companyId        String
-  company          Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employeeId       String
-  employee         PayrollEmployee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  period           String
-  grossCents       Int
-  deductionsCents  Int
-  advanceCents     Int             @default(0)
-  commissionCents  Int             @default(0)
-  netCents         Int
-  paymentMethod    PaymentMethod
-  reference        String?
-  proofDataUrl     String?         @db.Text
-  expenseId        String?
-  paidById         String
-  paidAt           DateTime        @default(now())
+  id              String          @id @default(cuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        PayrollEmployee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  period          String
+  grossCents      Int
+  deductionsCents Int
+  advanceCents    Int             @default(0)
+  commissionCents Int             @default(0)
+  netCents        Int
+  paymentMethod   PaymentMethod
+  reference       String?
+  proofDataUrl    String?         @db.Text
+  expenseId       String?
+  paidById        String
+  paidAt          DateTime        @default(now())
 
   @@unique([employeeId, period])
   @@index([companyId, period])
@@ -1346,4 +1348,40 @@ model LearningProgress {
 
   @@id([userId, videoId])
   @@index([videoId])
+}
+
+// Historial del Asistente IA: cada pregunta con su respuesta y, si el asistente
+// propuso un cambio, si el usuario lo aplicó. Es de cada usuario (userId).
+model AssistantEntry {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  question  String
+  answer    String
+  proposal  Json?
+  applied   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([companyId, userId, createdAt])
+}
+
+// Solicitud de compra de créditos del Asistente IA. La empresa paga por los
+// medios de siempre y manda la referencia; el administrador de KR System la
+// aprueba (suma los créditos) o la rechaza.
+model AiCreditRequest {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requestedBy String
+  credits     Int
+  priceCents  Int
+  reference   String
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewNote  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([status, createdAt])
 }
