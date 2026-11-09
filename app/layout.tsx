@@ -6,6 +6,8 @@ import { Sidebar } from "@/components/nav/Sidebar";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { KrPosTour } from "@/components/onboarding/KrPosTour";
 import { getSession } from "@/lib/session";
+import { RenewalBanner } from "@/components/nav/RenewalBanner";
+import { renewalNotice } from "@/lib/renewal";
 import { FEATURES, hasFeature } from "@/lib/features";
 import { getBranding } from "@/lib/actions/settings";
 import { listBranches } from "@/lib/actions/branches";
@@ -51,6 +53,8 @@ export default async function RootLayout({
   // sessions back to /blocked; calling it from the root layout caused that
   // route to redirect to itself until Next displayed a blank error page.
   const canLoadAppChrome = Boolean(session && !session.billingBlocked);
+  const renewal =
+    canLoadAppChrome && session && !session.isSuperAdmin ? renewalNotice(session.nextPaymentDueDate, session.isExempt) : null;
   const [branding, branches] = await Promise.all([
     session ? getBranding() : Promise.resolve({ logoDataUrl: null, brandColor: null, brandBackground: null }),
     canManage && canLoadAppChrome ? listBranches() : Promise.resolve([]),
@@ -82,9 +86,10 @@ export default async function RootLayout({
       <body className={`min-h-full flex flex-col ${canLoadAppChrome ? "md:h-dvh md:flex-row md:overflow-hidden" : ""}`}>
         {brandCss && <style>{brandCss}</style>}
         <Script id="theme-init" strategy="beforeInteractive">
-          {`(function(){try{var s=localStorage.getItem('kr-pos-theme');var d=s?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`}
+          {`(function(){try{var s=localStorage.getItem('kr-pos-theme');var d=s==='dark';if(d)document.documentElement.classList.add('dark');}catch(e){}})();`}
         </Script>
         <ServiceWorkerRegistration />
+        {renewal && <RenewalBanner days={renewal.days} text={renewal.text} />}
         {canLoadAppChrome && session && (
           <Sidebar
             companyName={session.companyName}
