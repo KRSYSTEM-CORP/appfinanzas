@@ -1,118 +1,125 @@
-import { LayoutGridIcon, PackageIcon, ReceiptTextIcon, ShoppingCartIcon } from "lucide-react";
+"use client";
 
-// The marketing-facing right panel of the split login ("01 · Portal"
-// direction) — KR POS's own brand violet, independent of a visiting
-// company's chosen accent (that only lives in the form column via
-// LoginForm's live branding preview). Purely decorative: no real data, no
-// business copy beyond what already exists elsewhere (WelcomeModal), so
-// nothing here can drift out of sync with an actual capability or price.
-export function PortalHero() {
-  return (
-    <div className="portal-hero relative hidden lg:flex flex-col justify-between overflow-hidden p-10 text-white">
-      <div className="portal-hero-blob-a" />
-      <div className="portal-hero-blob-b" />
+import { useEffect, useState } from "react";
 
-      <div className="relative flex items-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/wordmark-white.png" alt="KR POS" className="h-7 w-auto" />
-      </div>
+// Mitad informativa de la tarjeta de acceso (preview v15): degradado morado,
+// «Todo tu negocio. Más claro.» y cuatro mockups que rotan (POS, Inventario,
+// Ganancia, Presupuestos). Es decorativa: no usa datos reales. En teléfono se
+// reduce a una franja con la marca y el lema.
+const SLIDES = ["pos", "inventario", "ganancia", "presupuestos"] as const;
 
-      <div className="relative flex flex-col gap-4 max-w-md">
-        <h2 className="text-4xl font-semibold leading-tight text-balance">
-          Todo tu negocio. Más claro.
-        </h2>
-        <p className="text-white/70 text-sm leading-relaxed">
-          Punto de venta, inventario y reportes en un solo sistema — pensado para pymes que
-          necesitan control real de su negocio, todos los días.
-        </p>
-      </div>
-
-      <div className="portal-product-preview relative rounded-2xl border border-white/15 bg-white/[0.07] p-4 shadow-2xl shadow-black/20 backdrop-blur-sm max-w-md">
-        <div className="flex items-center gap-2 text-xs text-white/60 mb-3">
-          <ShoppingCartIcon className="size-3.5" />
-          Punto de venta
-        </div>
-        <div className="flex items-end gap-1.5 h-16 mb-4">
-          {[40, 65, 50, 80, 60, 90, 70].map((h, i) => (
-            <div
-              key={i}
-              className="flex-1 rounded-t bg-white/25 first:bg-white/20"
-              style={{ height: `${h}%` }}
-            />
+function Mockup({ kind }: { kind: (typeof SLIDES)[number] }) {
+  const box = "flex h-full flex-col gap-2.5 rounded-[20px] border border-white/20 bg-white/10 p-3.5 shadow-[0_24px_50px_rgba(0,0,0,0.22)] backdrop-blur-sm";
+  const head = (t: string, s: string) => (
+    <div className="flex items-center justify-between text-xs">
+      <b className="text-[13px]">{t}</b>
+      <span className="rounded-full bg-white/20 px-2.5 py-0.5 font-semibold">{s}</span>
+    </div>
+  );
+  if (kind === "pos")
+    return (
+      <div className={box}>
+        {head("POS", "Caja abierta")}
+        <div className="grid grid-cols-4 gap-1.5">
+          {[0, 1, 2, 3].map((i) => (
+            <i key={i} className={`h-[34px] rounded-[10px] ${i === 2 ? "auth-pulse bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.3)]" : "bg-white/20"}`} />
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="rounded-lg bg-white/[0.06] border border-white/10 p-2.5 flex flex-col gap-1.5">
-            <PackageIcon className="size-3.5 text-white/60" />
-            <span className="text-[11px] text-white/60">Inventario</span>
-            <div className="h-1.5 rounded-full bg-white/15 overflow-hidden">
-              <div className="h-full w-2/3 rounded-full bg-white/40" />
-            </div>
-          </div>
-          <div className="rounded-lg bg-white/[0.06] border border-white/10 p-2.5 flex flex-col gap-1.5">
-            <ReceiptTextIcon className="size-3.5 text-white/60" />
-            <span className="text-[11px] text-white/60">Reportes</span>
-            <div className="h-1.5 rounded-full bg-white/15 overflow-hidden">
-              <div className="h-full w-4/5 rounded-full bg-white/40" />
-            </div>
-          </div>
-        </div>
-        <div className="absolute -right-3 -top-3 flex items-center gap-1.5 rounded-full bg-white text-[#24145e] px-2.5 py-1 text-[11px] font-medium shadow-lg">
-          <LayoutGridIcon className="size-3" />
-          Todo en un lugar
+        <div className="flex flex-col gap-1.5 rounded-[14px] bg-white/[0.12] p-2.5 text-xs">
+          <div className="flex justify-between"><span>2 × Zapatos 42</span><b>$118,00</b></div>
+          <div className="flex justify-between"><span>1 × Perfume</span><b>$42,00</b></div>
+          <div className="flex justify-between border-t border-dashed border-white/30 pt-1.5 text-sm font-extrabold"><span>Total</span><b>$160,00</b></div>
+          <div className="mt-0.5 rounded-full bg-white py-1.5 text-center font-extrabold text-[#2a1f7a]">Cobrar</div>
         </div>
       </div>
-
-      <style>{`
-        .portal-hero {
-          background: linear-gradient(140deg, #211a54 0%, #4435bd 56%, #6655e5 100%);
-        }
-        .portal-hero-blob-a,
-        .portal-hero-blob-b {
-          position: absolute;
-          z-index: 0;
-          width: 22rem;
-          aspect-ratio: 1;
-          border-radius: 48% 52% 63% 37%;
-          pointer-events: none;
-        }
-        .portal-hero-blob-a {
-          top: -8rem;
-          right: -5rem;
-          border: 1px solid rgb(255 255 255 / 24%);
-          box-shadow: 0 0 0 30px rgb(255 255 255 / 6%), 0 0 0 70px rgb(255 255 255 / 4%);
-          animation: portal-drift 12s ease-in-out infinite;
-        }
-        .portal-hero-blob-b {
-          bottom: -12rem;
-          left: -8rem;
-          background: radial-gradient(circle, rgb(255 118 94 / 25%), rgb(174 151 255 / 16%) 38%, transparent 72%);
-          filter: blur(8px);
-          animation: portal-glow 10s ease-in-out infinite alternate;
-        }
-        .portal-product-preview {
-          animation: portal-float 7s ease-in-out infinite;
-        }
-        @keyframes portal-drift {
-          0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-          50%      { transform: translate3d(12px, -14px, 0) rotate(3deg); }
-        }
-        @keyframes portal-glow {
-          from { transform: scale(.92); opacity: .55; }
-          to   { transform: scale(1.08); opacity: .9; }
-        }
-        @keyframes portal-float {
-          0%, 100% { transform: translateY(0); }
-          50%      { transform: translateY(-7px); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .portal-hero-blob-a,
-          .portal-hero-blob-b,
-          .portal-product-preview {
-            animation: none !important;
-          }
-        }
-      `}</style>
+    );
+  if (kind === "inventario")
+    return (
+      <div className={box}>
+        {head("Inventario", "2 alertas")}
+        {[
+          ["Camisa M", 80, "#34c759", "Disponible", "bg-[#7be08f]"],
+          ["Zapatos 41", 22, "#ff9f0a", "Stock bajo", "bg-[#ffc15c]"],
+          ["Labial mate", 4, "#ff3b30", "Agotado", "bg-[#ff8a80]"],
+        ].map(([n, w, c, l, bg]) => (
+          <div key={n as string} className="grid grid-cols-[78px_1fr_auto] items-center gap-2 text-xs">
+            <span>{n}</span>
+            <div className="h-2 overflow-hidden rounded-full bg-white/20">
+              <i className="auth-grow block h-full rounded-full" style={{ width: `${w}%`, background: c as string }} />
+            </div>
+            <em className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold not-italic text-[#06210f] ${bg}`}>{l}</em>
+          </div>
+        ))}
+      </div>
+    );
+  if (kind === "ganancia")
+    return (
+      <div className={box}>
+        {head("Ganancia neta estimada", "Noviembre")}
+        <div className="text-[34px] font-extrabold tracking-tight text-[#8af0a6]">$1.120,00</div>
+        <div className="flex min-h-[60px] flex-1 items-end gap-1.5">
+          {[40, 62, 50, 78, 66, 92, 74].map((h, i) => (
+            <i key={i} className="auth-rise flex-1 rounded-t-md rounded-b-sm bg-white/35" style={{ height: `${h}%`, animationDelay: `${i * 0.05}s` }} />
+          ))}
+        </div>
+      </div>
+    );
+  return (
+    <div className={box}>
+      {head("Presupuestos", "78 % de cierre")}
+      <div className="flex flex-col gap-1.5 text-xs font-bold">
+        {[
+          ["Creados · 8", 100, ""],
+          ["Enviados · 7", 82, ""],
+          ["Vistos · 5", 62, ""],
+          ["Convertidos · 3", 38, "!bg-[#34c759]"],
+        ].map(([t, w, extra]) => (
+          <div key={t as string} className={`auth-grow rounded-[10px] bg-white/[0.22] px-2.5 py-2 ${extra}`} style={{ width: `${w}%` }}>
+            {t}
+          </div>
+        ))}
+      </div>
     </div>
+  );
+}
+
+export function PortalHero() {
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const t = setInterval(() => setActive((i) => (i + 1) % SLIDES.length), 3800);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <section
+      aria-label="Qué es KR POS"
+      className="relative flex flex-col gap-4 overflow-hidden p-5 text-white lg:gap-[18px] lg:p-8"
+      style={{ background: "linear-gradient(140deg, #211a54 0%, #4435bd 56%, #6655e5 100%)" }}
+    >
+      <div className="auth-ablob auth-a1" aria-hidden />
+      <div className="auth-ablob auth-a2" aria-hidden />
+      <div className="relative z-[1] text-xl font-extrabold tracking-tight">KR POS</div>
+      <div className="relative z-[1]">
+        <h2 className="text-balance text-2xl font-bold leading-[1.1] tracking-tight lg:text-[30px]">Todo tu negocio. Más claro.</h2>
+        <p className="mt-2 hidden text-sm text-white/70 lg:block">Ventas, inventario y ganancia en un solo lugar.</p>
+      </div>
+      <div className="auth-stage relative z-[1] hidden min-h-[230px] flex-1 lg:block" aria-hidden>
+        {SLIDES.map((k, i) => (
+          <div
+            key={k}
+            className="absolute inset-0 transition-[opacity,transform] duration-500 ease-out"
+            style={{ opacity: i === active ? 1 : 0, transform: i === active ? "none" : "translateY(16px) scale(.97)", pointerEvents: "none" }}
+          >
+            {i === active && <Mockup kind={k} />}
+          </div>
+        ))}
+      </div>
+      <div className="relative z-[1] hidden gap-1.5 lg:flex" aria-hidden>
+        {SLIDES.map((k, i) => (
+          <i key={k} className={`h-[7px] rounded-full transition-[width,background-color] duration-300 ${i === active ? "w-[22px] bg-white" : "w-[7px] bg-white/35"}`} />
+        ))}
+      </div>
+    </section>
   );
 }
