@@ -1,12 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withSuperAdmin } from "@/lib/tenant-db";
-import { fetchBcvRate } from "@/lib/bcv-rate";
+import { fetchBcvRateDetailed } from "@/lib/bcv-rate";
 import { PLATFORM_SETTINGS_ID } from "@/lib/billing";
 import { invalidateCache } from "@/lib/cache";
 
-// Runs once a day at 00:00 Venezuela time (04:00 UTC — Vercel cron schedules
-// always run in UTC, see vercel.json's "crons" entry) and refreshes
+// Runs once a day at 7:00 p. m. Venezuela time (23:00 UTC — Vercel cron schedules
+// always run in UTC, see vercel.json's "crons" entry), when the BCV has already
+// published the next business day's rate, so it is applied in advance. The
+// midnight re-check happens on demand: any rate older than the current "rate
+// day" (lib/bcv-parse.ts, flips at 7 p. m.) is renewed on the next page load.
+// (Before: ran at 00:00 Venezuela time, 04:00 UTC) and refreshes
 // Company.exchangeRate for every VES company automatically — this is what
 // makes the BCV rate "just update itself" instead of requiring someone to
 // open Settings and click a button every morning. Also refreshes
@@ -22,7 +26,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [usdRate, eurRate] = await Promise.allSettled([fetchBcvRate("USD"), fetchBcvRate("EUR")]);
+  const [usdRate, eurRate] = await Promise.allSettled([fetchBcvRateDetailed("USD"), fetchBcvRateDetailed("EUR")]);
 
   const results = await withSuperAdmin(async (tx) => {
     const companies = await tx.company.findMany({
@@ -40,7 +44,7 @@ export async function GET(request: NextRequest) {
       }
       await tx.company.update({
         where: { id: company.id },
-        data: { exchangeRate: rateResult.value, exchangeRateUpdatedAt: new Date() },
+        data: { exchangeRate: rateResult.value.rate, exchangeRateUpdatedAt: new Date() },
       });
       updated++;
     }
@@ -51,8 +55,8 @@ export async function GET(request: NextRequest) {
   if (usdRate.status === "fulfilled") {
     await prisma.platformSettings.upsert({
       where: { id: PLATFORM_SETTINGS_ID },
-      create: { id: PLATFORM_SETTINGS_ID, platformExchangeRate: usdRate.value, platformExchangeRateUpdatedAt: new Date() },
-      update: { platformExchangeRate: usdRate.value, platformExchangeRateUpdatedAt: new Date() },
+      create: { id: PLATFORM_SETTINGS_ID, platformExchangeRate: usdRate.value.rate, platformExchangeRateUpdatedAt: new Date() },
+      update: { platformExchangeRate: usdRate.value.rate, platformExchangeRateUpdatedAt: new Date() },
     });
     await invalidateCache("platformExchangeRateInfo");
     platformRateUpdated = true;
@@ -60,8 +64,10 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    usdRate: usdRate.status === "fulfilled" ? usdRate.value : null,
-    eurRate: eurRate.status === "fulfilled" ? eurRate.value : null,
+    usdRate: usdRate.status === "fulfilled" ? usdRate.value.rate : null,
+    eurRate: eurRate.status === "fulfilled" ? eurRate.value.rate : null,
+    source: usdRate.status === "fulfilled" ? usdRate.value.source : null,
+    valueDate: usdRate.status === "fulfilled" ? usdRate.value.valueDate : null,
     platformRateUpdated,
     ...results,
   });
