@@ -100,7 +100,10 @@ export default async function FinancePage({
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-3xl font-bold tracking-tight">Finanzas</h1>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-primary">Lo que vendes y lo que ganas</p>
+          <h1 className="text-3xl font-bold tracking-tight">Estadísticas</h1>
+        </div>
         <DateRangeSwitcher selection={range} extraParams={expenseSearch ? { q: expenseSearch } : undefined} />
       </div>
 

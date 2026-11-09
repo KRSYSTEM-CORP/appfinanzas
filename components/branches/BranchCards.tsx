@@ -27,7 +27,7 @@ export function BranchCards({
           const here = s.id === currentBranchId;
           return (
             <li key={s.id}>
-              <Card className={here ? "border-primary" : undefined}>
+              <Card className={here ? "ring-2 ring-primary" : undefined}>
                 <CardContent className="flex flex-col gap-3 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
@@ -43,20 +43,20 @@ export function BranchCards({
                     </div>
                   </div>
                   <dl className="grid grid-cols-3 gap-2 text-center text-xs">
-                    <div className="rounded-lg bg-muted p-2">
+                    <div className="rounded-xl bg-muted p-2.5">
                       <dt className="flex items-center justify-center gap-1 text-muted-foreground">
                         <ReceiptIcon className="size-3" aria-hidden /> Hoy
                       </dt>
                       <dd className="mt-0.5 font-semibold tabular-nums">{formatCurrencyCents(currency, s.salesTodayCents)}</dd>
                       <dd className="text-muted-foreground">{s.salesToday} ventas</dd>
                     </div>
-                    <div className="rounded-lg bg-muted p-2">
+                    <div className="rounded-xl bg-muted p-2.5">
                       <dt className="flex items-center justify-center gap-1 text-muted-foreground">
                         <PackageIcon className="size-3" aria-hidden /> Productos
                       </dt>
                       <dd className="mt-0.5 font-semibold tabular-nums">{s.products}</dd>
                     </div>
-                    <div className="rounded-lg bg-muted p-2">
+                    <div className="rounded-xl bg-muted p-2.5">
                       <dt className="flex items-center justify-center gap-1 text-muted-foreground">
                         <UsersIcon className="size-3" aria-hidden /> Personal
                       </dt>
@@ -74,7 +74,7 @@ export function BranchCards({
           );
         })}
       </ul>
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-[20px] bg-card p-4 text-sm shadow-(--shadow-card)">
         <p>
           Ventas de hoy en todas las sedes:{" "}
           <b className="tabular-nums">{formatCurrencyCents(currency, totalCents)}</b>
