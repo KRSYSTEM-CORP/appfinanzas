@@ -4,7 +4,7 @@ import { PendingClosingsList } from "@/components/reports/PendingClosingsList";
 import { SalesTable } from "@/components/reports/SalesTable";
 import { PaymentStatusFilter } from "@/components/reports/PaymentStatusFilter";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
-import { getCurrency } from "@/lib/currencies";
+import { formatCurrencyCents, getCurrency } from "@/lib/currencies";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
 import { requireSectionAccess } from "@/lib/session";
 import { listRecentSales } from "@/lib/actions/sales";
@@ -47,18 +47,41 @@ export default async function ReportsPage({
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Reportes</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Historial de ventas de contado y a crédito — registra pagos y anula ventas
-          desde aquí.
-        </p>
-      </div>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-primary">Cierre y control del turno</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight">Caja Chica</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Abre y cierra la caja, revisa las salidas y consulta las ventas del período.
+          </p>
+        </div>
+        {exchangeRateEnabled && rate != null && (
+          <span className="rounded-full bg-primary/10 px-3.5 py-1.5 text-sm font-semibold text-primary tabular-nums">
+            Tasa BCV · {localCurrencyCode} {rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        )}
+      </header>
 
       {todaySummary && (
-        <Card className="max-w-3xl">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {[
+            { label: "Ventas del día", value: formatCurrencyCents(referenceCurrency, todaySummary.totalCents), sub: `${todaySummary.salesCount} ventas`, tone: "text-foreground" },
+            { label: "Efectivo esperado", value: formatCurrencyCents(referenceCurrency, todaySummary.expectedCashCents), sub: "Apertura + efectivo − salidas", tone: "text-success" },
+            { label: "Salidas", value: formatCurrencyCents(referenceCurrency, todaySummary.outflowsCents), sub: `${todaySummary.outflows.length} movimientos`, tone: "text-destructive" },
+          ].map((k) => (
+            <div key={k.label} className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
+              <p className="text-sm font-medium text-muted-foreground">{k.label}</p>
+              <p className={`mt-1 text-3xl font-bold tabular-nums tracking-tight ${k.tone}`}>{k.value}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{k.sub}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {todaySummary && (
+        <Card>
           <CardHeader>
-            <CardTitle>Cierre de caja</CardTitle>
+            <CardTitle>Estado de la caja</CardTitle>
           </CardHeader>
           <CardContent>
             <CashClosingPanel
@@ -77,7 +100,7 @@ export default async function ReportsPage({
         </Card>
       )}
 
-      <Card className="max-w-3xl">
+      <Card>
         <CardHeader>
           <CardTitle>Días pendientes por cerrar</CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -99,7 +122,7 @@ export default async function ReportsPage({
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
-          <CardTitle>Ventas</CardTitle>
+          <CardTitle>Ventas del día y del período</CardTitle>
           <div className="flex items-center gap-3 flex-wrap">
             <PaymentStatusFilter value={statusFilter} />
             <DateRangeSwitcher selection={range} extraParams={statusFilter ? { status: statusFilter } : undefined} />
