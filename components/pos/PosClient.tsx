@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import type { PaymentStatus } from "@prisma/client";
 import type { ListedProduct } from "@/lib/product-image";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { searchCustomers } from "@/lib/actions/customers";
 import { CustomerForm, type CustomerInfo } from "@/components/pos/CustomerForm";
 import { ProductPicker } from "@/components/pos/ProductPicker";
 import { Cart, type CartLine } from "@/components/pos/Cart";
@@ -119,7 +122,13 @@ export function PosClient({
       };
     })
     .filter((l): l is CartLine => l != null);
-  const [step, setStep] = useState<Step>(initialQuote ? "cart" : "customer");
+  // Como en la preview: se entra directo al catálogo y el cliente se pide al cobrar
+// (registrar uno, elegirlo en el Directorio o «Cliente general» solo desde el Directorio).
+const [step, setStep] = useState<Step>("cart");
+  const [dialog, setDialog] = useState<null | "register" | "directory">(null);
+  const [fromPay, setFromPay] = useState(false);
+  const [dirQuery, setDirQuery] = useState("");
+  const [dirResults, setDirResults] = useState<{ id: string; firstName: string; lastName: string; phone: string; address: string | null; rif: string | null }[]>([]);
   const [customer, setCustomer] = useState<CustomerInfo | null>(
     initialQuote
       ? {
@@ -188,6 +197,33 @@ export function PosClient({
   function continueFromCustomer(info: CustomerInfo) {
     setCustomer(info);
     setStep("cart");
+    setDialog(null);
+    setFromPay(false);
+  }
+
+  function useGeneralCustomer() {
+    continueFromCustomer({ firstName: "Cliente", lastName: "general", phone: "0000-0000000", address: "Venta sin datos", rif: "" });
+  }
+
+  function runDirectorySearch(q: string) {
+    setDirQuery(q);
+    if (q.trim().length < 2) {
+      setDirResults([]);
+      return;
+    }
+    searchCustomers(q)
+      .then((r) => setDirResults(r.map((c) => ({ id: c.id, firstName: c.firstName, lastName: c.lastName, phone: c.phone, address: c.address, rif: c.rif }))))
+      .catch(() => setDirResults([]));
+  }
+
+  // Sin cliente no se cobra: se abre «Registrar cliente» con el atajo al Directorio.
+  function requestCheckout() {
+    if (!customer) {
+      setFromPay(true);
+      setDialog("register");
+      return;
+    }
+    checkout();
   }
 
   // Builds a stand-in Sale (matching what ReceiptView expects) from data
@@ -327,7 +363,7 @@ export function PosClient({
     setDiscountPercent("0");
     setCompletedSale(null);
     setPendingSync(false);
-    setStep("customer");
+    setStep("cart");
   }
 
   if (step === "receipt" && completedSale) {
@@ -346,23 +382,28 @@ export function PosClient({
     );
   }
 
-  if (step === "customer") {
-    return <CustomerForm initial={customer ?? undefined} onContinue={continueFromCustomer} />;
-  }
-
   return (
     <div className="flex flex-col gap-3 h-full">
-      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2">
-        <div className="min-w-0 text-sm">
-          <span className="text-muted-foreground">Cliente: </span>
-          <span className="font-medium">
-            {customer?.firstName} {customer?.lastName}
-          </span>
-          <span className="hidden text-muted-foreground min-[420px]:inline"> · {customer?.phone}</span>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-[20px] bg-card px-4 py-3 shadow-(--shadow-card)">
+        {customer ? (
+          <div className="min-w-0 text-sm">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cliente de esta venta</p>
+            <p className="truncate font-semibold">
+              {customer.firstName} {customer.lastName}
+              {customer.phone && customer.phone !== "0000-0000000" && <span className="font-normal text-muted-foreground"> · {customer.phone}</span>}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Registra o elige un cliente para cobrar.</p>
+        )}
+        <div className="flex gap-2">
+          <Button type="button" size="sm" className="min-h-11" onClick={() => { setFromPay(false); setDialog("register"); }}>
+            + Registrar cliente
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => { setDirQuery(""); setDirResults([]); setDialog("directory"); }}>
+            Directorio
+          </Button>
         </div>
-        <Button type="button" size="sm" variant="ghost" className="min-h-11 shrink-0" onClick={() => setStep("customer")}>
-          Editar cliente
-        </Button>
       </div>
       <div className={`grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_360px] md:gap-6 md:flex-1 md:min-h-0 ${lines.length ? "pb-[calc(var(--tabbar-h)+5rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>
         <ProductPicker
@@ -404,11 +445,62 @@ export function PosClient({
           paymentAccounts={paymentAccounts}
           discountPercent={discountPercent}
           onDiscountPercentChange={setDiscountPercent}
-          onCheckout={checkout}
+          onCheckout={requestCheckout}
           isPending={isPending}
           error={error}
         />
       </div>
+
+      <Dialog open={dialog === "register"} onOpenChange={(o) => !o && setDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar cliente</DialogTitle>
+            <DialogDescription>Se guarda en tu CRM y se usa en esta venta.</DialogDescription>
+          </DialogHeader>
+          <CustomerForm bare initial={customer ?? undefined} onContinue={continueFromCustomer} title="Datos del cliente" subtitle="Nombre, apellido, dirección y teléfono son obligatorios." submitLabel="Guardar y usar en la venta" />
+          {fromPay && (
+            <div className="flex flex-col gap-2 border-t pt-3">
+              <p className="text-xs text-muted-foreground">¿Venta sin datos? Elige «Cliente general» en el Directorio.</p>
+              <Button type="button" variant="outline" onClick={() => { setDirQuery(""); setDirResults([]); setDialog("directory"); }}>
+                Abrir Directorio
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialog === "directory"} onOpenChange={(o) => !o && setDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Directorio de clientes</DialogTitle>
+            <DialogDescription>Busca un cliente o usa «Cliente general» para una venta sin datos.</DialogDescription>
+          </DialogHeader>
+          <Input autoFocus value={dirQuery} onChange={(e) => runDirectorySearch(e.target.value)} placeholder="Buscar por nombre o apellido" />
+          <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+            <li>
+              <button type="button" onClick={useGeneralCustomer} className="flex w-full flex-col rounded-xl bg-muted p-3 text-left hover:bg-muted/70">
+                <span className="font-semibold">Cliente general</span>
+                <span className="text-xs text-muted-foreground">Venta sin datos</span>
+              </button>
+            </li>
+            {dirResults.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => continueFromCustomer({ firstName: c.firstName, lastName: c.lastName, phone: c.phone, address: c.address ?? "", rif: c.rif ?? "" })}
+                  className="flex w-full flex-col rounded-xl p-3 text-left hover:bg-muted"
+                >
+                  <span className="font-semibold">{c.firstName} {c.lastName}</span>
+                  <span className="text-xs text-muted-foreground">{c.phone}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <Button type="button" variant="outline" onClick={() => { setFromPay(false); setDialog("register"); }}>
+            + Registrar cliente nuevo
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
