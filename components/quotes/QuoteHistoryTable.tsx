@@ -7,6 +7,7 @@ import Link from "next/link";
 import type { Quote, QuoteStatus, ReferenceCurrency } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { formatCurrencyCents } from "@/lib/currencies";
@@ -59,6 +60,7 @@ export function QuoteHistoryTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const [openId, setOpenId] = useState<string | null>(null);
 
   // Most recent quote first, regardless of status.
   // Búsqueda por cliente o número y chips de estado, como en la preview.
@@ -76,6 +78,7 @@ export function QuoteHistoryTable({
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }, [quotes, query, statusFilter]);
 
+  const openQuote = openId ? sorted.find((x) => x.id === openId) ?? null : null;
   const [now] = useState(() => Date.now());
   function daysPending(createdAt: Date): number {
     return Math.floor((now - createdAt.getTime()) / (1000 * 60 * 60 * 24));
@@ -110,6 +113,52 @@ export function QuoteHistoryTable({
       router.refresh();
     });
   }
+
+  const detail = (q: QuoteWithSale) => (
+          <>
+            <div className="flex flex-col gap-0.5">
+              <h3 className="text-lg font-semibold leading-tight">
+                {`${q.customerFirstName ?? ""} ${q.customerLastName ?? ""}`.trim() || "—"}
+              </h3>
+              <p className="text-sm text-muted-foreground">Presupuesto Nº {q.controlNumber ?? "—"}</p>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">Fecha</dt>
+                <dd className="font-medium">{formatDate(q.createdAt)}</dd>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">Días pendiente</dt>
+                <dd className="font-medium">{q.status === "PENDING" ? `${daysPending(q.createdAt)} días` : "—"}</dd>
+              </div>
+              <div className="col-span-2 flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">Total</dt>
+                <dd className="text-lg font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, q.totalCents)}</dd>
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <dt className="text-xs text-muted-foreground">Estado</dt>
+                <dd>
+                  <QuoteStatusButtons quoteId={q.id} status={q.status} disabled={isPending} onChange={handleStatusChange} />
+                </dd>
+              </div>
+            </dl>
+            <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+              {q.sale ? (
+                <Link href="/documents" className="inline-flex">
+                  <Badge variant="success">
+                    Facturado{q.sale.controlNumber != null ? ` · Nº ${q.sale.controlNumber}` : ""}
+                  </Badge>
+                </Link>
+              ) : q.status === "PENDING" ? (
+                <Button nativeButton={false} render={<Link href={`/pos?fromQuote=${q.id}`} />}>
+                  Facturar
+                </Button>
+              ) : (
+                <span className="text-sm text-muted-foreground">Sin facturar</span>
+              )}
+            </div>
+          </>
+        );
 
   return (
     <div className="flex flex-col gap-3">
@@ -149,6 +198,7 @@ export function QuoteHistoryTable({
           </button>
         ))}
       </div>
+      <div className="md:hidden">
       <MasterDetail
         items={sorted}
         label="Presupuestos"
@@ -206,51 +256,7 @@ export function QuoteHistoryTable({
             </span>
           </>
         )}
-        renderDetail={(q) => (
-          <>
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-lg font-semibold leading-tight">
-                {`${q.customerFirstName ?? ""} ${q.customerLastName ?? ""}`.trim() || "—"}
-              </h3>
-              <p className="text-sm text-muted-foreground">Presupuesto Nº {q.controlNumber ?? "—"}</p>
-            </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-xs text-muted-foreground">Fecha</dt>
-                <dd className="font-medium">{formatDate(q.createdAt)}</dd>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-xs text-muted-foreground">Días pendiente</dt>
-                <dd className="font-medium">{q.status === "PENDING" ? `${daysPending(q.createdAt)} días` : "—"}</dd>
-              </div>
-              <div className="col-span-2 flex flex-col gap-0.5">
-                <dt className="text-xs text-muted-foreground">Total</dt>
-                <dd className="text-lg font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, q.totalCents)}</dd>
-              </div>
-              <div className="col-span-2 flex flex-col gap-1.5">
-                <dt className="text-xs text-muted-foreground">Estado</dt>
-                <dd>
-                  <QuoteStatusButtons quoteId={q.id} status={q.status} disabled={isPending} onChange={handleStatusChange} />
-                </dd>
-              </div>
-            </dl>
-            <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-              {q.sale ? (
-                <Link href="/documents" className="inline-flex">
-                  <Badge variant="success">
-                    Facturado{q.sale.controlNumber != null ? ` · Nº ${q.sale.controlNumber}` : ""}
-                  </Badge>
-                </Link>
-              ) : q.status === "PENDING" ? (
-                <Button nativeButton={false} render={<Link href={`/pos?fromQuote=${q.id}`} />}>
-                  Facturar
-                </Button>
-              ) : (
-                <span className="text-sm text-muted-foreground">Sin facturar</span>
-              )}
-            </div>
-          </>
-        )}
+        renderDetail={detail}
         empty={
           <EmptyState
             icon={FileTextIcon}
@@ -260,6 +266,75 @@ export function QuoteHistoryTable({
           />
         }
       />
+      </div>
+      <div className="hidden md:block">
+        {sorted.length === 0 ? (
+          <EmptyState
+            icon={FileTextIcon}
+            title="Aún no hay presupuestos."
+            action={{ href: "/quotes", label: "Crear presupuesto" }}
+            className="rounded-lg border bg-card py-14 shadow-xs"
+          />
+        ) : (
+          <>
+            <label className="mb-3 flex w-fit items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Seleccionar todos los presupuestos" className="size-4 cursor-pointer accent-[var(--primary)]" />
+              Seleccionar todos
+            </label>
+            <ul className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+              {sorted.map((q) => {
+                const name = `${q.customerFirstName ?? ""} ${q.customerLastName ?? ""}`.trim() || "—";
+                const days = q.status === "PENDING" ? daysPending(q.createdAt) : null;
+                return (
+                  <li key={q.id}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setOpenId(q.id)}
+                      onKeyDown={(e) => {
+                        if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          setOpenId(q.id);
+                        }
+                      }}
+                      className="flex h-full cursor-pointer flex-col gap-2 rounded-[20px] bg-card p-5 text-left shadow-(--shadow-card) transition-shadow hover:shadow-(--shadow-float) focus-visible:outline-2 focus-visible:outline-ring"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-bold">{name}</p>
+                          <p className="text-xs text-muted-foreground">PRE-{q.controlNumber ?? "—"} · {formatDate(q.createdAt)}</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(q.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleOne(q.id)}
+                          aria-label={`Seleccionar presupuesto ${q.controlNumber ?? q.id}`}
+                          className="size-4 cursor-pointer accent-[var(--primary)]"
+                        />
+                      </div>
+                      <p className="text-2xl font-bold tabular-nums tracking-tight">{formatCurrencyCents(referenceCurrency, q.totalCents)}</p>
+                      <div className="mt-auto flex flex-wrap gap-1.5">
+                        <Badge variant={q.status === "CONVERTED" ? "success" : q.status === "LOST" ? "destructive" : "outline"}>{QUOTE_STATUS_LABELS[q.status]}</Badge>
+                        {days != null && <Badge variant="secondary">Pendiente · {days} {days === 1 ? "día" : "días"}</Badge>}
+                        {q.sale && <Badge variant="success">Facturado</Badge>}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <Dialog open={openQuote != null} onOpenChange={(o) => !o && setOpenId(null)}>
+              <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Detalle del presupuesto</DialogTitle>
+                </DialogHeader>
+                {openQuote && <div className="flex flex-col gap-4">{detail(openQuote)}</div>}
+              </DialogContent>
+            </Dialog>
+          </>
+        )}
+      </div>
     </div>
   );
 }
