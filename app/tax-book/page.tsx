@@ -73,7 +73,11 @@ export default async function TaxBookPage({
             creditNotes={creditNotes}
             debitNotes={debitNotes}
             rangeLabel={
-              range.kind === "preset" ? range.preset : `meses-${range.year}-${range.months.join("-")}`
+              range.kind === "preset"
+                ? range.preset
+                : range.kind === "range"
+                  ? `rango-${range.from}-a-${range.to}`
+                  : `meses-${range.year}-${range.months.join("-")}`
             }
           />
         </div>

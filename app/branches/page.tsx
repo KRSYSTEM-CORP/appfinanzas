@@ -13,7 +13,7 @@ export default async function BranchesPage() {
         <h1 className="text-2xl font-semibold">Sucursales</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Resumen de cada sede. Para entrar a una necesitas tu clave de administrador. Las sucursales se crean y editan en
-          Configuración.
+          Ajustes.
         </p>
       </div>
       {summaries.length === 0 ? (

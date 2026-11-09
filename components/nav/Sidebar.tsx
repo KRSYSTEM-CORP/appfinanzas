@@ -83,7 +83,7 @@ const managementItemsBase: NavItem[] = [
 ];
 
 const companyItemsBase: NavItem[] = [
-  { href: "/settings", label: "Configuración", icon: SettingsIcon },
+  { href: "/settings", label: "Ajustes", icon: SettingsIcon },
   { href: "/billing", label: "Suscripción mensual", icon: CreditCardIcon },
 ];
 
@@ -214,7 +214,7 @@ export function Sidebar({
 
   const managementItems = canManage ? [...managementItemsBase, ...featureItems] : featureItems;
   const companyItems: NavItem[] = [
-    { href: "/learning", label: "Learning", icon: GraduationCapIcon },
+    { href: "/learning", label: "Aprendizaje", icon: GraduationCapIcon },
     ...(isSuperAdmin ? [{ href: "/admin", label: "Administración", icon: ShieldIcon }] : []),
     ...(canManage ? companyItemsBase : []),
   ];

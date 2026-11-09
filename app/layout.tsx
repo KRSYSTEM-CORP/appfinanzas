@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Hanken_Grotesk } from "next/font/google";
 import Script from "next/script";
 import { Toaster } from "sonner";
 import { Sidebar } from "@/components/nav/Sidebar";
@@ -14,8 +14,9 @@ import { listBranches } from "@/lib/actions/branches";
 import { deriveBrandVars, deriveDarkAccent } from "@/lib/theme-color";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Tipografía del rediseño v15: Hanken Grotesk (la de la preview).
+const hankenGrotesk = Hanken_Grotesk({
+  variable: "--font-hanken",
   subsets: ["latin"],
 });
 
@@ -80,7 +81,7 @@ export default async function RootLayout({
   return (
     <html
       lang="es"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${hankenGrotesk.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className={`min-h-full flex flex-col ${canLoadAppChrome ? "md:h-dvh md:flex-row md:overflow-hidden" : ""}`}>

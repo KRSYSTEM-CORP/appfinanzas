@@ -37,7 +37,7 @@ const MODULES = `MÓDULOS (dónde está cada cosa en el menú)
 - Contabilidad: solo en los planes Pyme y Corporativo. Incluye libro de impuestos y finanzas (gastos, ganancia, punto de equilibrio y meta de ganancia).
 - Nómina: pago por quincena de los empleados, con recibo en PDF.
 - Administración de perfiles: aquí la persona dueña crea y desactiva usuarios del negocio.
-- Configuración: datos de la empresa, divisas y tasa, sucursales y medios de pago.
+- Ajustes: datos de la empresa, divisas y tasa, sucursales y medios de pago.
 - Suscripción mensual: plan, pagos y reportar un pago.
 - Aprendizaje: videos cortos de cómo usar el sistema (solo los sube el equipo de KR System).
 - Asistente IA: responde preguntas sobre los datos del negocio y puede proponer registrar un gasto o ajustar precios de una categoría.`;
@@ -50,7 +50,7 @@ const ACCESS = `ACCESO
 const PROBLEMS = `PROBLEMAS FRECUENTES
 - «No puedo agregar más productos / usuarios»: se llegó al tope del plan. Solución: subir de plan, o desactivar usuarios que ya no trabajan (eso libera cupo).
 - «No veo Contabilidad»: está solo en Pyme y Corporativo.
-- «Los precios en bolívares no cuadran»: revisar en Configuración que la tasa esté al día.
+- «Los precios en bolívares no cuadran»: revisar en Ajustes que la tasa esté al día.
 - «El asistente dice que llegué al límite de consultas»: es un tope diario según el plan; se reinicia al día siguiente.
 - «No tengo créditos para aplicar un cambio»: comprar un paquete desde el Asistente, o esperar al mes siguiente (los del plan se reinician cada mes).
 - «No puedo cambiar precios con “Todas las sucursales”»: elegir primero una sucursal.`;

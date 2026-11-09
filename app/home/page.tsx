@@ -30,6 +30,7 @@ export const dynamic = "force-dynamic";
 
 function formatPeriodLabel(selection: ReturnType<typeof parseDateRangeSelection>) {
   if (selection.kind === "months") return `${selection.months.length} meses seleccionados`;
+  if (selection.kind === "range") return `Del ${selection.from} al ${selection.to}`;
   if (selection.preset === "today") return "Hoy";
   if (selection.preset === "7d") return "Últimos 7 días";
   return "Este mes";
@@ -104,7 +105,7 @@ export default async function BusinessHome({
           delta={revenueChangePct == null ? undefined : { pct: revenueChangePct, label: "vs. período anterior", note: changeNote }}
         />
         <StatCard
-          label="Promedio por venta"
+          label="Venta promedio"
           value={<Price eurCents={totals.avgEurCents} rate={rate} currencyCode={localCurrencyCode} exchangeRateEnabled={exchangeRateEnabled} referenceCurrency={referenceCurrency} />}
           icon={ChartNoAxesCombinedIcon}
           accent="violet"
