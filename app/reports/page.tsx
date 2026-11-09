@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CashClosingPanel } from "@/components/reports/CashClosingPanel";
 import { PendingClosingsList } from "@/components/reports/PendingClosingsList";
 import { SalesTable } from "@/components/reports/SalesTable";
-import { PaymentStatusFilter } from "@/components/reports/PaymentStatusFilter";
+import { ChannelFilter, PaymentStatusFilter } from "@/components/reports/PaymentStatusFilter";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { formatCurrencyCents, getCurrency } from "@/lib/currencies";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
@@ -16,12 +16,13 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; year?: string; months?: string; status?: string }>;
+  searchParams: Promise<{ range?: string; year?: string; months?: string; status?: string; channel?: string }>;
 }) {
   const session = await requireSectionAccess("reports");
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const todayStr = todayDateString();
+  const channelFilter = ["MOSTRADOR", "DELIVERY", "PICKUP", "ONLINE"].includes(params.channel ?? "") ? (params.channel as string) : "";
   const statusFilter = params.status === "PAID" || params.status === "CREDIT" ? params.status : "";
 
   const [
@@ -41,6 +42,7 @@ export default async function ReportsPage({
     listPendingClosings(range),
     listRecentClosings(5),
   ]);
+  const salesShown = channelFilter ? recentSales.filter((x) => x.channel === channelFilter) : recentSales;
   const company = { name: session.companyName, logoDataUrl, ...fiscalData };
   // Closing the register and voiding/deleting sales are manager-only on the
   // server (KRPOS-SEC-002/004); hide those controls for sellers too.
@@ -171,13 +173,14 @@ export default async function ReportsPage({
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
           <CardTitle>Ventas del día y del período</CardTitle>
           <div className="flex items-center gap-3 flex-wrap">
+            <ChannelFilter value={channelFilter} />
             <PaymentStatusFilter value={statusFilter} />
-            <DateRangeSwitcher selection={range} extraParams={statusFilter ? { status: statusFilter } : undefined} />
+            <DateRangeSwitcher selection={range} extraParams={{ ...(statusFilter ? { status: statusFilter } : {}), ...(channelFilter ? { channel: channelFilter } : {}) }} />
           </div>
         </CardHeader>
         <CardContent>
           <SalesTable
-            sales={recentSales}
+            sales={salesShown}
             company={company}
             rate={rate}
             localCurrencyCode={localCurrencyCode}
