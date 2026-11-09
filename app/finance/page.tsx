@@ -22,6 +22,8 @@ import {
   inventoryRotation,
   customerMix,
   restockSuggestions,
+  periodExtras,
+  weeklyReports,
 } from "@/lib/actions/reports";
 import { salesHeatmap } from "@/lib/actions/home";
 import { commissionsTotal, sellersSalesOverview } from "@/lib/actions/seller-reports";
@@ -65,6 +67,8 @@ export default async function FinancePage({
     heat,
     mix,
     restock,
+    extras,
+    weekly,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
     revenueTotals(range),
@@ -88,8 +92,17 @@ export default async function FinancePage({
     salesHeatmap(),
     customerMix(range),
     restockSuggestions(),
+    periodExtras(range),
+    weeklyReports(),
     getExchangeRateInfo(),
   ]);
+
+  // Variación contra el periodo anterior (solo si hay base para comparar).
+  const pctDelta = (cur: number, prev: number) =>
+    extras && prev > 0 ? { pct: Math.round(((cur - prev) / prev) * 100), label: extras.label } : undefined;
+  const avgDelta = extras && extras.prevCount > 0 && totals.count > 0 ? pctDelta(totals.avgEurCents, extras.prevAvgCents) : undefined;
+  const countDelta = extras ? pctDelta(totals.count, extras.prevCount) : undefined;
+  const expensesDelta = extras ? (() => { const d = pctDelta(expensesCents, extras.prevExpensesCents); return d ? { ...d, inverse: true } : undefined; })() : undefined;
 
   const netProfitCents = totals.totalEurCents - cogsCents - expensesCents - commissionsCents;
 
@@ -172,6 +185,7 @@ export default async function FinancePage({
         <StatCard
           label="Gastos totales"
           accent="destructive"
+          delta={expensesDelta}
           icon={WalletIcon}
           value={formatCurrencyCents(referenceCurrency, expensesCents)}
         />
@@ -184,10 +198,11 @@ export default async function FinancePage({
       </div>
 
       <div className="stat-grid grid grid-cols-1 gap-4 sm:grid-cols-2 [&>*]:rounded-[20px] [&>*]:bg-card [&>*]:p-5 [&>*]:shadow-(--shadow-card) xl:grid-cols-3">
-        <StatCard label="Ventas registradas" accent="primary" icon={TrendingUpIcon} value={String(totals.count)} />
+        <StatCard label="Ventas registradas" accent="primary" icon={TrendingUpIcon} value={String(totals.count)} delta={countDelta} />
         <StatCard
           label="Venta promedio"
           accent="violet"
+          delta={avgDelta}
           icon={WalletIcon}
           value={formatCurrencyCents(referenceCurrency, totals.avgEurCents)}
         />
@@ -470,6 +485,30 @@ export default async function FinancePage({
               </ul>
             );
           })()}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Reporte semanal</CardTitle>
+          <p className="text-sm text-muted-foreground">Las últimas 4 semanas (lunes a domingo). Toca «Ver reporte» para abrir Estadísticas de esa semana.</p>
+        </CardHeader>
+        <CardContent>
+          <ul className="flex flex-col divide-y">
+            {weekly.map((w) => (
+              <li key={w.from} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                <div>
+                  <p className="font-semibold">Semana del {w.label}</p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    Ventas {formatCurrencyCents(referenceCurrency, w.cents)} · {w.count} {w.count === 1 ? "pedido" : "pedidos"}
+                  </p>
+                </div>
+                <Link href={`/finance?range=range&from=${w.from}&to=${w.to}`} className="rounded-full bg-muted px-3 py-1.5 text-xs font-semibold">
+                  Ver reporte
+                </Link>
+              </li>
+            ))}
+          </ul>
         </CardContent>
       </Card>
 

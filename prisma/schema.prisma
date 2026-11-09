@@ -263,6 +263,8 @@ model Branch {
   company              Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name                 String
   isActive             Boolean  @default(true)
+  // Meta de ventas del mes de esta sede (se ve en Sucursales); null = sin meta.
+  monthlyGoalCents     Int?
   createdAt            DateTime @default(now())
   // Last document number handed out per sequence (see lib/document-sequence.ts).
   // Never derived from count(*): a deleted document must not free its number.

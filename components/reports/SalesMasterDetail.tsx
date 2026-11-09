@@ -9,7 +9,7 @@ import { PaymentMethodCell } from "@/components/reports/PaymentMethodCell";
 import { SaleActions } from "@/components/reports/SaleActions";
 import { SaleDocumentButtons } from "@/components/reports/SaleDocumentButtons";
 import { Price } from "@/components/money/Price";
-import { PAYMENT_STATUS_LABELS, formatDateSlash } from "@/lib/format";
+import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, formatDateSlash } from "@/lib/format";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { PlainSale } from "@/lib/sales-plain";
@@ -17,6 +17,15 @@ import type { PlainSale } from "@/lib/sales-plain";
 // Desktop-only list + detail panel for the sales history, shared by Reportes
 // and Contabilidad → Ventas por vendedor through SalesTable. Phones keep the
 // card layout rendered by SalesTable.
+const CHANNEL_LABELS: Record<string, string> = { MOSTRADOR: "Mostrador", DELIVERY: "Delivery", PICKUP: "Pick-up", ONLINE: "Online" };
+
+// Nº · hora · canal · método, como las columnas de la tabla de la preview.
+function saleMeta(s: { controlNumber: number | null; createdAt: Date | string; channel?: string | null; payments: { paymentMethod: keyof typeof PAYMENT_METHOD_LABELS }[] }): string {
+  const time = new Intl.DateTimeFormat("es-VE", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Caracas" }).format(new Date(s.createdAt));
+  const methods = [...new Set(s.payments.map((p) => PAYMENT_METHOD_LABELS[p.paymentMethod]))].join(" + ");
+  return [`#${s.controlNumber ?? "—"}`, time, s.channel ? CHANNEL_LABELS[s.channel] ?? s.channel : null, methods || null].filter(Boolean).join(" · ");
+}
+
 export function SalesMasterDetail({
   sales,
   remainingCentsBySaleId,
@@ -84,7 +93,7 @@ export function SalesMasterDetail({
           <span className={`min-w-0 flex-1 ${s.voided ? "opacity-60" : ""}`}>
             <span className="block truncate text-sm font-semibold">{nameOf(s)}</span>
             <span className="block truncate text-xs text-muted-foreground">
-              {formatDateSlash(s.createdAt)}
+              {formatDateSlash(s.createdAt)} · {saleMeta(s)}
               {showSellerColumn && s.sellerName ? ` · ${s.sellerName}` : ""}
               {s.voided && " · Anulada"}
             </span>

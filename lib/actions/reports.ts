@@ -6,8 +6,10 @@ import { withTenant } from "@/lib/tenant-db";
 import { closedDayWindows } from "@/lib/closed-days";
 import {
   comparisonWindows,
+  dayBoundsUtc,
   selectionToWindows,
   SHOP_TIME_ZONE,
+  todayDateString,
   type BottomProductPoint,
   type DateRangeSelection,
   type SalesByDayPoint,
@@ -465,5 +467,89 @@ export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]
       .filter((x) => x.suggestedQty > 0)
       .sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999))
       .slice(0, limit);
+  });
+}
+
+export type PeriodExtras = { prevCount: number; prevAvgCents: number; prevExpensesCents: number; prevDays: number; label: string };
+
+// Valores del periodo anterior comparable (mismo criterio que revenueComparison:
+// solo días con cierre de caja en las ventas) para mostrar la variación de venta
+// promedio, número de ventas y gastos en Estadísticas.
+export async function periodExtras(range: DateRangeSelection): Promise<PeriodExtras | null> {
+  const { companyId, branchId } = await requireManager();
+  const comparison = comparisonWindows(range);
+  if (!comparison) return null;
+  return withTenant(companyId, async (tx) => {
+    const closed = await closedDayWindows(tx, companyId, branchId, comparison.windows);
+    const [sales, expenses] = await Promise.all([
+      closed.length === 0
+        ? Promise.resolve({ _sum: { totalCents: 0 as number | null }, _count: 0 })
+        : tx.sale.aggregate({
+            _sum: { totalCents: true },
+            _count: true,
+            where: {
+              companyId,
+              ...(branchId ? { branchId } : {}),
+              OR: closed.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
+              voided: false,
+            },
+          }),
+      tx.expense.aggregate({
+        _sum: { amountCents: true },
+        where: { companyId, OR: comparison.windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
+      }),
+    ]);
+    const count = sales._count;
+    const cents = sales._sum.totalCents ?? 0;
+    return {
+      prevCount: count,
+      prevAvgCents: count > 0 ? Math.round(cents / count) : 0,
+      prevExpensesCents: expenses._sum.amountCents ?? 0,
+      prevDays: closed.length,
+      label: comparison.label,
+    };
+  });
+}
+
+export type WeeklyRow = { from: string; to: string; label: string; cents: number; count: number };
+
+function addDaysStr(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Reporte semanal: las últimas 4 semanas (lunes a domingo, hora de Venezuela) con
+// ventas y pedidos. Se calcula al abrir Estadísticas; no se envía por correo.
+export async function weeklyReports(): Promise<WeeklyRow[]> {
+  const { companyId, branchId } = await requireManager();
+  const today = todayDateString();
+  const dow = (new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7; // 0 = lunes
+  const thisMonday = addDaysStr(today, -dow);
+  const fmt = new Intl.DateTimeFormat("es-VE", { day: "numeric", month: "short", timeZone: "UTC" });
+  return withTenant(companyId, async (tx) => {
+    const weeks = [0, 1, 2, 3].map((i) => {
+      const from = addDaysStr(thisMonday, -7 * i);
+      const to = addDaysStr(from, 6);
+      return { from, to };
+    });
+    return Promise.all(
+      weeks.map(async (w) => {
+        const start = dayBoundsUtc(w.from).start;
+        const end = dayBoundsUtc(w.to).end;
+        const r = await tx.sale.aggregate({
+          _sum: { totalCents: true },
+          _count: true,
+          where: { companyId, ...(branchId ? { branchId } : {}), voided: false, createdAt: { gte: start, lt: end } },
+        });
+        return {
+          from: w.from,
+          to: w.to,
+          label: `${fmt.format(new Date(`${w.from}T12:00:00Z`))} al ${fmt.format(new Date(`${w.to}T12:00:00Z`))}`,
+          cents: r._sum.totalCents ?? 0,
+          count: r._count,
+        };
+      })
+    );
   });
 }

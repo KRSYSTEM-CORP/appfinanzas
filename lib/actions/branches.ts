@@ -108,6 +108,9 @@ export type BranchSummary = {
   salesMonth: number;
   salesMonthCents: number;
   lowStock: number;
+  // Ganancia estimada del mes = ventas − costo de lo vendido (los gastos no se llevan por sede).
+  profitMonthCents: number;
+  goalCents: number | null;
 };
 
 // Resumen visible de cada sede (ventas de hoy, productos y personal). Solo
@@ -123,7 +126,7 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
     ]);
     const summaries = await Promise.all(
       branches.map(async (b) => {
-        const [sales, products, users, month, low] = await Promise.all([
+        const [sales, products, users, month, low, cogs] = await Promise.all([
           tx.sale.aggregate({
             where: { companyId, branchId: b.id, voided: false, createdAt: { gte: start, lt: end } },
             _sum: { totalCents: true },
@@ -140,6 +143,13 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
             SELECT COUNT(*)::bigint AS n FROM "Product"
             WHERE "companyId" = ${companyId} AND "branchId" = ${b.id} AND "isActive" = true
               AND "trackStock" = true AND "stock" <= "lowStockThreshold"`,
+          tx.$queryRaw<{ c: bigint | null }[]>`
+            SELECT COALESCE(SUM(si."quantity" * p."costCents"), 0)::bigint AS c
+            FROM "SaleItem" si
+            JOIN "Sale" s ON s.id = si."saleId"
+            JOIN "Product" p ON p.id = si."productId"
+            WHERE s."companyId" = ${companyId} AND s."branchId" = ${b.id} AND s."voided" = false
+              AND s."createdAt" >= ${monthStart} AND s."createdAt" < ${end} AND p."costCents" IS NOT NULL`,
         ]);
         return {
           id: b.id,
@@ -152,9 +162,25 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
           salesMonth: month._count,
           salesMonthCents: month._sum.totalCents ?? 0,
           lowStock: Number(low[0]?.n ?? 0),
+          profitMonthCents: (month._sum.totalCents ?? 0) - Number(cogs[0]?.c ?? 0),
+          goalCents: b.monthlyGoalCents,
         };
       })
     );
     return { summaries, currency: company?.referenceCurrency ?? "USD" };
   });
+}
+
+// Meta de ventas del mes de una sucursal (null la quita). Solo gerente.
+export async function setBranchGoal(branchId: string, amount: number | null): Promise<ActionResult> {
+  const { companyId } = await requireManager();
+  if (amount != null && (!Number.isFinite(amount) || amount < 0)) return { success: false, error: "Escribe una meta válida." };
+  const cents = amount == null || amount === 0 ? null : Math.round(amount * 100);
+  const r = await withTenant(companyId, (tx) =>
+    tx.branch.updateMany({ where: { id: branchId, companyId }, data: { monthlyGoalCents: cents } })
+  );
+  if (r.count === 0) return { success: false, error: "Sucursal no encontrada." };
+  invalidateCache(`branches:${companyId}`);
+  revalidatePath("/branches");
+  return { success: true };
 }

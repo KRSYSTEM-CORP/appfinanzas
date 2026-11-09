@@ -1,12 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { LockIcon, PackageIcon, ReceiptIcon, StoreIcon, UsersIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EnterBranchDialog } from "@/components/branches/EnterBranchDialog";
 import { formatCurrencyCents } from "@/lib/currencies";
-import type { BranchSummary } from "@/lib/actions/branches";
+import { setBranchGoal, type BranchSummary } from "@/lib/actions/branches";
+
+function GoalEditor({ branchId, goalCents, currency }: { branchId: string; goalCents: number | null; currency: string }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(goalCents != null ? String(goalCents / 100) : "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  void currency;
+  if (!editing)
+    return (
+      <button type="button" onClick={() => setEditing(true)} className="text-xs font-semibold text-primary underline underline-offset-4">
+        {goalCents != null ? "Cambiar meta" : "Definir meta de ventas del mes"}
+      </button>
+    );
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        type="number"
+        min="0"
+        step="0.01"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        aria-label="Meta de ventas del mes"
+        className="h-9 w-28 rounded-full border-[1.5px] border-input bg-card px-3 text-sm outline-none focus-visible:border-ring"
+      />
+      <Button
+        size="sm"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            const r = await setBranchGoal(branchId, value.trim() === "" ? null : Number(value));
+            if (r.success) {
+              setEditing(false);
+              setError(null);
+              router.refresh();
+            } else setError(r.error ?? "No se pudo guardar");
+          })
+        }
+      >
+        Guardar
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+        Cancelar
+      </Button>
+      {error && <p className="w-full text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
 
 export function BranchCards({
   summaries,
@@ -106,6 +156,26 @@ export function BranchCards({
                       <p className="text-xs text-muted-foreground">Pedidos</p>
                       <p className="text-lg font-bold tabular-nums">{s.salesMonth}</p>
                     </div>
+                  </div>
+                  <div className="flex flex-col gap-2 rounded-2xl bg-muted/60 p-3">
+                    <div className="flex items-baseline justify-between text-sm">
+                      <span className="text-muted-foreground">Ganancia est. del mes</span>
+                      <b className={`tabular-nums ${s.profitMonthCents < 0 ? "text-destructive" : "text-success"}`}>{formatCurrencyCents(currency, s.profitMonthCents)}</b>
+                    </div>
+                    {s.goalCents != null && s.goalCents > 0 && (
+                      <>
+                        <div className="flex items-baseline justify-between text-xs text-muted-foreground">
+                          <span>Meta de ventas del mes</span>
+                          <span className="tabular-nums">
+                            {formatCurrencyCents(currency, s.salesMonthCents)} / {formatCurrencyCents(currency, s.goalCents)} · {Math.round((s.salesMonthCents / s.goalCents) * 100)} %
+                          </span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`Meta de ${s.name}`} aria-valuenow={Math.min(100, Math.round((s.salesMonthCents / s.goalCents) * 100))} aria-valuemin={0} aria-valuemax={100}>
+                          <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (s.salesMonthCents / s.goalCents) * 100)}%` }} />
+                        </div>
+                      </>
+                    )}
+                    {s.isActive && <GoalEditor branchId={s.id} goalCents={s.goalCents} currency={currency} />}
                   </div>
                   <dl className="grid grid-cols-3 gap-2 text-center text-xs">
                     <div className="rounded-xl bg-muted p-2.5">
