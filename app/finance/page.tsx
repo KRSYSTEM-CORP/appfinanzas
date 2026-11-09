@@ -201,6 +201,41 @@ export default async function FinancePage({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Cascada de utilidad</CardTitle>
+          <p className="text-sm text-muted-foreground">De las ventas a la ganancia neta, paso a paso</p>
+        </CardHeader>
+        <CardContent>
+          {totals.totalEurCents <= 0 ? (
+            <p className="text-sm text-muted-foreground">Sin ventas en este período.</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {[
+                { label: "Ventas", value: totals.totalEurCents, from: 0, color: "bg-primary", sign: "" },
+                { label: "Costo de mercancía", value: cogsCents, from: totals.totalEurCents - cogsCents, color: "bg-[#ff9f0a]", sign: "−" },
+                { label: "Gastos", value: expensesCents, from: totals.totalEurCents - cogsCents - expensesCents, color: "bg-destructive", sign: "−" },
+                { label: "Comisiones", value: commissionsCents, from: totals.totalEurCents - cogsCents - expensesCents - commissionsCents, color: "bg-[#c0577a]", sign: "−" },
+                { label: "Utilidad", value: Math.abs(netProfitCents), from: 0, color: netProfitCents < 0 ? "bg-destructive" : "bg-success", sign: netProfitCents < 0 ? "−" : "" },
+              ].map((r) => {
+                const total = totals.totalEurCents;
+                const left = Math.max(0, Math.min(100, (r.from / total) * 100));
+                const width = Math.max(r.value > 0 ? 1.5 : 0, Math.min(100 - left, (r.value / total) * 100));
+                return (
+                  <li key={r.label} className="grid grid-cols-[130px_1fr_110px] items-center gap-3 text-sm">
+                    <span className="font-medium">{r.label}</span>
+                    <div className="relative h-3 rounded-full bg-muted">
+                      <div className={`absolute top-0 h-full rounded-full ${r.color}`} style={{ left: `${left}%`, width: `${width}%` }} />
+                    </div>
+                    <span className="text-right font-semibold tabular-nums">{r.sign}{formatCurrencyCents(referenceCurrency, r.value)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
       <StatsInsights mix={paymentMix} purchased={purchased} rotation={rotation} referenceCurrency={referenceCurrency} />
 
       <BreakevenCard
