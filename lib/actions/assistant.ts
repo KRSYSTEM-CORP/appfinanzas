@@ -10,6 +10,7 @@ import {
   AI_APPLY_COST,
   ProposalSchema,
   creditsRemaining,
+  findPack,
   dailyAskCap,
   parseAssistantReply,
   periodKey,
@@ -268,4 +269,36 @@ export async function applyProposal(input: unknown, entryId?: string | null): Pr
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "No se pudo aplicar la propuesta" };
   }
+}
+
+export type CreditRequestRow = { id: string; credits: number; priceCents: number; reference: string; status: string; createdAt: Date };
+
+export async function listMyCreditRequests(): Promise<CreditRequestRow[]> {
+  const { companyId } = await requireManager();
+  return withTenant(companyId, (tx) =>
+    tx.aiCreditRequest.findMany({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: { id: true, credits: true, priceCents: true, reference: true, status: true, createdAt: true },
+    })
+  );
+}
+
+// La empresa pide un paquete: queda pendiente hasta que KR System confirme el pago.
+export async function requestCreditPack(credits: number, reference: string): Promise<ActionResult> {
+  const { companyId, userId } = await requireManager();
+  const pack = findPack(credits);
+  const ref = reference.trim().slice(0, 200);
+  if (!pack) return { success: false, error: "Elige un paquete válido" };
+  if (ref.length < 3) return { success: false, error: "Escribe la referencia o el comprobante del pago" };
+  const pending = await withTenant(companyId, (tx) => tx.aiCreditRequest.count({ where: { companyId, status: "PENDING" } }));
+  if (pending >= 3) return { success: false, error: "Ya tienes 3 solicitudes pendientes. Espera a que se aprueben." };
+  await withTenant(companyId, (tx) =>
+    tx.aiCreditRequest.create({
+      data: { companyId, requestedBy: userId, credits: pack.credits, priceCents: pack.priceCents, reference: ref },
+    })
+  );
+  revalidatePath("/assistant");
+  return { success: true };
 }

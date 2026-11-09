@@ -235,6 +235,7 @@ model Company {
   cashOpenings          CashOpening[]
   branchTransfers       BranchTransfer[]
   assistantEntries      AssistantEntry[]
+  aiCreditRequests      AiCreditRequest[]
   paymentAccounts       PaymentAccount[]
   payrollEmployees      PayrollEmployee[]
   payrollPayments       PayrollPayment[]
@@ -1337,4 +1338,24 @@ model AssistantEntry {
   createdAt DateTime @default(now())
 
   @@index([companyId, userId, createdAt])
+}
+
+// Solicitud de compra de créditos del Asistente IA. La empresa paga por los
+// medios de siempre y manda la referencia; el administrador de KR System la
+// aprueba (suma los créditos) o la rechaza.
+model AiCreditRequest {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requestedBy String
+  credits     Int
+  priceCents  Int
+  reference   String
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewNote  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([status, createdAt])
 }
