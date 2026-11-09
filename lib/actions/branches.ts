@@ -104,6 +104,10 @@ export type BranchSummary = {
   salesTodayCents: number;
   products: number;
   users: number;
+  // Ventas del mes en curso y productos con stock bajo (tarjetas de la preview).
+  salesMonth: number;
+  salesMonthCents: number;
+  lowStock: number;
 };
 
 // Resumen visible de cada sede (ventas de hoy, productos y personal). Solo
@@ -111,6 +115,7 @@ export type BranchSummary = {
 export async function branchOverview(): Promise<{ summaries: BranchSummary[]; currency: string }> {
   const { companyId } = await requireManager();
   const { start, end } = dayBoundsUtc(todayDateString());
+  const monthStart = dayBoundsUtc(`${todayDateString().slice(0, 7)}-01`).start;
   return withTenant(companyId, async (tx) => {
     const [branches, company] = await Promise.all([
       tx.branch.findMany({ where: { companyId }, orderBy: { createdAt: "asc" } }),
@@ -118,7 +123,7 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
     ]);
     const summaries = await Promise.all(
       branches.map(async (b) => {
-        const [sales, products, users] = await Promise.all([
+        const [sales, products, users, month, low] = await Promise.all([
           tx.sale.aggregate({
             where: { companyId, branchId: b.id, voided: false, createdAt: { gte: start, lt: end } },
             _sum: { totalCents: true },
@@ -126,6 +131,15 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
           }),
           tx.product.count({ where: { companyId, branchId: b.id } }),
           tx.user.count({ where: { companyId, branchId: b.id, status: "ACTIVE" } }),
+          tx.sale.aggregate({
+            where: { companyId, branchId: b.id, voided: false, createdAt: { gte: monthStart, lt: end } },
+            _sum: { totalCents: true },
+            _count: true,
+          }),
+          tx.$queryRaw<{ n: bigint }[]>`
+            SELECT COUNT(*)::bigint AS n FROM "Product"
+            WHERE "companyId" = ${companyId} AND "branchId" = ${b.id} AND "isActive" = true
+              AND "trackStock" = true AND "stock" <= "lowStockThreshold"`,
         ]);
         return {
           id: b.id,
@@ -135,6 +149,9 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
           salesTodayCents: sales._sum.totalCents ?? 0,
           products,
           users,
+          salesMonth: month._count,
+          salesMonthCents: month._sum.totalCents ?? 0,
+          lowStock: Number(low[0]?.n ?? 0),
         };
       })
     );
