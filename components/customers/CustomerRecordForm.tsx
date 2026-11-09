@@ -49,6 +49,17 @@ export function CustomerRecordForm({ customer, action }: Props) {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="rif">Cédula/RIF (opcional)</Label>
           <Input id="rif" name="rif" defaultValue={customer?.rif ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="birthDate">Cumpleaños (opcional)</Label>
+          <Input
+            id="birthDate"
+            name="birthDate"
+            type="date"
+            min="1900-01-01"
+            max={new Date().toISOString().slice(0, 10)}
+            defaultValue={customer?.birthDate ? customer.birthDate.toISOString().slice(0, 10) : ""}
+          />
           <p className="text-xs text-muted-foreground">Ej. V-12345678 o J-12345678-9</p>
         </div>
       </div>

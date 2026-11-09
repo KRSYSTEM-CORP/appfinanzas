@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireManager, requireSession, requireSectionAccess } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { CustomerRecordSchema, CustomerCrmSchema } from "@/lib/validations";
+import { upcomingBirthdays } from "@/lib/birthdays";
 import { dayBoundsUtc, todayDateString } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
 
@@ -136,6 +137,7 @@ function readCustomerForm(formData: FormData) {
     phone: formData.get("phone"),
     address: formData.get("address"),
     rif: formData.get("rif"),
+    birthDate: formData.get("birthDate"),
   });
 }
 
@@ -215,4 +217,16 @@ export async function deleteCustomer(id: string): Promise<ActionResult> {
   await withTenant(companyId, (tx) => tx.customer.deleteMany({ where: { id, companyId } }));
   revalidatePath("/customers");
   return { success: true };
+}
+
+// Clientes que cumplen años hoy o en los próximos `withinDays` días.
+export async function listUpcomingBirthdays(withinDays = 30) {
+  const { companyId } = await requireSectionAccess("customers");
+  const customers = await withTenant(companyId, (tx) =>
+    tx.customer.findMany({
+      where: { companyId, birthDate: { not: null } },
+      select: { id: true, firstName: true, lastName: true, phone: true, birthDate: true },
+    })
+  );
+  return upcomingBirthdays(customers, todayDateString(), withinDays);
 }

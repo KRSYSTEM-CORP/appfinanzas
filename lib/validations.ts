@@ -289,6 +289,10 @@ export const CustomerRecordSchema = z.object({
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
   rif: z.preprocess(blankToUndefined, z.string().trim().optional()),
+  // Vacío = sin fecha (y borra la que hubiera). No puede ser futura ni anterior a 1900.
+  birthDate: z
+    .preprocess((v) => (v == null || v === "" ? null : v), z.coerce.date().nullable())
+    .refine((d) => d == null || (d.getUTCFullYear() >= 1900 && d.getTime() <= Date.now()), "La fecha de nacimiento no es válida"),
 });
 
 export type CustomerRecordInput = z.infer<typeof CustomerRecordSchema>;
