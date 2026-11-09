@@ -22,9 +22,18 @@ export type CustomerInfo = {
 export function CustomerForm({
   initial,
   onContinue,
+  title = "Datos del cliente",
+  subtitle = "Un dato rápido y pasas directo al catálogo.",
+  submitLabel = "Continuar al catálogo",
+  bare = false,
 }: {
   initial?: CustomerInfo;
   onContinue: (customer: CustomerInfo) => void;
+  title?: string;
+  subtitle?: string;
+  submitLabel?: string;
+  // Sin tarjeta propia: para mostrarlo dentro de un diálogo.
+  bare?: boolean;
 }) {
   const [firstName, setFirstName] = useState(initial?.firstName ?? "");
   const [lastName, setLastName] = useState(initial?.lastName ?? "");
@@ -85,16 +94,20 @@ export function CustomerForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mx-auto my-3 flex w-full max-w-2xl flex-col gap-4 rounded-2xl border bg-card p-4 shadow-[0_8px_28px_color-mix(in_oklab,var(--foreground)_5%,transparent)] min-[400px]:my-4 min-[400px]:gap-5 min-[400px]:p-5 sm:my-6 sm:p-7"
+      className={
+        bare
+          ? "flex w-full flex-col gap-4"
+          : "mx-auto my-3 flex w-full max-w-2xl flex-col gap-4 rounded-2xl border bg-card p-4 shadow-[0_8px_28px_color-mix(in_oklab,var(--foreground)_5%,transparent)] min-[400px]:my-4 min-[400px]:gap-5 min-[400px]:p-5 sm:my-6 sm:p-7"
+      }
     >
       <div className="flex items-start gap-3">
         <div className="flex items-center justify-center size-9 shrink-0 rounded-lg bg-primary/10 text-primary">
           <UserIcon className="size-4.5" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold leading-tight tracking-tight">Datos del cliente</h2>
+          <h2 className="text-lg font-semibold leading-tight tracking-tight">{title}</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Un dato rápido y pasas directo al catálogo.
+            {subtitle}
           </p>
         </div>
       </div>
@@ -174,7 +187,7 @@ export function CustomerForm({
       </div>
 
       <Button type="submit" size="lg" className="w-full">
-        Continuar al catálogo
+        {submitLabel}
       </Button>
     </form>
   );
