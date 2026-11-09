@@ -6,7 +6,7 @@ export default function ImportProductsPage() {
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Importar productos desde Excel</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Importar productos desde Excel</h1>
         <Button variant="outline" nativeButton={false} render={<Link href="/inventory" />}>
           Volver a inventario
         </Button>

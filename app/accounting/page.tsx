@@ -43,7 +43,10 @@ export default async function AccountingPage() {
   await requireAccountingPlan();
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
-      <h1 className="text-2xl font-semibold">Contabilidad</h1>
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wider text-primary">Finanzas y obligaciones</p>
+        <h1 className="text-3xl font-bold tracking-tight">Administración</h1>
+      </div>
       <AccountingHub sections={sections} />
     </div>
   );

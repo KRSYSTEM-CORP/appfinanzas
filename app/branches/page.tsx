@@ -10,7 +10,8 @@ export default async function BranchesPage() {
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div>
-        <h1 className="text-2xl font-semibold">Sucursales</h1>
+        <p className="text-xs font-bold uppercase tracking-wider text-primary">Red de sedes</p>
+        <h1 className="text-3xl font-bold tracking-tight">Sucursales</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Resumen de cada sede. Para entrar a una necesitas tu clave de administrador. Las sucursales se crean y editan en
           Ajustes.
