@@ -6,7 +6,7 @@ const GRACE_DAYS = 5;
 // where this actually gets applied. approveUser in lib/actions/admin.ts still
 // applies it too, purely to cover any pre-existing PENDING account from
 // before self-serve signup — new signups never reach PENDING anymore.
-export const TRIAL_DAYS = 14;
+export const TRIAL_DAYS = 15;
 
 // Fallback used only if a platform admin has never set PlatformSettings.
 // defaultMonthlyFeeUsdCents — in practice that field should always be

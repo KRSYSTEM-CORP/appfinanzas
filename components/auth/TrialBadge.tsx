@@ -1,6 +1,8 @@
+import { TRIAL_DAYS } from "@/lib/billing";
+
 // Floating illustrative badge on login/signup — a lightweight CSS float (no
 // JS animation library needed for one decorative element) advertising the
-// 14-day free trial.
+// free trial.
 export function TrialBadge() {
   return (
     <div className="mx-auto w-fit rounded-full bg-gradient-to-r from-primary to-[color-mix(in_oklch,var(--primary),black_20%)] px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary/30 trial-badge-float">
@@ -16,7 +18,7 @@ export function TrialBadge() {
           .trial-badge-float { animation: none; }
         }
       `}</style>
-      ✦ 14 días gratis para probar el sistema
+      ✦ {TRIAL_DAYS} días gratis para probar el sistema
     </div>
   );
 }
