@@ -68,6 +68,26 @@ export function BranchCards({
                       </div>
                     </div>
                   </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${!s.isActive ? "bg-muted text-muted-foreground" : here ? "bg-primary/10 text-primary" : "bg-success/14 text-success"}`}>
+                      {!s.isActive ? "Inactiva" : here ? "Operando aquí" : "Activa"}
+                    </span>
+                    {s.lowStock > 0 && (
+                      <span className="rounded-full bg-warning/18 px-2.5 py-0.5 text-xs font-semibold text-warning">
+                        {s.lowStock} {s.lowStock === 1 ? "alerta de stock" : "alertas de stock"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Ventas · mes</p>
+                      <p className="text-2xl font-bold tabular-nums tracking-tight">{formatCurrencyCents(currency, s.salesMonthCents)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Pedidos</p>
+                      <p className="text-lg font-bold tabular-nums">{s.salesMonth}</p>
+                    </div>
+                  </div>
                   <dl className="grid grid-cols-3 gap-2 text-center text-xs">
                     <div className="rounded-xl bg-muted p-2.5">
                       <dt className="flex items-center justify-center gap-1 text-muted-foreground">
