@@ -314,6 +314,15 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
 
   const { price, cost, image, stock, trackStock, wholesalePrice, bulkPrice, ...rest } = parsed.data;
 
+  let stockAdd: number | null = null;
+  if (formData.has("stockAdd")) {
+    const n = Number(formData.get("stockAdd") || 0);
+    if (!Number.isInteger(n) || n < 0 || n > 1_000_000) {
+      return { success: false, error: "Las existencias a sumar deben ser un número entero de 0 a 1.000.000" };
+    }
+    stockAdd = n;
+  }
+
   try {
     const result = await withTenant(companyId, async (tx) => {
       await tx.$queryRaw`
@@ -324,7 +333,13 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
       const existing = await tx.product.findFirst({ where: { id, companyId, branchId } });
       if (!existing) return null;
 
-      const resolvedStock = trackStock ? (stock ?? 0) : existing.stock;
+      // «Sumar existencias»: la edición solo suma al stock que haya en este momento
+      // (leído con la fila bloqueada), nunca lo reemplaza por un número viejo.
+      const resolvedStock = !trackStock
+        ? existing.stock
+        : stockAdd != null
+          ? existing.stock + stockAdd
+          : (stock ?? 0);
       // Stock is the source of truth for availability: reaching 0 always
       // deactivates, and manually entering stock for a previously
       // out-of-stock product reactivates it. An unrelated edit that leaves
