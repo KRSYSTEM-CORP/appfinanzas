@@ -1,15 +1,16 @@
+import { AuthShell } from "@/components/auth/AuthShell";
 import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 
 export default function ForgotPasswordPage() {
   return (
-    <div className="flex flex-col gap-6 p-6 py-16 bg-gradient-to-b from-secondary/50 via-background to-background min-h-full">
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold">Recupera tu contraseña</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+    <AuthShell>
+      <div className="flex flex-col items-center gap-1 text-center">
+        <h1 className="text-[28px] font-bold tracking-tight">Recupera tu contraseña</h1>
+        <p className="text-sm text-muted-foreground">
           Ingresa tu correo y te enviamos un enlace para crear una nueva contraseña.
         </p>
       </div>
       <ForgotPasswordForm />
-    </div>
+    </AuthShell>
   );
 }
