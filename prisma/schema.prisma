@@ -516,6 +516,8 @@ model Customer {
   // Optional reminder date — surfaced as "clientes a contactar" on the
   // customers list once this date arrives (see listCustomersToContact).
   nextContactDate DateTime? @db.Date
+  // Fecha de nacimiento (solo día y mes importan; el año es opcional en la práctica).
+  birthDate       DateTime? @db.Date
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   sales           Sale[]

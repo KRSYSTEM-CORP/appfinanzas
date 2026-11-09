@@ -1,20 +1,21 @@
 import Link from "next/link";
-import { AlertTriangleIcon } from "lucide-react";
+import { AlertTriangleIcon, CakeIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CustomerTable } from "@/components/customers/CustomerTable";
-import { listCustomers, listCustomersToContact } from "@/lib/actions/customers";
+import { listCustomers, listCustomersToContact, listUpcomingBirthdays } from "@/lib/actions/customers";
 import { formatDateOnly } from "@/lib/format";
 import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
-  const [session, customers, toContact] = await Promise.all([
+  const [session, customers, toContact, birthdays] = await Promise.all([
     requireSectionAccess("customers"),
     listCustomers(),
     listCustomersToContact(),
+    listUpcomingBirthdays(30),
   ]);
   const canManage = session.role === "GERENTE" || session.isSuperAdmin;
 
@@ -57,6 +58,43 @@ export default async function CustomersPage() {
                 </Link>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {birthdays.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <span className="flex items-center justify-center size-6 rounded-full bg-primary/10 text-primary shrink-0">
+                <CakeIcon className="size-3.5" aria-hidden />
+              </span>
+              Cumpleaños próximos ({birthdays.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col gap-2">
+              {birthdays.map((b) => (
+                <li key={b.id}>
+                  <Link
+                    href={`/customers/${b.id}`}
+                    className="flex items-center justify-between rounded-lg border p-3 text-sm hover:bg-muted transition-colors"
+                  >
+                    <span className="font-medium">{b.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">{b.phone}</span>
+                      <Badge variant={b.inDays === 0 ? "success" : "secondary"}>
+                        {b.inDays === 0
+                          ? "Hoy"
+                          : `${new Intl.DateTimeFormat("es-VE", { day: "numeric", month: "long", timeZone: "UTC" }).format(
+                              new Date(Date.UTC(2000, b.month - 1, b.day))
+                            )}`}
+                      </Badge>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       )}
