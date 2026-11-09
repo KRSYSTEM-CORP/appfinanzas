@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requireManager, requireSession, setSessionCookie } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
+import { verifyPassword } from "@/lib/password";
+import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
+import { dayBoundsUtc, todayDateString } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
 
 export async function listBranches() {
@@ -52,13 +55,28 @@ export async function updateBranch(id: string, formData: FormData): Promise<Acti
   return { success: true };
 }
 
-// Lets a GERENTE/owner change which branch their session is currently
-// scoped to (or switch to "Todas las sucursales", branchId null, for a
-// consolidated view) — re-issues the session cookie with the new bid.
-// VENDEDOR never calls this; they're always pinned to their own User.branchId
-// (see getSession() in lib/session.ts, which ignores the cookie for them).
-export async function switchBranch(branchId: string | null): Promise<ActionResult> {
+// Entrar a una sede (o a «Todas las sucursales», branchId null) pide la clave de
+// la cuenta del gerente/dueño: ya no se cambia de sede con un simple clic. Si la
+// cuenta no tiene contraseña (entró con Google) no hay clave que pedir.
+// Re-emite la cookie de sesión con la sede elegida. VENDEDOR nunca llama esto:
+// siempre está fijo en su User.branchId (ver getSession() en lib/session.ts).
+export async function enterBranch(branchId: string | null, password: string): Promise<ActionResult> {
   const session = await requireManager();
+  if (branchId === (session.branchId ?? null)) return { success: true };
+
+  const limit = await checkRateLimit("branch-enter", session.userId, 5, 15 * 60_000);
+  if (!limit.allowed) return { success: false, error: rateLimitMessage(limit.retryAfterMinutes) };
+
+  const user = await withTenant(session.companyId, (tx) =>
+    tx.user.findUnique({ where: { id: session.userId }, select: { passwordHash: true } })
+  );
+  if (user?.passwordHash) {
+    if (!password || !verifyPassword(password, user.passwordHash)) {
+      await recordFailedAttempt("branch-enter", session.userId);
+      return { success: false, error: "Clave incorrecta" };
+    }
+    await clearAttempts("branch-enter", session.userId);
+  }
 
   if (branchId) {
     const branch = await withTenant(session.companyId, (tx) =>
@@ -76,4 +94,50 @@ export async function switchBranch(branchId: string | null): Promise<ActionResul
 
   revalidatePath("/", "layout");
   return { success: true };
+}
+
+export type BranchSummary = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  salesToday: number;
+  salesTodayCents: number;
+  products: number;
+  users: number;
+};
+
+// Resumen visible de cada sede (ventas de hoy, productos y personal). Solo
+// gerente/dueño; ver el resumen no requiere clave, entrar sí (enterBranch).
+export async function branchOverview(): Promise<{ summaries: BranchSummary[]; currency: string }> {
+  const { companyId } = await requireManager();
+  const { start, end } = dayBoundsUtc(todayDateString());
+  return withTenant(companyId, async (tx) => {
+    const [branches, company] = await Promise.all([
+      tx.branch.findMany({ where: { companyId }, orderBy: { createdAt: "asc" } }),
+      tx.company.findUnique({ where: { id: companyId }, select: { referenceCurrency: true } }),
+    ]);
+    const summaries = await Promise.all(
+      branches.map(async (b) => {
+        const [sales, products, users] = await Promise.all([
+          tx.sale.aggregate({
+            where: { companyId, branchId: b.id, voided: false, createdAt: { gte: start, lt: end } },
+            _sum: { totalCents: true },
+            _count: true,
+          }),
+          tx.product.count({ where: { companyId, branchId: b.id } }),
+          tx.user.count({ where: { companyId, branchId: b.id, status: "ACTIVE" } }),
+        ]);
+        return {
+          id: b.id,
+          name: b.name,
+          isActive: b.isActive,
+          salesToday: sales._count,
+          salesTodayCents: sales._sum.totalCents ?? 0,
+          products,
+          users,
+        };
+      })
+    );
+    return { summaries, currency: company?.referenceCurrency ?? "USD" };
+  });
 }
