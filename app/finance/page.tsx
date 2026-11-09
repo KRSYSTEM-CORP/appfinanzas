@@ -19,6 +19,7 @@ import {
   salesByPaymentMethod,
   mostPurchasedProducts,
   inventoryRotation,
+  customerMix,
 } from "@/lib/actions/reports";
 import { commissionsTotal, sellersSalesOverview } from "@/lib/actions/seller-reports";
 import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, productMargins, getProfitGoal } from "@/lib/actions/finance";
@@ -58,6 +59,7 @@ export default async function FinancePage({
     rotation,
     goalCents,
     sellers,
+    mix,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
     revenueTotals(range),
@@ -78,6 +80,7 @@ export default async function FinancePage({
     inventoryRotation(range),
     getProfitGoal(),
     sellersSalesOverview(range),
+    customerMix(range),
     getExchangeRateInfo(),
   ]);
 
@@ -279,6 +282,31 @@ export default async function FinancePage({
           );
         })}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Clientes nuevos y recurrentes</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            {mix.total} {mix.total === 1 ? "cliente atendido" : "clientes atendidos"} en el período
+          </p>
+        </CardHeader>
+        <CardContent>
+          {mix.total === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin clientes en este período.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex h-3 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${mix.newCount} nuevos y ${mix.returningCount} recurrentes`}>
+                <div className="bg-primary" style={{ width: `${(mix.newCount / mix.total) * 100}%` }} />
+                <div className="bg-success" style={{ width: `${(mix.returningCount / mix.total) * 100}%` }} />
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <p><span className="mr-2 inline-block size-2.5 rounded-full bg-primary" aria-hidden />Nuevos <b className="tabular-nums">{mix.newCount} · {Math.round((mix.newCount / mix.total) * 1000) / 10} %</b></p>
+                <p><span className="mr-2 inline-block size-2.5 rounded-full bg-success" aria-hidden />Recurrentes <b className="tabular-nums">{mix.returningCount} · {Math.round((mix.returningCount / mix.total) * 1000) / 10} %</b></p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <StatsInsights mix={paymentMix} purchased={purchased} rotation={rotation} referenceCurrency={referenceCurrency} />
 
