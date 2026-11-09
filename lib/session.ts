@@ -59,6 +59,8 @@ export type Session = {
   enabledFeatures: string[];
   // Plan de suscripción (lib/plans.ts).
   plan: PlanId;
+  // El dueño aún no eligió su plan al crear la cuenta.
+  needsPlanChoice: boolean;
   // The branch this session is currently scoped to — null means "every
   // branch" (a GERENTE/owner viewing consolidated data, see switchBranch()
   // in lib/actions/branches.ts). A VENDEDOR is always pinned to their own
@@ -107,6 +109,7 @@ async function readSession(): Promise<Session | null> {
           localCurrencyCode: true,
           enabledFeatures: true,
           plan: true,
+          planChosen: true,
         },
       },
     },
@@ -154,6 +157,7 @@ async function readSession(): Promise<Session | null> {
     allowedSections: user.allowedSections,
     enabledFeatures: user.company.enabledFeatures.filter(isKnownFeature),
     plan: user.company.plan,
+    needsPlanChoice: !user.company.planChosen && user.role === "GERENTE",
     branchId,
     branchName: branch?.name ?? null,
     hasSeenTour: user.hasSeenTour,
@@ -182,6 +186,7 @@ export async function requireSession(): Promise<Session> {
   // Pantalla bloqueada: ninguna acción ni página funciona hasta desbloquear.
   if (session.locked) redirect("/lock");
   if (session.billingBlocked) redirect("/blocked");
+  if (session.needsPlanChoice && !session.isSuperAdmin) redirect("/choose-plan");
   return session;
 }
 

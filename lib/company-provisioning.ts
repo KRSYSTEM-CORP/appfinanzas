@@ -45,6 +45,7 @@ export async function createCompanyWithOwner(companyName: string, owner: NewOwne
             name: companyName,
             loginCode: generateLoginCode(),
             plan: "EMPRENDE",
+            planChosen: false,
             monthlyFeeUsdCents: PLANS.EMPRENDE.priceUsdCents,
             nextPaymentDueDate: trialEnd,
           },

@@ -1,8 +1,8 @@
 "use server";
 
-import { requireManager } from "@/lib/session";
+import { getSession, requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { getPlan, type PlanDef } from "@/lib/plans";
+import { getPlan, PLANS, type PlanDef, type PlanId } from "@/lib/plans";
 import { getAssistantStatus } from "@/lib/actions/assistant";
 
 export type PlanUsage = {
@@ -37,4 +37,21 @@ export async function getPlanUsage(): Promise<PlanUsage> {
     nextPaymentDueDate: session.nextPaymentDueDate,
     isExempt: session.isExempt,
   };
+}
+
+// Primera elección de plan al crear la cuenta (pantalla /choose-plan). No cobra
+// nada: los 15 días gratis siguen corriendo y el pago se hace al terminar.
+export async function chooseInitialPlan(plan: string): Promise<{ success: true } | { success: false; error: string }> {
+  const session = await getSession();
+  if (!session || session.role !== "GERENTE") return { success: false, error: "No tienes permiso para elegir el plan." };
+  if (!session.needsPlanChoice) return { success: false, error: "Ya elegiste tu plan. Para cambiarlo escríbenos por soporte." };
+  if (!(plan in PLANS)) return { success: false, error: "Elige un plan válido." };
+  const def = PLANS[plan as PlanId];
+  await withTenant(session.companyId, (tx) =>
+    tx.company.update({
+      where: { id: session.companyId },
+      data: { plan: def.id, monthlyFeeUsdCents: def.priceUsdCents, planChosen: true },
+    })
+  );
+  return { success: true };
 }

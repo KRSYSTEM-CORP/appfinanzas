@@ -224,6 +224,8 @@ model Company {
   aiAskDay              String?
   aiAskCount            Int               @default(0)
   plan                  PlanTier          @default(CORPORATIVO)
+  // false hasta que el dueño elige su plan al crear la cuenta (pantalla /choose-plan).
+  planChosen            Boolean           @default(true)
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?
   payments              Payment[]

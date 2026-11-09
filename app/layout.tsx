@@ -56,7 +56,7 @@ export default async function RootLayout({
   // sessions back to /blocked; calling it from the root layout caused that
   // route to redirect to itself until Next displayed a blank error page.
   // Con la pantalla bloqueada no se carga el menú ni el contenido: solo /lock responde.
-  const canLoadAppChrome = Boolean(session && !session.billingBlocked && !session.locked);
+  const canLoadAppChrome = Boolean(session && !session.billingBlocked && !session.locked && !session.needsPlanChoice);
   const renewal =
     canLoadAppChrome && session && !session.isSuperAdmin ? renewalNotice(session.nextPaymentDueDate, session.isExempt) : null;
   const [branding, branches, sidebarRate] = await Promise.all([
