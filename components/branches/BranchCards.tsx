@@ -29,6 +29,11 @@ export function BranchCards({
     { label: "Mejor sede hoy", value: best && best.salesTodayCents > 0 ? best.name : "—", sub: best && best.salesTodayCents > 0 ? formatCurrencyCents(currency, best.salesTodayCents) : "Aún sin ventas" },
   ];
 
+  const alerts: { tone: "warn" | "info"; text: string }[] = [
+    ...active.filter((s) => s.lowStock > 0).map((s) => ({ tone: "warn" as const, text: `${s.name} tiene ${s.lowStock} ${s.lowStock === 1 ? "producto" : "productos"} con stock bajo.` })),
+    ...active.filter((s) => s.salesToday === 0).map((s) => ({ tone: "info" as const, text: `${s.name} aún no registra ventas hoy.` })),
+  ];
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3 rounded-[20px] bg-card p-4 shadow-(--shadow-card)">
@@ -48,6 +53,20 @@ export function BranchCards({
           </div>
         ))}
       </div>
+      {alerts.length > 0 && (
+        <section className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
+          <h2 className="text-base font-bold">Lo que no puede esperar</h2>
+          <p className="mb-2 text-xs text-muted-foreground">Alertas de toda la red</p>
+          <ul className="flex flex-col divide-y">
+            {alerts.map((a) => (
+              <li key={a.text} className="flex items-center gap-3 py-3 text-sm">
+                <span className={`size-2 shrink-0 rounded-full ${a.tone === "warn" ? "bg-warning" : "bg-primary"}`} aria-hidden />
+                <span>{a.text}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {summaries.map((s) => {
           const here = s.id === currentBranchId;
