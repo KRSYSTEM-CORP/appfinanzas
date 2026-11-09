@@ -43,6 +43,11 @@ R2 → *Manage API tokens* → *Create API token*:
 Mientras falte alguna, la pantalla muestra que la subida de archivos no está activa y el admin puede
 seguir usando enlaces de YouTube o Vimeo.
 
+En Vercel, las dos claves van en **Production** como *Secret*. Vercel solo lee las variables al
+construir: después de crearlas o cambiarlas hay que **redesplegar** (o unir cualquier cambio a `main`,
+que genera un despliegue de producción nuevo). El token debe tener permiso **Object Read & Write**
+sobre `kr-learning`; con *Read only* se puede reproducir pero no subir.
+
 ## 5. Límites y avance
 - Máximo **10 videos** y **300 MB** por archivo (MP4). Un tutorial de 1 minuto pesa unos 4 MB.
 - Cada usuario tiene su avance personal («X de N completados» y «Marcar como visto»; también se marca
