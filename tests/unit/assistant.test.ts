@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { creditsRemaining, dailyAskCap, parseAssistantReply, periodKey, spendCredits } from "@/lib/assistant";
+import { AI_PACKS, findPack, creditsRemaining, dailyAskCap, parseAssistantReply, periodKey, spendCredits } from "@/lib/assistant";
 
 describe("créditos del asistente", () => {
   it("cuenta primero los del plan y luego los extra", () => {
@@ -34,5 +34,16 @@ describe("respuesta del modelo", () => {
   it("si no es JSON usa el texto", () => {
     const r = parseAssistantReply("Respuesta simple");
     expect(r).toEqual({ answer: "Respuesta simple", proposal: null });
+  });
+});
+
+describe("paquetes de créditos", () => {
+  it("solo se pueden pedir los paquetes definidos", () => {
+    expect(findPack(100)?.priceCents).toBe(900);
+    expect(findPack(77)).toBeNull();
+  });
+  it("a más créditos, menor precio por crédito", () => {
+    const per = AI_PACKS.map((p) => p.priceCents / p.credits);
+    expect([...per].sort((a, b) => b - a)).toEqual(per);
   });
 });

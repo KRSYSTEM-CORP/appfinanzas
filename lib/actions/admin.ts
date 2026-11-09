@@ -147,6 +147,36 @@ export async function grantAiCredits(companyId: string, amount: number): Promise
   return { success: true };
 }
 
+export async function listPendingCreditRequests() {
+  await requireSuperAdmin();
+  return withSuperAdmin((tx) =>
+    tx.aiCreditRequest.findMany({
+      where: { status: "PENDING" },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, credits: true, priceCents: true, reference: true, createdAt: true, company: { select: { name: true } } },
+    })
+  );
+}
+
+// Aprueba (suma los créditos) o rechaza una solicitud de compra. Solo si sigue pendiente.
+export async function resolveCreditRequest(id: string, approve: boolean): Promise<ActionResult> {
+  await requireSuperAdmin();
+  const done = await withSuperAdmin(async (tx) => {
+    const r = await tx.aiCreditRequest.findUnique({ where: { id }, select: { companyId: true, credits: true, status: true } });
+    if (!r || r.status !== "PENDING") return false;
+    const upd = await tx.aiCreditRequest.updateMany({
+      where: { id, status: "PENDING" },
+      data: { status: approve ? "APPROVED" : "REJECTED", reviewedAt: new Date() },
+    });
+    if (upd.count === 0) return false;
+    if (approve) await tx.company.update({ where: { id: r.companyId }, data: { aiCreditsExtra: { increment: r.credits } } });
+    return true;
+  });
+  if (!done) return { success: false, error: "La solicitud ya fue procesada" };
+  revalidatePath("/admin");
+  return { success: true };
+}
+
 export async function denyUser(userId: string): Promise<ActionResult> {
   await requireSuperAdmin();
   const result = await withSuperAdmin((tx) =>

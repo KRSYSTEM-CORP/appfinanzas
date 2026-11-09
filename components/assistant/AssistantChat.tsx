@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { MicIcon, SendIcon, SquareIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { applyProposal, askAssistant, type AssistantStatus } from "@/lib/actions/assistant";
+import { applyProposal, askAssistant, clearAssistantHistory, type AssistantStatus, type HistoryEntry } from "@/lib/actions/assistant";
 import type { Proposal } from "@/lib/assistant";
 
 type Msg =
   | { role: "user"; text: string }
-  | { role: "assistant"; text: string; proposal: Proposal | null; state?: "open" | "applied" | "dropped"; note?: string };
+  | { role: "assistant"; text: string; proposal: Proposal | null; state?: "open" | "applied" | "dropped"; note?: string; entryId?: string | null };
 
 const SUGGESTIONS = [
   "¿Cuánto vendí hoy?",
@@ -36,9 +36,23 @@ function describe(p: Proposal): string {
     : `Ajustar precios de «${p.category}»: ${p.percent > 0 ? "+" : ""}${p.percent} %`;
 }
 
-export function AssistantChat({ status, applyCost }: { status: AssistantStatus; applyCost: number }) {
+function fromHistory(history: HistoryEntry[]): Msg[] {
+  return history.flatMap<Msg>((h) => [
+    { role: "user", text: h.question },
+    {
+      role: "assistant",
+      text: h.answer,
+      proposal: h.proposal,
+      state: h.applied ? "applied" : "open",
+      note: h.applied ? "Cambio aplicado." : undefined,
+      entryId: h.id,
+    },
+  ]);
+}
+
+export function AssistantChat({ status, applyCost, history = [] }: { status: AssistantStatus; applyCost: number; history?: HistoryEntry[] }) {
   const router = useRouter();
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [msgs, setMsgs] = useState<Msg[]>(() => fromHistory(history));
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const [creditsLeft, setCreditsLeft] = useState(status.creditsLeft);
@@ -55,16 +69,16 @@ export function AssistantChat({ status, applyCost }: { status: AssistantStatus; 
       const r = await askAssistant(question);
       if (r.success) {
         setAsked((n) => n + 1);
-        setMsgs((m) => [...m, { role: "assistant", text: r.reply.answer, proposal: r.reply.proposal, state: "open" }]);
+        setMsgs((m) => [...m, { role: "assistant", text: r.reply.answer, proposal: r.reply.proposal, state: "open", entryId: r.entryId }]);
       } else {
         setMsgs((m) => [...m, { role: "assistant", text: r.error, proposal: null }]);
       }
     });
   }
 
-  function apply(index: number, p: Proposal) {
+  function apply(index: number, p: Proposal, entryId?: string | null) {
     startTransition(async () => {
-      const r = await applyProposal(p);
+      const r = await applyProposal(p, entryId);
       setMsgs((m) =>
         m.map((x, i) =>
           i === index && x.role === "assistant"
@@ -76,6 +90,13 @@ export function AssistantChat({ status, applyCost }: { status: AssistantStatus; 
         setCreditsLeft((c) => Math.max(0, c - applyCost));
         router.refresh();
       }
+    });
+  }
+
+  function clearHistory() {
+    startTransition(async () => {
+      await clearAssistantHistory();
+      setMsgs([]);
     });
   }
 
@@ -121,6 +142,11 @@ export function AssistantChat({ status, applyCost }: { status: AssistantStatus; 
         <span className="text-muted-foreground">
           Consultas hoy: {asked} de {status.askCap}
         </span>
+        {msgs.length > 0 && (
+          <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={clearHistory} disabled={isPending}>
+            Borrar historial
+          </Button>
+        )}
       </div>
 
       <div className="flex min-h-64 flex-col gap-2 rounded-lg border bg-card p-3" aria-live="polite">
@@ -156,7 +182,7 @@ export function AssistantChat({ status, applyCost }: { status: AssistantStatus; 
                         </p>
                         {m.note && <p className="text-xs text-destructive">{m.note}</p>}
                         <div className="flex gap-2">
-                          <Button size="sm" disabled={isPending || creditsLeft < applyCost} onClick={() => apply(i, m.proposal as Proposal)}>
+                          <Button size="sm" disabled={isPending || creditsLeft < applyCost} onClick={() => apply(i, m.proposal as Proposal, m.entryId)}>
                             Aplicar · {applyCost} créditos
                           </Button>
                           <Button
