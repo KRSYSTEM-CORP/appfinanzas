@@ -4,7 +4,7 @@ import { createCustomer } from "@/lib/actions/customers";
 export default function NewCustomerPage() {
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
-      <h1 className="text-2xl font-semibold">Nuevo cliente</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Nuevo cliente</h1>
       <CustomerRecordForm action={createCustomer} />
     </div>
   );

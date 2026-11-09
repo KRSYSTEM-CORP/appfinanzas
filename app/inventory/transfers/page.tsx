@@ -20,7 +20,7 @@ export default async function TransfersPage() {
           <ArrowLeftIcon className="size-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-semibold">Traspasos entre sucursales</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Traspasos entre sucursales</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Mueve mercancía de una sucursal a otra. Descuenta el stock del origen y lo suma en el destino.
           </p>

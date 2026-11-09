@@ -27,7 +27,10 @@ export default async function QuotesPage() {
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 md:h-full">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Presupuestos</h1>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-primary">Cotiza y da seguimiento</p>
+          <h1 className="text-3xl font-bold tracking-tight">Presupuestos</h1>
+        </div>
         <Link href="/quotes/history" className="text-sm text-primary underline underline-offset-2">
           Ver historial y seguimiento
         </Link>

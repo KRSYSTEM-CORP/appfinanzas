@@ -22,7 +22,7 @@ export default async function BillingPage({
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <div>
-        <h1 className="text-2xl font-semibold">Suscripción mensual</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Suscripción mensual</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Costo mensual de la plataforma, cómo pagarlo y el estado de tus reportes de pago.
         </p>

@@ -18,7 +18,7 @@ export default async function PayrollPage() {
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div>
-        <h1 className="text-2xl font-semibold">Nómina</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Nómina</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Empleados, pagos por quincena con método, referencia y comprobante, e historial. Cada pago se anota como
           gasto de Nómina en Finanzas.

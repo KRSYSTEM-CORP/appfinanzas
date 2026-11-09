@@ -38,7 +38,7 @@ export default async function DocumentsPage() {
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <div>
-        <h1 className="text-2xl font-semibold">Documentos</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Documentos</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Notas de entrega, facturas, recibos de pago y presupuestos — filtra por tipo de documento
           para ver solo lo que se generó de cada uno.

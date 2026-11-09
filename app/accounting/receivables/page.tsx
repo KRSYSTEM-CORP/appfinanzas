@@ -47,7 +47,7 @@ export default async function ReceivablesPage({
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Cuentas por cobrar</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Cuentas por cobrar</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Ventas a crédito con saldo pendiente, de la más antigua a la más reciente — registra abonos
             desde el detalle de cada venta.

@@ -24,7 +24,7 @@ export default async function EditProductPage({
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Editar producto</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Editar producto</h1>
         <Button variant="outline" nativeButton={false} render={<Link href={`/inventory/${id}/movements`} />}>
           <HistoryIcon data-icon="inline-start" /> Historial de movimientos
         </Button>
