@@ -11,6 +11,7 @@ import {
   EllipsisIcon,
   FileTextIcon,
   GaugeIcon,
+  GraduationCapIcon,
   LogOutIcon,
   MenuIcon,
   PackageIcon,
@@ -46,6 +47,7 @@ const NAV_TONES: Record<string, string> = {
   "/settings": "#6e6e73",
   "/billing": "#c2410c",
   "/admin": "#1d4ed8",
+  "/learning": "#0f7a8a",
   "/assistant": "#6655e5",
 };
 
@@ -209,6 +211,7 @@ export function Sidebar({
 
   const managementItems = canManage ? [...managementItemsBase, ...featureItems] : featureItems;
   const companyItems: NavItem[] = [
+    { href: "/learning", label: "Learning", icon: GraduationCapIcon },
     ...(isSuperAdmin ? [{ href: "/admin", label: "Administración", icon: ShieldIcon }] : []),
     ...(canManage ? companyItemsBase : []),
   ];
