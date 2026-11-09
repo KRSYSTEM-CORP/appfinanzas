@@ -119,13 +119,19 @@ export function CashClosingPanel({
           onChange={(e) => handleDateChange(e.target.value)}
           className="max-w-[180px]"
         />
-        {summary.closed && <Badge variant="secondary">Cerrada</Badge>}
+        {summary.closed ? (
+          <Badge variant="secondary">Cerrada</Badge>
+        ) : summary.openingCents != null ? (
+          <Badge variant="success">Caja abierta</Badge>
+        ) : (
+          <Badge variant="outline">Sin abrir</Badge>
+        )}
         <div className="ml-auto flex gap-2">
           <Button size="sm" variant="outline" disabled={busy} onClick={downloadPdf}>
-            Descargar PDF
+            Generar Corte Z
           </Button>
           <PrintDialog
-            triggerLabel="Imprimir"
+            triggerLabel="Imprimir Corte Z"
             title="Imprimir cierre de caja"
             defaultPaperSize={printPaperSize}
             buildPdfBlob={async (paperSize) => (await buildPdf(paperSize)).output("blob") as Blob}
@@ -148,7 +154,7 @@ export function CashClosingPanel({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="grid grid-cols-2 gap-4">
-          <div className="rounded-lg border p-3 flex flex-col gap-1">
+          <div className="rounded-2xl bg-muted/50 p-4 flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Total vendido</span>
             <Price
               eurCents={summary.totalCents}
@@ -159,13 +165,13 @@ export function CashClosingPanel({
               size="lg"
             />
           </div>
-          <div className="rounded-lg border bg-card shadow-xs p-3 flex flex-col gap-1">
+          <div className="rounded-2xl bg-muted/50 p-4 flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Ventas</span>
             <span className="text-lg font-semibold">{summary.salesCount}</span>
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5 rounded-lg border bg-card shadow-xs p-3 sm:col-span-2">
+        <div className="flex flex-col gap-1.5 rounded-2xl bg-muted/50 p-4 sm:col-span-2">
           <span className="text-sm text-muted-foreground">Estado de cobro</span>
           <div className="flex items-center justify-between text-sm">
             <span>Pagadas ({summary.paidCount})</span>
@@ -200,7 +206,7 @@ export function CashClosingPanel({
         />
 
         {summary.byMethod.length > 0 && (
-          <div className="flex flex-col gap-1.5 rounded-lg border bg-card shadow-xs p-3">
+          <div className="flex flex-col gap-1.5 rounded-2xl bg-muted/50 p-4">
             <span className="text-sm text-muted-foreground">Por método de pago</span>
             {summary.byMethod.map((m) => (
               <div key={m.paymentMethod} className="flex items-center justify-between text-sm">
@@ -235,7 +241,7 @@ export function CashClosingPanel({
           />
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="button" onClick={handleClose} disabled={isPending || summary.salesCount === 0}>
-            {isPending ? "Cerrando..." : "Cerrar caja de este día"}
+            {isPending ? "Cerrando..." : "Cerrar caja"}
           </Button>
           {summary.salesCount === 0 && (
             <p className="text-xs text-muted-foreground">No hay ventas este día para cerrar.</p>
