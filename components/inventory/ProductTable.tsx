@@ -23,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ProductMasterDetail } from "@/components/inventory/ProductMasterDetail";
+import { InventoryDesktopTable } from "@/components/inventory/InventoryDesktopTable";
 import { deleteProduct, setProductActive, type getInventoryOverview } from "@/lib/actions/products";
 import { isLowStock } from "@/lib/inventory";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
@@ -30,14 +31,8 @@ import type { ReferenceCurrency } from "@prisma/client";
 
 const ALL_CATEGORIES = "__all__";
 
-type StockFilter = "all" | "low" | "positive" | "inactive";
+type StockFilter = "all" | "low" | "positive" | "out" | "inactive";
 
-const STOCK_FILTER_LABELS: Record<StockFilter, string> = {
-  all: "Todos los productos",
-  low: "Stock bajo",
-  positive: "Stock positivo",
-  inactive: "Desactivados",
-};
 
 export function ProductTable({
   products,
@@ -82,11 +77,24 @@ export function ProductTable({
           : stockFilter === "inactive"
             ? !p.isActive
             : stockFilter === "low"
-              ? p.isActive && isLowStock(p)
-              : p.isActive && !isLowStock(p);
+              ? p.isActive && isLowStock(p) && p.stock > 0
+              : stockFilter === "out"
+                ? p.isActive && p.trackStock && p.stock <= 0
+                : p.isActive && !isLowStock(p);
       return matchesQuery && matchesCategory && matchesStock;
     });
   }, [products, query, category, stockFilter]);
+
+  const counts = useMemo(() => {
+    let ok = 0, low = 0, out = 0, inactive = 0;
+    for (const p of products) {
+      if (!p.isActive) inactive++;
+      else if (p.trackStock && p.stock <= 0) out++;
+      else if (isLowStock(p)) low++;
+      else ok++;
+    }
+    return { all: products.length, ok, low, out, inactive };
+  }, [products]);
 
   const hasActiveFilters = query.trim() !== "" || category !== ALL_CATEGORIES || stockFilter !== "all";
 
@@ -120,19 +128,32 @@ export function ProductTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="hidden grid-cols-3 gap-3 md:grid">
-        <div className="rounded-xl border bg-card px-4 py-3">
-          <p className="text-xs text-muted-foreground">Productos en catálogo</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{totalCount.toLocaleString("es-VE")}</p>
-        </div>
-        <div className="rounded-xl border bg-card px-4 py-3">
-          <p className="text-xs text-muted-foreground">Unidades registradas</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{totalStock.toLocaleString("es-VE")}</p>
-        </div>
-        <div className={`rounded-xl border px-4 py-3 ${lowStockCount ? "border-warning/25 bg-warning/5" : "bg-card"}`}>
-          <p className="text-xs text-muted-foreground">Productos con stock bajo</p>
-          <p className={`mt-1 text-xl font-semibold tabular-nums ${lowStockCount ? "text-warning" : ""}`}>{lowStockCount.toLocaleString("es-VE")}</p>
-        </div>
+      <div className="hidden grid-cols-4 gap-3 md:grid">
+        {(
+          [
+            { key: "all", label: "Total de productos", value: totalCount, sub: "En el catálogo", tone: "text-primary bg-primary/10" },
+            { key: "positive", label: "Disponibles", value: counts.ok, sub: "Con stock suficiente", tone: "text-success bg-success/14" },
+            { key: "low", label: "Stock bajo", value: counts.low, sub: "En o debajo del mínimo", tone: "text-warning bg-warning/18" },
+            { key: "out", label: "Agotados", value: counts.out, sub: "Requieren reposición ya", tone: "text-destructive bg-destructive/12" },
+          ] as { key: StockFilter; label: string; value: number; sub: string; tone: string }[]
+        ).map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => setStockFilter(c.key)}
+            aria-pressed={stockFilter === c.key}
+            className={`flex flex-col gap-1 rounded-2xl bg-card p-4 text-left shadow-(--shadow-card) transition-transform active:scale-[0.98] ${
+              stockFilter === c.key ? "ring-2 ring-primary" : ""
+            }`}
+          >
+            <span className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              {c.label}
+              <span className={`size-2.5 rounded-full ${c.tone.split(" ")[1]}`} aria-hidden />
+            </span>
+            <span className="text-3xl font-extrabold tabular-nums tracking-tight">{c.value.toLocaleString("es-VE")}</span>
+            <span className="text-xs text-muted-foreground">{c.sub}</span>
+          </button>
+        ))}
       </div>
 
       <details className="hidden rounded-xl border bg-card md:block">
@@ -164,6 +185,30 @@ export function ProductTable({
         </div>
       </details>
 
+      <div className="hidden flex-wrap items-center gap-2 md:flex" role="group" aria-label="Filtrar por estado de stock">
+        {(
+          [
+            ["all", "Todos", counts.all, "bg-foreground text-background"],
+            ["positive", "Disponible", counts.ok, "bg-success text-white"],
+            ["low", "Stock bajo", counts.low, "bg-warning text-white"],
+            ["out", "Agotado", counts.out, "bg-destructive text-white"],
+            ...(counts.inactive > 0 ? [["inactive", "Inactivo", counts.inactive, "bg-muted-foreground text-background"]] : []),
+          ] as [StockFilter, string, number, string][]
+        ).map(([key, label, n, on]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setStockFilter(key)}
+            aria-pressed={stockFilter === key}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+              stockFilter === key ? on : "bg-card text-muted-foreground shadow-(--shadow-card) hover:text-foreground"
+            }`}
+          >
+            {label} <span className="tabular-nums opacity-80">{n}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full max-w-sm sm:w-auto sm:flex-1">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -189,20 +234,6 @@ export function ProductTable({
             {categories.map((c) => (
               <SelectItem key={c} value={c}>
                 {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={stockFilter} onValueChange={(v) => setStockFilter((v as StockFilter) ?? "all")}>
-          <SelectTrigger aria-label="Filtrar por estado de stock">
-            <SelectValue placeholder="Estado de stock">
-              {(value: string | null) => STOCK_FILTER_LABELS[(value as StockFilter) ?? "all"]}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(STOCK_FILTER_LABELS) as StockFilter[]).map((k) => (
-              <SelectItem key={k} value={k}>
-                {STOCK_FILTER_LABELS[k]}
               </SelectItem>
             ))}
           </SelectContent>
@@ -263,7 +294,21 @@ export function ProductTable({
         </div>
       </details>
 
-      <ProductMasterDetail
+      <div className="hidden md:block">
+        <InventoryDesktopTable
+          products={filtered}
+          rate={rate}
+          currencyCode={currencyCode}
+          exchangeRateEnabled={exchangeRateEnabled}
+          referenceCurrency={referenceCurrency}
+          canManage={canManage}
+          isPending={isPending}
+          onToggleActive={toggleActive}
+          onDelete={handleDelete}
+        />
+      </div>
+      <div className="md:hidden">
+        <ProductMasterDetail
         products={filtered}
         totalCount={totalCount}
         rate={rate}
@@ -276,6 +321,7 @@ export function ProductTable({
         onDelete={handleDelete}
         onClearFilters={clearFilters}
       />
+      </div>
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { InternalUseButton } from "@/components/inventory/InternalUseButton";
 import { getInventoryOverview, listAllProducts, listCategories } from "@/lib/actions/products";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
 import { requireSectionAccess } from "@/lib/session";
+import { getPlan } from "@/lib/plans";
+import { formatCurrencyCents } from "@/lib/currencies";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +31,14 @@ export default async function InventoryPage() {
     getBranding(),
     getFiscalData(),
   ]);
-  const lowStockCount = inventory.lowStockCount;
   const priceListProducts = products
     .filter((p) => p.isActive)
     .map((p) => ({ name: p.name, category: p.category, priceCents: p.priceCents }));
   const priceListCompany = { name: session.companyName, logoDataUrl, ...fiscalData };
   const canManage = session.role === "GERENTE" || session.isSuperAdmin;
+  const plan = getPlan(session.plan);
+  // Valor del inventario = existencias × costo de los productos con control de stock.
+  const inventoryValueCents = products.reduce((a, p) => (p.trackStock && p.costCents != null ? a + p.stock * p.costCents : a), 0);
 
   return (
     <div className="flex flex-col gap-5 p-4 md:p-6">
@@ -42,12 +46,25 @@ export default async function InventoryPage() {
         <div>
           <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Gestión de productos</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Inventario</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Encuentra productos y revisa sus existencias y precios.</p>
-          {lowStockCount > 0 && (
-            <p className="mt-1 hidden text-sm text-warning md:block">
-              {lowStockCount} producto{lowStockCount === 1 ? "" : "s"} con stock bajo
-            </p>
-          )}
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-1.5 shadow-(--shadow-card)">
+              {inventory.totalCount} {plan.maxProducts == null ? "productos" : `de ${plan.maxProducts} productos`}
+              {plan.maxProducts != null && (
+                <span className="h-1.5 w-12 overflow-hidden rounded-full bg-muted" aria-hidden>
+                  <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.min(100, Math.round((inventory.totalCount / plan.maxProducts) * 100))}%` }} />
+                </span>
+              )}
+              <span className="font-medium text-muted-foreground">Plan {plan.label}</span>
+            </span>
+            <span className="rounded-full bg-muted px-3 py-1.5 text-muted-foreground">
+              Valor del inventario: {formatCurrencyCents(referenceCurrency, inventoryValueCents)}
+            </span>
+            {rate != null && exchangeRateEnabled && (
+              <span className="rounded-full bg-muted px-3 py-1.5 text-muted-foreground">
+                Tasa Bs {rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por {referenceCurrency === "USD" ? "$" : "€"}
+              </span>
+            )}
+          </div>
         </div>
         <div className="hidden flex-wrap gap-2 md:flex">
           <PriceListButton
@@ -57,6 +74,9 @@ export default async function InventoryPage() {
           />
           {canManage && (
             <>
+              <Button nativeButton={false} render={<Link href="/inventory/new" />}>
+                Nuevo producto
+              </Button>
               <Button variant="outline" nativeButton={false} render={<Link href="/inventory/transfers" />}>
                 Traspasos
               </Button>
@@ -66,13 +86,10 @@ export default async function InventoryPage() {
                   .map((p) => ({ id: p.id, name: p.name, stock: p.stock }))}
               />
               <Button variant="outline" nativeButton={false} render={<Link href="/inventory/update" />}>
-                Actualizar desde Excel
+                Actualizar inventario
               </Button>
               <Button variant="outline" nativeButton={false} render={<Link href="/inventory/import" />}>
-                Importar desde Excel
-              </Button>
-              <Button nativeButton={false} render={<Link href="/inventory/new" />}>
-                Nuevo producto
+                Importar
               </Button>
             </>
           )}

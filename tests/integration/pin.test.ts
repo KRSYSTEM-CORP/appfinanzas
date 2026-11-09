@@ -25,6 +25,8 @@ let sellerId = "";
 
 beforeAll(async () => {
   ctx = await loadContext();
+  // Partir sin PIN en la empresa de pruebas (puede haber PIN de otras pruebas a mano).
+  await owner.user.updateMany({ where: { companyId: ctx.companyId }, data: { pinHash: null, pinKey: null } });
   await owner.user.deleteMany({ where: { email: SELLER_EMAIL } });
   const seller = await owner.user.create({
     data: { email: SELLER_EMAIL, companyId: ctx.companyId, role: "VENDEDOR", branchId: ctx.branchId, firstName: "Vera", lastName: "Pin" },

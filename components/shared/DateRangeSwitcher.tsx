@@ -9,7 +9,7 @@ import { dateRangeSelectionToQuery, isValidRange, type DateRangeSelection } from
 const PRESETS: { key: "today" | "7d" | "month"; label: string }[] = [
   { key: "today", label: "Hoy" },
   { key: "7d", label: "7 días" },
-  { key: "month", label: "Este mes" },
+  { key: "month", label: "Mes" },
 ];
 
 const MONTH_LABELS = [

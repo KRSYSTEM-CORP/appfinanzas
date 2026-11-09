@@ -26,21 +26,23 @@ function plansSection(): string {
   ].join("\n");
 }
 
-const MODULES = `MÓDULOS (dónde está cada cosa en el menú)
-- Punto de venta: para vender. Se cobra en la divisa de referencia o en bolívares según la tasa configurada; puede haber ventas a crédito y pagos mixtos.
+const MODULES = `MÓDULOS (el menú tiene tres grupos)
+OPERACIÓN
+- Inicio: ganancia neta estimada del periodo, accesos rápidos, avisos que no pueden esperar, ventas por hora, meta de ganancia, lo más vendido y últimas ventas.
+- POS: para vender. Se cobra en la divisa de referencia o en bolívares según la tasa; ventas a crédito y pagos mixtos.
+- Inventario: productos, existencias, categorías, movimientos de cada producto, importar desde archivo y traspasos entre sucursales. Para subir existencias: Editar producto → «Sumar existencias».
 - Presupuestos: cotizaciones para clientes; se pueden convertir en venta y compartir.
-- Inventario: productos, existencias, categorías, movimientos de cada producto, importar desde archivo, actualización masiva y traspasos entre sucursales.
-- Clientes: ficha de cada cliente, sus compras y lo que debe. La sección de seguimiento a clientes se llama Marketing.
-- Reportes: ventas por período, cierre de caja y caja chica.
-- Documentos: facturas, notas y comprobantes generados.
-- Resumen del negocio: panel con lo más importante del día.
-- Contabilidad: solo en los planes Pyme y Corporativo. Incluye libro de impuestos y finanzas (gastos, ganancia, punto de equilibrio y meta de ganancia).
-- Nómina: pago por quincena de los empleados, con recibo en PDF.
-- Administración de perfiles: aquí la persona dueña crea y desactiva usuarios del negocio.
-- Ajustes: datos de la empresa, divisas y tasa, sucursales y medios de pago.
-- Suscripción mensual: plan, pagos y reportar un pago.
-- Aprendizaje: videos cortos de cómo usar el sistema (solo los sube el equipo de KR System).
-- Asistente IA: responde preguntas sobre los datos del negocio y puede proponer registrar un gasto o ajustar precios de una categoría.`;
+CONTROL
+- Caja Chica: cierre y control del turno, días pendientes por cerrar, ventas del día y su estado.
+- Estadísticas: ventas, costos, gastos y ganancia, distribución de ventas por método de pago, productos más comprados, rotación y punto de equilibrio. Solo en los planes Pyme y Corporativo.
+- Marketing: clientes, su historial, notas, próximo contacto y cumpleaños.
+- Administración: compras, proveedores, libro de impuestos y nómina. Contabilidad: solo en los planes Pyme y Corporativo.
+- Documentos: facturas, notas de entrega y comprobantes generados.
+RED Y PLATAFORMA
+- Sucursales: resumen de cada sede; para entrar a una se pide la clave de administrador.
+- Asistente IA: responde preguntas sobre los datos del negocio y puede proponer registrar un gasto o ajustar precios de una categoría.
+- Learning: videos cortos de cómo usar el sistema (solo los sube el equipo de KR System).
+- Ajustes: Mi plan, moneda y tasa, apariencia, impresión, datos fiscales, IVA, datos para cobrar, sucursales y cambio de clave. Los perfiles y su PIN se administran desde la búsqueda («Perfiles y PIN»).`;
 
 const ACCESS = `ACCESO
 - Se entra con el correo y la clave de la empresa; después cada persona elige su perfil (foto) y escribe su PIN.
