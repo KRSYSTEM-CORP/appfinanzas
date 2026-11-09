@@ -12,7 +12,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { formatDate, QUOTE_STATUS_LABELS } from "@/lib/format";
-import { updateQuoteStatus, updateQuoteStatusBulk } from "@/lib/actions/quotes";
+import { markQuoteStage, updateQuoteStatus, updateQuoteStatusBulk } from "@/lib/actions/quotes";
+import { QUOTE_LOST_REASONS } from "@/lib/quote-follow-up";
 
 type QuoteWithSale = Omit<Quote, "exchangeRate"> & {
   exchangeRate: number | null;
@@ -99,9 +100,33 @@ export function QuoteHistoryTable({
     });
   }
 
+  // Al marcar «Perdido» se pide el motivo (Precio, Compró en otro lado…).
+  const [lostFor, setLostFor] = useState<string | null>(null);
+
   function handleStatusChange(quoteId: string, status: QuoteStatus) {
+    if (status === "LOST") {
+      setLostFor(quoteId);
+      return;
+    }
     startTransition(async () => {
       await updateQuoteStatus(quoteId, status);
+      router.refresh();
+    });
+  }
+
+  function confirmLost(reason: string) {
+    const id = lostFor;
+    setLostFor(null);
+    if (!id) return;
+    startTransition(async () => {
+      await updateQuoteStatus(id, "LOST", reason);
+      router.refresh();
+    });
+  }
+
+  function toggleStage(quoteId: string, stage: "SENT" | "VIEWED", on: boolean) {
+    startTransition(async () => {
+      await markQuoteStage(quoteId, stage, on);
       router.refresh();
     });
   }
@@ -139,6 +164,23 @@ export function QuoteHistoryTable({
                 <dt className="text-xs text-muted-foreground">Estado</dt>
                 <dd>
                   <QuoteStatusButtons quoteId={q.id} status={q.status} disabled={isPending} onChange={handleStatusChange} />
+                </dd>
+              </div>
+              {q.status === "LOST" && (
+                <div className="col-span-2 flex flex-col gap-0.5">
+                  <dt className="text-xs text-muted-foreground">Motivo de la pérdida</dt>
+                  <dd className="font-medium">{q.lostReason ?? "Sin motivo"}</dd>
+                </div>
+              )}
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <dt className="text-xs text-muted-foreground">Seguimiento</dt>
+                <dd className="flex flex-wrap gap-2">
+                  <Button type="button" size="xs" variant={q.sentAt ? "default" : "outline"} disabled={isPending} onClick={() => toggleStage(q.id, "SENT", !q.sentAt)}>
+                    {q.sentAt ? "Enviado ✓" : "Marcar enviado"}
+                  </Button>
+                  <Button type="button" size="xs" variant={q.viewedAt ? "default" : "outline"} disabled={isPending} onClick={() => toggleStage(q.id, "VIEWED", !q.viewedAt)}>
+                    {q.viewedAt ? "Visto ✓" : "Marcar visto"}
+                  </Button>
                 </dd>
               </div>
             </dl>
@@ -335,6 +377,20 @@ export function QuoteHistoryTable({
           </>
         )}
       </div>
+      <Dialog open={lostFor != null} onOpenChange={(o) => !o && setLostFor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Por qué se perdió?</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            {QUOTE_LOST_REASONS.map((r) => (
+              <Button key={r} type="button" variant="outline" disabled={isPending} onClick={() => confirmLost(r)}>
+                {r}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

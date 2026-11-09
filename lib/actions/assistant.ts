@@ -247,7 +247,7 @@ export async function applyProposal(input: unknown, entryId?: string | null): Pr
       if (p.type === "EXPENSE") {
         const amountCents = Math.round(p.amount * 100);
         const created = await tx.expense.create({
-          data: { companyId, description: p.description, category: p.category || null, amountCents, createdById: userId },
+          data: { companyId, description: p.description, category: p.category || null, amountCents, createdById: userId, branchId: session.branchId ?? null },
         });
         undoData = { kind: "EXPENSE", expenseId: created.id };
         text = `Gasto registrado: ${p.description} por ${formatCurrencyCents(c?.referenceCurrency ?? "USD", amountCents)}.`;

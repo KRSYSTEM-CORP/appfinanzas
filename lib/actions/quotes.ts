@@ -1,5 +1,6 @@
 "use server";
 
+import { QUOTE_LOST_REASONS } from "@/lib/quote-follow-up";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
 import { requireSectionAccess, requireSession } from "@/lib/session";
@@ -238,12 +239,12 @@ export async function listQuotes(limit = 200, windows?: { start: Date; end: Date
   return quotes.map((q) => ({ ...q, exchangeRate: q.exchangeRate != null ? Number(q.exchangeRate) : null }));
 }
 
-export async function updateQuoteStatus(quoteId: string, status: QuoteStatus): Promise<ActionResult> {
+export async function updateQuoteStatus(quoteId: string, status: QuoteStatus, lostReason?: string): Promise<ActionResult> {
   const { companyId, branchId } = await requireSession();
   const result = await withTenant(companyId, (tx) =>
     tx.quote.updateMany({
       where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) },
-      data: { status },
+      data: { status, lostReason: status === "LOST" ? (QUOTE_LOST_REASONS as readonly string[]).includes(lostReason ?? "") ? lostReason : null : null },
     })
   );
   if (result.count === 0) {
@@ -264,9 +265,25 @@ export async function updateQuoteStatusBulk(quoteIds: string[], status: QuoteSta
   await withTenant(companyId, (tx) =>
     tx.quote.updateMany({
       where: { id: { in: quoteIds }, companyId, ...(branchId ? { branchId } : {}) },
-      data: { status },
+      data: { status, ...(status !== "LOST" ? { lostReason: null } : {}) },
     })
   );
+  revalidatePath("/quotes/history");
+  return { success: true };
+}
+
+// Marca un presupuesto como enviado o visto por el cliente (o quita la marca).
+export async function markQuoteStage(quoteId: string, stage: "SENT" | "VIEWED", on: boolean): Promise<ActionResult> {
+  const { companyId, branchId } = await requireSession();
+  const when = on ? new Date() : null;
+  const result = await withTenant(companyId, (tx) =>
+    tx.quote.updateMany({
+      where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) },
+      // Visto implica enviado; quitar enviado quita también visto.
+      data: stage === "SENT" ? (on ? { sentAt: when } : { sentAt: null, viewedAt: null }) : on ? { viewedAt: when, sentAt: when } : { viewedAt: null },
+    })
+  );
+  if (result.count === 0) return { success: false, error: "Presupuesto no encontrado" };
   revalidatePath("/quotes/history");
   return { success: true };
 }

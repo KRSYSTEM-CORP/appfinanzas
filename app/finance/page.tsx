@@ -24,10 +24,12 @@ import {
   restockSuggestions,
   periodExtras,
   weeklyReports,
+  getWeeklyReportEnabled,
 } from "@/lib/actions/reports";
 import { salesHeatmap } from "@/lib/actions/home";
 import { commissionsTotal, sellersSalesOverview } from "@/lib/actions/seller-reports";
 import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, productMargins, getProfitGoal } from "@/lib/actions/finance";
+import { WeeklyReportToggle } from "@/components/finance/WeeklyReportToggle";
 import { BreakevenCard } from "@/components/finance/BreakevenCard";
 import { StatsInsights } from "@/components/finance/StatsInsights";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
@@ -69,6 +71,7 @@ export default async function FinancePage({
     restock,
     extras,
     weekly,
+    weeklyOn,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
     revenueTotals(range),
@@ -94,6 +97,7 @@ export default async function FinancePage({
     restockSuggestions(),
     periodExtras(range),
     weeklyReports(),
+    getWeeklyReportEnabled(),
     getExchangeRateInfo(),
   ]);
 
@@ -197,14 +201,20 @@ export default async function FinancePage({
         />
       </div>
 
-      <div className="stat-grid grid grid-cols-1 gap-4 sm:grid-cols-2 [&>*]:rounded-[20px] [&>*]:bg-card [&>*]:p-5 [&>*]:shadow-(--shadow-card) xl:grid-cols-3">
-        <StatCard label="Ventas registradas" accent="primary" icon={TrendingUpIcon} value={String(totals.count)} delta={countDelta} />
+      <div className="stat-grid grid grid-cols-1 gap-4 sm:grid-cols-2 [&>*]:rounded-[20px] [&>*]:bg-card [&>*]:p-5 [&>*]:shadow-(--shadow-card) xl:grid-cols-4">
+        <StatCard label="Pedidos" accent="primary" icon={TrendingUpIcon} value={String(totals.count)} delta={countDelta} />
         <StatCard
           label="Venta promedio"
           accent="violet"
           delta={avgDelta}
           icon={WalletIcon}
           value={formatCurrencyCents(referenceCurrency, totals.avgEurCents)}
+        />
+        <StatCard
+          label="Clientes nuevos"
+          accent="success"
+          icon={TrendingUpIcon}
+          value={String(mix.newCount)}
         />
         <StatCard
           label="Margen bruto"
@@ -494,6 +504,9 @@ export default async function FinancePage({
           <p className="text-sm text-muted-foreground">Las últimas 4 semanas (lunes a domingo). Toca «Ver reporte» para abrir Estadísticas de esa semana.</p>
         </CardHeader>
         <CardContent>
+          <div className="mb-3">
+            <WeeklyReportToggle initial={weeklyOn} />
+          </div>
           <ul className="flex flex-col divide-y">
             {weekly.map((w) => (
               <li key={w.from} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
@@ -562,18 +575,30 @@ export default async function FinancePage({
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Top productos</CardTitle>
+            <CardTitle>Más vendidos</CardTitle>
+            <p className="text-sm text-muted-foreground">Unidades vendidas en el período</p>
           </CardHeader>
           <CardContent>
             <TopProductsChart data={top} />
+            {top[0] && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Líder: <b className="text-foreground">{top[0].productName}</b> con {formatCurrencyCents(referenceCurrency, top[0].revenueCents)} en ventas.
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Productos con menos ventas</CardTitle>
+            <CardTitle>Menos vendidos</CardTitle>
+            <p className="text-sm text-muted-foreground">Los que menos se mueven · candidatos a promoción</p>
           </CardHeader>
           <CardContent>
             <BottomProductsChart data={bottom} />
+            {bottom[0] && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                <b className="text-foreground">{bottom[0].productName}</b> vendió {bottom[0].quantity} {bottom[0].quantity === 1 ? "unidad" : "unidades"}: prueba un descuento o combo.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

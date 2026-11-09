@@ -42,10 +42,15 @@ export default async function QuoteHistoryPage({
   ];
   const funnel = [
     { label: "Creados", n: quotes.length, color: "bg-primary" },
-    { label: "Abiertos", n: open.length, color: "bg-[#ff9f0a]" },
+    { label: "Enviados", n: quotes.filter((q) => q.sentAt != null).length, color: "bg-[#0f9d9a]" },
+    { label: "Vistos", n: quotes.filter((q) => q.viewedAt != null).length, color: "bg-[#ff9f0a]" },
     { label: "Convertidos", n: won.length, color: "bg-success" },
-    { label: "Perdidos", n: lost.length, color: "bg-destructive" },
   ];
+  const lostReasons = new Map<string, number>();
+  for (const q of lost) lostReasons.set(q.lostReason ?? "Sin motivo", (lostReasons.get(q.lostReason ?? "Sin motivo") ?? 0) + q.totalCents);
+  const lostRows = [...lostReasons.entries()].sort((a, b) => b[1] - a[1]);
+  const lostMax = Math.max(1, ...lostRows.map((r) => r[1]));
+
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
@@ -72,9 +77,10 @@ export default async function QuoteHistoryPage({
         ))}
       </div>
 
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <section className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
         <h2 className="text-base font-bold">Embudo de seguimiento</h2>
-        <p className="mb-4 text-xs text-muted-foreground">De creado a facturado, según el período elegido</p>
+        <p className="mb-4 text-xs text-muted-foreground">De creado a facturado, en el período elegido</p>
         <ul className="flex flex-col gap-3">
           {funnel.map((f) => (
             <li key={f.label} className="grid grid-cols-[96px_1fr_84px] items-center gap-3 text-sm">
@@ -89,6 +95,26 @@ export default async function QuoteHistoryPage({
           ))}
         </ul>
       </section>
+        <section className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
+          <h2 className="text-base font-bold">Por qué se pierden</h2>
+          <p className="mb-4 text-xs text-muted-foreground">Monto perdido por motivo</p>
+          {lostRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aún no hay presupuestos perdidos en este período.</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {lostRows.map(([reason, cents]) => (
+                <li key={reason} className="grid grid-cols-[130px_1fr_90px] items-center gap-3 text-sm">
+                  <span className="truncate font-medium">{reason}</span>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-destructive" style={{ width: `${Math.max(2, Math.round((cents / lostMax) * 100))}%` }} />
+                  </div>
+                  <span className="text-right font-semibold tabular-nums">{money(cents)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
 
       <Card>
         <CardHeader>
