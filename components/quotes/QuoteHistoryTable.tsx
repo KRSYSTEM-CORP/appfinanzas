@@ -61,9 +61,20 @@ export function QuoteHistoryTable({
   const router = useRouter();
 
   // Most recent quote first, regardless of status.
+  // Búsqueda por cliente o número y chips de estado, como en la preview.
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | QuoteStatus>("ALL");
   const sorted = useMemo(() => {
-    return [...quotes].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }, [quotes]);
+    const q = query.trim().toLowerCase();
+    return [...quotes]
+      .filter((x) => statusFilter === "ALL" || x.status === statusFilter)
+      .filter((x) => {
+        if (!q) return true;
+        const name = `${x.customerFirstName ?? ""} ${x.customerLastName ?? ""}`.toLowerCase();
+        return name.includes(q) || String(x.controlNumber ?? "").includes(q);
+      })
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }, [quotes, query, statusFilter]);
 
   const [now] = useState(() => Date.now());
   function daysPending(createdAt: Date): number {
@@ -115,6 +126,29 @@ export function QuoteHistoryTable({
           </div>
         </div>
       )}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar cliente o número"
+          aria-label="Buscar presupuesto"
+          className="h-11 min-w-0 flex-1 rounded-full border-[1.5px] border-input bg-card px-4 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
+        {(["ALL", ...STATUSES] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            aria-pressed={statusFilter === s}
+            onClick={() => setStatusFilter(s)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+              statusFilter === s ? "bg-primary text-primary-foreground" : "bg-muted text-foreground hover:bg-muted/70"
+            }`}
+          >
+            {s === "ALL" ? "Todos" : QUOTE_STATUS_LABELS[s]}
+          </button>
+        ))}
+      </div>
       <MasterDetail
         items={sorted}
         label="Presupuestos"
