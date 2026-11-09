@@ -66,3 +66,26 @@ export async function latestSales(limit = 5): Promise<LatestSale[]> {
     onCredit: s.paymentStatus === "CREDIT",
   }));
 }
+
+export type HeatCell = { dow: number; hour: number; count: number };
+
+// Mapa de calor: ventas por día de la semana (0 = lunes) y hora (8 a 20, hora de
+// Venezuela) en las últimas 8 semanas. Usa ventas reales, no solo días cerrados.
+export async function salesHeatmap(): Promise<HeatCell[]> {
+  const { companyId, branchId } = await requireManager();
+  const since = new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
+  return withTenant(companyId, async (tx) => {
+    const rows = await tx.$queryRaw<{ d: number; h: number; n: bigint }[]>`
+      SELECT ((EXTRACT(DOW FROM s."createdAt" AT TIME ZONE ${SHOP_TIME_ZONE})::int + 6) % 7) AS d,
+             EXTRACT(HOUR FROM s."createdAt" AT TIME ZONE ${SHOP_TIME_ZONE})::int AS h,
+             COUNT(*)::bigint AS n
+      FROM "Sale" s
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND s."voided" = false
+        AND s."createdAt" >= ${since}
+      GROUP BY 1, 2
+    `;
+    return rows.filter((r) => r.h >= 8 && r.h <= 20).map((r) => ({ dow: r.d, hour: r.h, count: Number(r.n) }));
+  });
+}
