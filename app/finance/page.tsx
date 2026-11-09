@@ -23,6 +23,7 @@ import {
   customerMix,
   restockSuggestions,
   periodExtras,
+  weeklyReports,
 } from "@/lib/actions/reports";
 import { salesHeatmap } from "@/lib/actions/home";
 import { commissionsTotal, sellersSalesOverview } from "@/lib/actions/seller-reports";
@@ -67,6 +68,7 @@ export default async function FinancePage({
     mix,
     restock,
     extras,
+    weekly,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
     revenueTotals(range),
@@ -91,6 +93,7 @@ export default async function FinancePage({
     customerMix(range),
     restockSuggestions(),
     periodExtras(range),
+    weeklyReports(),
     getExchangeRateInfo(),
   ]);
 
@@ -482,6 +485,30 @@ export default async function FinancePage({
               </ul>
             );
           })()}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Reporte semanal</CardTitle>
+          <p className="text-sm text-muted-foreground">Las últimas 4 semanas (lunes a domingo). Toca «Ver reporte» para abrir Estadísticas de esa semana.</p>
+        </CardHeader>
+        <CardContent>
+          <ul className="flex flex-col divide-y">
+            {weekly.map((w) => (
+              <li key={w.from} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                <div>
+                  <p className="font-semibold">Semana del {w.label}</p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    Ventas {formatCurrencyCents(referenceCurrency, w.cents)} · {w.count} {w.count === 1 ? "pedido" : "pedidos"}
+                  </p>
+                </div>
+                <Link href={`/finance?range=range&from=${w.from}&to=${w.to}`} className="rounded-full bg-muted px-3 py-1.5 text-xs font-semibold">
+                  Ver reporte
+                </Link>
+              </li>
+            ))}
+          </ul>
         </CardContent>
       </Card>
 

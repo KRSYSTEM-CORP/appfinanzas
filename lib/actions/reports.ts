@@ -6,8 +6,10 @@ import { withTenant } from "@/lib/tenant-db";
 import { closedDayWindows } from "@/lib/closed-days";
 import {
   comparisonWindows,
+  dayBoundsUtc,
   selectionToWindows,
   SHOP_TIME_ZONE,
+  todayDateString,
   type BottomProductPoint,
   type DateRangeSelection,
   type SalesByDayPoint,
@@ -506,5 +508,48 @@ export async function periodExtras(range: DateRangeSelection): Promise<PeriodExt
       prevDays: closed.length,
       label: comparison.label,
     };
+  });
+}
+
+export type WeeklyRow = { from: string; to: string; label: string; cents: number; count: number };
+
+function addDaysStr(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Reporte semanal: las últimas 4 semanas (lunes a domingo, hora de Venezuela) con
+// ventas y pedidos. Se calcula al abrir Estadísticas; no se envía por correo.
+export async function weeklyReports(): Promise<WeeklyRow[]> {
+  const { companyId, branchId } = await requireManager();
+  const today = todayDateString();
+  const dow = (new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7; // 0 = lunes
+  const thisMonday = addDaysStr(today, -dow);
+  const fmt = new Intl.DateTimeFormat("es-VE", { day: "numeric", month: "short", timeZone: "UTC" });
+  return withTenant(companyId, async (tx) => {
+    const weeks = [0, 1, 2, 3].map((i) => {
+      const from = addDaysStr(thisMonday, -7 * i);
+      const to = addDaysStr(from, 6);
+      return { from, to };
+    });
+    return Promise.all(
+      weeks.map(async (w) => {
+        const start = dayBoundsUtc(w.from).start;
+        const end = dayBoundsUtc(w.to).end;
+        const r = await tx.sale.aggregate({
+          _sum: { totalCents: true },
+          _count: true,
+          where: { companyId, ...(branchId ? { branchId } : {}), voided: false, createdAt: { gte: start, lt: end } },
+        });
+        return {
+          from: w.from,
+          to: w.to,
+          label: `${fmt.format(new Date(`${w.from}T12:00:00Z`))} al ${fmt.format(new Date(`${w.to}T12:00:00Z`))}`,
+          cents: r._sum.totalCents ?? 0,
+          count: r._count,
+        };
+      })
+    );
   });
 }
