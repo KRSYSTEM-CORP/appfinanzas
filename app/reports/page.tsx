@@ -8,7 +8,7 @@ import { formatCurrencyCents, getCurrency } from "@/lib/currencies";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
 import { requireSectionAccess } from "@/lib/session";
 import { listRecentSales } from "@/lib/actions/sales";
-import { getDailyClosingSummary, listPendingClosings } from "@/lib/actions/cash-closing";
+import { getDailyClosingSummary, listPendingClosings, listRecentClosings } from "@/lib/actions/cash-closing";
 import { parseDateRangeSelection, selectionToWindows, todayDateString } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,7 @@ export default async function ReportsPage({
     fiscalData,
     todaySummary,
     pendingClosings,
+    recentClosings,
   ] = await Promise.all([
     listRecentSales(500, selectionToWindows(range), statusFilter || undefined),
     getExchangeRateInfo(),
@@ -38,6 +39,7 @@ export default async function ReportsPage({
     getFiscalData(),
     getDailyClosingSummary(todayStr),
     listPendingClosings(range),
+    listRecentClosings(5),
   ]);
   const company = { name: session.companyName, logoDataUrl, ...fiscalData };
   // Closing the register and voiding/deleting sales are manager-only on the
@@ -119,6 +121,51 @@ export default async function ReportsPage({
           />
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Historial de cierres</CardTitle>
+            <p className="text-sm text-muted-foreground">Últimos cierres de caja</p>
+          </CardHeader>
+          <CardContent>
+            {recentClosings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aún no hay cierres.</p>
+            ) : (
+              <ul className="flex flex-col divide-y">
+                {recentClosings.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="font-medium tabular-nums">{c.date.split("-").reverse().join("/")}</span>
+                    <span className="text-muted-foreground">{c.salesCount} ventas</span>
+                    <span className="rounded-full bg-success/14 px-2.5 py-0.5 text-xs font-semibold text-success">Cerrado</span>
+                    <span className="font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, c.totalCents)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Movimientos de Caja Chica</CardTitle>
+            <p className="text-sm text-muted-foreground">Salidas del turno de hoy</p>
+          </CardHeader>
+          <CardContent>
+            {!todaySummary || todaySummary.outflows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay salidas registradas hoy.</p>
+            ) : (
+              <ul className="flex flex-col divide-y">
+                {todaySummary.outflows.map((o) => (
+                  <li key={o.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="min-w-0 truncate font-medium">{o.concept}</span>
+                    <span className="font-semibold tabular-nums text-destructive">−{formatCurrencyCents(referenceCurrency, o.amountCents)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">

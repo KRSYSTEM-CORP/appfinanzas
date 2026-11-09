@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { receivablesTotals, revenueTotals, topProducts } from "@/lib/actions/reports";
+import { commissionsTotal } from "@/lib/actions/seller-reports";
 import { costOfGoodsSold, expensesTotal, getProfitGoal } from "@/lib/actions/finance";
 import { getDashboardTasks } from "@/lib/actions/dashboard";
 import { latestSales, salesByHourToday } from "@/lib/actions/home";
@@ -89,12 +90,13 @@ export default async function BusinessHome({
 }) {
   const session = await requireManager();
   const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
-  const [{ rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, totals, cogsCents, expensesCents, receivables, bestSellers, tasks, hours, latest, goalCents] =
+  const [{ rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, totals, cogsCents, expensesCents, commissionsCents, receivables, bestSellers, tasks, hours, latest, goalCents] =
     await Promise.all([
       getExchangeRateInfo(),
       revenueTotals(range),
       costOfGoodsSold(range),
       expensesTotal(range),
+      commissionsTotal(range),
       receivablesTotals(),
       topProducts(range, 5),
       getDashboardTasks(),
@@ -105,7 +107,7 @@ export default async function BusinessHome({
 
   const money = (c: number) => formatCurrencyCents(referenceCurrency, c);
   const revenue = totals.totalEurCents;
-  const profit = revenue - cogsCents - expensesCents;
+  const profit = revenue - cogsCents - expensesCents - commissionsCents;
   const marginPct = revenue > 0 ? Math.round(((profit / revenue) * 1000)) / 10 : 0;
   const profitInLocal = exchangeRateEnabled && rate ? formatLocalCurrency(Math.round((profit / 100) * rate * 100) / 100, localCurrencyCode) : null;
   const peak = hours.reduce<(typeof hours)[number] | null>((best, h) => (best == null || h.count > best.count ? h : best), null);
@@ -167,6 +169,8 @@ export default async function BusinessHome({
           <Chip label="Costo" value={money(cogsCents)} />
           <span aria-hidden className="text-muted-foreground">−</span>
           <Chip label="Gastos" value={money(expensesCents)} />
+          <span aria-hidden className="text-muted-foreground">−</span>
+          <Chip label="Comisiones" value={money(commissionsCents)} />
         </div>
         <p className="mt-3 text-xs text-muted-foreground">Calculada con los días que ya tienen cierre de caja.</p>
       </section>

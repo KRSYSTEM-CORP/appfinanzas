@@ -1,5 +1,6 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
@@ -186,7 +187,12 @@ export type HistoryEntry = {
   answer: string;
   proposal: Proposal | null;
   applied: boolean;
+  undone: boolean;
+  // Se puede deshacer sin costo hasta 24 h después de aplicar.
+  canUndo: boolean;
 };
+
+const UNDO_WINDOW_MS = 24 * 60 * 60_000;
 
 // Últimas conversaciones del usuario, de la más antigua a la más reciente.
 export async function listAssistantHistory(): Promise<HistoryEntry[]> {
@@ -196,12 +202,13 @@ export async function listAssistantHistory(): Promise<HistoryEntry[]> {
       where: { companyId, userId },
       orderBy: { createdAt: "desc" },
       take: 20,
-      select: { id: true, question: true, answer: true, proposal: true, applied: true },
+      select: { id: true, question: true, answer: true, proposal: true, applied: true, undone: true, appliedAt: true, undoData: true },
     })
   );
   return rows.reverse().map((r) => {
     const parsed = r.proposal ? ProposalSchema.safeParse(r.proposal) : null;
-    return { id: r.id, question: r.question, answer: r.answer, proposal: parsed?.success ? parsed.data : null, applied: r.applied };
+    const canUndo = r.applied && !r.undone && r.undoData != null && r.appliedAt != null && Date.now() - r.appliedAt.getTime() < UNDO_WINDOW_MS;
+    return { id: r.id, question: r.question, answer: r.answer, proposal: parsed?.success ? parsed.data : null, applied: r.applied, undone: r.undone, canUndo };
   });
 }
 
@@ -236,14 +243,21 @@ export async function applyProposal(input: unknown, entryId?: string | null): Pr
       if (!spend) throw new Error(`No tienes créditos suficientes (cada aplicación cuesta ${AI_APPLY_COST}).`);
 
       let text: string;
+      let undoData: Prisma.InputJsonValue;
       if (p.type === "EXPENSE") {
         const amountCents = Math.round(p.amount * 100);
-        await tx.expense.create({
+        const created = await tx.expense.create({
           data: { companyId, description: p.description, category: p.category || null, amountCents, createdById: userId },
         });
+        undoData = { kind: "EXPENSE", expenseId: created.id };
         text = `Gasto registrado: ${p.description} por ${formatCurrencyCents(c?.referenceCurrency ?? "USD", amountCents)}.`;
       } else {
         const factor = 1 + p.percent / 100;
+        const before = await tx.product.findMany({
+          where: { companyId, branchId: session.branchId as string, category: p.category },
+          select: { id: true, priceCents: true },
+        });
+        undoData = { kind: "PRICE_ADJUST", prices: before.map((b) => ({ id: b.id, priceCents: b.priceCents })) };
         const count = await tx.$executeRaw`
           UPDATE "Product" SET "priceCents" = ROUND("priceCents" * ${factor}::numeric)::int, "updatedAt" = NOW()
           WHERE "companyId" = ${companyId} AND "branchId" = ${session.branchId} AND "category" = ${p.category}`;
@@ -260,7 +274,7 @@ export async function applyProposal(input: unknown, entryId?: string | null): Pr
         },
       });
       if (entryId) {
-        await tx.assistantEntry.updateMany({ where: { id: entryId, companyId, userId }, data: { applied: true } });
+        await tx.assistantEntry.updateMany({ where: { id: entryId, companyId, userId }, data: { applied: true, appliedAt: now, undoData, undone: false } });
       }
       return text;
     });
@@ -303,4 +317,38 @@ export async function requestCreditPack(credits: number, reference: string): Pro
   );
   revalidatePath("/assistant");
   return { success: true };
+}
+
+// Revierte un cambio aplicado por el asistente. Gratis y solo durante 24 h; los
+// créditos ya gastados no se devuelven.
+export async function undoProposal(entryId: string): Promise<ActionResult & { summary?: string }> {
+  const { companyId, userId } = await requireManager();
+  try {
+    const summary = await withTenant(companyId, async (tx) => {
+      const e = await tx.assistantEntry.findFirst({ where: { id: entryId, companyId, userId } });
+      if (!e || !e.applied || e.undone || !e.undoData || !e.appliedAt) throw new Error("Este cambio no se puede deshacer.");
+      if (Date.now() - e.appliedAt.getTime() >= UNDO_WINDOW_MS) throw new Error("Pasaron más de 24 horas: ya no se puede deshacer.");
+      const u = e.undoData as { kind?: string; expenseId?: string; prices?: { id: string; priceCents: number }[] };
+      let text: string;
+      if (u.kind === "EXPENSE" && u.expenseId) {
+        await tx.expense.deleteMany({ where: { id: u.expenseId, companyId } });
+        text = "Gasto eliminado: el cambio se deshizo.";
+      } else if (u.kind === "PRICE_ADJUST" && Array.isArray(u.prices)) {
+        for (const pr of u.prices) {
+          await tx.product.updateMany({ where: { id: pr.id, companyId }, data: { priceCents: pr.priceCents } });
+        }
+        text = `Precios restaurados (${u.prices.length} productos).`;
+      } else {
+        throw new Error("Este cambio no se puede deshacer.");
+      }
+      await tx.assistantEntry.update({ where: { id: e.id }, data: { undone: true } });
+      return text;
+    });
+    revalidatePath("/finance");
+    revalidatePath("/inventory");
+    revalidatePath("/pos");
+    return { success: true, summary };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo deshacer" };
+  }
 }

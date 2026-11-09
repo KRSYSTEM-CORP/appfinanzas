@@ -139,3 +139,10 @@ export async function updateSellerCommission(userId: string, percent: number | n
   revalidatePath("/accounting/sellers");
   return { success: true };
 }
+
+// Comisiones de los vendedores en el período (se restan de la ganancia neta,
+// como en la preview v15).
+export async function commissionsTotal(range: DateRangeSelection): Promise<number> {
+  const rows = await sellersSalesOverview(range);
+  return rows.reduce((a, r) => a + r.commissionCents, 0);
+}

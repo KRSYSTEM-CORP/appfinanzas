@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { MicIcon, SendIcon, SquareIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { applyProposal, askAssistant, clearAssistantHistory, type AssistantStatus, type HistoryEntry } from "@/lib/actions/assistant";
+import { applyProposal, askAssistant, clearAssistantHistory, undoProposal, type AssistantStatus, type HistoryEntry } from "@/lib/actions/assistant";
 import type { Proposal } from "@/lib/assistant";
 
 type Msg =
   | { role: "user"; text: string }
-  | { role: "assistant"; text: string; proposal: Proposal | null; state?: "open" | "applied" | "dropped"; note?: string; entryId?: string | null };
+  | { role: "assistant"; text: string; proposal: Proposal | null; state?: "open" | "applied" | "dropped" | "undone"; canUndo?: boolean; note?: string; entryId?: string | null };
 
 const SUGGESTIONS = [
   "¿Cuánto vendí hoy?",
@@ -43,8 +43,9 @@ function fromHistory(history: HistoryEntry[]): Msg[] {
       role: "assistant",
       text: h.answer,
       proposal: h.proposal,
-      state: h.applied ? "applied" : "open",
-      note: h.applied ? "Cambio aplicado." : undefined,
+      state: h.undone ? "undone" : h.applied ? "applied" : "open",
+      canUndo: h.canUndo,
+      note: h.undone ? "Cambio deshecho." : h.applied ? "Cambio aplicado." : undefined,
       entryId: h.id,
     },
   ]);
@@ -82,7 +83,7 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
       setMsgs((m) =>
         m.map((x, i) =>
           i === index && x.role === "assistant"
-            ? { ...x, state: r.success ? "applied" : "open", note: r.success ? r.summary : r.error }
+            ? { ...x, state: r.success ? "applied" : "open", canUndo: r.success && !!entryId, note: r.success ? r.summary : r.error }
             : x
         )
       );
@@ -90,6 +91,20 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
         setCreditsLeft((c) => Math.max(0, c - applyCost));
         router.refresh();
       }
+    });
+  }
+
+  function undo(index: number, entryId: string) {
+    startTransition(async () => {
+      const r = await undoProposal(entryId);
+      setMsgs((m) =>
+        m.map((x, i) =>
+          i === index && x.role === "assistant"
+            ? { ...x, state: r.success ? "undone" : x.state, canUndo: r.success ? false : x.canUndo, note: r.success ? r.summary : r.error }
+            : x
+        )
+      );
+      if (r.success) router.refresh();
     });
   }
 
@@ -173,8 +188,17 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
                 {m.proposal && m.state !== "dropped" && (
                   <div className="flex flex-col gap-2 rounded-lg border bg-background p-2.5">
                     <p className="font-medium">{describe(m.proposal)}</p>
-                    {m.state === "applied" ? (
-                      <p className="text-success">{m.note}</p>
+                    {m.state === "undone" ? (
+                      <p className="text-muted-foreground">{m.note}</p>
+                    ) : m.state === "applied" ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-success">{m.note}</p>
+                        {m.canUndo && m.entryId && (
+                          <Button size="sm" variant="outline" disabled={isPending} onClick={() => undo(i, m.entryId as string)}>
+                            Deshacer · gratis 24 h
+                          </Button>
+                        )}
+                      </div>
                     ) : (
                       <>
                         <p className="text-xs text-muted-foreground">

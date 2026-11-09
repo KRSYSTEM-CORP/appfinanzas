@@ -20,6 +20,7 @@ import {
   mostPurchasedProducts,
   inventoryRotation,
 } from "@/lib/actions/reports";
+import { commissionsTotal } from "@/lib/actions/seller-reports";
 import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, productMargins, getProfitGoal } from "@/lib/actions/finance";
 import { BreakevenCard } from "@/components/finance/BreakevenCard";
 import { StatsInsights } from "@/components/finance/StatsInsights";
@@ -47,6 +48,7 @@ export default async function FinancePage({
     currencyIncome,
     cogsCents,
     expensesCents,
+    commissionsCents,
     expenses,
     comparison,
     categories,
@@ -65,6 +67,7 @@ export default async function FinancePage({
     incomeByCurrency(range),
     costOfGoodsSold(range),
     expensesTotal(range),
+    commissionsTotal(range),
     listExpenses(range, expenseSearch),
     revenueComparison(range),
     categoryMargins(range),
@@ -76,7 +79,7 @@ export default async function FinancePage({
     getExchangeRateInfo(),
   ]);
 
-  const netProfitCents = totals.totalEurCents - cogsCents - expensesCents;
+  const netProfitCents = totals.totalEurCents - cogsCents - expensesCents - commissionsCents;
 
   // Only shown when both periods have at least one closed day and a baseline
   // to compare against — otherwise a percentage would be noise.
@@ -160,6 +163,12 @@ export default async function FinancePage({
           icon={WalletIcon}
           value={formatCurrencyCents(referenceCurrency, expensesCents)}
         />
+        <StatCard
+          label="Comisiones de vendedores"
+          accent="warning"
+          icon={WalletIcon}
+          value={formatCurrencyCents(referenceCurrency, commissionsCents)}
+        />
       </div>
 
       <Card>
@@ -187,7 +196,7 @@ export default async function FinancePage({
             {formatCurrencyCents(referenceCurrency, netProfitCents)}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            Ingresos − costo de mercancía vendida − gastos, para el período seleccionado.
+            Ingresos − costo de mercancía vendida − gastos − comisiones, para el período seleccionado.
           </p>
         </CardContent>
       </Card>
@@ -197,7 +206,7 @@ export default async function FinancePage({
       <BreakevenCard
         revenueCents={totals.totalEurCents}
         cogsCents={cogsCents}
-        expensesCents={expensesCents}
+        expensesCents={expensesCents + commissionsCents}
         categories={categories}
         products={products}
         goalCents={goalCents}

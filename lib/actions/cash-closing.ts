@@ -290,3 +290,19 @@ export async function deleteCashOutflow(dateStr: string, id: string): Promise<Ac
   revalidatePath("/reports");
   return { success: true };
 }
+
+export type RecentClosing = { id: string; date: string; totalCents: number; salesCount: number; note: string | null };
+
+// Últimos cierres de caja (de la sede activa o de todas), para el «Historial de cierres».
+export async function listRecentClosings(limit = 5): Promise<RecentClosing[]> {
+  const { companyId, branchId } = await requireSession();
+  const rows = await withTenant(companyId, (tx) =>
+    tx.cashClosing.findMany({
+      where: { companyId, ...(branchId ? { branchId } : {}) },
+      orderBy: { closingDate: "desc" },
+      take: limit,
+      select: { id: true, closingDate: true, totalCents: true, salesCount: true, note: true },
+    })
+  );
+  return rows.map((r) => ({ id: r.id, date: r.closingDate.toISOString().slice(0, 10), totalCents: r.totalCents, salesCount: r.salesCount, note: r.note }));
+}
