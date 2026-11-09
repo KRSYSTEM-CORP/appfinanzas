@@ -383,3 +383,50 @@ export async function inventoryRotation(range: DateRangeSelection, limit = 10): 
     }));
   });
 }
+
+export type RestockSuggestion = {
+  id: string;
+  name: string;
+  stock: number;
+  daysLeft: number | null;
+  suggestedQty: number;
+  estimatedCostCents: number | null;
+};
+
+const RESTOCK_COVER_DAYS = 20;
+
+// Reposición sugerida: con el ritmo de venta de los últimos 30 días, cuánto pedir
+// para cubrir 20 días. Solo productos activos con control de stock que vendieron.
+export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]> {
+  const { companyId, branchId } = await requireManager();
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  return withTenant(companyId, async (tx) => {
+    const rows = await tx.$queryRaw<{ id: string; name: string; stock: number; cost: number | null; sold: bigint }[]>`
+      SELECT pr.id, pr."name" AS name, pr."stock" AS stock, pr."costCents" AS cost, SUM(si."quantity")::bigint AS sold
+      FROM "Product" pr
+      JOIN "SaleItem" si ON si."productId" = pr.id
+      JOIN "Sale" s ON s.id = si."saleId"
+      WHERE pr."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND pr."branchId" = ${branchId}` : Prisma.empty}
+        AND pr."isActive" = true AND pr."trackStock" = true
+        AND s."voided" = false AND s."createdAt" >= ${since}
+      GROUP BY pr.id, pr."name", pr."stock", pr."costCents"
+    `;
+    return rows
+      .map((r) => {
+        const perDay = Number(r.sold) / 30;
+        const need = Math.ceil(perDay * RESTOCK_COVER_DAYS - r.stock);
+        return {
+          id: r.id,
+          name: r.name,
+          stock: r.stock,
+          daysLeft: perDay > 0 ? Math.floor(r.stock / perDay) : null,
+          suggestedQty: need,
+          estimatedCostCents: r.cost != null ? need * r.cost : null,
+        };
+      })
+      .filter((x) => x.suggestedQty > 0)
+      .sort((a, b) => (a.daysLeft ?? 999) - (b.daysLeft ?? 999))
+      .slice(0, limit);
+  });
+}
