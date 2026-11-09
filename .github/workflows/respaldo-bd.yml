@@ -59,14 +59,18 @@ jobs:
           set -euo pipefail
           STAMP=$(date -u +%Y%m%d-%H%M%S)
           echo "STAMP=$STAMP" >> "$GITHUB_ENV"
-          export PGURL="$BACKUP_DATABASE_URL"
+          # verify-full exige un certificado raíz que el contenedor no tiene: se usa
+          # require (la conexión sigue cifrada), sea cual sea la cadena que se pegó.
+          export PGURL=$(printf '%s' "$BACKUP_DATABASE_URL" | sed -E 's/sslmode=(verify-full|verify-ca)/sslmode=require/')
           # pg_dump de una versión igual o mayor que el servidor puede copiar servidores más viejos.
           docker run --rm -e PGURL postgres:18-alpine sh -c 'pg_dump --format=custom --no-owner "$PGURL"' > "bd-$STAMP.dump"
           test -s "bd-$STAMP.dump"
           # Comprobación mínima: que el archivo se pueda leer y traiga las tablas.
           TABLES=$(docker run --rm -i postgres:18-alpine pg_restore --list < "bd-$STAMP.dump" | grep -c " TABLE " || true)
           echo "Tablas en la copia: $TABLES"
-          if [ "$TABLES" -lt 20 ]; then
+          # La base de producción tiene más de 35 tablas: menos indica que se está
+          # copiando otra base (más vieja o equivocada).
+          if [ "$TABLES" -lt 35 ]; then
             echo "::error::La copia trae solo $TABLES tablas; algo salió mal."
             exit 1
           fi
