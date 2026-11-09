@@ -6,6 +6,7 @@ import { withTenant } from "@/lib/tenant-db";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { fetchBcvRate } from "@/lib/bcv-rate";
+import { isRateStale } from "@/lib/bcv-parse";
 import {
   BrandingSchema,
   ChangePasswordSchema,
@@ -68,7 +69,7 @@ async function computeExchangeRateInfo(companyId: string): Promise<ExchangeRateI
   const isStale =
     company?.localCurrencyCode === "VES" &&
     company.exchangeRateEnabled &&
-    (updatedAt == null || Date.now() - updatedAt.getTime() > STALE_RATE_MS);
+    (updatedAt == null || Date.now() - updatedAt.getTime() > STALE_RATE_MS || isRateStale(updatedAt));
 
   if (isStale && company) {
     try {

@@ -8,6 +8,7 @@ import { getSession } from "@/lib/session";
 import { withTenant, withSuperAdmin } from "@/lib/tenant-db";
 import { isCompanyBlocked, PLATFORM_SETTINGS_ID } from "@/lib/billing";
 import { fetchBcvRate } from "@/lib/bcv-rate";
+import { isRateStale } from "@/lib/bcv-parse";
 import { getOrSetCache } from "@/lib/cache";
 import { sendPaymentReportEmail } from "@/lib/email";
 import { PaymentReportSchema } from "@/lib/validations";
@@ -34,7 +35,7 @@ async function computePlatformExchangeRateInfo(): Promise<PlatformExchangeRateIn
   let rate = settings?.platformExchangeRate != null ? Number(settings.platformExchangeRate) : null;
   let updatedAt = settings?.platformExchangeRateUpdatedAt ?? null;
 
-  const isStale = updatedAt == null || Date.now() - updatedAt.getTime() > PLATFORM_STALE_RATE_MS;
+  const isStale = updatedAt == null || Date.now() - updatedAt.getTime() > PLATFORM_STALE_RATE_MS || isRateStale(updatedAt);
   if (isStale) {
     try {
       const freshRate = await fetchBcvRate("USD");
