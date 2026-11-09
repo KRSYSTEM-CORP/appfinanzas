@@ -234,18 +234,23 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
 
           {trackStock && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="stock">Stock actual</Label>
-                <Input
-                  id="stock"
-                  name="stock"
-                  type="number"
-                  min={0}
-                  step={1}
-                  defaultValue={product?.stock ?? 0}
-                  required
-                />
-              </div>
+              {product ? (
+                <div className="flex flex-col gap-1.5">
+                  {/* Solo satisface la validación; el servidor suma stockAdd al stock real. */}
+                  <input type="hidden" name="stock" value={product.stock} />
+                  <Label htmlFor="stockAdd">Sumar existencias</Label>
+                  <Input id="stockAdd" name="stockAdd" type="number" min={0} step={1} defaultValue={0} />
+                  <p className="text-xs text-muted-foreground">
+                    Stock actual: <b className="tabular-nums">{product.stock}</b>. Lo que escribas se suma; el
+                    movimiento queda en el historial del producto.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="stock">Stock actual</Label>
+                  <Input id="stock" name="stock" type="number" min={0} step={1} defaultValue={0} required />
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="lowStockThreshold">Umbral de stock bajo</Label>
                 <Input

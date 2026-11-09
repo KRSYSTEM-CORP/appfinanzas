@@ -209,6 +209,9 @@ export function ProductMasterDetail({
               <Button nativeButton={false} render={<Link href={`/inventory/${selected.id}`} />}>
                 Editar producto
               </Button>
+              <Button variant="outline" nativeButton={false} render={<Link href={`/inventory/${selected.id}/movements`} />}>
+                Movimientos
+              </Button>
               <Button
                 type="button"
                 variant="outline"
