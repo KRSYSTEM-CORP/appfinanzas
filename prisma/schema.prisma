@@ -296,6 +296,11 @@ model User {
   // Null for an account that only ever signed up/logged in with Google (see
   // app/api/auth/google/callback) — nothing to verify a password against.
   passwordHash        String?
+  // PIN de 4 a 6 números para desbloquear la pantalla (lib/pin.ts). pinHash es el
+  // hash con sal para verificarlo; pinKey es un HMAC (con AUTH_SECRET) solo para
+  // garantizar que dos personas de la misma empresa no tengan el mismo PIN.
+  pinHash             String?
+  pinKey              String?
   // Bumped when the password changes; session cookies carry the value they
   // were issued with (SessionPayload.tv), so older cookies stop working on
   // every device (audit KRPOS-SEC-006).
@@ -364,6 +369,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
 
   @@unique([companyId, loginUsername])
+  @@unique([companyId, pinKey])
   @@index([companyId])
   @@index([branchId])
 }

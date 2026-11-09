@@ -23,6 +23,7 @@ export default async function AdminPage() {
   // so a stale-but-signed cookie (deleted/suspended user) must be cleared
   // through the Route Handler rather than by redirecting straight to /login.
   if (!session) redirect("/api/auth/clear-session");
+  if (session.locked) redirect("/lock");
   if (!session.isSuperAdmin) redirect("/pos");
 
   const [companies, pendingReports, platformSettings, platformExchangeRate, announcementRecipients, creditRequests] = await Promise.all([

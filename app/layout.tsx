@@ -7,6 +7,7 @@ import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistratio
 import { KrPosTour } from "@/components/onboarding/KrPosTour";
 import { getSession } from "@/lib/session";
 import { RenewalBanner } from "@/components/nav/RenewalBanner";
+import { IdleLock } from "@/components/lock/IdleLock";
 import { renewalNotice } from "@/lib/renewal";
 import { FEATURES, hasFeature } from "@/lib/features";
 import { getBranding } from "@/lib/actions/settings";
@@ -52,7 +53,8 @@ export default async function RootLayout({
   // /billing. listBranches() uses requireSession(), which redirects blocked
   // sessions back to /blocked; calling it from the root layout caused that
   // route to redirect to itself until Next displayed a blank error page.
-  const canLoadAppChrome = Boolean(session && !session.billingBlocked);
+  // Con la pantalla bloqueada no se carga el menú ni el contenido: solo /lock responde.
+  const canLoadAppChrome = Boolean(session && !session.billingBlocked && !session.locked);
   const renewal =
     canLoadAppChrome && session && !session.isSuperAdmin ? renewalNotice(session.nextPaymentDueDate, session.isExempt) : null;
   const [branding, branches] = await Promise.all([
@@ -90,6 +92,7 @@ export default async function RootLayout({
         </Script>
         <ServiceWorkerRegistration />
         {renewal && <RenewalBanner days={renewal.days} text={renewal.text} />}
+        {canLoadAppChrome && session?.hasPin && <IdleLock role={session.role} />}
         {canLoadAppChrome && session && (
           <Sidebar
             companyName={session.companyName}
@@ -106,6 +109,7 @@ export default async function RootLayout({
             branches={branches.map((b) => ({ id: b.id, name: b.name }))}
             currentBranchId={session.branchId}
             currentBranchName={session.branchName}
+            hasPin={session.hasPin}
           />
         )}
         {canLoadAppChrome && session && <KrPosTour hasSeenTour={session.hasSeenTour} />}
