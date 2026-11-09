@@ -384,6 +384,43 @@ export async function inventoryRotation(range: DateRangeSelection, limit = 10): 
   });
 }
 
+export type CustomerMix = { total: number; newCount: number; returningCount: number };
+
+// Clientes atendidos en el período: «nuevos» = su primera compra cae dentro del
+// período; «recurrentes» = ya habían comprado antes. Ventas anuladas no cuentan.
+export async function customerMix(range: DateRangeSelection): Promise<CustomerMix> {
+  const { companyId, branchId } = await requireManager();
+  const windows = selectionToWindows(range);
+  return withTenant(companyId, async (tx) => {
+    const rows = await tx.$queryRaw<{ new_n: bigint; ret_n: bigint }[]>`
+      WITH inrange AS (
+        SELECT DISTINCT s."customerId"
+        FROM "Sale" s
+        WHERE s."companyId" = ${companyId}
+          ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+          AND s."voided" = false AND s."customerId" IS NOT NULL
+          AND ${windowsSql('s."createdAt"', windows)}
+      )
+      SELECT
+        COUNT(*) FILTER (WHERE NOT EXISTS (
+          SELECT 1 FROM "Sale" p
+          WHERE p."companyId" = ${companyId} AND p."customerId" = i."customerId" AND p."voided" = false
+            AND p."createdAt" < ${windows.reduce((m, w) => (w.start < m ? w.start : m), windows[0].start)}
+        ))::bigint AS new_n,
+        COUNT(*) FILTER (WHERE EXISTS (
+          SELECT 1 FROM "Sale" p
+          WHERE p."companyId" = ${companyId} AND p."customerId" = i."customerId" AND p."voided" = false
+            AND p."createdAt" < ${windows.reduce((m, w) => (w.start < m ? w.start : m), windows[0].start)}
+        ))::bigint AS ret_n
+      FROM inrange i
+    `;
+    const r = rows[0];
+    const newCount = Number(r?.new_n ?? 0);
+    const returningCount = Number(r?.ret_n ?? 0);
+    return { total: newCount + returningCount, newCount, returningCount };
+  });
+}
+
 export type RestockSuggestion = {
   id: string;
   name: string;

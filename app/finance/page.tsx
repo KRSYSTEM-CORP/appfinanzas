@@ -20,6 +20,7 @@ import {
   salesByPaymentMethod,
   mostPurchasedProducts,
   inventoryRotation,
+  customerMix,
   restockSuggestions,
 } from "@/lib/actions/reports";
 import { salesHeatmap } from "@/lib/actions/home";
@@ -62,6 +63,7 @@ export default async function FinancePage({
     goalCents,
     sellers,
     heat,
+    mix,
     restock,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
@@ -84,6 +86,7 @@ export default async function FinancePage({
     getProfitGoal(),
     sellersSalesOverview(range),
     salesHeatmap(),
+    customerMix(range),
     restockSuggestions(),
     getExchangeRateInfo(),
   ]);
@@ -338,6 +341,31 @@ export default async function FinancePage({
 
       <Card>
         <CardHeader>
+          <CardTitle>Clientes nuevos y recurrentes</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            {mix.total} {mix.total === 1 ? "cliente atendido" : "clientes atendidos"} en el período
+          </p>
+        </CardHeader>
+        <CardContent>
+          {mix.total === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin clientes en este período.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex h-3 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${mix.newCount} nuevos y ${mix.returningCount} recurrentes`}>
+                <div className="bg-primary" style={{ width: `${(mix.newCount / mix.total) * 100}%` }} />
+                <div className="bg-success" style={{ width: `${(mix.returningCount / mix.total) * 100}%` }} />
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <p><span className="mr-2 inline-block size-2.5 rounded-full bg-primary" aria-hidden />Nuevos <b className="tabular-nums">{mix.newCount} · {Math.round((mix.newCount / mix.total) * 1000) / 10} %</b></p>
+                <p><span className="mr-2 inline-block size-2.5 rounded-full bg-success" aria-hidden />Recurrentes <b className="tabular-nums">{mix.returningCount} · {Math.round((mix.returningCount / mix.total) * 1000) / 10} %</b></p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Reposición sugerida</CardTitle>
           <p className="text-sm text-muted-foreground">Para cubrir 20 días de ventas, según el ritmo de los últimos 30 días</p>
         </CardHeader>
@@ -369,6 +397,79 @@ export default async function FinancePage({
               </Link>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Rendimiento de productos</CardTitle>
+          <p className="text-sm text-muted-foreground">Pareto 80/20: qué productos generan la mayor parte de la venta</p>
+        </CardHeader>
+        <CardContent>
+          {(() => {
+            const items = [...top].sort((a, b) => b.revenueCents - a.revenueCents);
+            const total = items.reduce((t, i) => t + i.revenueCents, 0);
+            if (items.length === 0 || total <= 0) return <p className="text-sm text-muted-foreground">Sin ventas de productos en este período.</p>;
+            const rows = items.map((i, idx) => {
+              const before = items.slice(0, idx).reduce((t, x) => t + x.revenueCents, 0);
+              return { ...i, before, cum: Math.round(((before + i.revenueCents) / total) * 100) };
+            });
+            const classA = rows.filter((r) => r.before < total * 0.8).length;
+            const max = items[0].revenueCents;
+            return (
+              <div className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-2.5">
+                  {rows.map((r) => (
+                    <li key={`${r.productId}-${r.productName}`} className="grid grid-cols-[130px_1fr_84px_44px] items-center gap-3 text-sm">
+                      <span className="truncate font-medium">{r.productName}</span>
+                      <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                        <div className={`h-full rounded-full ${r.before < total * 0.8 ? "bg-primary" : "bg-muted-foreground/40"}`} style={{ width: `${Math.max(2, Math.round((r.revenueCents / max) * 100))}%` }} />
+                      </div>
+                      <span className="text-right font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, r.revenueCents)}</span>
+                      <span className="text-right text-xs text-muted-foreground tabular-nums">{r.cum} %</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-sm text-muted-foreground">
+                  Los primeros {classA} {classA === 1 ? "producto genera" : "productos generan"} el 80 % de la venta (clase A). Cuídalos de agotarse.
+                </p>
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Lo que dicen tus números</CardTitle>
+          <p className="text-sm text-muted-foreground">Hallazgos automáticos</p>
+        </CardHeader>
+        <CardContent>
+          {(() => {
+            const days = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+            const findings: { text: string; href?: string; cta?: string }[] = [];
+            const peak = [...heat].sort((a, b) => b.count - a.count)[0];
+            if (peak && peak.count > 0) findings.push({ text: `Tu hora más fuerte es el ${days[peak.dow]} a las ${peak.hour}:00 (${peak.count} ventas en 8 semanas): refuerza el personal.` });
+            if (restock[0]) findings.push({ text: `${restock[0].name} ${restock[0].stock <= 0 ? "está agotado" : `tiene ${restock[0].stock}`} y se vende bien: repón pronto.`, href: "/purchases/new", cta: "Crear orden de compra" });
+            const totalMix = paymentMix.reduce((t, m) => t + m.totalCents, 0);
+            if (totalMix > 0 && paymentMix[0]) findings.push({ text: `${Math.round((paymentMix[0].totalCents / totalMix) * 100)} % de tus cobros llega por ${paymentMix[0].method}.` });
+            if (receivables.count > 0) findings.push({ text: `Tienes ${receivables.count} ${receivables.count === 1 ? "venta a crédito" : "ventas a crédito"} por cobrar.`, href: "/accounting/receivables", cta: "Ver cuentas por cobrar" });
+            if (findings.length === 0) return <p className="text-sm text-muted-foreground">Aún no hay suficientes datos para hallazgos.</p>;
+            return (
+              <ul className="flex flex-col divide-y">
+                {findings.map((f) => (
+                  <li key={f.text} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                    <span>{f.text}</span>
+                    {f.href && (
+                      <Link href={f.href} className="shrink-0 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold">
+                        {f.cta}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
         </CardContent>
       </Card>
 
