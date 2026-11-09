@@ -150,3 +150,8 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
     `,
   );
 }
+
+// Reporte semanal de ventas (cuerpo ya armado por lib/weekly-report.ts).
+export async function sendWeeklyReportEmail(to: string, subject: string, bodyHtml: string): Promise<boolean> {
+  return send(to, subject, bodyHtml);
+}

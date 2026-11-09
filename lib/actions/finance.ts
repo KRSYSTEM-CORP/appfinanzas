@@ -73,7 +73,7 @@ export async function listExpenses(range: DateRangeSelection, search = "") {
 }
 
 export async function createExpense(formData: FormData): Promise<ActionResult> {
-  const { companyId, userId } = await requireManager();
+  const { companyId, userId, branchId } = await requireManager();
   const parsed = ExpenseSchema.safeParse({
     description: formData.get("description"),
     category: formData.get("category"),
@@ -113,6 +113,7 @@ export async function createExpense(formData: FormData): Promise<ActionResult> {
         companyId,
         description: parsed.data.description,
         category: parsed.data.category,
+        branchId: branchId ?? null,
         amountCents,
         enteredInLocal,
         localAmountCents,

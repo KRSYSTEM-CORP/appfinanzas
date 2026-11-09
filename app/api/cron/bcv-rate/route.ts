@@ -4,6 +4,8 @@ import { withSuperAdmin } from "@/lib/tenant-db";
 import { fetchBcvRateDetailed } from "@/lib/bcv-rate";
 import { PLATFORM_SETTINGS_ID } from "@/lib/billing";
 import { invalidateCache } from "@/lib/cache";
+import { todayDateString } from "@/lib/report-types";
+import { sendWeeklyReports } from "@/lib/weekly-report";
 
 // Runs once a day at 7:00 p. m. Venezuela time (23:00 UTC — Vercel cron schedules
 // always run in UTC, see vercel.json's "crons" entry), when the BCV has already
@@ -62,8 +64,20 @@ export async function GET(request: NextRequest) {
     platformRateUpdated = true;
   }
 
+  // Reporte semanal por correo: se envía los domingos aquí mismo porque el plan
+  // Hobby de Vercel solo permite 2 crons y ya están en uso. Un fallo no afecta a la tasa.
+  let weekly: { companies: number; sent: number } | null = null;
+  if (new Date(`${todayDateString()}T12:00:00Z`).getUTCDay() === 0) {
+    try {
+      weekly = await sendWeeklyReports();
+    } catch (err) {
+      console.error("[cron bcv-rate] weekly report failed:", err);
+    }
+  }
+
   return NextResponse.json({
     ok: true,
+    weekly,
     usdRate: usdRate.status === "fulfilled" ? usdRate.value.rate : null,
     eurRate: eurRate.status === "fulfilled" ? eurRate.value.rate : null,
     source: usdRate.status === "fulfilled" ? usdRate.value.source : null,

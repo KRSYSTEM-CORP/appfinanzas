@@ -226,6 +226,8 @@ model Company {
   plan                  PlanTier          @default(CORPORATIVO)
   // false hasta que el dueño elige su plan al crear la cuenta (pantalla /choose-plan).
   planChosen            Boolean           @default(true)
+  // Reporte semanal por correo a los gerentes (domingo por la noche); opt-in.
+  weeklyReportEnabled   Boolean           @default(false)
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?
   payments              Payment[]
@@ -761,6 +763,10 @@ model Quote {
   // stays null; the presence of `sale` is what "seguimiento de presupuestos"
   // uses to link straight to the resulting document.
   status            QuoteStatus @default(PENDING)
+  // Seguimiento: cuándo se marcó como enviado / visto por el cliente y por qué se perdió.
+  sentAt            DateTime?
+  viewedAt          DateTime?
+  lostReason        String?
   // Virtual back-relation — no column here, see Sale.quoteId (the actual FK,
   // unique so a quote can never be linked to more than one sale).
   sale              Sale?
@@ -1052,6 +1058,8 @@ model Expense {
   company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   description      String
   category         String?
+  // Sede a la que se cargó el gasto (la activa al registrarlo); null = general / anterior.
+  branchId         String?
   // Always the reference-currency amount (EUR/USD) — every Finanzas total
   // sums this column, so an expense entered in local currency is converted
   // at the rate of the moment it was recorded.
@@ -1070,6 +1078,7 @@ model Expense {
   createdAt        DateTime @default(now())
 
   @@index([companyId, spentAt])
+  @@index([companyId, branchId])
 }
 
 // A formal end-of-day cash register closing — freezes that business day's

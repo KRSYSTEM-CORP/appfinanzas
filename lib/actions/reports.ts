@@ -553,3 +553,15 @@ export async function weeklyReports(): Promise<WeeklyRow[]> {
     );
   });
 }
+
+export async function getWeeklyReportEnabled(): Promise<boolean> {
+  const { companyId } = await requireManager();
+  const c = await withTenant(companyId, (tx) => tx.company.findUnique({ where: { id: companyId }, select: { weeklyReportEnabled: true } }));
+  return c?.weeklyReportEnabled ?? false;
+}
+
+export async function setWeeklyReportEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }> {
+  const { companyId } = await requireManager();
+  await withTenant(companyId, (tx) => tx.company.update({ where: { id: companyId }, data: { weeklyReportEnabled: enabled } }));
+  return { success: true };
+}
