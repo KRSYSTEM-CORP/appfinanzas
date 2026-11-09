@@ -20,11 +20,16 @@ export async function listEmployees() {
     tx.user.findMany({
     where: { companyId },
       orderBy: [{ role: "asc" }, { createdAt: "asc" }],
-      omit: { passwordHash: true, googleId: true },
+      omit: { passwordHash: true, googleId: true, pinHash: true, pinKey: true },
     })
   );
+  const withPin = await withTenant(companyId, (tx) =>
+    tx.user.findMany({ where: { companyId, pinHash: { not: null } }, select: { id: true } })
+  );
+  const hasPin = new Set(withPin.map((u) => u.id));
   return users.map((u) => ({
     ...u,
+    hasPin: hasPin.has(u.id),
     commissionPercent: u.commissionPercent != null ? Number(u.commissionPercent) : null,
   }));
 }

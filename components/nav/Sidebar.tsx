@@ -30,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/actions/auth";
 import { BranchSwitcher } from "@/components/nav/BranchSwitcher";
+import { LockButton } from "@/components/lock/LockButton";
 import { ThemeToggle } from "@/components/nav/ThemeToggle";
 import { CommandPalette, type PaletteItem } from "@/components/nav/CommandPalette";
 import type { Role } from "@prisma/client";
@@ -162,6 +163,7 @@ export function Sidebar({
   branches,
   currentBranchId,
   currentBranchName,
+  hasPin = false,
 }: {
   companyName: string;
   logoDataUrl: string | null;
@@ -173,6 +175,7 @@ export function Sidebar({
   branches: { id: string; name: string }[];
   currentBranchId: string | null;
   currentBranchName: string | null;
+  hasPin?: boolean;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -346,6 +349,7 @@ export function Sidebar({
             )}
           </button>
           <ThemeToggle collapsed={collapsed} />
+          {hasPin && <LockButton collapsed={collapsed} />}
           <form action={logout} className={collapsed ? "" : "w-full"}>
             <Button type="submit" variant="ghost" size={collapsed ? "icon-sm" : "sm"} className={collapsed ? "" : "w-full justify-start"} title={collapsed ? "Salir" : undefined} aria-label={collapsed ? "Salir" : undefined}>
               {collapsed ? <LogOutIcon className="size-4" /> : "Salir"}
@@ -406,6 +410,7 @@ export function Sidebar({
                 <span className="text-xs text-sidebar-foreground/70">{ROLE_LABELS[role]}</span>
               </div>
               <ThemeToggle />
+              {hasPin && <LockButton />}
               <form action={logout}>
                 <Button type="submit" variant="ghost" size="sm" className="w-full justify-start">
                   Salir

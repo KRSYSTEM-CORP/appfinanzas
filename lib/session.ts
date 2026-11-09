@@ -71,6 +71,10 @@ export type Session = {
   // — false only for a brand-new signup/employee that hasn't clicked through
   // or skipped it yet.
   hasSeenTour: boolean;
+  // La pantalla está bloqueada: solo /lock responde hasta ingresar un PIN.
+  locked: boolean;
+  // Esta persona ya tiene PIN (solo entonces puede bloquear y desbloquear).
+  hasPin: boolean;
 };
 
 // Memoized per request (React cache): a page renders the layout, the
@@ -153,6 +157,8 @@ async function readSession(): Promise<Session | null> {
     branchId,
     branchName: branch?.name ?? null,
     hasSeenTour: user.hasSeenTour,
+    locked: payload.lk === true,
+    hasPin: user.pinHash != null,
   };
 }
 
@@ -173,6 +179,8 @@ export async function requireSession(): Promise<Session> {
     const suspended = await isSuspendedSessionCookie();
     redirect(suspended ? "/api/auth/clear-session?reason=suspended" : "/api/auth/clear-session");
   }
+  // Pantalla bloqueada: ninguna acción ni página funciona hasta desbloquear.
+  if (session.locked) redirect("/lock");
   if (session.billingBlocked) redirect("/blocked");
   return session;
 }

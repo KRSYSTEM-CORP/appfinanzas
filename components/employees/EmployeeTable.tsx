@@ -34,6 +34,7 @@ import {
   type EmployeeListItem,
 } from "@/lib/actions/employees";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
+import { PinControl } from "@/components/employees/PinControl";
 import { resizeImageToDataUrl } from "@/lib/image-utils";
 
 const ROLE_LABELS: Record<Role, string> = { GERENTE: "Gerente", VENDEDOR: "Vendedor" };
@@ -365,6 +366,7 @@ export function EmployeeTable({
               </div>
             </div>
             <PhotoControl user={u} />
+            <PinControl userId={u.id} name={displayName(u)} hasPin={u.hasPin} />
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <div className="flex flex-col gap-0.5">
                 <dt className="text-xs text-muted-foreground">Rol</dt>
