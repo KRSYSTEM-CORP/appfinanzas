@@ -3,8 +3,8 @@
 // se bloquea antes que un gerente.
 
 export const LOCK_AFTER_MS = {
-  GERENTE: 15 * 60_000,
-  VENDEDOR: 10 * 60_000,
+  GERENTE: 10 * 60_000,
+  VENDEDOR: 5 * 60_000,
 } as const;
 
 // Cuánto antes del bloqueo se avisa.

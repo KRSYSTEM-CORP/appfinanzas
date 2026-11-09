@@ -1369,6 +1369,10 @@ model AssistantEntry {
   answer    String
   proposal  Json?
   applied   Boolean  @default(false)
+  // Deshacer 24 h sin costo: qué hacer para revertir y si ya se revirtió.
+  appliedAt DateTime?
+  undoData  Json?
+  undone    Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@index([companyId, userId, createdAt])
