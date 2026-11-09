@@ -16,6 +16,7 @@ export function BreakevenCard({
   cogsCents,
   expensesCents,
   categories,
+  products,
   goalCents,
   referenceCurrency,
 }: {
@@ -23,6 +24,7 @@ export function BreakevenCard({
   cogsCents: number;
   expensesCents: number;
   categories: CategoryMargin[];
+  products: CategoryMargin[];
   goalCents: number | null;
   referenceCurrency: ReferenceCurrency;
 }) {
@@ -38,6 +40,11 @@ export function BreakevenCard({
   const pctOf = (needed: number | null) =>
     needed && needed > 0 ? Math.min(100, Math.round((revenueCents / needed) * 100)) : 0;
   const rows = breakevenByCategory(categories, expensesCents);
+  // Solo se reparte a los 15 productos la parte de los gastos que les corresponde
+  // por su peso en las ventas totales (el resto de productos absorbe el resto).
+  const productsRevenue = products.reduce((a, r) => a + r.revenueCents, 0);
+  const productExpenses = revenueCents > 0 ? Math.round((expensesCents * productsRevenue) / revenueCents) : 0;
+  const productRows = breakevenByCategory(products, productExpenses);
 
   function save(e: React.FormEvent) {
     e.preventDefault();
@@ -105,42 +112,8 @@ export function BreakevenCard({
           )}
         </form>
 
-        {rows.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <p className="text-sm font-medium">Por categoría</p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="py-1 pr-3 font-medium">Categoría</th>
-                    <th className="py-1 pr-3 text-right font-medium">Ventas</th>
-                    <th className="py-1 pr-3 text-right font-medium">Margen</th>
-                    <th className="py-1 pr-3 text-right font-medium">Equilibrio</th>
-                    <th className="py-1 font-medium">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.category} className="border-t">
-                      <td className="py-1.5 pr-3">{r.category}</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums">{money(r.revenueCents)}</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums">{Math.round(r.margin * 100)} %</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums">
-                        {r.breakevenCents != null ? money(r.breakevenCents) : "—"}
-                      </td>
-                      <td className={`py-1.5 ${r.covered ? "text-success" : "text-warning"}`}>
-                        {r.covered ? "Cubre su parte" : "Por debajo"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Los gastos se reparten entre categorías según su peso en las ventas del período.
-            </p>
-          </div>
-        )}
+        <BreakevenTable title="Por categoría" label="Categoría" rows={rows} money={money} />
+        <BreakevenTable title="Por producto (los 15 que más venden)" label="Producto" rows={productRows} money={money} />
       </CardContent>
     </Card>
   );
@@ -150,6 +123,56 @@ function ProgressBar({ pct }: { pct: number }) {
   return (
     <div className="my-1.5 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
       <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function BreakevenTable({
+  title,
+  label,
+  rows,
+  money,
+}: {
+  title: string;
+  label: string;
+  rows: ReturnType<typeof breakevenByCategory>;
+  money: (c: number) => string;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-sm font-medium">{title}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-muted-foreground">
+              <th className="py-1 pr-3 font-medium">{label}</th>
+              <th className="py-1 pr-3 text-right font-medium">Ventas</th>
+              <th className="py-1 pr-3 text-right font-medium">Margen</th>
+              <th className="py-1 pr-3 text-right font-medium">Equilibrio</th>
+              <th className="py-1 font-medium">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.category} className="border-t">
+                <td className="py-1.5 pr-3">{r.category}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{money(r.revenueCents)}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{Math.round(r.margin * 100)} %</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">
+                  {r.breakevenCents != null ? money(r.breakevenCents) : "—"}
+                </td>
+                <td className={`py-1.5 ${r.covered ? "text-success" : "text-warning"}`}>
+                  {r.covered ? "Cubre su parte" : "Por debajo"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Los gastos se reparten según el peso de cada fila en las ventas del período.
+      </p>
     </div>
   );
 }

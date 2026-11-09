@@ -177,6 +177,34 @@ export async function categoryMargins(range: DateRangeSelection): Promise<Catego
   });
 }
 
+// Mismo cálculo que categoryMargins pero agrupado por producto (los 15 que más
+// venden). `category` lleva el nombre del producto para reutilizar el cálculo.
+export async function productMargins(range: DateRangeSelection): Promise<CategoryMargin[]> {
+  const { companyId, branchId } = await requireManager();
+  const requestedWindows = selectionToWindows(range);
+
+  return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return [];
+    const rows = await tx.$queryRaw<{ name: string; revenue: bigint; cogs: bigint | null }[]>`
+      SELECT si."productName" AS name,
+             SUM(si."subtotalCents")::bigint AS revenue,
+             SUM(CASE WHEN p."costCents" IS NOT NULL THEN si."quantity" * p."costCents" ELSE 0 END)::bigint AS cogs
+      FROM "SaleItem" si
+      JOIN "Sale" s ON s.id = si."saleId"
+      LEFT JOIN "Product" p ON p.id = si."productId"
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND ${windowsSql('s."createdAt"', windows)}
+        AND s."voided" = false
+      GROUP BY 1
+      ORDER BY revenue DESC
+      LIMIT 15
+    `;
+    return rows.map((r) => ({ category: r.name, revenueCents: Number(r.revenue), cogsCents: Number(r.cogs ?? 0) }));
+  });
+}
+
 export async function getProfitGoal(): Promise<number | null> {
   const { companyId } = await requireManager();
   const company = await withTenant(companyId, (tx) =>

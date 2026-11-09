@@ -234,6 +234,7 @@ model Company {
   cashClosings          CashClosing[]
   cashOpenings          CashOpening[]
   branchTransfers       BranchTransfer[]
+  assistantEntries      AssistantEntry[]
   paymentAccounts       PaymentAccount[]
   payrollEmployees      PayrollEmployee[]
   payrollPayments       PayrollPayment[]
@@ -1320,4 +1321,20 @@ model BranchTransferItem {
   quantity    Int
 
   @@index([transferId])
+}
+
+// Historial del Asistente IA: cada pregunta con su respuesta y, si el asistente
+// propuso un cambio, si el usuario lo aplicó. Es de cada usuario (userId).
+model AssistantEntry {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  question  String
+  answer    String
+  proposal  Json?
+  applied   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([companyId, userId, createdAt])
 }

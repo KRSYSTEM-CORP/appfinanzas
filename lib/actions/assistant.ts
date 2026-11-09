@@ -112,8 +112,8 @@ Reglas:
   {"type":"PRICE_ADJUST","category":"nombre exacto de la lista","percent":numero entre -50 y 50}
 - La propuesta no se ejecuta sola: el usuario debe confirmarla.`;
 
-export async function askAssistant(question: string): Promise<{ success: true; reply: AssistantReply } | { success: false; error: string }> {
-  const { companyId, plan, branchId } = await requireManager();
+export async function askAssistant(question: string): Promise<{ success: true; reply: AssistantReply; entryId: string | null } | { success: false; error: string }> {
+  const { companyId, plan, branchId, userId } = await requireManager();
   const q = question.trim().slice(0, 600);
   if (q.length < 2) return { success: false, error: "Escribe tu pregunta" };
   if (!isConfigured()) return { success: false, error: "El asistente todavía no está activado en esta plataforma." };
@@ -154,12 +154,63 @@ export async function askAssistant(question: string): Promise<{ success: true; r
   } catch {
     return { success: false, error: "El asistente tardó demasiado. Intenta de nuevo." };
   }
-  return { success: true, reply: parseAssistantReply(raw) };
+  const reply = parseAssistantReply(raw);
+  // El historial es un extra: si no se puede guardar, la respuesta igual se entrega.
+  let entryId: string | null = null;
+  try {
+    const entry = await withTenant(companyId, (tx) =>
+      tx.assistantEntry.create({
+        data: {
+          companyId,
+          userId,
+          question: q,
+          answer: reply.answer.slice(0, 4000),
+          proposal: reply.proposal ? (reply.proposal as object) : undefined,
+        },
+        select: { id: true },
+      })
+    );
+    entryId = entry.id;
+  } catch {
+    entryId = null;
+  }
+  return { success: true, reply, entryId };
+}
+
+export type HistoryEntry = {
+  id: string;
+  question: string;
+  answer: string;
+  proposal: Proposal | null;
+  applied: boolean;
+};
+
+// Últimas conversaciones del usuario, de la más antigua a la más reciente.
+export async function listAssistantHistory(): Promise<HistoryEntry[]> {
+  const { companyId, userId } = await requireManager();
+  const rows = await withTenant(companyId, (tx) =>
+    tx.assistantEntry.findMany({
+      where: { companyId, userId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: { id: true, question: true, answer: true, proposal: true, applied: true },
+    })
+  );
+  return rows.reverse().map((r) => {
+    const parsed = r.proposal ? ProposalSchema.safeParse(r.proposal) : null;
+    return { id: r.id, question: r.question, answer: r.answer, proposal: parsed?.success ? parsed.data : null, applied: r.applied };
+  });
+}
+
+export async function clearAssistantHistory(): Promise<ActionResult> {
+  const { companyId, userId } = await requireManager();
+  await withTenant(companyId, (tx) => tx.assistantEntry.deleteMany({ where: { companyId, userId } }));
+  return { success: true };
 }
 
 // Aplica una propuesta ya confirmada por el usuario. Se vuelve a validar aquí:
 // nada de lo que venga del navegador o del modelo se ejecuta sin comprobarlo.
-export async function applyProposal(input: unknown): Promise<ActionResult & { summary?: string }> {
+export async function applyProposal(input: unknown, entryId?: string | null): Promise<ActionResult & { summary?: string }> {
   const session = await requireManager();
   const { companyId, userId, plan } = session;
   const parsed = ProposalSchema.safeParse(input);
@@ -205,6 +256,9 @@ export async function applyProposal(input: unknown): Promise<ActionResult & { su
           aiCreditsExtra: (c?.aiCreditsExtra ?? 0) - spend.extraUsed,
         },
       });
+      if (entryId) {
+        await tx.assistantEntry.updateMany({ where: { id: entryId, companyId, userId }, data: { applied: true } });
+      }
       return text;
     });
     revalidatePath("/finance");
