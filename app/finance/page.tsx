@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAccountingPlan } from "@/lib/session";
 import { ClockIcon, PackageIcon, TrendingUpIcon, WalletIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,7 @@ import {
   mostPurchasedProducts,
   inventoryRotation,
   customerMix,
+  restockSuggestions,
 } from "@/lib/actions/reports";
 import { salesHeatmap } from "@/lib/actions/home";
 import { commissionsTotal, sellersSalesOverview } from "@/lib/actions/seller-reports";
@@ -62,6 +64,7 @@ export default async function FinancePage({
     sellers,
     heat,
     mix,
+    restock,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
     revenueTotals(range),
@@ -84,6 +87,7 @@ export default async function FinancePage({
     sellersSalesOverview(range),
     salesHeatmap(),
     customerMix(range),
+    restockSuggestions(),
     getExchangeRateInfo(),
   ]);
 
@@ -355,6 +359,42 @@ export default async function FinancePage({
                 <p><span className="mr-2 inline-block size-2.5 rounded-full bg-primary" aria-hidden />Nuevos <b className="tabular-nums">{mix.newCount} · {Math.round((mix.newCount / mix.total) * 1000) / 10} %</b></p>
                 <p><span className="mr-2 inline-block size-2.5 rounded-full bg-success" aria-hidden />Recurrentes <b className="tabular-nums">{mix.returningCount} · {Math.round((mix.returningCount / mix.total) * 1000) / 10} %</b></p>
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Reposición sugerida</CardTitle>
+          <p className="text-sm text-muted-foreground">Para cubrir 20 días de ventas, según el ritmo de los últimos 30 días</p>
+        </CardHeader>
+        <CardContent>
+          {restock.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nada por reponer: tu stock cubre el ritmo actual.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <ul className="flex flex-col divide-y">
+                {restock.map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{r.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {r.stock <= 0 ? "Agotado" : `Quedan ${r.stock}${r.daysLeft != null ? ` · alcanza para ${r.daysLeft} ${r.daysLeft === 1 ? "día" : "días"}` : ""}`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold tabular-nums">Pedir {r.suggestedQty} und.</p>
+                      {r.estimatedCostCents != null && (
+                        <p className="text-xs text-muted-foreground tabular-nums">{formatCurrencyCents(referenceCurrency, r.estimatedCostCents)}</p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <Link href="/purchases/new" className="text-sm font-semibold text-primary underline underline-offset-4">
+                Crear orden de compra con estos productos
+              </Link>
             </div>
           )}
         </CardContent>
