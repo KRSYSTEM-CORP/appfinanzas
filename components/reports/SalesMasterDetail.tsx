@@ -1,7 +1,8 @@
 "use client";
 
 import { ReceiptTextIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
@@ -53,6 +54,11 @@ export function SalesMasterDetail({
   showSellerColumn: boolean;
   empty: ReactNode;
 }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openSale = openId ? sales.find((x) => x.id === openId) ?? null : null;
+  const timeOf = (d: Date | string) =>
+    new Intl.DateTimeFormat("es-VE", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Caracas" }).format(new Date(d));
+  const methodsOf = (s: PlainSale) => [...new Set(s.payments.map((p) => PAYMENT_METHOD_LABELS[p.paymentMethod]))].join(" + ") || "—";
   const nameOf = (s: PlainSale) =>
     s.customerFirstName ? `${s.customerFirstName} ${s.customerLastName ?? ""}`.trim() : "—";
   const totalRate = (s: PlainSale) => s.paidExchangeRate ?? s.exchangeRate ?? rate;
@@ -63,55 +69,7 @@ export function SalesMasterDetail({
       <Badge variant="success">{PAYMENT_STATUS_LABELS.PAID}</Badge>
     );
 
-  return (
-    <MasterDetail
-      items={sales}
-      label="Ventas"
-      renderRowMobile={(s) => (
-        <MobileRow
-          title={nameOf(s)}
-          meta={`${formatDateSlash(s.createdAt)}${showSellerColumn && s.sellerName ? ` · ${s.sellerName}` : ""}${s.voided ? " · Anulada" : ""}`}
-          badge={statusBadge(s)}
-          amount={
-            <Price
-              eurCents={s.totalCents}
-              rate={totalRate(s)}
-              currencyCode={localCurrencyCode}
-              exchangeRateEnabled={exchangeRateEnabled}
-              referenceCurrency={referenceCurrency}
-              className="items-end"
-            />
-          }
-        />
-      )}
-      empty={empty}
-      renderRow={(s) => (
-        <>
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
-            <ReceiptTextIcon className="size-4 text-muted-foreground/60" />
-          </span>
-          <span className={`min-w-0 flex-1 ${s.voided ? "opacity-60" : ""}`}>
-            <span className="block truncate text-sm font-semibold">{nameOf(s)}</span>
-            <span className="block truncate text-xs text-muted-foreground">
-              {formatDateSlash(s.createdAt)} · {saleMeta(s)}
-              {showSellerColumn && s.sellerName ? ` · ${s.sellerName}` : ""}
-              {s.voided && " · Anulada"}
-            </span>
-          </span>
-          {statusBadge(s)}
-          <span className="flex w-28 shrink-0 justify-end text-sm">
-            <Price
-              eurCents={s.totalCents}
-              rate={totalRate(s)}
-              currencyCode={localCurrencyCode}
-              exchangeRateEnabled={exchangeRateEnabled}
-              referenceCurrency={referenceCurrency}
-              className="items-end"
-            />
-          </span>
-        </>
-      )}
-      renderDetail={(s) => {
+  const detail = (s: PlainSale) => {
         const remaining = remainingCentsBySaleId[s.id] ?? s.totalCents;
         return (
           <>
@@ -213,7 +171,132 @@ export function SalesMasterDetail({
             </div>
           </>
         );
-      }}
+      };
+
+  return (
+    <>
+      <div className="md:hidden">
+        <MasterDetail
+      items={sales}
+      label="Ventas"
+      renderRowMobile={(s) => (
+        <MobileRow
+          title={nameOf(s)}
+          meta={`${formatDateSlash(s.createdAt)}${showSellerColumn && s.sellerName ? ` · ${s.sellerName}` : ""}${s.voided ? " · Anulada" : ""}`}
+          badge={statusBadge(s)}
+          amount={
+            <Price
+              eurCents={s.totalCents}
+              rate={totalRate(s)}
+              currencyCode={localCurrencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+              className="items-end"
+            />
+          }
+        />
+      )}
+      empty={empty}
+      renderRow={(s) => (
+        <>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
+            <ReceiptTextIcon className="size-4 text-muted-foreground/60" />
+          </span>
+          <span className={`min-w-0 flex-1 ${s.voided ? "opacity-60" : ""}`}>
+            <span className="block truncate text-sm font-semibold">{nameOf(s)}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {formatDateSlash(s.createdAt)} · {saleMeta(s)}
+              {showSellerColumn && s.sellerName ? ` · ${s.sellerName}` : ""}
+              {s.voided && " · Anulada"}
+            </span>
+          </span>
+          {statusBadge(s)}
+          <span className="flex w-28 shrink-0 justify-end text-sm">
+            <Price
+              eurCents={s.totalCents}
+              rate={totalRate(s)}
+              currencyCode={localCurrencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+              className="items-end"
+            />
+          </span>
+        </>
+      )}
+      renderDetail={detail}
     />
+      </div>
+      <div className="hidden md:block">
+        {sales.length === 0 ? (
+          empty
+        ) : (
+          <>
+            <div className="overflow-x-auto rounded-[20px] bg-card shadow-(--shadow-card)">
+              <table className="w-full min-w-[820px] text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-muted-foreground">
+                    <th className="px-4 py-3 font-medium">N.º</th>
+                    <th className="px-3 py-3 font-medium">Hora</th>
+                    <th className="px-3 py-3 font-medium">Cliente</th>
+                    <th className="px-3 py-3 font-medium">Canal</th>
+                    <th className="px-3 py-3 font-medium">Método</th>
+                    <th className="px-3 py-3 font-medium">Estado</th>
+                    <th className="px-4 py-3 text-right font-medium">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sales.map((s) => (
+                    <tr
+                      key={s.id}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Ver detalle de la venta ${s.controlNumber ?? ""} de ${nameOf(s)}`}
+                      onClick={() => setOpenId(s.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setOpenId(s.id);
+                        }
+                      }}
+                      className={`cursor-pointer border-t border-border/70 hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none ${s.voided ? "opacity-60" : ""}`}
+                    >
+                      <td className="whitespace-nowrap px-4 py-3 font-semibold tabular-nums">#{s.controlNumber ?? "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-3 tabular-nums text-muted-foreground">
+                        {formatDateSlash(s.createdAt)} · {timeOf(s.createdAt)}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="block max-w-56 truncate font-medium">{nameOf(s)}</span>
+                        {showSellerColumn && s.sellerName && <span className="block text-xs text-muted-foreground">{s.sellerName}</span>}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">{s.channel ? CHANNEL_LABELS[s.channel] ?? s.channel : "—"}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{methodsOf(s)}</td>
+                      <td className="px-3 py-3">{s.voided ? <Badge variant="destructive">Anulada</Badge> : statusBadge(s)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right [&_*]:whitespace-nowrap">
+                        <Price
+                          eurCents={s.totalCents}
+                          rate={totalRate(s)}
+                          currencyCode={localCurrencyCode}
+                          exchangeRateEnabled={exchangeRateEnabled}
+                          referenceCurrency={referenceCurrency}
+                          className="items-end"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Dialog open={openSale != null} onOpenChange={(o) => !o && setOpenId(null)}>
+              <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Detalle de la venta</DialogTitle>
+                </DialogHeader>
+                {openSale && <div className="flex flex-col gap-4">{detail(openSale)}</div>}
+              </DialogContent>
+            </Dialog>
+          </>
+        )}
+      </div>
+    </>
   );
 }
