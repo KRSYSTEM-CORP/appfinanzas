@@ -38,7 +38,7 @@ import type { Role } from "@prisma/client";
 const NAV_TONES: Record<string, string> = {
   "/home": "#433ddd",
   "/pos": "#0f9d9a",
-  "/quotes": "#7a3ff2",
+  "/quotes/history": "#7a3ff2",
   "/inventory": "#ff9f0a",
   "/customers": "#e0409a",
   "/reports": "#d6407f",
@@ -67,7 +67,7 @@ const operationItems: NavItem[] = [
   { href: "/home", label: "Inicio", icon: GaugeIcon },
   { href: "/pos", label: "POS", section: "pos", icon: ShoppingCartIcon },
   { href: "/inventory", label: "Inventario", section: "inventory", icon: PackageIcon },
-  { href: "/quotes", label: "Presupuestos", section: "quotes", icon: ClipboardListIcon },
+  { href: "/quotes/history", label: "Presupuestos", section: "quotes", icon: ClipboardListIcon },
 ];
 
 // Control: caja, números y administración.
@@ -95,6 +95,7 @@ function isLinkActive(pathname: string, href: string) {
   if (href === "/accounting") {
     return ACCOUNTING_SUBPATHS.some((p) => pathname.startsWith(p));
   }
+  if (href === "/quotes/history") return pathname.startsWith("/quotes");
   return pathname.startsWith(href);
 }
 
@@ -235,7 +236,7 @@ export function Sidebar({
     { href: "/home", label: "Inicio", icon: GaugeIcon },
     { href: "/inventory", label: "Inventario", section: "inventory", icon: PackageIcon },
     { href: "/pos", label: "POS", section: "pos", icon: ShoppingCartIcon },
-    { href: "/quotes", label: "Presupuestos", section: "quotes", icon: ClipboardListIcon },
+    { href: "/quotes/history", label: "Presupuestos", section: "quotes", icon: ClipboardListIcon },
     { href: "/customers", label: "Marketing", section: "customers", icon: UsersIcon },
   ];
   const tabs = tabCandidates.filter((t) => (t.section ? allowed(t) : canManage)).slice(0, 4);
