@@ -44,9 +44,15 @@ export default async function PosPage({
     <div className="flex flex-col gap-4 p-4 md:p-6 md:h-full">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Operación</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Punto de venta</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Registra una venta y mantén el control de caja.</p>
+          <p className="text-xs font-bold tracking-wider text-muted-foreground uppercase">
+            {companyName} · {branchName ?? "Todas las sedes"}
+          </p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight">POS</h1>
+          {exchangeRateEnabled && rate != null && (
+            <span className="mt-2 inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary tabular-nums">
+              Tasa BCV · {localCurrencyCode} {rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          )}
         </div>
       </div>
       <OfflineSyncBanner canManage={role === "GERENTE" || isSuperAdmin} />

@@ -217,7 +217,7 @@ export function Cart({
       ref={sheetRef}
       role={open ? "dialog" : undefined}
       aria-label={open ? "Carrito" : undefined}
-      className={`flex flex-col h-full gap-3 max-md:fixed max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:z-[45] max-md:h-auto max-md:max-h-[88dvh] max-md:overflow-y-auto max-md:rounded-t-2xl max-md:border-t max-md:bg-popover max-md:text-popover-foreground max-md:px-4 max-md:pt-2 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:shadow-2xl max-md:transition-transform max-md:duration-[260ms] max-md:ease-[cubic-bezier(.23,1,.32,1)] motion-reduce:max-md:transition-none ${
+      className={`flex flex-col h-full gap-3 md:rounded-[22px] md:bg-card md:p-5 md:shadow-(--shadow-card) md:overflow-y-auto max-md:fixed max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:z-[45] max-md:h-auto max-md:max-h-[88dvh] max-md:overflow-y-auto max-md:rounded-t-2xl max-md:border-t max-md:bg-popover max-md:text-popover-foreground max-md:px-4 max-md:pt-2 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:shadow-2xl max-md:transition-transform max-md:duration-[260ms] max-md:ease-[cubic-bezier(.23,1,.32,1)] motion-reduce:max-md:transition-none ${
         open ? "max-md:translate-y-0" : "max-md:translate-y-full max-md:invisible"
       }`}
     >
@@ -238,7 +238,7 @@ export function Cart({
           <XIcon className="size-5" />
         </button>
       </div>
-      <h2 className="font-semibold">Carrito</h2>
+      <h2 className="text-xl font-bold tracking-tight">Venta actual</h2>
 
       <div className="md:flex-1 md:overflow-y-auto flex flex-col gap-2">
         {lines.length === 0 && (

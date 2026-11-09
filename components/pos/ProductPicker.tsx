@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { productImageUrl, type ListedProduct } from "@/lib/product-image";
-import { PackageIcon, SearchIcon } from "lucide-react";
+import { SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Price } from "@/components/money/Price";
@@ -171,7 +171,7 @@ export function ProductPicker({
               type="button"
               disabled={outOfStock}
               onClick={() => onAdd(p)}
-            className="relative flex min-h-11 flex-col items-start gap-1.5 rounded-xl border bg-card p-2.5 text-left shadow-xs transition-all duration-150 ease-out-smooth hover:border-ring/40 hover:shadow-sm active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+            className="relative flex min-h-11 flex-col items-start gap-1.5 rounded-2xl bg-card p-3 text-left shadow-(--shadow-card) transition-all duration-150 ease-out-smooth hover:shadow-(--shadow-float) active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
             >
               {p.hasImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -183,8 +183,15 @@ export function ProductPicker({
                   className="h-16 w-full rounded-lg object-cover"
                 />
               ) : (
-                <div className="flex h-16 w-full items-center justify-center rounded-lg bg-muted">
-                  <PackageIcon className="size-6 text-muted-foreground/50" />
+                <div
+                  className="grid size-10 place-items-center rounded-xl text-base font-bold"
+                  style={{
+                    background: `color-mix(in oklab, var(--chart-${(p.name.charCodeAt(0) % 5) + 1}) 18%, transparent)`,
+                    color: `var(--chart-${(p.name.charCodeAt(0) % 5) + 1})`,
+                  }}
+                  aria-hidden
+                >
+                  {p.name.slice(0, 1).toUpperCase()}
                 </div>
               )}
               <span className="line-clamp-2 min-h-8 text-[13px] leading-tight font-semibold">{p.name}</span>
