@@ -7,10 +7,10 @@ import {
   BarChart3Icon,
   CalculatorIcon,
   ClipboardListIcon,
-  CreditCardIcon,
   EllipsisIcon,
   FileTextIcon,
   GaugeIcon,
+  WalletIcon,
   GraduationCapIcon,
   LogOutIcon,
   MenuIcon,
@@ -24,12 +24,12 @@ import {
   SparklesIcon,
   StoreIcon,
   UsersIcon,
-  UsersRoundIcon,
   XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/actions/auth";
 import { BranchSwitcher } from "@/components/nav/BranchSwitcher";
+import { LockButton } from "@/components/lock/LockButton";
 import { ThemeToggle } from "@/components/nav/ThemeToggle";
 import { CommandPalette, type PaletteItem } from "@/components/nav/CommandPalette";
 import type { Role } from "@prisma/client";
@@ -51,6 +51,7 @@ const NAV_TONES: Record<string, string> = {
   "/learning": "#0f7a8a",
   "/assistant": "#6655e5",
   "/branches": "#0f9d9a",
+  "/finance": "#0f9d9a",
 };
 
 const COLLAPSE_KEY = "kr-pos-sidebar-collapsed";
@@ -58,40 +59,37 @@ const ROLE_LABELS: Record<Role, string> = { GERENTE: "Gerente", VENDEDOR: "Vende
 
 type NavItem = { href: string; label: string; section?: string; icon: React.ComponentType<{ className?: string }> };
 
-// The day-to-day operational tools — same set every role can reach (see
-// requireSectionAccess, lib/session.ts), just grouped under a visible
-// heading now instead of an unlabeled row.
+// Estructura de la preview v15: tres grupos. Los accesos que no tienen lugar propio
+// en la preview (Documentos, Administración de perfiles, Suscripción) siguen
+// existiendo: Documentos queda en Control, perfiles y suscripción salen de Ajustes.
+// Operación: lo del día a día (los vendedores solo ven lo que su rol permite).
 const operationItems: NavItem[] = [
-  { href: "/pos", label: "Punto de venta", section: "pos", icon: ShoppingCartIcon },
-  { href: "/quotes", label: "Presupuestos", section: "quotes", icon: ClipboardListIcon },
+  { href: "/home", label: "Inicio", icon: GaugeIcon },
+  { href: "/pos", label: "POS", section: "pos", icon: ShoppingCartIcon },
   { href: "/inventory", label: "Inventario", section: "inventory", icon: PackageIcon },
-  { href: "/customers", label: "Clientes", section: "customers", icon: UsersIcon },
-  { href: "/reports", label: "Reportes", section: "reports", icon: BarChart3Icon },
+  { href: "/quotes", label: "Presupuestos", section: "quotes", icon: ClipboardListIcon },
+];
+
+// Control: caja, números y administración.
+const controlItems: NavItem[] = [
+  { href: "/reports", label: "Caja Chica", section: "reports", icon: WalletIcon },
+  { href: "/finance", label: "Estadísticas", icon: BarChart3Icon },
+  { href: "/customers", label: "Marketing", section: "customers", icon: UsersIcon },
+  { href: "/accounting", label: "Administración", icon: CalculatorIcon },
   { href: "/documents", label: "Documentos", section: "documents", icon: FileTextIcon },
 ];
 
-// GERENTE-only (or a platform super admin, who already sees everything
-// else too). Finanzas, Proveedores, Compras and Libro IVA live inside the
-// single "Contabilidad" hub (app/accounting) rather than their own items —
-// same information architecture as before, just relabeled as a group.
-const managementItemsBase: NavItem[] = [
-  { href: "/home", label: "Resumen del negocio", icon: GaugeIcon },
-  { href: "/accounting", label: "Contabilidad", icon: CalculatorIcon },
-  { href: "/assistant", label: "Asistente IA", icon: SparklesIcon },
+// Red y plataforma.
+const networkItemsBase: NavItem[] = [
   { href: "/branches", label: "Sucursales", icon: StoreIcon },
-  { href: "/employees", label: "Administración de perfiles", icon: UsersRoundIcon },
-];
-
-const companyItemsBase: NavItem[] = [
-  { href: "/settings", label: "Ajustes", icon: SettingsIcon },
-  { href: "/billing", label: "Suscripción mensual", icon: CreditCardIcon },
+  { href: "/assistant", label: "Asistente IA", icon: SparklesIcon },
 ];
 
 // The nav collapses Finanzas/Proveedores/Compras/Libro IVA into one
 // "Contabilidad" item, but a user can still land on any of those routes
 // directly (e.g. a bookmark) — this keeps it highlighted while on any of
 // them, not just on /accounting itself.
-const ACCOUNTING_SUBPATHS = ["/accounting", "/finance", "/suppliers", "/purchases", "/tax-book", "/payroll"];
+const ACCOUNTING_SUBPATHS = ["/accounting", "/suppliers", "/purchases", "/tax-book", "/payroll"];
 
 function isLinkActive(pathname: string, href: string) {
   if (href === "/accounting") {
@@ -162,6 +160,10 @@ export function Sidebar({
   branches,
   currentBranchId,
   currentBranchName,
+  hasPin = false,
+  planLabel,
+  planMaxUsers,
+  rateLabel,
 }: {
   companyName: string;
   logoDataUrl: string | null;
@@ -173,6 +175,10 @@ export function Sidebar({
   branches: { id: string; name: string }[];
   currentBranchId: string | null;
   currentBranchName: string | null;
+  hasPin?: boolean;
+  planLabel?: string;
+  planMaxUsers?: number;
+  rateLabel?: string | null;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -203,43 +209,48 @@ export function Sidebar({
   // Empty allowedSections means "unrestricted" (see requireSectionAccess,
   // lib/session.ts) — same rule as before so the nav never hides a link a
   // never-configured VENDEDOR could actually still open.
-  const opItems =
-    canManage || allowedSections.length === 0
-      ? operationItems
-      : operationItems.filter((l) => allowedSections.includes(l.section as string));
+  const allowed = (item: NavItem) =>
+    canManage || allowedSections.length === 0 || allowedSections.includes(item.section as string);
+  // Sin `section` = solo gerente (Inicio, Estadísticas, Administración).
+  const visible = (items: NavItem[]) => items.filter((i) => (i.section ? allowed(i) : canManage));
+
+  const opItems = visible(operationItems);
+  const controlVisible = visible(controlItems);
 
   const featureItems: NavItem[] = featureLinks
     .filter((l) => canManage || !l.managerOnly)
     .map((l) => ({ href: l.href, label: l.label, icon: FileTextIcon }));
 
-  const managementItems = canManage ? [...managementItemsBase, ...featureItems] : featureItems;
-  const companyItems: NavItem[] = [
-    { href: "/learning", label: "Aprendizaje", icon: GraduationCapIcon },
-    ...(isSuperAdmin ? [{ href: "/admin", label: "Administración", icon: ShieldIcon }] : []),
-    ...(canManage ? companyItemsBase : []),
+  const networkItems: NavItem[] = [
+    ...(canManage ? networkItemsBase : []),
+    { href: "/learning", label: "Learning", icon: GraduationCapIcon },
+    ...(canManage ? [{ href: "/settings", label: "Ajustes", icon: SettingsIcon }] : []),
+    ...(isSuperAdmin ? [{ href: "/admin", label: "Plataforma", icon: ShieldIcon }] : []),
+    ...featureItems,
   ];
 
-  // Punto de venta, Inventario, Reportes and Contabilidad for managers; a
-  // seller without accounting access gets Clientes in that slot instead.
-  const tabCandidates: (NavItem & { managerOnly?: boolean })[] = [
-    { href: "/pos", label: "POS", section: "pos", icon: ShoppingCartIcon },
+  // Barra inferior (teléfono) de la preview: Inicio · Inventario · POS (botón
+  // central) · Presupuestos · Más. Un vendedor sin Inicio ve lo que sí puede abrir.
+  const tabCandidates: NavItem[] = [
+    { href: "/home", label: "Inicio", icon: GaugeIcon },
     { href: "/inventory", label: "Inventario", section: "inventory", icon: PackageIcon },
-    { href: "/reports", label: "Reportes", section: "reports", icon: BarChart3Icon },
-    { href: "/accounting", label: "Contabilidad", icon: CalculatorIcon, managerOnly: true },
-    { href: "/customers", label: "Clientes", section: "customers", icon: UsersIcon },
+    { href: "/pos", label: "POS", section: "pos", icon: ShoppingCartIcon },
+    { href: "/quotes", label: "Presupuestos", section: "quotes", icon: ClipboardListIcon },
+    { href: "/customers", label: "Marketing", section: "customers", icon: UsersIcon },
   ];
-  const tabs = tabCandidates
-    .filter((t) =>
-      t.managerOnly
-        ? canManage
-        : canManage || allowedSections.length === 0 || allowedSections.includes(t.section as string)
-    )
-    .slice(0, 4);
+  const tabs = tabCandidates.filter((t) => (t.section ? allowed(t) : canManage)).slice(0, 4);
 
   const paletteItems: PaletteItem[] = [
     ...opItems.map((i) => ({ href: i.href, label: i.label, group: "Operación" })),
-    ...managementItems.map((i) => ({ href: i.href, label: i.label, group: "Gestión" })),
-    ...companyItems.map((i) => ({ href: i.href, label: i.label, group: "Empresa" })),
+    ...controlVisible.map((i) => ({ href: i.href, label: i.label, group: "Control" })),
+    ...networkItems.map((i) => ({ href: i.href, label: i.label, group: "Red y plataforma" })),
+    ...(canManage
+      ? [
+          { href: "/employees", label: "Perfiles y PIN", group: "Ajustes" },
+          { href: "/billing", label: "Suscripción mensual", group: "Ajustes" },
+          { href: "/payroll", label: "Nómina", group: "Control" },
+        ]
+      : []),
   ];
 
   useEffect(() => {
@@ -266,8 +277,8 @@ export function Sidebar({
   const nav = (collapsedRail: boolean, onNavigate: () => void) => (
     <nav className="flex-1 overflow-y-auto px-2.5 py-2 flex flex-col gap-1">
       <NavGroup title="Operación" items={opItems} pathname={pathname} collapsed={collapsedRail} onNavigate={onNavigate} />
-      <NavGroup title="Gestión" items={managementItems} pathname={pathname} collapsed={collapsedRail} onNavigate={onNavigate} />
-      <NavGroup title="Empresa" items={companyItems} pathname={pathname} collapsed={collapsedRail} onNavigate={onNavigate} />
+      <NavGroup title="Control" items={controlVisible} pathname={pathname} collapsed={collapsedRail} onNavigate={onNavigate} />
+      <NavGroup title="Red y plataforma" items={networkItems} pathname={pathname} collapsed={collapsedRail} onNavigate={onNavigate} />
     </nav>
   );
 
@@ -318,47 +329,66 @@ export function Sidebar({
           )}
         </div>
 
+        {!collapsed && branchControl && (
+          <div className="mx-3 mt-3 rounded-xl bg-muted p-2.5">
+            <span className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Sede activa</span>
+            <div className="mt-1 text-sm font-semibold">{branchControl}</div>
+          </div>
+        )}
+
         {nav(collapsed, () => {})}
 
         <div className={`border-t shrink-0 flex flex-col gap-2 p-3 ${collapsed ? "items-center" : ""}`}>
-          {!collapsed && branchControl}
+          {!collapsed && planLabel && (
+            <Link
+              href="/settings"
+              className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              <span>
+                Plan {planLabel} · {planMaxUsers} usuarios
+              </span>
+              {rateLabel && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">Tasa {rateLabel}</span>}
+            </Link>
+          )}
           {!collapsed && (
-            <div className="flex flex-col leading-tight min-w-0 px-0.5">
-              <span className="text-sm font-medium truncate">{sellerName}</span>
-              <span className="text-xs text-sidebar-foreground/70">{ROLE_LABELS[role]}</span>
+            <div className="flex items-center gap-2.5 min-w-0 px-0.5">
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-xs font-extrabold text-primary-foreground" aria-hidden>
+                {sellerName
+                  .split(" ")
+                  .map((w) => w[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase()}
+              </span>
+              <div className="flex min-w-0 flex-col leading-tight">
+                <span className="truncate text-sm font-semibold">{sellerName}</span>
+                <span className="text-xs text-muted-foreground">{ROLE_LABELS[role]}</span>
+              </div>
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => setPaletteOpen(true)}
-            title={collapsed ? "Buscar (Ctrl K)" : undefined}
-            aria-label="Buscar pantalla"
-            className={`flex items-center gap-2 rounded-lg p-1.5 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-              collapsed ? "justify-center" : "w-full px-2.5"
-            }`}
-          >
-            <SearchIcon className="size-4 shrink-0" />
-            {!collapsed && (
-              <>
-                <span className="flex-1 text-left">Buscar</span>
-                <kbd className="rounded border px-1 text-[11px] text-sidebar-foreground/70">Ctrl K</kbd>
-              </>
-            )}
-          </button>
-          <ThemeToggle collapsed={collapsed} />
-          <form action={logout} className={collapsed ? "" : "w-full"}>
-            <Button type="submit" variant="ghost" size={collapsed ? "icon-sm" : "sm"} className={collapsed ? "" : "w-full justify-start"} title={collapsed ? "Salir" : undefined} aria-label={collapsed ? "Salir" : undefined}>
-              {collapsed ? <LogOutIcon className="size-4" /> : "Salir"}
+          {/* Acciones del pie en una sola fila de íconos (como la preview). */}
+          <div className={`flex items-center gap-1 ${collapsed ? "flex-col" : "justify-between"}`}>
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => setPaletteOpen(true)} title="Buscar (Ctrl K)" aria-label="Buscar pantalla">
+              <SearchIcon className="size-4" />
             </Button>
-          </form>
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            aria-label={collapsed ? "Expandir barra lateral" : "Contraer barra lateral"}
-            className="flex items-center justify-center rounded-lg p-1.5 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors self-stretch"
-          >
-            {collapsed ? <PanelLeftOpenIcon className="size-4" /> : <PanelLeftCloseIcon className="size-4" />}
-          </button>
+            <ThemeToggle collapsed />
+            {hasPin && <LockButton collapsed />}
+            <form action={logout}>
+              <Button type="submit" variant="ghost" size="icon-sm" title="Salir" aria-label="Salir">
+                <LogOutIcon className="size-4" />
+              </Button>
+            </form>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleCollapsed}
+              title={collapsed ? "Expandir barra lateral" : "Contraer barra lateral"}
+              aria-label={collapsed ? "Expandir barra lateral" : "Contraer barra lateral"}
+            >
+              {collapsed ? <PanelLeftOpenIcon className="size-4" /> : <PanelLeftCloseIcon className="size-4" />}
+            </Button>
+          </div>
         </div>
       </aside>
 
@@ -400,12 +430,18 @@ export function Sidebar({
             </div>
             {nav(false, () => setMobileOpen(false))}
             <div className="border-t shrink-0 flex flex-col gap-2 p-3">
-              {branchControl}
+              {branchControl && (
+                <div className="rounded-xl bg-muted p-2.5">
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Sede activa</span>
+                  <div className="mt-1 text-sm font-semibold">{branchControl}</div>
+                </div>
+              )}
               <div className="flex flex-col leading-tight min-w-0 px-0.5">
                 <span className="text-sm font-medium truncate">{sellerName}</span>
                 <span className="text-xs text-sidebar-foreground/70">{ROLE_LABELS[role]}</span>
               </div>
               <ThemeToggle />
+              {hasPin && <LockButton />}
               <form action={logout}>
                 <Button type="submit" variant="ghost" size="sm" className="w-full justify-start">
                   Salir
@@ -427,7 +463,20 @@ export function Sidebar({
             const active = isLinkActive(pathname, tab.href);
             const Icon = tab.icon;
             return (
-              <li key={tab.href} className="flex flex-1 items-center justify-center py-1.5">
+              <li key={tab.href} className={`flex flex-1 items-center justify-center py-1.5 ${tab.href === "/pos" ? "relative" : ""}`}>
+                {tab.href === "/pos" ? (
+                  <Link
+                    href={tab.href}
+                    aria-current={active ? "page" : undefined}
+                    aria-label="POS"
+                    className="-mt-6 flex flex-col items-center gap-0.5 text-[11px] font-bold text-primary"
+                  >
+                    <span className="grid size-14 place-items-center rounded-full border-4 border-card bg-primary text-primary-foreground shadow-[0_8px_22px_color-mix(in_srgb,var(--primary)_45%,transparent)] transition-transform active:scale-95">
+                      <Icon className="size-6" />
+                    </span>
+                    <span>{tab.label}</span>
+                  </Link>
+                ) : (
                 <Link
                   href={tab.href}
                   aria-current={active ? "page" : undefined}
@@ -438,6 +487,7 @@ export function Sidebar({
                   <Icon className="size-5 shrink-0" />
                   <span className="max-w-full truncate px-0.5">{tab.label}</span>
                 </Link>
+                )}
               </li>
             );
           })}

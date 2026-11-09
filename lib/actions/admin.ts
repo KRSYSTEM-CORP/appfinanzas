@@ -35,6 +35,7 @@ async function requireSuperAdmin() {
   // reached during a plain page render, so route through the Route Handler
   // instead of redirecting straight to /login.
   if (!session) redirect("/api/auth/clear-session");
+  if (session.locked) redirect("/lock");
   if (!session.isSuperAdmin) redirect("/pos");
   return session;
 }

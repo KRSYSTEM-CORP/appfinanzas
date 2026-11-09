@@ -16,6 +16,9 @@ export type SessionPayload = {
   // User.tokenVersion at sign time; absent on cookies issued before it
   // existed, which getSession() treats as 0.
   tv?: number;
+  // Pantalla bloqueada (lib/lock.ts): la sesión sigue siendo de esta empresa, pero
+  // nada del sistema responde hasta desbloquear con el PIN de un perfil.
+  lk?: boolean;
   exp: number;
 };
 

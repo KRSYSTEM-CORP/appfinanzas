@@ -11,7 +11,7 @@ const DATA_URL_RE = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i;
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
-  if (!session) return new Response("No autorizado", { status: 401 });
+  if (!session || session.locked) return new Response("No autorizado", { status: 401 });
 
   const { id } = await params;
   const { companyId, branchId } = session;

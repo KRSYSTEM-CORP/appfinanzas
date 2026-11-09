@@ -1,11 +1,8 @@
-import Image from "next/image";
+import { AuthShell } from "@/components/auth/AuthShell";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { WelcomeModal } from "@/components/auth/WelcomeModal";
-import { TrialBadge } from "@/components/auth/TrialBadge";
-import { PortalHero } from "@/components/auth/PortalHero";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { InstallAppPrompt } from "@/components/nav/InstallAppPrompt";
-import { WHATSAPP_URL } from "@/lib/legal";
 import { getRememberedCompany } from "@/lib/actions/auth";
 import { googleOAuthConfigured } from "@/lib/google-oauth";
 
@@ -18,51 +15,19 @@ export default async function LoginPage({
 }) {
   const [rememberedCompany, { error, blocked }] = await Promise.all([getRememberedCompany(), searchParams]);
   return (
-    <div className="grid lg:grid-cols-2 min-h-full">
-      <div className="flex flex-col gap-6 p-4 py-8 overflow-x-hidden sm:p-6 sm:py-12">
-        <div className="mx-auto flex w-full min-w-0 max-w-sm flex-1 flex-col gap-6">
-          <TrialBadge />
-          <div className="text-center flex flex-col items-center gap-3">
-            <Image
-              src="/icons/icon-512.png"
-              alt="KR POS"
-              width={64}
-              height={64}
-              className="rounded-2xl shadow-lg shadow-primary/20 lg:hidden"
-            />
-            <div>
-              <h1 className="text-2xl font-semibold">Inicia sesión</h1>
-              <p className="text-sm text-muted-foreground mt-1">KR POS — Ventas e Inventario</p>
-            </div>
-            {/* Only offered here, before signing in — once inside the app the
-                nav no longer shows it (see components/nav/Sidebar.tsx). Always
-                shows something actionable: the real install button when the
-                browser offers it, otherwise manual steps (e.g. every iPhone,
-                since Safari never fires beforeinstallprompt at all). */}
-            <InstallAppPrompt />
-          </div>
-          <LoginForm
-            rememberedCompany={rememberedCompany}
-            googleConfigured={googleOAuthConfigured()}
-            authError={error}
-            initiallyBlocked={blocked === "suspended"}
-          />
-          <WelcomeModal />
-          <p className="text-center text-sm text-muted-foreground">
-            ¿Quieres este sistema para tu negocio o más información?{" "}
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-primary hover:underline"
-            >
-              Escríbenos por WhatsApp
-            </a>
-          </p>
-        </div>
-        <SiteFooter />
+    <AuthShell footer={<SiteFooter />}>
+      <div className="flex flex-col items-center gap-1 text-center">
+        <h1 className="text-[28px] font-bold tracking-tight">Bienvenido</h1>
+        <p className="text-sm text-muted-foreground">Entra a tu negocio</p>
+        <InstallAppPrompt />
       </div>
-      <PortalHero />
-    </div>
+      <LoginForm
+        rememberedCompany={rememberedCompany}
+        googleConfigured={googleOAuthConfigured()}
+        authError={error}
+        initiallyBlocked={blocked === "suspended"}
+      />
+      <WelcomeModal />
+    </AuthShell>
   );
 }

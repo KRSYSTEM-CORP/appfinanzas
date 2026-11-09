@@ -441,3 +441,25 @@ export async function changeMyPassword(formData: FormData): Promise<ActionResult
 
   return { success: true };
 }
+
+// Tasa que se muestra en el pie del menú («Tasa Bs 897,54»). Solo lectura y con
+// caché corta: el menú está en todas las páginas y no debe consultar ni renovar
+// la tasa en cada una (eso lo hacen los cron y las pantallas que la usan).
+export async function getSidebarRate(): Promise<string | null> {
+  const session = await getSession();
+  if (!session) return null;
+  const { companyId } = session;
+  return getOrSetCache(`sidebar-rate:${companyId}`, 300, async () => {
+    const c = await withTenant(companyId, (tx) =>
+      tx.company.findUnique({
+        where: { id: companyId },
+        select: { exchangeRate: true, exchangeRateEnabled: true, localCurrencyCode: true },
+      })
+    );
+    if (!c || !c.exchangeRateEnabled || c.exchangeRate == null) return null;
+    const n = Number(c.exchangeRate);
+    return Number.isFinite(n) && n > 0
+      ? `${c.localCurrencyCode === "VES" ? "Bs" : c.localCurrencyCode} ${n.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : null;
+  });
+}

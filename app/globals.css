@@ -70,42 +70,45 @@
    background override only touches the neutral surface + accent tokens
    above, not the chart palette. */
 :root {
-  --background: #f7f7fb;
-  --foreground: #1e1b2e;
+  --background: #f5f7fb;
+  --foreground: #1d1d1f;
   --card: #ffffff;
-  --card-foreground: #1e1b2e;
+  --card-foreground: #1d1d1f;
   --popover: #ffffff;
-  --popover-foreground: #1e1b2e;
+  --popover-foreground: #1d1d1f;
   --primary: #433ddd;
   --primary-foreground: #ffffff;
-  --secondary: #ecebfc;
-  --secondary-foreground: #2c2790;
-  --muted: #f1f0f6;
-  --muted-foreground: #625f73;
-  --accent: #ecebfc;
-  --accent-foreground: #2c2790;
+  --secondary: rgba(120, 120, 128, 0.12);
+  --secondary-foreground: #1d1d1f;
+  --muted: rgba(120, 120, 128, 0.12);
+  --muted-foreground: #6e6e73;
+  --accent: rgba(67, 61, 221, 0.12);
+  --accent-foreground: #433ddd;
   /* Darkened for WCAG AA contrast (≥4.5:1) as text and on tinted badges. */
-  --destructive: #b42a2a;
-  --success: #0f6b47;
+  --destructive: #d70015;
+  --success: #1f8a3c;
   --success-foreground: #ffffff;
-  --warning: #8a5706;
+  --warning: #9a5b00;
   --warning-foreground: #ffffff;
-  --border: #e5e3ed;
-  --input: #dedce8;
+  --border: #e6e9f1;
+  --input: #e6e9f1;
   --ring: #433ddd;
-  --chart-1: #2a78d6;
-  --chart-2: #1baf7a;
-  --chart-3: #eda100;
-  --chart-4: #008300;
-  --chart-5: #4a3aa7;
-  --radius: 0.75rem;
+  --chart-1: #433ddd;
+  --chart-2: #0f9d9a;
+  --chart-3: #ff9f0a;
+  --chart-4: #d6407f;
+  --chart-5: #7a8499;
+  --radius: 0.875rem;
+  /* Sombras de la preview v15 */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 24px rgba(0, 0, 0, 0.05);
+  --shadow-float: 0 2px 4px rgba(0, 0, 0, 0.06), 0 14px 36px rgba(0, 0, 0, 0.14);
   --sidebar: #ffffff;
-  --sidebar-foreground: #262338;
+  --sidebar-foreground: #1d1d1f;
   --sidebar-primary: #433ddd;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #ecebfc;
-  --sidebar-accent-foreground: #2c2790;
-  --sidebar-border: #e8e6ef;
+  --sidebar-accent: rgba(67, 61, 221, 0.12);
+  --sidebar-accent-foreground: #433ddd;
+  --sidebar-border: #e6e9f1;
   --sidebar-ring: #433ddd;
 }
 
@@ -117,41 +120,43 @@
    look keeps it exactly as before, dark toggle or not; this palette only
    ever reaches companies still on the app default. */
 .dark {
-  --background: #121113;
-  --foreground: #f3f1ec;
-  --card: #1a191c;
-  --card-foreground: #f3f1ec;
-  --popover: #1a191c;
-  --popover-foreground: #f3f1ec;
+  --background: #0d0f18;
+  --foreground: #f2f3f8;
+  --card: #171a26;
+  --card-foreground: #f2f3f8;
+  --popover: #171a26;
+  --popover-foreground: #f2f3f8;
   --primary: #7b76ff;
-  --primary-foreground: #121113;
-  --secondary: #262432;
-  --secondary-foreground: #cdc8f5;
-  --muted: #221f23;
-  --muted-foreground: #9b968f;
-  --accent: #262432;
-  --accent-foreground: #cdc8f5;
-  --destructive: #f16767;
-  --success: #4ad66d;
+  --primary-foreground: #0d0f18;
+  --secondary: rgba(160, 166, 189, 0.16);
+  --secondary-foreground: #f2f3f8;
+  --muted: rgba(160, 166, 189, 0.16);
+  --muted-foreground: #a0a6bd;
+  --accent: rgba(123, 118, 255, 0.2);
+  --accent-foreground: #9c98ff;
+  --destructive: #ff7a70;
+  --success: #5fdc82;
   --success-foreground: #0b0b0b;
-  --warning: #ebab4e;
+  --warning: #ffc15c;
   --warning-foreground: #0b0b0b;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.14);
+  --border: #262b3d;
+  --input: #262b3d;
   --ring: #7b76ff;
-  --chart-1: #5b9ee8;
-  --chart-2: #3fcf9b;
-  --chart-3: #f0b94a;
-  --chart-4: #52d152;
-  --chart-5: #7b76ff;
-  --sidebar: #18171a;
-  --sidebar-foreground: #f3f1ec;
+  --chart-1: #7b76ff;
+  --chart-2: #35c9c4;
+  --chart-3: #ffc15c;
+  --chart-4: #ff7fb0;
+  --chart-5: #9aa3ba;
+  --sidebar: #171a26;
+  --sidebar-foreground: #f2f3f8;
   --sidebar-primary: #7b76ff;
   --sidebar-primary-foreground: #121113;
-  --sidebar-accent: #262432;
-  --sidebar-accent-foreground: #cdc8f5;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-accent: rgba(123, 118, 255, 0.2);
+  --sidebar-accent-foreground: #9c98ff;
+  --sidebar-border: #262b3d;
   --sidebar-ring: #7b76ff;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 24px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 2px 4px rgba(0, 0, 0, 0.5), 0 14px 36px rgba(0, 0, 0, 0.6);
 }
 
 @layer base {

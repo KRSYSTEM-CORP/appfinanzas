@@ -66,6 +66,7 @@ async function requireCompanyUser() {
   // user) must be cleared through the Route Handler rather than by
   // redirecting straight to /login.
   if (!session) redirect("/api/auth/clear-session");
+  if (session.locked) redirect("/lock");
   // Subscription/billing is a GERENTE concern — a VENDEDOR is bounced to
   // /pos same as Contabilidad/Administración de perfiles, WITHOUT going
   // through requireSession()'s billing-blocked check above (this route must

@@ -241,7 +241,7 @@ export function LoginForm({
 
   return (
     <div className="flex flex-col gap-4 max-w-sm mx-auto">
-      <div className="mx-auto grid w-full grid-cols-2 gap-1 rounded-xl border bg-card p-1">
+      <div className="mx-auto grid w-full grid-cols-2 gap-1 rounded-full bg-muted p-1">
         <button
           type="button"
           aria-pressed={mode === "owner"}
@@ -252,7 +252,7 @@ export function LoginForm({
             setBranchChoices(null);
             setPendingCredentials(null);
           }}
-          className={`min-h-11 min-w-0 rounded-lg px-2 py-2 text-center text-xs transition-colors sm:text-sm ${
+          className={`min-h-11 min-w-0 rounded-full px-2 py-2 text-center text-xs transition-colors sm:text-sm ${
             mode === "owner" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
           }`}
         >
@@ -271,7 +271,7 @@ export function LoginForm({
             setBranchChoices(null);
             setPendingCredentials(null);
           }}
-          className={`min-h-11 min-w-0 rounded-lg px-2 py-2 text-center text-xs transition-colors sm:text-sm ${
+          className={`min-h-11 min-w-0 rounded-full px-2 py-2 text-center text-xs transition-colors sm:text-sm ${
             mode === "employee" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
           }`}
         >
@@ -284,22 +284,6 @@ export function LoginForm({
       )}
 
       <Turnstile key={turnstileGeneration} onVerify={setTurnstileToken} />
-
-      {mode === "owner" && googleConfigured && !branchChoices && (
-        <>
-          <button
-            type="button"
-            onClick={handleGoogleClick}
-            className={buttonVariants({ variant: "outline", size: "lg" })}
-          >
-            <GoogleIcon />
-            Continuar con Google
-          </button>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="h-px flex-1 bg-border" />o<div className="h-px flex-1 bg-border" />
-          </div>
-        </>
-      )}
 
       {branchChoices ? (
         <div className="flex flex-col gap-4">
@@ -429,7 +413,7 @@ export function LoginForm({
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button type="submit" disabled={isPending} size="lg">
-          {isPending ? "Entrando..." : "Iniciar sesión"}
+          {isPending ? "Entrando..." : "Entrar"}
         </Button>
 
         {mode === "owner" && (
@@ -442,6 +426,22 @@ export function LoginForm({
         )}
       </form>
       )}
+      {mode === "owner" && googleConfigured && !branchChoices && (
+        <>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="h-px flex-1 bg-border" />o<div className="h-px flex-1 bg-border" />
+          </div>
+          <button
+            type="button"
+            onClick={handleGoogleClick}
+            className={buttonVariants({ variant: "outline", size: "lg" })}
+          >
+            <GoogleIcon />
+            Continuar con Google
+          </button>
+        </>
+      )}
+
     </div>
   );
 }
