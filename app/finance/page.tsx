@@ -20,6 +20,7 @@ import {
   mostPurchasedProducts,
   inventoryRotation,
 } from "@/lib/actions/reports";
+import { salesHeatmap } from "@/lib/actions/home";
 import { commissionsTotal, sellersSalesOverview } from "@/lib/actions/seller-reports";
 import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, productMargins, getProfitGoal } from "@/lib/actions/finance";
 import { BreakevenCard } from "@/components/finance/BreakevenCard";
@@ -58,6 +59,7 @@ export default async function FinancePage({
     rotation,
     goalCents,
     sellers,
+    heat,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
     revenueTotals(range),
@@ -78,6 +80,7 @@ export default async function FinancePage({
     inventoryRotation(range),
     getProfitGoal(),
     sellersSalesOverview(range),
+    salesHeatmap(),
     getExchangeRateInfo(),
   ]);
 
@@ -235,6 +238,55 @@ export default async function FinancePage({
               })}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Mapa de calor de ventas</CardTitle>
+          <p className="text-sm text-muted-foreground">Ventas por día y hora (8 a 20 h) · últimas 8 semanas</p>
+        </CardHeader>
+        <CardContent>
+          {(() => {
+            const days = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+            const hours = Array.from({ length: 13 }, (_, i) => i + 8);
+            const byKey = new Map(heat.map((c) => [`${c.dow}-${c.hour}`, c.count]));
+            const max = Math.max(0, ...heat.map((c) => c.count));
+            if (max === 0) return <p className="text-sm text-muted-foreground">Aún no hay suficientes ventas para el mapa.</p>;
+            const top = [...heat].sort((a, b) => b.count - a.count)[0];
+            return (
+              <div className="flex flex-col gap-3">
+                <div className="overflow-x-auto">
+                  <div className="grid min-w-[560px] gap-1" style={{ gridTemplateColumns: `40px repeat(${hours.length}, minmax(0, 1fr))` }} role="grid" aria-label="Mapa de calor de ventas por día y hora">
+                    <span />
+                    {hours.map((h) => (
+                      <span key={h} className="text-center text-[11px] text-muted-foreground">{h}</span>
+                    ))}
+                    {days.map((d, di) => (
+                      <div key={d} className="contents">
+                        <span className="self-center text-xs font-medium text-muted-foreground">{d}</span>
+                        {hours.map((h) => {
+                          const n = byKey.get(`${di}-${h}`) ?? 0;
+                          const a = n === 0 ? 0 : 0.15 + 0.85 * (n / max);
+                          return (
+                            <span
+                              key={h}
+                              title={`${d} ${h}:00 · ${n} ventas`}
+                              className="h-7 rounded-md bg-muted"
+                              style={n > 0 ? { background: `color-mix(in oklab, var(--primary) ${Math.round(a * 100)}%, transparent)` } : undefined}
+                            />
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  El pico está el {["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][top.dow]} a las {top.hour}:00 ({top.count} ventas en 8 semanas).
+                </p>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 
