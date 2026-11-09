@@ -40,6 +40,10 @@ export function LearningPanel({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const watchedCount = videos.filter((v) => v.watched).length;
+  const pct = videos.length > 0 ? Math.round((watchedCount / videos.length) * 100) : 0;
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const currentIndex = Math.max(0, videos.findIndex((v) => v.id === currentId));
+  const current = videos[currentIndex] ?? videos[0];
   const uploading = progress !== null;
 
   function reset() {
@@ -105,88 +109,116 @@ export function LearningPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {videos.length > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-lg border bg-card p-3" aria-live="polite">
-          <p className="text-sm">
-            <b>{watchedCount}</b> de {videos.length} completados
-          </p>
-          <div
-            className="h-1.5 overflow-hidden rounded-full bg-muted"
-            role="progressbar"
-            aria-valuenow={watchedCount}
-            aria-valuemin={0}
-            aria-valuemax={videos.length}
-          >
-            <div className="h-full rounded-full bg-primary" style={{ width: `${(watchedCount / videos.length) * 100}%` }} />
-          </div>
-        </div>
-      )}
-
       {videos.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+        <p className="rounded-[20px] border border-dashed p-5 text-sm text-muted-foreground">
           Todavía no hay videos. Pronto agregaremos guías paso a paso.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {videos.map((v) => {
-            const embed = v.url ? videoEmbed(v.url) : null;
-            return (
-              <Card key={v.id}>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between gap-2 text-base">
-                    <span>{v.title}</span>
-                    {v.watched && <CheckIcon className="size-4 shrink-0 text-success" aria-label="Visto" />}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-2">
-                  {v.playUrl ? (
-                    <video
-                      src={v.playUrl}
-                      controls
-                      preload="metadata"
-                      playsInline
-                      className="aspect-video w-full rounded-md border bg-black"
-                      onEnded={() => !v.watched && toggleWatched(v)}
-                    />
-                  ) : embed ? (
-                    <div className="aspect-video overflow-hidden rounded-md border bg-black">
-                      <iframe
-                        src={embed.embedUrl}
-                        title={v.title}
-                        loading="lazy"
-                        className="size-full"
-                        allow="accelerometer; encrypted-media; picture-in-picture; fullscreen"
-                        allowFullScreen
-                        referrerPolicy="strict-origin-when-cross-origin"
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <section className="flex min-w-0 flex-col gap-4">
+            {(() => {
+              const v = current;
+              const embed = v.url ? videoEmbed(v.url) : null;
+              return (
+                <>
+                  <div className="overflow-hidden rounded-[22px] bg-black shadow-(--shadow-float)">
+                    {v.playUrl ? (
+                      <video
+                        key={v.id}
+                        src={v.playUrl}
+                        controls
+                        preload="metadata"
+                        playsInline
+                        className="aspect-video w-full bg-black"
+                        onEnded={() => !v.watched && toggleWatched(v)}
                       />
-                    </div>
-                  ) : v.url ? (
-                    <a
-                      href={v.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-primary underline underline-offset-2"
-                    >
-                      Ver el video <ExternalLinkIcon className="size-3.5" />
-                    </a>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Este video no está disponible por ahora.</p>
-                  )}
-                  {v.description && <p className="text-sm text-muted-foreground">{v.description}</p>}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button size="sm" variant={v.watched ? "outline" : "default"} disabled={isPending} onClick={() => toggleWatched(v)}>
-                      {v.watched ? "Marcar como no visto" : "Marcar como visto"}
-                    </Button>
-                    {isAdmin && (
-                      <Button size="sm" variant="ghost" disabled={isPending} onClick={() => remove(v)}>
-                        Quitar
-                      </Button>
+                    ) : embed ? (
+                      <div className="aspect-video">
+                        <iframe
+                          key={v.id}
+                          src={embed.embedUrl}
+                          title={v.title}
+                          loading="lazy"
+                          className="size-full"
+                          allow="accelerometer; encrypted-media; picture-in-picture; fullscreen"
+                          allowFullScreen
+                          referrerPolicy="strict-origin-when-cross-origin"
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid aspect-video place-items-center p-6 text-center text-sm text-white/80">
+                        {v.url ? (
+                          <a href={v.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 underline underline-offset-2">
+                            Ver el video <ExternalLinkIcon className="size-3.5" />
+                          </a>
+                        ) : (
+                          "Este video no está disponible por ahora."
+                        )}
+                      </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  <div className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Módulo {currentIndex + 1} de {videos.length}
+                    </p>
+                    <h2 className="mt-1 text-xl font-bold tracking-tight">{v.title}</h2>
+                    {v.description && <p className="mt-1 text-sm text-muted-foreground">{v.description}</p>}
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <Button size="sm" variant={v.watched ? "outline" : "default"} disabled={isPending} onClick={() => toggleWatched(v)}>
+                        {v.watched ? "Marcar como no visto" : "Marcar como visto"}
+                      </Button>
+                      {isAdmin && (
+                        <Button size="sm" variant="ghost" disabled={isPending} onClick={() => remove(v)}>
+                          Quitar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </section>
+
+          <aside className="flex min-w-0 flex-col gap-4 rounded-[20px] bg-card p-5 shadow-(--shadow-card)" aria-live="polite">
+            <div className="flex items-center gap-4">
+              <div
+                className="grid size-16 shrink-0 place-items-center rounded-full"
+                style={{ background: `conic-gradient(var(--primary) ${pct * 3.6}deg, var(--muted) 0)` }}
+                role="progressbar"
+                aria-valuenow={watchedCount}
+                aria-valuemin={0}
+                aria-valuemax={videos.length}
+              >
+                <span className="grid size-12 place-items-center rounded-full bg-card text-sm font-bold tabular-nums">{pct} %</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                <b className="text-foreground">{watchedCount}</b> de {videos.length} videos completados
+              </p>
+            </div>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tu ruta</p>
+            <ol className="flex flex-col gap-2">
+              {videos.map((v, i) => (
+                <li key={v.id}>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentId(v.id)}
+                    aria-current={v.id === current.id}
+                    className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors ${
+                      v.id === current.id ? "bg-primary/10 ring-2 ring-primary" : "bg-muted hover:bg-muted/70"
+                    }`}
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-card text-sm font-bold">
+                      {v.watched ? <CheckIcon className="size-4 text-success" aria-label="Visto" /> : i + 1}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Módulo {i + 1}</span>
+                      <span className="block truncate text-sm font-semibold">{v.title}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </aside>
         </div>
       )}
 

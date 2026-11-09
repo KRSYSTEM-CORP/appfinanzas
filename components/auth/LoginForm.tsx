@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { MessageCircleIcon, MailIcon } from "lucide-react";
+import { MailIcon } from "lucide-react";
+import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -202,7 +203,7 @@ export function LoginForm({
     return (
       <div className="flex flex-col gap-4 max-w-sm mx-auto rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
         <div className="mx-auto flex items-center justify-center size-11 rounded-full bg-destructive/10 text-destructive">
-          <MessageCircleIcon className="size-5" />
+          <WhatsappIcon className="size-5" />
         </div>
         <div>
           <h2 className="font-semibold">Cuenta suspendida</h2>
@@ -218,7 +219,7 @@ export function LoginForm({
             rel="noopener noreferrer"
             className={buttonVariants({ variant: "default" })}
           >
-            <MessageCircleIcon /> Escribir por WhatsApp
+            <WhatsappIcon className="size-4" /> Escribir por WhatsApp
           </a>
           <a
             href={`mailto:${CONTACT_EMAIL}`}

@@ -20,8 +20,34 @@ export function BranchCards({
   const [target, setTarget] = useState<{ id: string | null; name: string } | null>(null);
   const totalCents = summaries.filter((s) => s.isActive).reduce((a, s) => a + s.salesTodayCents, 0);
 
+  const active = summaries.filter((s) => s.isActive);
+  const ordersToday = active.reduce((a, s) => a + s.salesToday, 0);
+  const best = active.reduce<BranchSummary | null>((b, s) => (b == null || s.salesTodayCents > b.salesTodayCents ? s : b), null);
+  const kpis = [
+    { label: "Ventas de hoy en la red", value: formatCurrencyCents(currency, totalCents), sub: "Todas las sedes activas" },
+    { label: "Pedidos hoy", value: String(ordersToday), sub: `${active.length} ${active.length === 1 ? "sede activa" : "sedes activas"}` },
+    { label: "Mejor sede hoy", value: best && best.salesTodayCents > 0 ? best.name : "—", sub: best && best.salesTodayCents > 0 ? formatCurrencyCents(currency, best.salesTodayCents) : "Aún sin ventas" },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3 rounded-[20px] bg-card p-4 shadow-(--shadow-card)">
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
+          <LockIcon className="size-5" aria-hidden />
+        </span>
+        <p className="text-sm text-muted-foreground">
+          <b className="text-foreground">Resumen de toda la red.</b> Para entrar a una sede, abrir su caja o ver su ficha necesitas la clave de su administrador.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {kpis.map((k) => (
+          <div key={k.label} className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{k.label}</p>
+            <p className="mt-1 truncate text-3xl font-bold tabular-nums tracking-tight">{k.value}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{k.sub}</p>
+          </div>
+        ))}
+      </div>
       <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {summaries.map((s) => {
           const here = s.id === currentBranchId;

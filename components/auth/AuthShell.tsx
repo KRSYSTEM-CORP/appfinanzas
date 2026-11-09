@@ -1,15 +1,7 @@
 import { MailIcon } from "lucide-react";
+import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { PortalHero } from "@/components/auth/PortalHero";
 import { CONTACT_EMAIL, WHATSAPP_URL } from "@/lib/legal";
-
-function WhatsappIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-[19px]" aria-hidden>
-      <path d="M4 20l1.3-4.2A8 8 0 1 1 8.4 18.8L4 20Z" />
-      <path d="M9.2 8.8c.2 2.5 2.5 4.8 5 5l1.1-1.2-1.8-1-.8.7c-.8-.3-1.6-1.1-1.9-1.9l.7-.8-1-1.8-1.3 1Z" />
-    </svg>
-  );
-}
 
 // Marco de acceso de la preview v15: tarjeta flotante centrada (radio 32) sobre un
 // fondo con degradados y formas que flotan; mitad informativa a la izquierda y el
