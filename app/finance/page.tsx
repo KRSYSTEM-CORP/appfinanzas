@@ -20,7 +20,7 @@ import {
   mostPurchasedProducts,
   inventoryRotation,
 } from "@/lib/actions/reports";
-import { commissionsTotal } from "@/lib/actions/seller-reports";
+import { commissionsTotal, sellersSalesOverview } from "@/lib/actions/seller-reports";
 import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, productMargins, getProfitGoal } from "@/lib/actions/finance";
 import { BreakevenCard } from "@/components/finance/BreakevenCard";
 import { StatsInsights } from "@/components/finance/StatsInsights";
@@ -57,6 +57,7 @@ export default async function FinancePage({
     purchased,
     rotation,
     goalCents,
+    sellers,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
     revenueTotals(range),
@@ -76,6 +77,7 @@ export default async function FinancePage({
     mostPurchasedProducts(range),
     inventoryRotation(range),
     getProfitGoal(),
+    sellersSalesOverview(range),
     getExchangeRateInfo(),
   ]);
 
@@ -235,6 +237,48 @@ export default async function FinancePage({
           )}
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {[
+          {
+            title: "Ventas por categoría",
+            sub: "Lo vendido en el período, por categoría",
+            rows: [...categories].sort((a, b) => b.revenueCents - a.revenueCents).slice(0, 8).map((c) => ({ label: c.category, cents: c.revenueCents })),
+          },
+          {
+            title: "Ventas por vendedor",
+            sub: "Quién vendió cuánto en el período",
+            rows: sellers.filter((x) => x.totalEurCents > 0).slice(0, 8).map((x) => ({ label: x.name, cents: x.totalEurCents })),
+          },
+        ].map((b) => {
+          const max = Math.max(1, ...b.rows.map((r) => r.cents));
+          return (
+            <Card key={b.title}>
+              <CardHeader>
+                <CardTitle>{b.title}</CardTitle>
+                <p className="text-sm text-muted-foreground">{b.sub}</p>
+              </CardHeader>
+              <CardContent>
+                {b.rows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin ventas en este período.</p>
+                ) : (
+                  <ul className="flex flex-col gap-3">
+                    {b.rows.map((r) => (
+                      <li key={r.label} className="grid grid-cols-[110px_1fr_90px] items-center gap-3 text-sm">
+                        <span className="truncate font-medium">{r.label}</span>
+                        <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(2, Math.round((r.cents / max) * 100))}%` }} />
+                        </div>
+                        <span className="text-right font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, r.cents)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
 
       <StatsInsights mix={paymentMix} purchased={purchased} rotation={rotation} referenceCurrency={referenceCurrency} />
 
