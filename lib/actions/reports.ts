@@ -467,3 +467,44 @@ export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]
       .slice(0, limit);
   });
 }
+
+export type PeriodExtras = { prevCount: number; prevAvgCents: number; prevExpensesCents: number; prevDays: number; label: string };
+
+// Valores del periodo anterior comparable (mismo criterio que revenueComparison:
+// solo días con cierre de caja en las ventas) para mostrar la variación de venta
+// promedio, número de ventas y gastos en Estadísticas.
+export async function periodExtras(range: DateRangeSelection): Promise<PeriodExtras | null> {
+  const { companyId, branchId } = await requireManager();
+  const comparison = comparisonWindows(range);
+  if (!comparison) return null;
+  return withTenant(companyId, async (tx) => {
+    const closed = await closedDayWindows(tx, companyId, branchId, comparison.windows);
+    const [sales, expenses] = await Promise.all([
+      closed.length === 0
+        ? Promise.resolve({ _sum: { totalCents: 0 as number | null }, _count: 0 })
+        : tx.sale.aggregate({
+            _sum: { totalCents: true },
+            _count: true,
+            where: {
+              companyId,
+              ...(branchId ? { branchId } : {}),
+              OR: closed.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
+              voided: false,
+            },
+          }),
+      tx.expense.aggregate({
+        _sum: { amountCents: true },
+        where: { companyId, OR: comparison.windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
+      }),
+    ]);
+    const count = sales._count;
+    const cents = sales._sum.totalCents ?? 0;
+    return {
+      prevCount: count,
+      prevAvgCents: count > 0 ? Math.round(cents / count) : 0,
+      prevExpensesCents: expenses._sum.amountCents ?? 0,
+      prevDays: closed.length,
+      label: comparison.label,
+    };
+  });
+}

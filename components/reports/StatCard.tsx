@@ -37,7 +37,7 @@ export function StatCard({
   // Makes the whole metric a link to the screen behind it.
   href?: string;
   // Change versus a comparable period. `note` carries any caveat worth showing.
-  delta?: { pct: number; label: string; note?: string };
+  delta?: { pct: number; label: string; note?: string; inverse?: boolean };
 }) {
   const accentColor = accent ? ACCENT_VAR[accent] : undefined;
   const content = (
@@ -64,7 +64,7 @@ export function StatCard({
         <div className="flex flex-col text-xs">
           <span className="flex flex-wrap items-center gap-x-1.5">
             <span
-              className={`font-medium tabular-nums ${delta.pct > 0 ? "text-success" : delta.pct < 0 ? "text-destructive" : "text-muted-foreground"}`}
+              className={`font-medium tabular-nums ${delta.pct === 0 ? "text-muted-foreground" : (delta.pct > 0) !== !!delta.inverse ? "text-success" : "text-destructive"}`}
             >
               <span aria-hidden="true">{delta.pct > 0 ? "▲" : delta.pct < 0 ? "▼" : "•"}</span>{" "}
               <span className="sr-only">{delta.pct > 0 ? "Sube" : delta.pct < 0 ? "Baja" : "Sin cambio"} </span>
