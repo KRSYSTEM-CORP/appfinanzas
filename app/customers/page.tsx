@@ -22,7 +22,10 @@ export default async function CustomersPage() {
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-primary">Clientes y seguimiento</p>
+        <h1 className="text-3xl font-bold tracking-tight">Marketing</h1>
+        </div>
         <Button nativeButton={false} render={<Link href="/customers/new" />}>
           Nuevo cliente
         </Button>

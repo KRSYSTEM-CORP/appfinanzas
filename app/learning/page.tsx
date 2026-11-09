@@ -13,6 +13,7 @@ export default async function LearningPage() {
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div>
+        <p className="text-xs font-bold uppercase tracking-wider text-primary">Aprende con videos cortos</p>
         <h1 className="text-3xl font-bold tracking-tight">Learning</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Videos cortos para aprender a sacarle el máximo a KR POS.
