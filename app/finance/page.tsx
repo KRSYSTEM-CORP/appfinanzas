@@ -110,7 +110,7 @@ export default async function FinancePage({
         <DateRangeSwitcher selection={range} extraParams={expenseSearch ? { q: expenseSearch } : undefined} />
       </div>
 
-      <div className="rounded-lg border bg-card shadow-xs stat-grid divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-4 [&>*]:p-4">
+      <div className="stat-grid grid grid-cols-1 gap-4 sm:grid-cols-2 [&>*]:rounded-[20px] [&>*]:bg-card [&>*]:p-5 [&>*]:shadow-(--shadow-card) xl:grid-cols-5">
         <StatCard
           label="Ingresos totales"
           accent="primary"
@@ -171,8 +171,7 @@ export default async function FinancePage({
         />
       </div>
 
-      <Card>
-        <div className="rounded-lg border bg-card shadow-xs stat-grid divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-3">
+      <div className="stat-grid grid grid-cols-1 gap-4 sm:grid-cols-2 [&>*]:rounded-[20px] [&>*]:bg-card [&>*]:p-5 [&>*]:shadow-(--shadow-card) xl:grid-cols-3">
         <StatCard label="Ventas registradas" accent="primary" icon={TrendingUpIcon} value={String(totals.count)} />
         <StatCard
           label="Venta promedio"
@@ -188,7 +187,8 @@ export default async function FinancePage({
         />
       </div>
 
-      <CardHeader>
+      <Card>
+        <CardHeader>
           <CardTitle>Ganancia neta estimada</CardTitle>
         </CardHeader>
         <CardContent>
