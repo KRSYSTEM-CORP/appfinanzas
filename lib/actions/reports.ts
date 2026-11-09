@@ -295,3 +295,91 @@ export async function bottomProducts(range: DateRangeSelection, limit = 10): Pro
     rows.map((r) => ({ productId: r.id, productName: r.name, category: r.category, quantity: Number(r.quantity) }))
   );
 }
+
+export type PaymentMixRow = { method: string; totalCents: number; count: number };
+
+// Distribución de ventas: cuánto se cobró por cada método de pago en el periodo
+// (en la divisa de referencia), de mayor a menor.
+export async function salesByPaymentMethod(range: DateRangeSelection): Promise<PaymentMixRow[]> {
+  const { companyId, branchId } = await requireManager();
+  const requestedWindows = selectionToWindows(range);
+  return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return [];
+    const rows = await tx.$queryRaw<{ method: string; total: bigint; n: bigint }[]>`
+      SELECT sp."paymentMethod"::text AS method,
+             SUM(sp."amountEurCents")::bigint AS total,
+             COUNT(*)::bigint AS n
+      FROM "SalePayment" sp
+      JOIN "Sale" s ON s.id = sp."saleId"
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND ${windowsSql('sp."createdAt"', windows)}
+        AND s."voided" = false
+      GROUP BY 1
+      ORDER BY total DESC
+    `;
+    return rows.map((r) => ({ method: r.method, totalCents: Number(r.total), count: Number(r.n) }));
+  });
+}
+
+export type PurchasedProductRow = { name: string; quantity: number; totalCents: number };
+
+// Productos más comprados: unidades compradas a proveedores en el periodo
+// (compras anuladas no cuentan).
+export async function mostPurchasedProducts(range: DateRangeSelection, limit = 10): Promise<PurchasedProductRow[]> {
+  const { companyId, branchId } = await requireManager();
+  const windows = selectionToWindows(range);
+  if (windows.length === 0) return [];
+  return withTenant(companyId, async (tx) => {
+    const rows = await tx.$queryRaw<{ name: string; qty: bigint; cents: bigint }[]>`
+      SELECT pi."productName" AS name,
+             SUM(pi."quantity")::bigint AS qty,
+             SUM(pi."subtotalCents")::bigint AS cents
+      FROM "PurchaseItem" pi
+      JOIN "Purchase" p ON p.id = pi."purchaseId"
+      WHERE p."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND p."branchId" = ${branchId}` : Prisma.empty}
+        AND ${windowsSql('p."createdAt"', windows)}
+        AND p."voided" = false
+      GROUP BY 1
+      ORDER BY qty DESC, name ASC
+      LIMIT ${limit}
+    `;
+    return rows.map((r) => ({ name: r.name, quantity: Number(r.qty), totalCents: Number(r.cents) }));
+  });
+}
+
+export type RotationRow = { name: string; sold: number; stock: number; turns: number };
+
+// Rotación: cuántas veces se vendió el stock actual en el periodo
+// (unidades vendidas ÷ stock actual; con stock 0 se cuenta como 1 para no dividir
+// entre cero). Solo productos con control de stock que vendieron algo.
+export async function inventoryRotation(range: DateRangeSelection, limit = 10): Promise<RotationRow[]> {
+  const { companyId, branchId } = await requireManager();
+  const requestedWindows = selectionToWindows(range);
+  return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return [];
+    const rows = await tx.$queryRaw<{ name: string; sold: bigint; stock: number }[]>`
+      SELECT pr."name" AS name, SUM(si."quantity")::bigint AS sold, pr."stock" AS stock
+      FROM "Product" pr
+      JOIN "SaleItem" si ON si."productId" = pr.id
+      JOIN "Sale" s ON s.id = si."saleId"
+      WHERE pr."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND pr."branchId" = ${branchId}` : Prisma.empty}
+        AND pr."trackStock" = true
+        AND s."voided" = false
+        AND ${windowsSql('s."createdAt"', windows)}
+      GROUP BY pr.id, pr."name", pr."stock"
+      ORDER BY SUM(si."quantity")::numeric / GREATEST(pr."stock", 1) DESC, pr."name" ASC
+      LIMIT ${limit}
+    `;
+    return rows.map((r) => ({
+      name: r.name,
+      sold: Number(r.sold),
+      stock: r.stock,
+      turns: Math.round((Number(r.sold) / Math.max(r.stock, 1)) * 100) / 100,
+    }));
+  });
+}

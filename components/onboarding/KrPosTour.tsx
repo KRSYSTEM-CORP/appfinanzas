@@ -36,7 +36,7 @@ const STEPS: TourStep[] = [
   },
   {
     icon: <Settings2 className="size-6" />,
-    title: "Configuración",
+    title: "Ajustes",
     description:
       "Personaliza tu marca, moneda de referencia, sucursales y empleados desde Administración. Ya puedes empezar a vender.",
   },

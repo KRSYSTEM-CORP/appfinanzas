@@ -101,7 +101,23 @@ function monthWindowUtc(year: number, month: number): { start: Date; end: Date }
 // febrero.
 export type DateRangeSelection =
   | { kind: "preset"; preset: "today" | "7d" | "month" }
-  | { kind: "months"; year: number; months: number[] };
+  | { kind: "months"; year: number; months: number[] }
+  // Rango con calendario: de un día a otro, ambos incluidos, en días de Venezuela
+  // («AAAA-MM-DD»). Máximo un año.
+  | { kind: "range"; from: string; to: string };
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_RANGE_DAYS = 366;
+
+// true si «desde» y «hasta» son fechas reales, en orden y de a lo sumo un año.
+export function isValidRange(from: string, to: string): boolean {
+  if (!DATE_RE.test(from) || !DATE_RE.test(to)) return false;
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  if (new Date(a).toISOString().slice(0, 10) !== from || new Date(b).toISOString().slice(0, 10) !== to) return false;
+  return a <= b && (b - a) / 86_400_000 + 1 <= MAX_RANGE_DAYS;
+}
 
 // Expands a selection into one or more disjoint [start, end) windows — a
 // single window for a preset, one window per chosen month for "months".
@@ -111,6 +127,9 @@ export type DateRangeSelection =
 // exactly those two months and nothing in between.
 export function selectionToWindows(selection: DateRangeSelection): { start: Date; end: Date }[] {
   if (selection.kind === "preset") return [rangeToDates(selection.preset)];
+  if (selection.kind === "range") {
+    return [{ start: dayBoundsUtc(selection.from).start, end: dayBoundsUtc(selection.to).end }];
+  }
   return selection.months.map((m) => monthWindowUtc(selection.year, m));
 }
 
@@ -123,6 +142,11 @@ export function comparisonWindows(
   selection: DateRangeSelection
 ): { windows: { start: Date; end: Date }[]; label: string } | null {
   const now = new Date();
+  if (selection.kind === "range") {
+    const { start, end } = selectionToWindows(selection)[0];
+    const len = end.getTime() - start.getTime();
+    return { windows: [{ start: new Date(start.getTime() - len), end: start }], label: "vs el periodo anterior" };
+  }
   if (selection.kind === "months") {
     return {
       windows: selection.months.map((m) => monthWindowUtc(selection.year - 1, m)),
@@ -170,9 +194,14 @@ const PRESET_VALUES = new Set(["today", "7d", "month"]);
 // a known-good set, else default" pattern every page using DateRangePreset
 // already followed.
 export function parseDateRangeSelection(
-  params: { range?: string; year?: string; months?: string },
+  params: { range?: string; year?: string; months?: string; from?: string; to?: string },
   fallback: DateRangeSelection = { kind: "preset", preset: "month" }
 ): DateRangeSelection {
+  if (params.range === "range") {
+    return params.from && params.to && isValidRange(params.from, params.to)
+      ? { kind: "range", from: params.from, to: params.to }
+      : fallback;
+  }
   if (params.range === "months") {
     const year = Number(params.year);
     const months = [
@@ -196,6 +225,7 @@ export function parseDateRangeSelection(
 
 export function dateRangeSelectionToQuery(selection: DateRangeSelection): Record<string, string> {
   if (selection.kind === "preset") return { range: selection.preset };
+  if (selection.kind === "range") return { range: "range", from: selection.from, to: selection.to };
   return { range: "months", year: String(selection.year), months: selection.months.join(",") };
 }
 

@@ -16,9 +16,13 @@ import {
   bottomProducts,
   incomeByCurrency,
   revenueComparison,
+  salesByPaymentMethod,
+  mostPurchasedProducts,
+  inventoryRotation,
 } from "@/lib/actions/reports";
 import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, productMargins, getProfitGoal } from "@/lib/actions/finance";
 import { BreakevenCard } from "@/components/finance/BreakevenCard";
+import { StatsInsights } from "@/components/finance/StatsInsights";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { parseDateRangeSelection } from "@/lib/report-types";
 
@@ -47,6 +51,9 @@ export default async function FinancePage({
     comparison,
     categories,
     products,
+    paymentMix,
+    purchased,
+    rotation,
     goalCents,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
@@ -62,6 +69,9 @@ export default async function FinancePage({
     revenueComparison(range),
     categoryMargins(range),
     productMargins(range),
+    salesByPaymentMethod(range),
+    mostPurchasedProducts(range),
+    inventoryRotation(range),
     getProfitGoal(),
     getExchangeRateInfo(),
   ]);
@@ -150,7 +160,23 @@ export default async function FinancePage({
       </div>
 
       <Card>
-        <CardHeader>
+        <div className="rounded-lg border bg-card shadow-xs stat-grid divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-3">
+        <StatCard label="Ventas registradas" accent="primary" icon={TrendingUpIcon} value={String(totals.count)} />
+        <StatCard
+          label="Venta promedio"
+          accent="violet"
+          icon={WalletIcon}
+          value={formatCurrencyCents(referenceCurrency, totals.avgEurCents)}
+        />
+        <StatCard
+          label="Margen bruto"
+          accent="warning"
+          icon={PackageIcon}
+          value={`${totals.totalEurCents > 0 ? Math.round(((totals.totalEurCents - cogsCents) / totals.totalEurCents) * 100) : 0} %`}
+        />
+      </div>
+
+      <CardHeader>
           <CardTitle>Ganancia neta estimada</CardTitle>
         </CardHeader>
         <CardContent>
@@ -162,6 +188,8 @@ export default async function FinancePage({
           </p>
         </CardContent>
       </Card>
+
+      <StatsInsights mix={paymentMix} purchased={purchased} rotation={rotation} referenceCurrency={referenceCurrency} />
 
       <BreakevenCard
         revenueCents={totals.totalEurCents}
