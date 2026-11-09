@@ -1,4 +1,5 @@
 import { AI_APPLY_COST, AI_PACKS } from "@/lib/assistant";
+import { TRIAL_DAYS } from "@/lib/billing";
 import { PLANS } from "@/lib/plans";
 
 // Manual de uso que se le da al Asistente IA para contestar "¿cómo se hace…?".
@@ -19,7 +20,7 @@ function plansSection(): string {
   return [
     "PLANES Y SUSCRIPCIÓN",
     ...lines,
-    "- Toda empresa nueva tiene 15 días gratis. La suscripción se paga en bolívares a la tasa dólar BCV del día, en el menú «Suscripción mensual».",
+    `- Toda empresa nueva tiene ${TRIAL_DAYS} días gratis. La suscripción se paga en bolívares a la tasa dólar BCV del día, en el menú «Suscripción mensual».`,
     "- Para cambiar de plan o pagar, la persona dueña usa «Suscripción mensual»; los pagos los confirma el equipo de KR System.",
     `- Créditos de IA: preguntar es gratis (con un tope diario según el plan). Aplicar un cambio que proponga el asistente cuesta ${AI_APPLY_COST} créditos y solo si confirmas. Se pueden comprar créditos extra, que no vencen: ${packs}. Se piden desde la pantalla del Asistente y se suman cuando KR System confirma el pago.`,
   ].join("\n");
