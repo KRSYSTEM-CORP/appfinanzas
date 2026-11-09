@@ -13,6 +13,8 @@ import { IvaSettingsForm } from "@/components/settings/IvaSettingsForm";
 import { PaymentAccountsForm } from "@/components/settings/PaymentAccountsForm";
 import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { SettingsTabs, type SettingsSection } from "@/components/settings/SettingsTabs";
+import { MyPlanPanel } from "@/components/settings/MyPlanPanel";
+import { getPlanUsage } from "@/lib/actions/plan";
 import { Separator } from "@/components/ui/separator";
 import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from "@/lib/actions/settings";
 import { listBranches } from "@/lib/actions/branches";
@@ -48,6 +50,7 @@ export default async function SettingsPage() {
     branches,
     ivaSettings,
     paymentAccounts,
+    planUsage,
   ] = await Promise.all([
     getExchangeRateInfo(),
     getBranding(),
@@ -55,11 +58,17 @@ export default async function SettingsPage() {
     canManage ? listBranches() : Promise.resolve([]),
     getIvaSettings(),
     canManage ? listPaymentAccounts(false) : Promise.resolve([]),
+    getPlanUsage(),
   ]);
   const stale = isStale(updatedAt);
   const referenceSymbol = referenceCurrency === "USD" ? "$1" : "€1";
 
   const sections: SettingsSection[] = [
+    {
+      id: "plan",
+      label: "Mi plan",
+      content: <MyPlanPanel usage={planUsage} />,
+    },
     {
       id: "moneda",
       label: "Moneda y tasa de cambio",
