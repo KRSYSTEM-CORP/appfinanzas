@@ -30,7 +30,7 @@ export function BranchSwitcher({
   return (
     <>
       <Select value={currentBranchId ?? ALL_VALUE} onValueChange={(v) => v && handleChange(v)}>
-        <SelectTrigger size="sm" aria-label="Sucursal">
+        <SelectTrigger size="sm" aria-label="Sucursal" className="h-auto! w-full border-transparent! bg-transparent! px-0! py-0! text-[15px]! font-bold! shadow-none! dark:bg-transparent!">
           <SelectValue placeholder="Sucursal">
             {(value: string | null) =>
               !value || value === ALL_VALUE

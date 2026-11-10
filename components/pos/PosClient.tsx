@@ -15,6 +15,7 @@ import { ReceiptView } from "@/components/pos/ReceiptView";
 import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { useDefaultPaymentRow } from "@/components/payments/useDefaultPaymentRow";
 import { completeSale, getSaleReceipt } from "@/lib/actions/sales";
+import { SALE_CHANNEL_LABELS } from "@/lib/format";
 import type { QuoteForConversion } from "@/lib/actions/quotes";
 import { computeItemDiscountCents } from "@/lib/discount";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
@@ -43,6 +44,7 @@ function PosSession({
   company,
   sellerName,
   initialQuote,
+  accountTabs,
   companyId,
   companyName,
   branchId,
@@ -70,6 +72,8 @@ function PosSession({
   // dropped here too, as a second line of defense on top of the filtering
   // already done in getQuoteForConversion.
   initialQuote?: QuoteForConversion | null;
+  // Pestañas de cuentas (las pone PosClient dentro de la tarjeta de venta).
+  accountTabs?: React.ReactNode;
   companyId: string;
   // Only used to keep this terminal's offline catalog snapshot up to date
   // (see useCatalogSync below) — nothing here changes this component's own
@@ -394,29 +398,54 @@ const [step, setStep] = useState<Step>("cart");
           categories={categories}
           onAdd={addProduct}
         />
-        <div className="flex min-h-0 flex-col gap-3">
-      <div className="flex min-w-0 flex-col gap-3 rounded-[22px] bg-card p-4 shadow-(--shadow-card)">
-        {customer ? (
-          <div className="min-w-0 text-sm">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cliente de esta venta</p>
-            <p className="truncate font-semibold">
-              {customer.firstName} {customer.lastName}
-              {customer.phone && customer.phone !== "0000-0000000" && <span className="font-normal text-muted-foreground"> · {customer.phone}</span>}
-            </p>
+        <div className="flex min-h-0 flex-col gap-3 rounded-[22px] bg-card p-5 shadow-(--shadow-card) md:overflow-y-auto">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold tracking-tight">Venta actual</h2>
+              <p className="text-[13px] text-muted-foreground">
+                {lines.reduce((n, l) => n + l.quantity, 0)} {lines.reduce((n, l) => n + l.quantity, 0) === 1 ? "producto" : "productos"} · {SALE_CHANNEL_LABELS[channel]}
+              </p>
+            </div>
+            <Button type="button" size="sm" variant="outline" disabled={lines.length === 0} onClick={() => { resetCart(); }}>
+              Vaciar
+            </Button>
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Registra o elige un cliente para cobrar.</p>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          <Button type="button" size="sm" className="min-h-11" onClick={() => { setFromPay(false); setDialog("register"); }}>
-            + Registrar cliente
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => { setDirQuery(""); setDirResults([]); setDialog("directory"); }}>
-            Directorio
-          </Button>
-        </div>
-      </div>
+          <div role="radiogroup" aria-label="Canal de venta" className="flex flex-wrap gap-2">
+            {(Object.keys(SALE_CHANNEL_LABELS) as SaleChannel[]).map((ch) => (
+              <button
+                key={ch}
+                type="button"
+                role="radio"
+                aria-checked={channel === ch}
+                onClick={() => setChannel(ch)}
+                className={`min-h-[38px] rounded-xl border-2 px-3.5 text-[13px] font-bold transition-colors ${
+                  channel === ch ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted text-foreground hover:bg-muted/70"
+                }`}
+              >
+                {SALE_CHANNEL_LABELS[ch]}
+              </button>
+            ))}
+          </div>
+          {accountTabs}
+          {customer && (
+            <div className="min-w-0 rounded-2xl bg-muted px-3.5 py-2.5 text-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cliente de esta venta</p>
+              <p className="truncate font-semibold">
+                {customer.firstName} {customer.lastName}
+                {customer.phone && customer.phone !== "0000-0000000" && <span className="font-normal text-muted-foreground"> · {customer.phone}</span>}
+              </p>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" size="lg" onClick={() => { setFromPay(false); setDialog("register"); }}>
+              + Registrar cliente
+            </Button>
+            <Button type="button" size="lg" variant="outline" onClick={() => { setDirQuery(""); setDirResults([]); setDialog("directory"); }}>
+              Directorio
+            </Button>
+          </div>
         <Cart
+          bare
           lines={lines.map((l) => {
             const current = productById.get(l.productId);
             return {
@@ -530,8 +559,7 @@ export function PosClient(props: React.ComponentProps<typeof PosSession>) {
     if (active === id) setActive(left[0]);
   }
 
-  return (
-    <div className="flex h-full flex-col gap-3">
+  const tabs = (
       <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Cuentas abiertas">
         {accounts.map((id, i) => (
           <span key={id} className="inline-flex items-center">
@@ -561,9 +589,13 @@ export function PosClient(props: React.ComponentProps<typeof PosSession>) {
           + Nueva cuenta
         </button>
       </div>
+  );
+
+  return (
+    <div className="flex h-full flex-col gap-3">
       {accounts.map((id) => (
         <div key={id} className={id === active ? "min-h-0 flex-1" : "hidden"}>
-          <PosSession {...props} initialQuote={id === 1 ? props.initialQuote : null} />
+          <PosSession {...props} initialQuote={id === 1 ? props.initialQuote : null} accountTabs={tabs} />
         </div>
       ))}
     </div>

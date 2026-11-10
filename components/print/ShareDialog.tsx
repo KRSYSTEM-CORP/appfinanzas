@@ -1,5 +1,6 @@
 "use client";
 
+import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
@@ -128,7 +129,7 @@ export function ShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>{triggerLabel}</DialogTrigger>
+      <DialogTrigger render={<Button size="sm" variant="outline" />}><WhatsappIcon className="size-3.5 text-[#1faa59]" />{triggerLabel}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -159,14 +160,14 @@ export function ShareDialog({
           {buildPdfBlob ? (
             <>
               <Button className="w-full" onClick={handleSendPdf} disabled={!pdfFile}>
-                {pdfFile || pdfError ? "Enviar PDF por WhatsApp" : "Preparando PDF…"}
+                <WhatsappIcon className="size-4" /> {pdfFile || pdfError ? "Enviar PDF por WhatsApp" : "Preparando PDF…"}
               </Button>
               <Button className="w-full" variant="outline" onClick={handleWhatsApp}>
-                Enviar enlace por WhatsApp
+                <WhatsappIcon className="size-4" /> Enviar enlace por WhatsApp
               </Button>
             </>
           ) : (
-            <Button className="w-full" onClick={handleWhatsApp}>Enviar por WhatsApp</Button>
+            <Button className="w-full" onClick={handleWhatsApp}><WhatsappIcon className="size-4" /> Enviar por WhatsApp</Button>
           )}
           {pdfError && <p className="text-sm text-destructive">{pdfError}</p>}
           {pdfNotice && <p role="status" className="text-sm text-muted-foreground">{pdfNotice}</p>}
