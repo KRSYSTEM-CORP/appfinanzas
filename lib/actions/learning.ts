@@ -11,6 +11,7 @@ import {
   MAX_LEARNING_UPLOAD_BYTES,
   MAX_LEARNING_VIDEOS,
   isHttpsUrl,
+  LEARNING_AUDIENCES,
 } from "@/lib/learning";
 import { r2Config, r2Delete, r2ReadUrl, r2UploadUrl } from "@/lib/r2";
 import type { ActionResult } from "@/lib/types";
@@ -25,6 +26,9 @@ export type LearningVideoRow = {
   playUrl: string | null;
   position: number;
   watched: boolean;
+  audience: string;
+  published: boolean;
+  learns: string[];
 };
 
 export async function isLearningStorageReady(): Promise<boolean> {
@@ -34,8 +38,9 @@ export async function isLearningStorageReady(): Promise<boolean> {
 // Cualquier usuario autenticado ve los videos y su propio avance.
 export async function listLearningVideos(): Promise<LearningVideoRow[]> {
   const { userId } = await requireSession();
+  const admin = await isLearningAdmin();
   const [videos, progress] = await Promise.all([
-    prisma.learningVideo.findMany({ orderBy: { position: "asc" } }),
+    prisma.learningVideo.findMany({ where: admin ? {} : { published: true }, orderBy: { position: "asc" } }),
     prisma.learningProgress.findMany({ where: { userId }, select: { videoId: true } }),
   ]);
   const seen = new Set(progress.map((p) => p.videoId));
@@ -48,6 +53,9 @@ export async function listLearningVideos(): Promise<LearningVideoRow[]> {
     playUrl: v.r2Key && ready ? r2ReadUrl(v.r2Key) : null,
     position: v.position,
     watched: seen.has(v.id),
+    audience: v.audience,
+    published: v.published,
+    learns: v.learns,
   }));
 }
 
@@ -85,6 +93,9 @@ const VideoSchema = z
     description: z.string().trim().max(300).optional(),
     url: z.string().trim().refine(isHttpsUrl, "El enlace debe empezar con https://").optional(),
     r2Key: z.string().regex(LEARNING_KEY_REGEX, "Archivo inválido").optional(),
+    audience: z.enum(LEARNING_AUDIENCES).optional(),
+    published: z.boolean().optional(),
+    learns: z.array(z.string().trim().min(1).max(140)).max(8).optional(),
   })
   .refine((v) => Boolean(v.url) !== Boolean(v.r2Key), "Indica un enlace o sube un archivo MP4");
 
@@ -105,6 +116,9 @@ export async function addLearningVideo(input: unknown): Promise<ActionResult> {
       url: parsed.data.url ?? null,
       r2Key: parsed.data.r2Key ?? null,
       position: (last?.position ?? 0) + 1,
+      audience: parsed.data.audience ?? "Todo",
+      published: parsed.data.published ?? true,
+      learns: parsed.data.learns ?? [],
     },
   });
   revalidatePath("/learning");
@@ -143,4 +157,46 @@ export async function setLearningWatched(videoId: string, watched: boolean): Pro
   }
   revalidatePath("/learning");
   return { success: true };
+}
+
+// Biblioteca del administrador: subir o bajar un video en el orden.
+export async function moveLearningVideo(id: string, direction: "up" | "down"): Promise<ActionResult> {
+  if (!(await isLearningAdmin())) return { success: false, error: "No tienes permiso" };
+  const all = await prisma.learningVideo.findMany({ orderBy: { position: "asc" }, select: { id: true, position: true } });
+  const i = all.findIndex((v) => v.id === id);
+  const j = direction === "up" ? i - 1 : i + 1;
+  if (i < 0 || j < 0 || j >= all.length) return { success: true };
+  await prisma.$transaction([
+    prisma.learningVideo.update({ where: { id: all[i].id }, data: { position: all[j].position } }),
+    prisma.learningVideo.update({ where: { id: all[j].id }, data: { position: all[i].position } }),
+  ]);
+  revalidatePath("/learning");
+  return { success: true };
+}
+
+// Publicar u ocultar un video (los ocultos solo los ve el administrador).
+export async function setLearningPublished(id: string, published: boolean): Promise<ActionResult> {
+  if (!(await isLearningAdmin())) return { success: false, error: "No tienes permiso" };
+  await prisma.learningVideo.updateMany({ where: { id }, data: { published } });
+  revalidatePath("/learning");
+  return { success: true };
+}
+
+export type LearningStats = { modules: number; published: number; companies: number; avgCompletionPct: number };
+
+// Resumen para el administrador: módulos, empresas que ya aprenden y avance promedio.
+export async function getLearningStats(): Promise<LearningStats | null> {
+  if (!(await isLearningAdmin())) return null;
+  const [videos, progress] = await Promise.all([
+    prisma.learningVideo.findMany({ select: { id: true, published: true } }),
+    prisma.learningProgress.findMany({ select: { userId: true, videoId: true } }),
+  ]);
+  const publishedIds = new Set(videos.filter((v) => v.published).map((v) => v.id));
+  const perUser = new Map<string, number>();
+  for (const p of progress) if (publishedIds.has(p.videoId)) perUser.set(p.userId, (perUser.get(p.userId) ?? 0) + 1);
+  const userIds = [...perUser.keys()];
+  const users = userIds.length ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, companyId: true } }) : [];
+  const companies = new Set(users.map((u) => u.companyId));
+  const avg = perUser.size && publishedIds.size ? [...perUser.values()].reduce((a, n) => a + n / publishedIds.size, 0) / perUser.size : 0;
+  return { modules: videos.length, published: publishedIds.size, companies: companies.size, avgCompletionPct: Math.round(avg * 100) };
 }

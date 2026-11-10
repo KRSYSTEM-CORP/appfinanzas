@@ -40,3 +40,6 @@ export function isHttpsUrl(raw: string): boolean {
     return false;
   }
 }
+
+export const LEARNING_AUDIENCES = ["Todo", "Dueño", "Cajero", "Vendedor", "Contador"] as const;
+export type LearningAudience = (typeof LEARNING_AUDIENCES)[number];

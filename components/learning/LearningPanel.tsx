@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, ExternalLinkIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, CheckIcon, EyeIcon, EyeOffIcon, ExternalLinkIcon, FileTextIcon, StarIcon, UsersIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,19 +11,24 @@ import {
   addLearningVideo,
   deleteLearningVideo,
   getLearningUploadUrl,
+  moveLearningVideo,
+  setLearningPublished,
   setLearningWatched,
+  type LearningStats,
   type LearningVideoRow,
 } from "@/lib/actions/learning";
-import { videoEmbed } from "@/lib/learning";
+import { LEARNING_AUDIENCES, videoEmbed } from "@/lib/learning";
 
 export function LearningPanel({
-  videos,
+  videos: allVideos,
+  stats,
   isAdmin,
   storageReady,
   max,
   maxUploadMb,
 }: {
   videos: LearningVideoRow[];
+  stats: LearningStats | null;
   isAdmin: boolean;
   storageReady: boolean;
   max: number;
@@ -32,6 +37,9 @@ export function LearningPanel({
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [audience, setAudience] = useState<string>("Todo");
+  const [published, setPublished] = useState(true);
+  const [learnsText, setLearnsText] = useState("");
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -39,6 +47,8 @@ export function LearningPanel({
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [route, setRoute] = useState<string>("Todo");
+  const videos = allVideos.filter((v) => route === "Todo" || v.audience === "Todo" || v.audience === route);
   const watchedCount = videos.filter((v) => v.watched).length;
   const pct = videos.length > 0 ? Math.round((watchedCount / videos.length) * 100) : 0;
   const [currentId, setCurrentId] = useState<string | null>(null);
@@ -49,6 +59,9 @@ export function LearningPanel({
   function reset() {
     setTitle("");
     setDescription("");
+    setAudience("Todo");
+    setPublished(true);
+    setLearnsText("");
     setUrl("");
     setFile(null);
     setProgress(null);
@@ -78,10 +91,10 @@ export function LearningPanel({
         const grant = await getLearningUploadUrl({ size: file.size, contentType: file.type });
         if (!grant.success) throw new Error(grant.error);
         await putFile(grant.uploadUrl, file);
-        const added = await addLearningVideo({ title, description, r2Key: grant.key });
+        const added = await addLearningVideo({ title, description, r2Key: grant.key, audience: audience as (typeof LEARNING_AUDIENCES)[number], published, learns: learnsText.split("\n").map((l) => l.trim()).filter(Boolean) });
         if (!added.success) throw new Error(added.error);
       } else {
-        const added = await addLearningVideo({ title, description, url });
+        const added = await addLearningVideo({ title, description, url, audience: audience as (typeof LEARNING_AUDIENCES)[number], published, learns: learnsText.split("\n").map((l) => l.trim()).filter(Boolean) });
         if (!added.success) throw new Error(added.error);
       }
       reset();
@@ -163,6 +176,18 @@ export function LearningPanel({
                     </p>
                     <h2 className="mt-1 text-xl font-bold tracking-tight">{v.title}</h2>
                     {v.description && <p className="mt-1 text-sm text-muted-foreground">{v.description}</p>}
+                    {v.learns.length > 0 && (
+                      <div className="mt-4">
+                        <p className="kr-eyebrow mb-2">Lo que aprendes</p>
+                        <ul className="flex flex-col gap-1.5">
+                          {v.learns.map((l) => (
+                            <li key={l} className="flex items-start gap-2 text-sm">
+                              <CheckIcon className="mt-0.5 size-4 shrink-0 text-success" aria-hidden /> {l}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                       <Button size="sm" variant={v.watched ? "outline" : "default"} disabled={isPending} onClick={() => toggleWatched(v)}>
                         {v.watched ? "Marcar como no visto" : "Marcar como visto"}
@@ -196,6 +221,21 @@ export function LearningPanel({
               </p>
             </div>
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tu ruta</p>
+            <div className="flex flex-wrap gap-2">
+              {LEARNING_AUDIENCES.map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  aria-pressed={route === a}
+                  onClick={() => setRoute(a)}
+                  className={`min-h-[38px] rounded-xl border-2 px-3.5 text-[13px] font-bold transition-colors ${
+                    route === a ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted text-foreground hover:bg-muted/70"
+                  }`}
+                >
+                  {a}
+                </button>
+              ))}
+            </div>
             <ol className="flex flex-col gap-2">
               {videos.map((v, i) => (
                 <li key={v.id}>
@@ -220,6 +260,64 @@ export function LearningPanel({
             </ol>
           </aside>
         </div>
+      )}
+
+      {isAdmin && stats && (
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+          {[
+            { label: "Módulos", value: String(stats.modules), sub: `${stats.published} publicados · ${stats.modules - stats.published} ocultos`, Icon: FileTextIcon, chip: "bg-primary/12 text-primary" },
+            { label: "Empresas que aprenden", value: String(stats.companies), sub: "con al menos un video visto", Icon: UsersIcon, chip: "bg-success/14 text-success" },
+            { label: "Finalización promedio", value: `${stats.avgCompletionPct} %`, sub: "de quienes ya empezaron", Icon: StarIcon, chip: "bg-warning/18 text-warning" },
+          ].map((k) => (
+            <div key={k.label} className="relative min-h-32 rounded-[19px] bg-card p-[17px] shadow-(--shadow-card)">
+              <p className="pr-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{k.label}</p>
+              <span className={`absolute right-4 top-4 grid size-[34px] place-items-center rounded-full ${k.chip}`} aria-hidden>
+                <k.Icon className="size-[18px]" />
+              </span>
+              <p className="mt-1.5 text-[34px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums">{k.value}</p>
+              <p className="mt-1.5 text-[13px] text-muted-foreground">{k.sub}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isAdmin && allVideos.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Biblioteca</CardTitle>
+            <p className="text-sm text-muted-foreground">Ordena, oculta o elimina</p>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col divide-y">
+              {allVideos.map((v, i) => (
+                <li key={v.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-bold">
+                      {i + 1}. {v.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {v.audience} · {v.published ? "Publicado" : "Oculto"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending || i === 0} aria-label="Subir" onClick={() => startTransition(async () => { await moveLearningVideo(v.id, "up"); router.refresh(); })}>
+                      <ArrowUpIcon />
+                    </Button>
+                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending || i === allVideos.length - 1} aria-label="Bajar" onClick={() => startTransition(async () => { await moveLearningVideo(v.id, "down"); router.refresh(); })}>
+                      <ArrowDownIcon />
+                    </Button>
+                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending} aria-label={v.published ? "Ocultar" : "Publicar"} onClick={() => startTransition(async () => { await setLearningPublished(v.id, !v.published); router.refresh(); })}>
+                      {v.published ? <EyeIcon /> : <EyeOffIcon />}
+                    </Button>
+                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending} aria-label="Quitar" onClick={() => remove(v)}>
+                      <XIcon />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
 
       {isAdmin && (
@@ -260,6 +358,27 @@ export function LearningPanel({
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="lv-desc">Descripción (opcional)</Label>
                 <Input id="lv-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="lv-aud">Ruta sugerida</Label>
+                  <select id="lv-aud" value={audience} onChange={(e) => setAudience(e.target.value)} className="h-11 rounded-[14px] border-[1.5px] border-input bg-transparent px-3 text-sm md:h-[50px]">
+                    {LEARNING_AUDIENCES.map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="lv-pub">Estado</Label>
+                  <select id="lv-pub" value={published ? "1" : "0"} onChange={(e) => setPublished(e.target.value === "1")} className="h-11 rounded-[14px] border-[1.5px] border-input bg-transparent px-3 text-sm md:h-[50px]">
+                    <option value="1">Publicado</option>
+                    <option value="0">Oculto</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="lv-learns">Lo que aprendes (una línea por punto)</Label>
+                <textarea id="lv-learns" rows={3} value={learnsText} onChange={(e) => setLearnsText(e.target.value)} className="rounded-[14px] border-[1.5px] border-input bg-transparent px-3 py-2 text-sm" placeholder={"Abre la caja\nGenera el Corte Z"} />
               </div>
               {uploading && (
                 <div className="flex flex-col gap-1" aria-live="polite">

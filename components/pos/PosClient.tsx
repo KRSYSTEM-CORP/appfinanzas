@@ -30,7 +30,7 @@ import type { PrintPaperSize, ReferenceCurrency, SaleChannel } from "@prisma/cli
 type SaleWithItems = NonNullable<Awaited<ReturnType<typeof getSaleReceipt>>>;
 type Step = "customer" | "cart" | "receipt";
 
-export function PosClient({
+function PosSession({
   paymentAccounts = [],
   products,
   rate,
@@ -503,6 +503,69 @@ const [step, setStep] = useState<Step>("cart");
           </Button>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+
+// Varias cuentas abiertas a la vez (como en la preview): cada una es una venta
+// independiente con su propio carrito, cliente y pagos. Las inactivas siguen
+// montadas (ocultas) para no perder lo que llevan.
+export function PosClient(props: React.ComponentProps<typeof PosSession>) {
+  const [accounts, setAccounts] = useState<number[]>([1]);
+  const [active, setActive] = useState(1);
+  const [nextId, setNextId] = useState(2);
+
+  function addAccount() {
+    setAccounts((a) => [...a, nextId]);
+    setActive(nextId);
+    setNextId((n) => n + 1);
+  }
+
+  function closeAccount(id: number) {
+    if (accounts.length === 1) return;
+    if (!window.confirm("¿Cerrar esta cuenta? Se pierde lo que lleva sin cobrar.")) return;
+    const left = accounts.filter((a) => a !== id);
+    setAccounts(left);
+    if (active === id) setActive(left[0]);
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Cuentas abiertas">
+        {accounts.map((id, i) => (
+          <span key={id} className="inline-flex items-center">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={active === id}
+              onClick={() => setActive(id)}
+              className={`min-h-[38px] rounded-xl border-2 px-3.5 text-[13px] font-bold transition-colors ${
+                active === id ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted text-foreground hover:bg-muted/70"
+              }`}
+            >
+              Cuenta {i + 1}
+            </button>
+            {accounts.length > 1 && (
+              <button type="button" onClick={() => closeAccount(id)} aria-label={`Cerrar cuenta ${i + 1}`} className="ml-1 grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-muted">
+                ×
+              </button>
+            )}
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={addAccount}
+          className="min-h-[38px] rounded-xl border-2 border-dashed border-border px-3.5 text-[13px] font-bold text-foreground hover:bg-muted"
+        >
+          + Nueva cuenta
+        </button>
+      </div>
+      {accounts.map((id) => (
+        <div key={id} className={id === active ? "min-h-0 flex-1" : "hidden"}>
+          <PosSession {...props} initialQuote={id === 1 ? props.initialQuote : null} />
+        </div>
+      ))}
     </div>
   );
 }

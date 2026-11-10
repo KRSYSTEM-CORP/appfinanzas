@@ -1356,6 +1356,10 @@ model LearningVideo {
   url         String?
   r2Key       String?
   position    Int
+  // Ruta sugerida (Todo, Dueño, Cajero, Vendedor, Contador), estado y puntos de «lo que aprendes».
+  audience    String   @default("Todo")
+  published   Boolean  @default(true)
+  learns      String[] @default([])
   createdAt   DateTime @default(now())
 
   @@index([position])
