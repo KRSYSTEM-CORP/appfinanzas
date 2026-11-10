@@ -41,23 +41,22 @@ export function StatCard({
 }) {
   const accentColor = accent ? ACCENT_VAR[accent] : undefined;
   const content = (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        {Icon && (
-          <span
-            className="grid size-7 shrink-0 place-items-center rounded-lg"
-            style={
-              accentColor
-                ? { color: accentColor, background: `color-mix(in oklab, ${accentColor} 14%, transparent)` }
-                : undefined
-            }
-          >
-            <Icon className="size-4" />
-          </span>
-        )}
-        <span className="text-sm text-muted-foreground">{label}</span>
-      </div>
-      <div className="text-2xl font-semibold tabular-nums [overflow-wrap:anywhere]" style={accentColor ? { color: accentColor } : undefined}>
+    <div className="relative flex min-h-[104px] flex-col gap-1.5">
+      <span className="pr-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      {Icon && (
+        <span
+          className="absolute right-0 top-0 grid size-[34px] place-items-center rounded-full"
+          style={
+            accentColor
+              ? { color: accentColor, background: `color-mix(in oklab, ${accentColor} 14%, transparent)` }
+              : undefined
+          }
+          aria-hidden
+        >
+          <Icon className="size-[18px]" />
+        </span>
+      )}
+      <div className="text-[30px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums [overflow-wrap:anywhere]">
         {value}
       </div>
       {delta && (

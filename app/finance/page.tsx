@@ -133,11 +133,30 @@ export default async function FinancePage({
     <div className="flex flex-col gap-6 px-4 py-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="kr-eyebrow">Lo que vendes y lo que ganas</p>
+          <p className="kr-eyebrow">Qué está pasando en tu tienda</p>
           <h1 className="kr-h1">Estadísticas</h1>
         </div>
         <DateRangeSwitcher selection={range} extraParams={expenseSearch ? { q: expenseSearch } : undefined} />
       </div>
+
+      {(revenueDelta || avgDelta || expensesDelta) && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {[
+            { name: "Ventas", d: revenueDelta, inverse: false },
+            { name: "Venta promedio", d: avgDelta, inverse: false },
+            { name: "Gastos", d: expensesDelta, inverse: true },
+          ]
+            .filter((x) => x.d)
+            .map((x) => {
+              const good = (x.d!.pct >= 0) !== x.inverse;
+              return (
+                <span key={x.name} className={`rounded-full px-4 py-3 text-center text-sm font-bold ${good ? "bg-success/14 text-success" : "bg-destructive/12 text-destructive"}`}>
+                  {x.name} {x.d!.pct > 0 ? "+" : x.d!.pct < 0 ? "−" : ""}{Math.abs(x.d!.pct)} % {x.d!.label}
+                </span>
+              );
+            })}
+        </div>
+      )}
 
       <div className="stat-grid grid grid-cols-1 gap-4 sm:grid-cols-2 [&>*]:rounded-[20px] [&>*]:bg-card [&>*]:p-5 [&>*]:shadow-(--shadow-card) xl:grid-cols-5">
         <StatCard
