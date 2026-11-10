@@ -27,7 +27,7 @@ export default async function ProductMovementsPage({ params }: { params: Promise
   if (!data) notFound();
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6">
+    <div className="flex flex-col gap-5 px-4 py-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <Button variant="outline" size="icon" nativeButton={false} render={<Link href={`/inventory/${id}`} />} aria-label="Volver al producto">
@@ -35,7 +35,7 @@ export default async function ProductMovementsPage({ params }: { params: Promise
           </Button>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Inventario · Historial</p>
-            <h1 className="mt-1 text-2xl font-semibold">{data.product.name}</h1>
+            <h1 className="kr-h1">{data.product.name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{data.product.branch.name} · Existencia actual: {data.product.stock.toLocaleString("es-VE")}</p>
           </div>
         </div>

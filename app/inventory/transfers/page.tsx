@@ -14,13 +14,13 @@ export default async function TransfersPage() {
   const active = branches.filter((b) => b.isActive).map((b) => ({ id: b.id, name: b.name }));
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 px-4 py-5">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" nativeButton={false} render={<Link href="/inventory" />} aria-label="Volver al inventario">
           <ArrowLeftIcon className="size-4" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Traspasos entre sucursales</h1>
+          <h1 className="kr-h1">Traspasos entre sucursales</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Mueve mercancía de una sucursal a otra. Descuenta el stock del origen y lo suma en el destino.
           </p>

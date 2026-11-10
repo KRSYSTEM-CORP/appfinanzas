@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FileTextIcon, TargetIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +17,7 @@ export default async function QuoteHistoryPage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string }>;
 }) {
-  await requireSectionAccess("quotes");
+  const session = await requireSectionAccess("quotes");
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
 
@@ -35,10 +36,10 @@ export default async function QuoteHistoryPage({
   const total = Math.max(1, quotes.length);
 
   const kpis = [
-    { label: "Abiertos", value: money(sum(open)), sub: `${open.length} esperando respuesta`, tone: "text-foreground" },
-    { label: "Convertidos", value: money(sum(won)), sub: `${won.length} ya facturados`, tone: "text-success" },
-    { label: "Perdidos", value: money(sum(lost)), sub: `${lost.length} presupuestos`, tone: "text-destructive" },
-    { label: "Tasa de conversión", value: `${rate} %`, sub: "de los cerrados en el período", tone: "text-primary" },
+    { label: "Abiertos", value: money(sum(open)), sub: `${open.length} esperando respuesta`, tone: "text-foreground", Icon: FileTextIcon, chip: "bg-warning/18 text-warning" },
+    { label: "Convertidos", value: money(sum(won)), sub: `${won.length} ya facturados`, tone: "text-foreground", Icon: TrendingUpIcon, chip: "bg-success/14 text-success" },
+    { label: "Perdidos", value: money(sum(lost)), sub: `${lost.length} presupuestos`, tone: "text-foreground", Icon: TrendingDownIcon, chip: "bg-destructive/12 text-destructive" },
+    { label: "Tasa de conversión", value: `${rate} %`, sub: "de los cerrados en el período", tone: "text-foreground", Icon: TargetIcon, chip: "bg-primary/12 text-primary" },
   ];
   const funnel = [
     { label: "Creados", n: quotes.length, color: "bg-primary" },
@@ -53,11 +54,11 @@ export default async function QuoteHistoryPage({
 
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6">
+    <div className="flex flex-col gap-6 px-4 py-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-primary">Cotiza y da seguimiento</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Presupuestos</h1>
+          <p className="kr-eyebrow">{session.companyName}</p>
+          <h1 className="mt-1 kr-h1">Presupuestos</h1>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <DateRangeSwitcher selection={range} />
@@ -69,10 +70,13 @@ export default async function QuoteHistoryPage({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map((k) => (
-          <div key={k.label} className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{k.label}</p>
-            <p className={`mt-1 text-3xl font-bold tabular-nums tracking-tight ${k.tone}`}>{k.value}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{k.sub}</p>
+          <div key={k.label} className="relative min-h-32 rounded-[19px] bg-card p-[17px] shadow-(--shadow-card)">
+            <p className="pr-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{k.label}</p>
+            <span className={`absolute right-4 top-4 grid size-[34px] place-items-center rounded-full ${k.chip}`} aria-hidden>
+              <k.Icon className="size-[18px]" />
+            </span>
+            <p className={`mt-1.5 text-[34px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums ${k.tone}`}>{k.value}</p>
+            <p className="mt-1.5 text-[13px] text-muted-foreground">{k.sub}</p>
           </div>
         ))}
       </div>

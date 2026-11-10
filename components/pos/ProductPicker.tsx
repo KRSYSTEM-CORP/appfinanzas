@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { productImageUrl, type ListedProduct } from "@/lib/product-image";
 import { SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Price } from "@/components/money/Price";
 import { BarcodeScannerDialog, type ScanFeedback } from "@/components/scanner/BarcodeScannerDialog";
 import { findProductByCode, normalizeCode } from "@/lib/barcode";
@@ -108,7 +107,7 @@ export function ProductPicker({
     <div className="flex flex-col gap-3 h-full">
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 size-[18px] text-muted-foreground" />
           <Input
             ref={searchRef}
             type="search"
@@ -122,7 +121,7 @@ export function ProductPicker({
                 handleSearchEnter();
               }
             }}
-            className="pl-8"
+            className="h-12 rounded-full border-transparent bg-card pl-10 shadow-(--shadow-card)"
           />
         </div>
         <BarcodeScannerDialog onDetected={handleScan} continuous />
@@ -139,30 +138,23 @@ export function ProductPicker({
       )}
       {categories.length > 0 && (
         <div className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible md:pb-0">
-          <Button
-            type="button"
-            size="xs"
-            variant={category === ALL_CATEGORIES ? "default" : "outline"}
-            className="min-h-10 min-w-max md:min-h-0"
-            onClick={() => setCategory(ALL_CATEGORIES)}
-          >
-            Todas
-          </Button>
-          {categories.map((c) => (
-            <Button
+          {[ALL_CATEGORIES, ...categories].map((c) => (
+            <button
               key={c}
               type="button"
-              size="xs"
-              variant={category === c ? "default" : "outline"}
-              className="min-h-10 min-w-max md:min-h-0"
+              aria-pressed={category === c}
               onClick={() => setCategory(c)}
+              className={`min-h-[38px] min-w-max rounded-xl border-2 px-3.5 text-[13px] font-bold transition-colors ${
+                category === c ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted text-foreground hover:bg-muted/70"
+              }`}
             >
-              {c}
-            </Button>
+              {c === ALL_CATEGORIES ? "Todos" : c}
+              {c === ALL_CATEGORIES && <sup className="ml-1 text-[10px] font-semibold">{products.length}</sup>}
+            </button>
           ))}
         </div>
       )}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 overflow-y-auto pr-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto pr-1">
         {filtered.map((p) => {
           const outOfStock = !allowOutOfStock && p.trackStock && p.stock <= 0;
           return (
@@ -205,10 +197,10 @@ export function ProductPicker({
               {p.trackStock && !outOfStock && (
                 <span
                   className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    isLowStock(p) ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
+                    isLowStock(p) ? "bg-warning/18 text-warning" : "bg-success/14 text-success"
                   }`}
                 >
-                  {isLowStock(p) ? `Stock bajo · ${p.stock}` : `Stock ${p.stock}`}
+                  <span className="mr-1.5 inline-block size-1.5 rounded-full bg-current align-middle" aria-hidden />{p.stock} und.
                 </span>
               )}
               {outOfStock && (

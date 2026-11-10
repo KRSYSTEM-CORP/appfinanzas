@@ -164,6 +164,9 @@
     @apply border-border outline-ring/50;
   }
   body {
+    font-size: 14px;
+    line-height: 1.45;
+    letter-spacing: -0.005em;
     @apply bg-background text-foreground;
     font-feature-settings: "ss01" on, "cv11" on;
   }
@@ -536,3 +539,23 @@
 }
 .sheet-in { animation: sheet-in 230ms var(--ease-ui) backwards; }
 .sheet-fade { animation: sheet-fade 180ms ease-out both; }
+
+
+/* Tipografía de página de la preview: título grande y etiqueta superior en gris. */
+@layer components {
+  .kr-h1 {
+    font-size: clamp(1.8rem, 5vw, 2.4rem);
+    margin: 2px 0 0;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    font-weight: 800;
+  }
+  .kr-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    margin: 0;
+  }
+}

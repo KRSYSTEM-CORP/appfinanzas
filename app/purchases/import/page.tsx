@@ -4,9 +4,9 @@ import { ImportPurchasesForm } from "@/components/purchases/ImportPurchasesForm"
 export default async function ImportPurchasesPage() {
   await requireAccountingPlan();
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6">
+    <div className="flex flex-col gap-6 px-4 py-5">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Importar compras desde Excel</h1>
+        <h1 className="kr-h1">Importar compras desde Excel</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Registra varias compras a la vez desde una hoja de cálculo.
         </p>

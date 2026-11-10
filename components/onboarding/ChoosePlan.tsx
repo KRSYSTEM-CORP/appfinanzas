@@ -28,8 +28,8 @@ export function ChoosePlan({ trialDays, companyName }: { trialDays: number; comp
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col justify-center gap-6 p-5 py-10">
       <header className="text-center">
-        <p className="text-xs font-bold uppercase tracking-wider text-primary">Bienvenido a KR POS · {companyName}</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight">Elige tu plan para empezar</h1>
+        <p className="kr-eyebrow">Bienvenido a KR POS · {companyName}</p>
+        <h1 className="mt-1 kr-h1">Elige tu plan para empezar</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {trialDays} días gratis. Al terminar, tu plan se renueva y lo pagas a la tasa BCV del día. Los límites se cuentan desde hoy.
         </p>

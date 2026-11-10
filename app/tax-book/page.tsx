@@ -56,10 +56,10 @@ export default async function TaxBookPage({
   );
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6">
+    <div className="flex flex-col gap-6 px-4 py-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Libro de Contabilidad</h1>
+          <h1 className="kr-h1">Libro de Contabilidad</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Formato de referencia para tu declaración de IVA ante el SENIAT — verifica los montos
             con tu contador antes de declarar.

@@ -255,7 +255,7 @@ export function Cart({
                 second (a single row left the name truncated to a few letters). */}
             <div className="order-1 min-w-0 flex-[1_1_calc(100%_-_3.5rem)] md:flex-1 md:basis-auto">
               <p className="text-sm font-medium truncate">{line.name}</p>
-              <p className="font-mono tabular-nums text-xs text-muted-foreground">
+              <p className="tabular-nums text-xs text-muted-foreground">
                 {exchangeRateEnabled && rate != null
                   ? `${formatLocalCurrency(eurCentsToLocal(line.unitPriceCents, rate), currencyCode)} / ${formatCurrencyCents(referenceCurrency, line.unitPriceCents)} c/u`
                   : `${formatCurrencyCents(referenceCurrency, line.unitPriceCents)} c/u`}

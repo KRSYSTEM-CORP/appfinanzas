@@ -64,16 +64,16 @@ export function InventoryDesktopTable({
   return (
     <>
       <div className="overflow-x-auto rounded-2xl bg-card shadow-(--shadow-card)">
-        <table className="w-full min-w-[860px] text-sm">
+        <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="text-left text-xs text-muted-foreground">
               <th className="px-4 py-3 font-medium">Producto</th>
-              <th className="px-3 py-3 font-medium">Categoría</th>
-              <th className="px-3 py-3 font-medium">Existencia vs. mínimo</th>
-              <th className="px-3 py-3 font-medium">Estado</th>
-              <th className="px-3 py-3 text-right font-medium">Costo</th>
-              <th className="px-3 py-3 text-right font-medium">Precio</th>
-              <th className="px-3 py-3 text-right font-medium">Valor en stock</th>
+              <th className="px-2 py-3 font-medium">Categoría</th>
+              <th className="px-2 py-3 font-medium">Existencia vs. mínimo</th>
+              <th className="px-2 py-3 font-medium">Estado</th>
+              <th className="px-2 py-3 text-right font-medium">Costo</th>
+              <th className="px-2 py-3 text-right font-medium">Precio</th>
+              <th className="px-2 py-3 text-right font-medium">Valor en stock</th>
               <th className="px-4 py-3 text-right font-medium">Ajustar</th>
             </tr>
           </thead>
@@ -102,10 +102,10 @@ export function InventoryDesktopTable({
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-3">
                     {p.category ? <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">{p.category}</span> : <span className="text-muted-foreground">—</span>}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-3">
                     {p.trackStock ? (
                       <div className="flex min-w-36 flex-col gap-1">
                         <span className="font-semibold tabular-nums">{p.stock} und.</span>
@@ -118,17 +118,17 @@ export function InventoryDesktopTable({
                       <span className="text-xs text-muted-foreground">Sin control de stock</span>
                     )}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-2 py-3">
                     <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${ui.pill}`}>
                       <span className={`size-1.5 rounded-full ${ui.bar}`} aria-hidden />
                       {ui.label}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">{p.costCents != null ? formatCurrencyCents(referenceCurrency, p.costCents) : "—"}</td>
-                  <td className="px-3 py-3 text-right whitespace-nowrap [&_*]:whitespace-nowrap">
+                  <td className="px-2 py-3 text-right tabular-nums text-muted-foreground">{p.costCents != null ? formatCurrencyCents(referenceCurrency, p.costCents) : "—"}</td>
+                  <td className="px-2 py-3 text-right whitespace-nowrap [&_*]:whitespace-nowrap">
                     <Price eurCents={p.priceCents} rate={rate} currencyCode={currencyCode} exchangeRateEnabled={exchangeRateEnabled} referenceCurrency={referenceCurrency} className="items-end" />
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{value != null ? formatCurrencyCents(referenceCurrency, value) : "—"}</td>
+                  <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">{value != null ? formatCurrencyCents(referenceCurrency, value) : "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <span className="whitespace-nowrap tabular-nums font-semibold">{p.trackStock ? `${p.stock} und.` : ""}</span>

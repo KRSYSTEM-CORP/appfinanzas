@@ -11,9 +11,9 @@ export default async function SuppliersPage() {
   const suppliers = await listSuppliers();
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 px-4 py-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Proveedores</h1>
+        <h1 className="kr-h1">Proveedores</h1>
         <Button nativeButton={false} render={<Link href="/suppliers/new" />}>
           Nuevo proveedor
         </Button>

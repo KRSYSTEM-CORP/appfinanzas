@@ -20,11 +20,11 @@ export default async function CustomersPage() {
   const canManage = session.role === "GERENTE" || session.isSuperAdmin;
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 px-4 py-5">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-primary">Clientes y seguimiento</p>
-        <h1 className="text-3xl font-bold tracking-tight">Marketing</h1>
+          <p className="kr-eyebrow">Clientes y seguimiento</p>
+        <h1 className="kr-h1">Marketing</h1>
         </div>
         <Button nativeButton={false} render={<Link href="/customers/new" />}>
           Nuevo cliente

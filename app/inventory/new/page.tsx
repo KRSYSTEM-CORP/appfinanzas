@@ -6,8 +6,8 @@ export default async function NewProductPage() {
   const [categories, { referenceCurrency }] = await Promise.all([listCategories(), getExchangeRateInfo()]);
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
-      <h1 className="text-3xl font-bold tracking-tight">Nuevo producto</h1>
+    <div className="flex flex-col gap-4 px-4 py-5">
+      <h1 className="kr-h1">Nuevo producto</h1>
       <ProductForm action={createProduct} categories={categories} referenceCurrency={referenceCurrency} />
     </div>
   );

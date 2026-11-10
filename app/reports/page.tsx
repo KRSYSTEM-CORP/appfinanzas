@@ -1,3 +1,4 @@
+import { BanknoteIcon, FileTextIcon, TrendingDownIcon, WalletIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CashClosingPanel } from "@/components/reports/CashClosingPanel";
 import { PendingClosingsList } from "@/components/reports/PendingClosingsList";
@@ -50,44 +51,63 @@ export default async function ReportsPage({
   const localCurrencyName = getCurrency(localCurrencyCode).name.split(" (")[0];
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className="flex flex-col gap-6 px-4 py-5">
+      <header className="flex flex-col gap-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-primary">Cierre y control del turno</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Caja Chica</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Abre y cierra la caja, revisa las salidas y consulta las ventas del período.
-          </p>
+          <p className="kr-eyebrow">Cierre y control del turno</p>
+          <h1 className="kr-h1">Caja Chica</h1>
         </div>
-        {exchangeRateEnabled && rate != null && (
-          <span className="rounded-full bg-primary/10 px-3.5 py-1.5 text-sm font-semibold text-primary tabular-nums">
-            Tasa BCV · {localCurrencyCode} {rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        <div className="flex flex-wrap items-center gap-2">
+          {exchangeRateEnabled && rate != null && (
+            <span className="rounded-full bg-primary/12 px-3 py-1 text-xs font-semibold text-primary tabular-nums">
+              Tasa Bs {rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          )}
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
+            {new Intl.DateTimeFormat("es-VE", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Caracas" }).format(new Date())}
           </span>
-        )}
-      </header>
-
-      {todaySummary && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {[
-            { label: "Ventas del día", value: formatCurrencyCents(referenceCurrency, todaySummary.totalCents), sub: `${todaySummary.salesCount} ventas`, tone: "text-foreground" },
-            { label: "Efectivo esperado", value: formatCurrencyCents(referenceCurrency, todaySummary.expectedCashCents), sub: "Apertura + efectivo − salidas", tone: "text-success" },
-            { label: "Salidas", value: formatCurrencyCents(referenceCurrency, todaySummary.outflowsCents), sub: `${todaySummary.outflows.length} movimientos`, tone: "text-destructive" },
-          ].map((k) => (
-            <div key={k.label} className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
-              <p className="text-sm font-medium text-muted-foreground">{k.label}</p>
-              <p className={`mt-1 text-3xl font-bold tabular-nums tracking-tight ${k.tone}`}>{k.value}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{k.sub}</p>
-            </div>
-          ))}
         </div>
-      )}
+      </header>
 
       {todaySummary && (
         <Card>
           <CardHeader>
-            <CardTitle>Estado de la caja</CardTitle>
+            <CardTitle className="text-lg font-bold">Estado de la caja</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {todaySummary.closed ? "Caja cerrada" : todaySummary.openingCents != null ? "Caja abierta · turno activo" : "Caja sin abrir · sin turno activo"}
+            </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <a href="#historial" className="flex items-center gap-3 rounded-2xl bg-muted p-3.5">
+                <span className="grid size-10 place-items-center rounded-xl bg-primary/12 text-primary"><FileTextIcon className="size-5" /></span>
+                <span>
+                  <span className="block font-bold">Historial de cierres</span>
+                  <span className="text-xs text-muted-foreground">{recentClosings.length} {recentClosings.length === 1 ? "cierre reciente" : "cierres recientes"}</span>
+                </span>
+              </a>
+              <a href="#movimientos" className="flex items-center gap-3 rounded-2xl bg-muted p-3.5">
+                <span className="grid size-10 place-items-center rounded-xl bg-primary/12 text-primary"><BanknoteIcon className="size-5" /></span>
+                <span>
+                  <span className="block font-bold">Movimientos de Caja Chica</span>
+                  <span className="text-xs text-muted-foreground">Entradas y salidas · −{formatCurrencyCents(referenceCurrency, todaySummary.outflowsCents)}</span>
+                </span>
+              </a>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {[
+                { label: "Ventas del día", value: formatCurrencyCents(referenceCurrency, todaySummary.totalCents), sub: `${todaySummary.paidCount} ventas pagadas`, Icon: BanknoteIcon, tone: "bg-success/14 text-success" },
+                { label: "Efectivo esperado", value: formatCurrencyCents(referenceCurrency, todaySummary.expectedCashCents), sub: "Apertura + efectivo − salidas", Icon: WalletIcon, tone: "bg-primary/12 text-primary" },
+                { label: "Salidas", value: formatCurrencyCents(referenceCurrency, todaySummary.outflowsCents), sub: `${todaySummary.outflows.length} movimientos`, Icon: TrendingDownIcon, tone: "bg-destructive/12 text-destructive" },
+              ].map((k) => (
+                <div key={k.label} className="relative min-h-32 rounded-[19px] bg-card p-[17px] shadow-(--shadow-card)">
+                  <p className="pr-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{k.label}</p>
+                  <span className={`absolute right-4 top-4 grid size-[34px] place-items-center rounded-full ${k.tone}`}><k.Icon className="size-[18px]" /></span>
+                  <p className="mt-1.5 text-[34px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums">{k.value}</p>
+                  <p className="mt-1.5 text-[13px] text-muted-foreground">{k.sub}</p>
+                </div>
+              ))}
+            </div>
             <CashClosingPanel
               initialSummary={todaySummary}
               todayStr={todayStr}
@@ -125,7 +145,7 @@ export default async function ReportsPage({
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card id="historial">
           <CardHeader>
             <CardTitle>Historial de cierres</CardTitle>
             <p className="text-sm text-muted-foreground">Últimos cierres de caja</p>
@@ -147,7 +167,7 @@ export default async function ReportsPage({
             )}
           </CardContent>
         </Card>
-        <Card>
+        <Card id="movimientos">
           <CardHeader>
             <CardTitle>Movimientos de Caja Chica</CardTitle>
             <p className="text-sm text-muted-foreground">Salidas del turno de hoy</p>

@@ -20,9 +20,9 @@ export default async function BillingPage({
   const [info, reports] = await Promise.all([getBillingInfo(), listMyPaymentReports()]);
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6">
+    <div className="flex flex-col gap-6 px-4 py-5">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Suscripción mensual</h1>
+        <h1 className="kr-h1">Suscripción mensual</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Costo mensual de la plataforma, cómo pagarlo y el estado de tus reportes de pago.
         </p>

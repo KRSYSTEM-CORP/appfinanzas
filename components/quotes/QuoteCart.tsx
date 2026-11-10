@@ -122,7 +122,7 @@ export function QuoteCart({
                 <PlusIcon />
               </Button>
             </div>
-            <div className="w-28 text-right font-mono tabular-nums text-sm font-medium">
+            <div className="w-28 text-right tabular-nums text-sm font-medium">
               {money(line.unitPriceCents * line.quantity)}
             </div>
             <Button
@@ -142,7 +142,7 @@ export function QuoteCart({
 
       <div className="flex items-center justify-between">
         <span className="text-lg font-semibold">Total</span>
-        <span className="font-mono tabular-nums text-lg font-semibold">{money(total)}</span>
+        <span className="tabular-nums text-lg font-semibold">{money(total)}</span>
       </div>
 
       <div className="flex flex-col gap-1.5">

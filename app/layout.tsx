@@ -119,7 +119,7 @@ export default async function RootLayout({
           />
         )}
         {canLoadAppChrome && session && <KrPosTour hasSeenTour={session.hasSeenTour} />}
-        <main className={`flex-1 min-w-0 ${canLoadAppChrome ? "md:h-full md:overflow-y-auto max-md:pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))]" : "min-h-0"}`}>{children}</main>
+        <main className={`flex-1 min-w-0 ${canLoadAppChrome ? "md:h-full md:overflow-y-auto max-md:pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-[1120px]" : "min-h-0"}`}>{children}</main>
         <Toaster richColors closeButton position="bottom-right" />
       </body>
     </html>

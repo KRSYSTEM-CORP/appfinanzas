@@ -73,6 +73,24 @@ const networkItemsBase: NavItem[] = [
 // them, not just on /accounting itself.
 const ACCOUNTING_SUBPATHS = ["/accounting", "/suppliers", "/purchases", "/tax-book", "/payroll"];
 
+// Color propio de cada ícono del menú (sin recuadro), como en la preview.
+const NAV_TONES: Record<string, string> = {
+  "/home": "#433ddd",
+  "/pos": "#0f9d9a",
+  "/inventory": "#ff9f0a",
+  "/quotes/history": "#7a3ff2",
+  "/reports": "#34c759",
+  "/finance": "#d6407f",
+  "/customers": "#e0409a",
+  "/accounting": "#1d4ed8",
+  "/documents": "#5b6cff",
+  "/branches": "#c2410c",
+  "/assistant": "#6655e5",
+  "/learning": "#0f7a8a",
+  "/settings": "#6e6e73",
+  "/admin": "#6e6e73",
+};
+
 function isLinkActive(pathname: string, href: string) {
   if (href === "/accounting") {
     return ACCOUNTING_SUBPATHS.some((p) => pathname.startsWith(p));
@@ -114,11 +132,13 @@ function NavGroup({
             title={collapsed ? item.label : undefined}
             className={`group/nav flex min-h-11 items-center gap-3 rounded-xl px-3 py-1.5 text-sm font-bold transition-[background-color,color,box-shadow] duration-150 ease-out ${
               active
-                ? "bg-primary/10 text-primary"
+                ? "bg-primary/15 text-primary"
                 : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             } ${collapsed ? "justify-center" : ""}`}
           >
-            <Icon className={`size-5 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
+            <span className="shrink-0" style={{ color: active ? "var(--primary)" : (NAV_TONES[item.href] ?? "var(--muted-foreground)") }}>
+              <Icon className="size-[21px]" />
+            </span>
             <span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span>
           </Link>
         );
@@ -275,7 +295,7 @@ export function Sidebar({
       {/* Desktop: persistent column, collapsible to an icon rail. */}
       <aside
         className={`hidden md:flex md:flex-col shrink-0 border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 ${
-          collapsed ? "md:w-16" : "md:w-64"
+          collapsed ? "md:w-16" : "md:w-[260px]"
         }`}
       >
         <div className={`flex items-center gap-2.5 px-3 h-16 border-b shrink-0 ${collapsed ? "justify-center px-2" : ""}`}>

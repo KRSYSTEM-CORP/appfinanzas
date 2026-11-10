@@ -35,9 +35,9 @@ export default async function CustomerCrmPage({
   ]);
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6">
+    <div className="flex flex-col gap-6 px-4 py-5">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">
+        <h1 className="kr-h1">
           {customer.firstName} {customer.lastName}
         </h1>
         <Link href={`/customers/${id}`} className="text-sm text-primary underline underline-offset-2">
