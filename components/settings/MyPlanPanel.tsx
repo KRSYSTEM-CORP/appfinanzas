@@ -1,3 +1,4 @@
+import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import Link from "next/link";
 import { CheckIcon, MinusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -104,8 +105,8 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
         </ul>
         <p className="text-sm text-muted-foreground">
           Para cambiar de plan escribe al soporte de KR System:{" "}
-          <a href="https://wa.me/19045796156" className="text-primary underline underline-offset-2">
-            WhatsApp +1 (904) 579-6156
+          <a href="https://wa.me/19045796156" className="inline-flex items-center gap-1 text-primary underline underline-offset-2">
+            <WhatsappIcon className="size-3.5" /> WhatsApp +1 (904) 579-6156
           </a>
           .
         </p>

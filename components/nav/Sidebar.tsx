@@ -116,7 +116,7 @@ function NavGroup({
   return (
     <div className="flex flex-col gap-0.5">
       {!collapsed && (
-        <span className="px-2.5 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-sidebar-foreground/70">
+        <span className="px-3 pt-3 pb-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
           {title}
         </span>
       )}
@@ -328,9 +328,9 @@ export function Sidebar({
         </div>
 
         {!collapsed && branchControl && (
-          <div className="mx-3 mt-3 rounded-xl bg-muted p-2.5">
-            <span className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Sede activa</span>
-            <div className="mt-1 text-sm font-semibold">{branchControl}</div>
+          <div className="mx-3.5 mt-3 rounded-2xl bg-muted px-3.5 py-3">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Sede activa</span>
+            <div className="mt-0.5">{branchControl}</div>
           </div>
         )}
 

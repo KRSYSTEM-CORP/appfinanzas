@@ -155,7 +155,7 @@ export default async function BusinessHome({
 
       <section
         aria-label="Ganancia neta estimada"
-        className={`rounded-3xl p-5 md:p-6 ${profit >= 0 ? "bg-success/14" : "bg-destructive/12"}`}
+        className={`rounded-[22px] p-5 md:p-6 ${profit >= 0 ? "bg-[color-mix(in_srgb,#34c759_12%,var(--card))]" : "bg-[color-mix(in_srgb,#ff3b30_12%,var(--card))]"}`}
       >
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Ganancia neta estimada</p>
         <p className={`my-1 text-[clamp(2.5rem,9vw,3.6rem)] font-extrabold leading-[1.02] tracking-[-0.045em] tabular-nums ${profit >= 0 ? "text-success" : "text-destructive"}`}>{money(profit)}</p>

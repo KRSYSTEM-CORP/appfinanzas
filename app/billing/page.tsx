@@ -1,3 +1,4 @@
+import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LIFETIME_PRICE_USD_CENTS } from "@/lib/billing";
 import { Badge } from "@/components/ui/badge";
@@ -220,9 +221,9 @@ export default async function BillingPage({
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-medium text-primary underline underline-offset-4 w-fit"
+                  className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary underline underline-offset-4"
                 >
-                  Enviar comprobante por WhatsApp →
+                  <WhatsappIcon className="size-4" /> Enviar comprobante por WhatsApp →
                 </a>
               </div>
               <PaymentReportForm
