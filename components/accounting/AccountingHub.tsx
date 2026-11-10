@@ -2,9 +2,19 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { SearchIcon } from "lucide-react";
+import { BanknoteIcon, BarChart3Icon, ClipboardListIcon, FileTextIcon, LandmarkIcon, PackageIcon, SearchIcon, ShoppingCartIcon, UsersIcon, WalletIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  "/finance": BarChart3Icon,
+  "/accounting/sellers": UsersIcon,
+  "/accounting/receivables": WalletIcon,
+  "/suppliers": LandmarkIcon,
+  "/purchases": ShoppingCartIcon,
+  "/payroll": BanknoteIcon,
+  "/tax-book": FileTextIcon,
+  "/inventory": PackageIcon,
+};
 
 type AccountingSection = {
   href: string;
@@ -25,34 +35,36 @@ export function AccountingHub({ sections }: { sections: AccountingSection[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="relative max-w-sm">
-        <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+      <div className="relative max-w-md">
+        <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
         <Input
           type="search"
           aria-label="Buscar en contabilidad"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar en contabilidad…"
-          className="pl-8 h-9"
+          className="h-11 rounded-full border-transparent bg-card pl-9 shadow-(--shadow-card)"
         />
       </div>
 
       {filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">Sin resultados para &quot;{query}&quot;.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((s) => (
-            <Link key={s.href} href={s.href}>
-              <Card className="h-full transition-colors hover:border-primary/50 hover:bg-muted/40">
-                <CardHeader>
-                  <CardTitle>{s.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{s.description}</p>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((s) => {
+            const Icon = ICONS[s.href] ?? ClipboardListIcon;
+            return (
+              <Link
+                key={s.href}
+                href={s.href}
+                className="flex h-full flex-col gap-1.5 rounded-[19px] border-2 border-transparent bg-card p-5 shadow-(--shadow-card) transition-[transform,border-color] duration-150 hover:-translate-y-0.5 hover:border-primary"
+              >
+                <Icon className="mb-1.5 size-[22px] text-primary" />
+                <span className="text-base font-bold">{s.title}</span>
+                <span className="text-[13px] text-muted-foreground">{s.description}</span>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
