@@ -232,8 +232,8 @@ export function QuoteHistoryTable({
             type="button"
             aria-pressed={statusFilter === s}
             onClick={() => setStatusFilter(s)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-              statusFilter === s ? "bg-primary text-primary-foreground" : "bg-muted text-foreground hover:bg-muted/70"
+            className={`min-h-[38px] rounded-xl border-2 px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
+              statusFilter === s ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted text-foreground hover:bg-muted/70"
             }`}
           >
             {s === "ALL" ? "Todos" : QUOTE_STATUS_LABELS[s]}

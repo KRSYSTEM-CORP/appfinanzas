@@ -30,10 +30,10 @@ export function PaymentStatusFilter({ value }: { value: "" | "PAID" | "CREDIT" }
           key={o.value}
           type="button"
           onClick={() => apply(o.value)}
-          className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors ${
+          className={`min-h-[38px] rounded-xl border-2 px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
             value === o.value
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-foreground hover:bg-muted/70"
+              ? "border-primary bg-primary/12 text-primary"
+              : "border-transparent bg-muted text-foreground hover:bg-muted/70"
           }`}
         >
           {o.label}
@@ -71,8 +71,8 @@ export function ChannelFilter({ value }: { value: string }) {
           key={o.value}
           type="button"
           onClick={() => apply(o.value)}
-          className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors ${
-            value === o.value ? "bg-primary text-primary-foreground" : "bg-muted text-foreground hover:bg-muted/70"
+          className={`min-h-[38px] rounded-xl border-2 px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
+            value === o.value ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted text-foreground hover:bg-muted/70"
           }`}
         >
           {o.label}

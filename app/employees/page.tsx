@@ -16,9 +16,9 @@ export default async function EmployeesPage() {
   ]);
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6">
+    <div className="flex flex-col gap-6 px-4 py-5">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Administración de perfiles</h1>
+        <h1 className="kr-h1">Administración de perfiles</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Crea y administra los perfiles de tus empleados: gerentes y vendedores.
         </p>

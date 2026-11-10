@@ -86,16 +86,16 @@ export function DateRangeSwitcher({
   }
 
   return (
-    <div className="flex flex-wrap gap-1 rounded-lg border p-1 w-fit max-w-full">
+    <div className="inline-flex flex-wrap gap-0.5 rounded-full bg-muted p-[3px] w-fit max-w-full">
       {PRESETS.map((p) => (
         <button
           key={p.key}
           type="button"
           onClick={() => apply({ kind: "preset", preset: p.key })}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
+          className={`min-h-[34px] rounded-full px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
             selection.kind === "preset" && selection.preset === p.key
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted"
+              ? "bg-card text-foreground shadow-[0_1px_3px_rgba(0,0,0,.15)]"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           {p.label}
@@ -104,10 +104,10 @@ export function DateRangeSwitcher({
 
       <PopoverPrimitive.Root open={monthsOpen} onOpenChange={setMonthsOpen}>
         <PopoverPrimitive.Trigger
-          className={`rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
+          className={`min-h-[34px] rounded-full px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
             selection.kind === "months"
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted"
+              ? "bg-card text-foreground shadow-[0_1px_3px_rgba(0,0,0,.15)]"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Meses{selection.kind === "months" ? ` (${selection.months.length})` : ""}
@@ -166,8 +166,8 @@ export function DateRangeSwitcher({
 
       <PopoverPrimitive.Root open={rangeOpen} onOpenChange={setRangeOpen}>
         <PopoverPrimitive.Trigger
-          className={`rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
-            selection.kind === "range" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+          className={`min-h-[34px] rounded-full px-3.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
+            selection.kind === "range" ? "bg-card text-foreground shadow-[0_1px_3px_rgba(0,0,0,.15)]" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Rango

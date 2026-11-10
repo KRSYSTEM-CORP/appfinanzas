@@ -16,9 +16,9 @@ export default async function PayrollPage() {
   ]);
   const company = { name: companyName, logoDataUrl, ...fiscalData };
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 px-4 py-5">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Nómina</h1>
+        <h1 className="kr-h1">Nómina</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Empleados, pagos por quincena con método, referencia y comprobante, e historial. Cada pago se anota como
           gasto de Nómina en Finanzas.

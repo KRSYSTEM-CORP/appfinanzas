@@ -42,10 +42,10 @@ const sections = [
 export default async function AccountingPage() {
   await requireAccountingPlan();
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 px-4 py-5">
       <div>
-        <p className="text-xs font-bold uppercase tracking-wider text-primary">Finanzas y obligaciones</p>
-        <h1 className="text-3xl font-bold tracking-tight">Administración</h1>
+        <p className="kr-eyebrow">Finanzas y obligaciones</p>
+        <h1 className="kr-h1">Administración</h1>
       </div>
       <AccountingHub sections={sections} />
     </div>

@@ -8,10 +8,10 @@ export default async function BranchesPage() {
   const session = await requireManager();
   const { summaries, currency } = await branchOverview();
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 px-4 py-5">
       <div>
-        <p className="text-xs font-bold uppercase tracking-wider text-primary">Red de sedes</p>
-        <h1 className="text-3xl font-bold tracking-tight">Sucursales</h1>
+        <p className="kr-eyebrow">{session.companyName} · Acceso por sede</p>
+        <h1 className="kr-h1">Sucursales</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Resumen de cada sede. Para entrar a una necesitas tu clave de administrador. Las sucursales se crean y editan en
           Ajustes.

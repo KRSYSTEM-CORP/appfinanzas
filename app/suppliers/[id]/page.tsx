@@ -14,8 +14,8 @@ export default async function EditSupplierPage({
   const updateWithId = updateSupplier.bind(null, id);
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
-      <h1 className="text-3xl font-bold tracking-tight">Editar proveedor</h1>
+    <div className="flex flex-col gap-4 px-4 py-5">
+      <h1 className="kr-h1">Editar proveedor</h1>
       <SupplierForm supplier={supplier} action={updateWithId} />
     </div>
   );

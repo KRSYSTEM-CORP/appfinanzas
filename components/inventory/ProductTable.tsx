@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { SearchIcon, XIcon } from "lucide-react";
+import { CircleCheckIcon, CircleXIcon, PackageIcon, SearchIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 import type { ListedProduct } from "@/lib/product-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -128,35 +128,35 @@ export function ProductTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="hidden grid-cols-4 gap-3 md:grid">
+      <div className="hidden grid-cols-4 gap-3.5 md:grid">
         {(
           [
-            { key: "all", label: "Total de productos", value: totalCount, sub: "En el catálogo", tone: "text-primary bg-primary/10" },
-            { key: "positive", label: "Disponibles", value: counts.ok, sub: "Con stock suficiente", tone: "text-success bg-success/14" },
-            { key: "low", label: "Stock bajo", value: counts.low, sub: "En o debajo del mínimo", tone: "text-warning bg-warning/18" },
-            { key: "out", label: "Agotados", value: counts.out, sub: "Requieren reposición ya", tone: "text-destructive bg-destructive/12" },
-          ] as { key: StockFilter; label: string; value: number; sub: string; tone: string }[]
+            { key: "all", label: "Total de productos", value: totalCount, sub: "En el catálogo", tone: "text-primary bg-primary/12", Icon: PackageIcon },
+            { key: "positive", label: "Disponibles", value: counts.ok, sub: "Con stock suficiente", tone: "text-success bg-success/14", Icon: CircleCheckIcon },
+            { key: "low", label: "Stock bajo", value: counts.low, sub: "En o debajo del mínimo", tone: "text-warning bg-warning/18", Icon: TriangleAlertIcon },
+            { key: "out", label: "Agotados", value: counts.out, sub: "Requieren reposición ya", tone: "text-destructive bg-destructive/12", Icon: CircleXIcon },
+          ] as { key: StockFilter; label: string; value: number; sub: string; tone: string; Icon: React.ComponentType<{ className?: string }> }[]
         ).map((c) => (
           <button
             key={c.key}
             type="button"
             onClick={() => setStockFilter(c.key)}
             aria-pressed={stockFilter === c.key}
-            className={`flex flex-col gap-1 rounded-2xl bg-card p-4 text-left shadow-(--shadow-card) transition-transform active:scale-[0.98] ${
-              stockFilter === c.key ? "ring-2 ring-primary" : ""
+            className={`relative flex min-h-32 flex-col gap-1.5 rounded-[19px] border-2 bg-card p-[17px] text-left shadow-(--shadow-card) transition-[transform,border-color] duration-150 hover:-translate-y-0.5 active:scale-[0.98] ${
+              stockFilter === c.key ? "border-primary" : "border-transparent"
             }`}
           >
-            <span className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-              {c.label}
-              <span className={`size-2.5 rounded-full ${c.tone.split(" ")[1]}`} aria-hidden />
+            <span className="pr-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{c.label}</span>
+            <span className={`absolute right-4 top-4 grid size-[34px] place-items-center rounded-full ${c.tone}`} aria-hidden>
+              <c.Icon className="size-[18px]" />
             </span>
-            <span className="text-3xl font-extrabold tabular-nums tracking-tight">{c.value.toLocaleString("es-VE")}</span>
-            <span className="text-xs text-muted-foreground">{c.sub}</span>
+            <span className="text-[34px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums">{c.value.toLocaleString("es-VE")}</span>
+            <span className="text-[13px] text-muted-foreground">{c.sub}</span>
           </button>
         ))}
       </div>
 
-      <details className="hidden rounded-xl border bg-card md:block">
+      <details className="order-last hidden rounded-xl border bg-card md:block">
         <summary className="min-h-11 cursor-pointer list-none px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
           <span className="flex items-center justify-between gap-3">
             Existencias por categoría
@@ -185,32 +185,34 @@ export function ProductTable({
         </div>
       </details>
 
+      <div className="flex flex-col gap-3 rounded-[22px] bg-card p-3 shadow-(--shadow-card) md:flex-row md:flex-wrap md:items-center">
       <div className="hidden flex-wrap items-center gap-2 md:flex" role="group" aria-label="Filtrar por estado de stock">
         {(
           [
-            ["all", "Todos", counts.all, "bg-foreground text-background"],
-            ["positive", "Disponible", counts.ok, "bg-success text-white"],
-            ["low", "Stock bajo", counts.low, "bg-warning text-white"],
-            ["out", "Agotado", counts.out, "bg-destructive text-white"],
-            ...(counts.inactive > 0 ? [["inactive", "Inactivo", counts.inactive, "bg-muted-foreground text-background"]] : []),
-          ] as [StockFilter, string, number, string][]
-        ).map(([key, label, n, on]) => (
+            ["all", "Todos", counts.all, "bg-foreground text-background", ""],
+            ["positive", "Disponible", counts.ok, "bg-foreground text-background", "bg-success"],
+            ["low", "Stock bajo", counts.low, "bg-foreground text-background", "bg-warning"],
+            ["out", "Agotado", counts.out, "bg-foreground text-background", "bg-destructive"],
+            ...(counts.inactive > 0 ? [["inactive", "Inactivo", counts.inactive, "bg-foreground text-background", "bg-muted-foreground"]] : []),
+          ] as [StockFilter, string, number, string, string][]
+        ).map(([key, label, n, on, dot]) => (
           <button
             key={key}
             type="button"
             onClick={() => setStockFilter(key)}
             aria-pressed={stockFilter === key}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-              stockFilter === key ? on : "bg-card text-muted-foreground shadow-(--shadow-card) hover:text-foreground"
+            className={`inline-flex min-h-[42px] items-center gap-2 rounded-full px-4 text-sm font-bold transition-colors ${
+              stockFilter === key ? on : "bg-muted text-foreground hover:bg-muted/70"
             }`}
           >
+            <span className={`size-2 rounded-full ${dot || "bg-current"}`} aria-hidden />
             {label} <span className="tabular-nums opacity-80">{n}</span>
           </button>
         ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full max-w-sm sm:w-auto sm:flex-1">
+        <div className="relative w-full min-w-[200px] sm:w-auto sm:flex-1">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             type="search"
@@ -218,7 +220,7 @@ export function ProductTable({
             placeholder="Buscar por nombre o SKU..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="pl-8"
+            className="h-11 rounded-full border-transparent bg-muted pl-9"
           />
         </div>
         <Select value={category} onValueChange={(v) => setCategory(v ?? ALL_CATEGORIES)}>
@@ -250,6 +252,7 @@ export function ProductTable({
               : `${totalCount} producto${totalCount === 1 ? "" : "s"}`
             : `${filtered.length} de ${products.length} cargados`}
         </span>
+      </div>
       </div>
 
       {totalCount > products.length && (

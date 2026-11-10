@@ -384,7 +384,18 @@ const [step, setStep] = useState<Step>("cart");
 
   return (
     <div className="flex flex-col gap-3 h-full">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-[20px] bg-card px-4 py-3 shadow-(--shadow-card)">
+      <div className={`grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_360px] md:gap-6 md:flex-1 md:min-h-0 ${lines.length ? "pb-[calc(var(--tabbar-h)+5rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>
+        <ProductPicker
+          products={products}
+          rate={rate}
+          currencyCode={currencyCode}
+          exchangeRateEnabled={exchangeRateEnabled}
+          referenceCurrency={referenceCurrency}
+          categories={categories}
+          onAdd={addProduct}
+        />
+        <div className="flex min-h-0 flex-col gap-3">
+      <div className="flex min-w-0 flex-col gap-3 rounded-[22px] bg-card p-4 shadow-(--shadow-card)">
         {customer ? (
           <div className="min-w-0 text-sm">
             <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cliente de esta venta</p>
@@ -396,7 +407,7 @@ const [step, setStep] = useState<Step>("cart");
         ) : (
           <p className="text-sm text-muted-foreground">Registra o elige un cliente para cobrar.</p>
         )}
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <Button type="button" size="sm" className="min-h-11" onClick={() => { setFromPay(false); setDialog("register"); }}>
             + Registrar cliente
           </Button>
@@ -405,16 +416,6 @@ const [step, setStep] = useState<Step>("cart");
           </Button>
         </div>
       </div>
-      <div className={`grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_360px] md:gap-6 md:flex-1 md:min-h-0 ${lines.length ? "pb-[calc(var(--tabbar-h)+5rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>
-        <ProductPicker
-          products={products}
-          rate={rate}
-          currencyCode={currencyCode}
-          exchangeRateEnabled={exchangeRateEnabled}
-          referenceCurrency={referenceCurrency}
-          categories={categories}
-          onAdd={addProduct}
-        />
         <Cart
           lines={lines.map((l) => {
             const current = productById.get(l.productId);
@@ -449,6 +450,7 @@ const [step, setStep] = useState<Step>("cart");
           isPending={isPending}
           error={error}
         />
+        </div>
       </div>
 
       <Dialog open={dialog === "register"} onOpenChange={(o) => !o && setDialog(null)}>

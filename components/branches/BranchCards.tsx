@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { LockIcon, PackageIcon, ReceiptIcon, StoreIcon, UsersIcon } from "lucide-react";
+import { BanknoteIcon, LockIcon, PackageIcon, ReceiptIcon, ShoppingCartIcon, StarIcon, StoreIcon, TrendingUpIcon, UsersIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EnterBranchDialog } from "@/components/branches/EnterBranchDialog";
@@ -71,13 +71,17 @@ export function BranchCards({
   const totalCents = summaries.filter((s) => s.isActive).reduce((a, s) => a + s.salesTodayCents, 0);
 
   const active = summaries.filter((s) => s.isActive);
-  const ordersToday = active.reduce((a, s) => a + s.salesToday, 0);
-  const best = active.reduce<BranchSummary | null>((b, s) => (b == null || s.salesTodayCents > b.salesTodayCents ? s : b), null);
+  const monthSales = active.reduce((t, x) => t + x.salesMonthCents, 0);
+  const monthProfit = active.reduce((t, x) => t + x.profitMonthCents, 0);
+  const monthOrders = active.reduce((t, x) => t + x.salesMonth, 0);
+  const bestMonth = active.reduce<BranchSummary | null>((b, x) => (b == null || x.salesMonthCents > b.salesMonthCents ? x : b), null);
   const kpis = [
-    { label: "Ventas de hoy en la red", value: formatCurrencyCents(currency, totalCents), sub: "Todas las sedes activas" },
-    { label: "Pedidos hoy", value: String(ordersToday), sub: `${active.length} ${active.length === 1 ? "sede activa" : "sedes activas"}` },
-    { label: "Mejor sede hoy", value: best && best.salesTodayCents > 0 ? best.name : "—", sub: best && best.salesTodayCents > 0 ? formatCurrencyCents(currency, best.salesTodayCents) : "Aún sin ventas" },
+    { label: "Ventas de la red", value: formatCurrencyCents(currency, monthSales), sub: "Mes en curso · sedes activas", Icon: BanknoteIcon, chip: "bg-primary/12 text-primary" },
+    { label: "Ganancia neta estimada", value: formatCurrencyCents(currency, monthProfit), sub: monthSales > 0 ? `${Math.round((monthProfit / monthSales) * 1000) / 10} % de margen` : "Sin ventas este mes", Icon: TrendingUpIcon, chip: "bg-success/14 text-success" },
+    { label: "Pedidos", value: String(monthOrders), sub: `${active.length} ${active.length === 1 ? "sede activa" : "sedes activas"}`, Icon: ShoppingCartIcon, chip: "bg-warning/18 text-warning" },
+    { label: "Mejor sede", value: bestMonth && bestMonth.salesMonthCents > 0 ? bestMonth.name : "—", sub: bestMonth && bestMonth.salesMonthCents > 0 ? formatCurrencyCents(currency, bestMonth.salesMonthCents) : "Aún sin ventas", Icon: StarIcon, chip: "bg-primary/12 text-primary" },
   ];
+
 
   const alerts: { tone: "warn" | "info"; text: string }[] = [
     ...active.filter((s) => s.lowStock > 0).map((s) => ({ tone: "warn" as const, text: `${s.name} tiene ${s.lowStock} ${s.lowStock === 1 ? "producto" : "productos"} con stock bajo.` })),
@@ -94,12 +98,15 @@ export function BranchCards({
           <b className="text-foreground">Resumen de toda la red.</b> Para entrar a una sede, abrir su caja o ver su ficha necesitas la clave de su administrador.
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         {kpis.map((k) => (
-          <div key={k.label} className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{k.label}</p>
-            <p className="mt-1 truncate text-3xl font-bold tabular-nums tracking-tight">{k.value}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{k.sub}</p>
+          <div key={k.label} className="relative min-h-32 rounded-[19px] bg-card p-[17px] shadow-(--shadow-card)">
+            <p className="pr-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{k.label}</p>
+            <span className={`absolute right-4 top-4 grid size-[34px] place-items-center rounded-full ${k.chip}`} aria-hidden>
+              <k.Icon className="size-[18px]" />
+            </span>
+            <p className="mt-1.5 truncate text-[34px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums">{k.value}</p>
+            <p className="mt-1.5 text-[13px] text-muted-foreground">{k.sub}</p>
           </div>
         ))}
       </div>

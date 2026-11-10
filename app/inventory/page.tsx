@@ -41,11 +41,11 @@ export default async function InventoryPage() {
   const inventoryValueCents = products.reduce((a, p) => (p.trackStock && p.costCents != null ? a + p.stock * p.costCents : a), 0);
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-5 px-4 py-5">
+      <div className="flex flex-col gap-3.5">
         <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Gestión de productos</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Inventario</h1>
+          <p className="kr-eyebrow">Gestión de productos</p>
+          <h1 className="kr-h1">Inventario</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold">
             <span className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-1.5 shadow-(--shadow-card)">
               {inventory.totalCount} {plan.maxProducts == null ? "productos" : `de ${plan.maxProducts} productos`}
@@ -56,8 +56,9 @@ export default async function InventoryPage() {
               )}
               <span className="font-medium text-muted-foreground">Plan {plan.label}</span>
             </span>
-            <span className="rounded-full bg-muted px-3 py-1.5 text-muted-foreground">
+            <span className="rounded-full bg-primary/12 px-3 py-1.5 text-primary">
               Valor del inventario: {formatCurrencyCents(referenceCurrency, inventoryValueCents)}
+              {rate != null && exchangeRateEnabled ? ` · Bs ${Math.round((inventoryValueCents / 100) * rate).toLocaleString("es-VE")}` : ""}
             </span>
             {rate != null && exchangeRateEnabled && (
               <span className="rounded-full bg-muted px-3 py-1.5 text-muted-foreground">
@@ -67,17 +68,18 @@ export default async function InventoryPage() {
           </div>
         </div>
         <div className="hidden flex-wrap gap-2 md:flex">
-          <PriceListButton
-            products={priceListProducts}
-            company={priceListCompany}
-            referenceCurrency={referenceCurrency}
-          />
           {canManage && (
             <>
-              <Button nativeButton={false} render={<Link href="/inventory/new" />}>
-                Nuevo producto
+              <Button size="lg" nativeButton={false} render={<Link href="/inventory/new" />}>
+                <PlusIcon data-icon="inline-start" /> Nuevo producto
               </Button>
-              <Button variant="outline" nativeButton={false} render={<Link href="/inventory/transfers" />}>
+              <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/inventory/update" />}>
+                Actualizar inventario
+              </Button>
+              <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/inventory/import" />}>
+                Importar
+              </Button>
+              <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/inventory/transfers" />}>
                 Traspasos
               </Button>
               <InternalUseButton
@@ -85,14 +87,13 @@ export default async function InventoryPage() {
                   .filter((p) => p.trackStock && p.stock > 0)
                   .map((p) => ({ id: p.id, name: p.name, stock: p.stock }))}
               />
-              <Button variant="outline" nativeButton={false} render={<Link href="/inventory/update" />}>
-                Actualizar inventario
-              </Button>
-              <Button variant="outline" nativeButton={false} render={<Link href="/inventory/import" />}>
-                Importar
-              </Button>
             </>
           )}
+          <PriceListButton
+            products={priceListProducts}
+            company={priceListCompany}
+            referenceCurrency={referenceCurrency}
+          />
         </div>
         <div className="flex items-center gap-2 md:hidden">
           {canManage ? (

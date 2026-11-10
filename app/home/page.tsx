@@ -48,13 +48,13 @@ function Shortcut({ href, icon: Icon, title, sub, tone }: { href: string; icon: 
   return (
     <Link
       href={href}
-      className="group flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-(--shadow-card) transition-transform duration-150 hover:-translate-y-0.5 active:scale-[0.98]"
+      className="group flex flex-col items-start gap-1 rounded-[19px] border-2 border-transparent bg-card p-3.5 text-left shadow-(--shadow-card) transition-[transform,border-color] duration-150 hover:-translate-y-0.5 hover:border-primary active:scale-[0.97]"
     >
-      <span style={{ "--mc": tone } as React.CSSProperties} className="grid size-10 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--mc)_14%,transparent)] text-[var(--mc)]">
+      <span data-tone={tone} className="mb-2 grid size-11 place-items-center rounded-2xl bg-primary/12 text-primary">
         <Icon className="size-5" />
       </span>
       <span>
-        <span className="block text-sm font-bold">{title}</span>
+        <span className="block text-[15px] font-bold">{title}</span>
         <span className="block text-xs text-muted-foreground">{sub}</span>
       </span>
     </Link>
@@ -63,7 +63,7 @@ function Shortcut({ href, icon: Icon, title, sub, tone }: { href: string; icon: 
 
 function Chip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-card/80 px-3 py-1.5 shadow-xs">
+    <div className="rounded-xl bg-card px-3 py-1.5 shadow-(--shadow-card)">
       <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
       <span className="text-sm font-bold tabular-nums">{value}</span>
     </div>
@@ -141,11 +141,11 @@ export default async function BusinessHome({
   }
 
   return (
-    <div className="flex flex-col gap-5 p-4 md:p-6">
+    <div className="flex flex-col gap-5 px-4 py-5">
       <header className="flex flex-col gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">{eyebrow}</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight md:text-4xl">Inicio</h1>
+          <h1 className="mt-1 kr-h1 md:text-4xl">Inicio</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DateRangeSwitcher selection={range} />
@@ -158,7 +158,7 @@ export default async function BusinessHome({
         className={`rounded-3xl p-5 md:p-6 ${profit >= 0 ? "bg-success/14" : "bg-destructive/12"}`}
       >
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Ganancia neta estimada</p>
-        <p className={`mt-1 text-5xl font-extrabold tracking-tight tabular-nums md:text-6xl ${profit >= 0 ? "text-success" : "text-destructive"}`}>{money(profit)}</p>
+        <p className={`my-1 text-[clamp(2.5rem,9vw,3.6rem)] font-extrabold leading-[1.02] tracking-[-0.045em] tabular-nums ${profit >= 0 ? "text-success" : "text-destructive"}`}>{money(profit)}</p>
         <p className="mt-1 text-sm text-muted-foreground">
           {profitInLocal ? `${profitInLocal} · ` : ""}
           {marginPct} % de margen · {periodLabel(range)}

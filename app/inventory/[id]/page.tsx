@@ -22,9 +22,9 @@ export default async function EditProductPage({
   const updateWithId = updateProduct.bind(null, id);
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 px-4 py-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold tracking-tight">Editar producto</h1>
+        <h1 className="kr-h1">Editar producto</h1>
         <Button variant="outline" nativeButton={false} render={<Link href={`/inventory/${id}/movements`} />}>
           <HistoryIcon data-icon="inline-start" /> Historial de movimientos
         </Button>
