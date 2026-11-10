@@ -1,14 +1,15 @@
 import { LearningPanel } from "@/components/learning/LearningPanel";
-import { isLearningAdmin, isLearningStorageReady, listLearningVideos } from "@/lib/actions/learning";
+import { getLearningStats, isLearningAdmin, isLearningStorageReady, listLearningVideos } from "@/lib/actions/learning";
 import { MAX_LEARNING_UPLOAD_BYTES, MAX_LEARNING_VIDEOS } from "@/lib/learning";
 
 export const dynamic = "force-dynamic";
 
 export default async function LearningPage() {
-  const [videos, admin, storageReady] = await Promise.all([
+  const [videos, admin, storageReady, stats] = await Promise.all([
     listLearningVideos(),
     isLearningAdmin(),
     isLearningStorageReady(),
+    getLearningStats(),
   ]);
   return (
     <div className="flex flex-col gap-4 px-4 py-5">
@@ -28,6 +29,7 @@ export default async function LearningPage() {
       </div>
       <LearningPanel
         videos={videos}
+        stats={stats}
         isAdmin={admin}
         storageReady={storageReady}
         max={MAX_LEARNING_VIDEOS}
