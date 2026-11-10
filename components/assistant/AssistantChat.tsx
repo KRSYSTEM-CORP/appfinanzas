@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { MicIcon, SendIcon, SquareIcon } from "lucide-react";
+import { BanknoteIcon, BarChart3Icon, MicIcon, PackageIcon, SendIcon, SparklesIcon, SquareIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { applyProposal, askAssistant, clearAssistantHistory, undoProposal, type AssistantStatus, type HistoryEntry } from "@/lib/actions/assistant";
@@ -13,10 +13,10 @@ type Msg =
   | { role: "assistant"; text: string; proposal: Proposal | null; state?: "open" | "applied" | "dropped" | "undone"; canUndo?: boolean; note?: string; entryId?: string | null };
 
 const SUGGESTIONS = [
-  "¿Cuánto vendí hoy?",
-  "¿Qué productos tengo con stock bajo?",
-  "¿Cuáles son mis productos más vendidos?",
-  "¿Cuánto llevo gastado este mes?",
+  { title: "¿Cuánto vendí hoy?", desc: "Resumen de ventas del día, en palabras simples.", prompt: "¿Cuánto vendí hoy?", Icon: BarChart3Icon },
+  { title: "Productos con stock bajo", desc: "Qué se está acabando y conviene reponer.", prompt: "¿Qué productos tengo con stock bajo?", Icon: PackageIcon },
+  { title: "Los más vendidos", desc: "Tus productos estrella del período.", prompt: "¿Cuáles son mis productos más vendidos?", Icon: SparklesIcon },
+  { title: "Gastos del mes", desc: "Cuánto llevas gastado y en qué.", prompt: "¿Cuánto llevo gastado este mes?", Icon: BanknoteIcon },
 ];
 
 // Reconocimiento de voz del navegador (Chrome, Edge, Safari).
@@ -149,8 +149,8 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
   }
 
   return (
-    <div className="flex max-w-3xl flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-card p-2.5 text-sm">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl bg-card p-3 text-sm shadow-(--shadow-card)">
         <span>
           Créditos: <b className="tabular-nums">{creditsLeft}</b>
         </span>
@@ -164,15 +164,33 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
         )}
       </div>
 
-      <div className="flex min-h-64 flex-col gap-2 rounded-lg border bg-card p-3" aria-live="polite">
+      <div className="flex min-h-64 flex-col gap-2 rounded-[22px] bg-card p-4 shadow-(--shadow-card)" aria-live="polite">
         {msgs.length === 0 ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-muted-foreground">Prueba con una de estas preguntas, o dicta con el micrófono:</p>
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col items-center gap-5 py-4">
+            <span className="grid size-16 place-items-center rounded-full bg-[conic-gradient(from_200deg,#433ddd,#0f9d9a,#ff9f0a,#433ddd)] text-white shadow-[0_0_30px_rgba(67,61,221,.35)]" aria-hidden>
+              <SparklesIcon className="size-7" />
+            </span>
+            <div className="text-center">
+              <h2 className="text-2xl font-extrabold tracking-tight">¿Qué hacemos hoy por tu negocio?</h2>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                Primero te muestro los cambios y su costo en créditos, gratis. Tú decides si continuar.
+              </p>
+            </div>
+            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
               {SUGGESTIONS.map((s) => (
-                <Button key={s} size="sm" variant="outline" onClick={() => send(s)} disabled={isPending}>
-                  {s}
-                </Button>
+                <button
+                  key={s.title}
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => send(s.prompt)}
+                  className="flex flex-col items-start gap-1.5 rounded-[19px] bg-muted p-4 text-left transition-colors hover:bg-muted/70 disabled:opacity-60"
+                >
+                  <span className="grid size-9 place-items-center rounded-xl bg-primary/12 text-primary">
+                    <s.Icon className="size-[18px]" />
+                  </span>
+                  <span className="font-bold">{s.title}</span>
+                  <span className="text-[13px] text-muted-foreground">{s.desc}</span>
+                </button>
               ))}
             </div>
           </div>

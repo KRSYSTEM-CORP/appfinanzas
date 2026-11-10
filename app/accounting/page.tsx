@@ -44,7 +44,7 @@ export default async function AccountingPage() {
   return (
     <div className="flex flex-col gap-4 px-4 py-5">
       <div>
-        <p className="kr-eyebrow">Finanzas y obligaciones</p>
+        <p className="kr-eyebrow">Contabilidad renovada</p>
         <h1 className="kr-h1">Administración</h1>
       </div>
       <AccountingHub sections={sections} />

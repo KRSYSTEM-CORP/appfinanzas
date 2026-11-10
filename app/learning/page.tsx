@@ -13,11 +13,9 @@ export default async function LearningPage() {
   return (
     <div className="flex flex-col gap-4 px-4 py-5">
       <div>
-        <p className="kr-eyebrow">Aprende con videos cortos</p>
+        <p className="kr-eyebrow">Academia KR POS</p>
         <h1 className="kr-h1">Learning</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Videos cortos para aprender a sacarle el máximo a KR POS.
-        </p>
+        <span className="mt-2 inline-block rounded-full bg-primary/12 px-3 py-1 text-xs font-semibold text-primary">{videos.length ? Math.round((videos.filter((v) => v.watched).length / videos.length) * 100) : 0} % completado</span>
       </div>
       <div className="flex items-center gap-3 rounded-[20px] bg-card p-4 shadow-(--shadow-card)">
         <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary" aria-hidden>

@@ -67,11 +67,13 @@ export default async function SettingsPage() {
     {
       id: "plan",
       label: "Mi plan",
+      hint: `Plan ${planUsage.plan.label} · ${planUsage.usedUsers} de ${planUsage.plan.maxUsers} usuarios`,
       content: <MyPlanPanel usage={planUsage} />,
     },
     {
       id: "moneda",
       label: "Moneda y tasa de cambio",
+      hint: rate != null ? `Tasa ${rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${referenceCurrency}` : "Sin tasa configurada",
       content: (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="flex flex-col gap-4">
@@ -155,6 +157,7 @@ export default async function SettingsPage() {
     },
     {
       id: "fiscales",
+      hint: fiscalData.fiscalRif ? `RIF ${fiscalData.fiscalRif}` : "Aún sin datos fiscales",
       label: "Datos fiscales",
       content: (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
@@ -256,7 +259,16 @@ export default async function SettingsPage() {
         </div>
       )}
 
-      <SettingsTabs sections={sections} />
+      <SettingsTabs
+        sections={sections}
+        steps={[
+          { label: "Datos del negocio y RIF", hint: "Nombre, RIF y WhatsApp que verán tus clientes en documentos y presupuestos.", cta: "Completar datos del negocio y RIF", sectionId: "fiscales", done: Boolean(fiscalData.fiscalRif && fiscalData.fiscalLegalName) },
+          { label: "Tasa de cambio del día", hint: "Para mostrar precios en bolívares con la tasa vigente.", cta: "Revisar la tasa de cambio", sectionId: "moneda", done: !exchangeRateEnabled || (rate != null && !stale) },
+          { label: "Marca y apariencia", hint: "Tu logo y tu color en documentos y en el sistema.", cta: "Personalizar la marca", sectionId: "apariencia", done: Boolean(logoDataUrl || brandColor) },
+          { label: "Datos para cobrar", hint: "Cuentas y métodos con los que te pagan tus clientes y tu suscripción.", cta: "Agregar datos para cobrar", sectionId: "cobros", done: paymentAccounts.length > 0 },
+          { label: "Equipo", hint: "Invita a tus vendedores con su código de empresa.", cta: "Ver mi plan y usuarios", sectionId: "plan", done: planUsage.usedUsers > 1 },
+        ]}
+      />
     </div>
   );
 }
