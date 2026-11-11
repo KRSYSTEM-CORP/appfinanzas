@@ -171,3 +171,49 @@ export async function createTransfer(input: unknown): Promise<ActionResult> {
   revalidatePath("/inventory/transfers");
   return { success: true };
 }
+
+export type TransferSuggestion = {
+  productName: string;
+  quantity: number;
+  fromBranchName: string;
+  toBranchName: string;
+  reason: string;
+};
+
+// «KR POS te sugiere»: productos (mismo SKU, o mismo nombre sin SKU) que están en o bajo el
+// mínimo en una sede mientras otra sede tiene más del doble de su mínimo.
+export async function listTransferSuggestions(): Promise<TransferSuggestion[]> {
+  const { companyId } = await requireManager();
+  const rows = await withTenant(companyId, (tx) =>
+    tx.$queryRaw<
+      { name: string; qty: number; from_name: string; to_name: string; from_stock: number; to_stock: number }[]
+    >`
+      SELECT p_to."name" AS name,
+             LEAST(p_to."lowStockThreshold" * 2 - p_to."stock", p_from."stock" - p_from."lowStockThreshold")::int AS qty,
+             b_from."name" AS from_name, b_to."name" AS to_name,
+             p_from."stock"::int AS from_stock, p_to."stock"::int AS to_stock
+      FROM "Product" p_to
+      JOIN "Product" p_from
+        ON p_from."companyId" = p_to."companyId"
+       AND p_from."branchId" <> p_to."branchId"
+       AND ((p_to."sku" IS NOT NULL AND p_from."sku" = p_to."sku") OR (p_to."sku" IS NULL AND p_from."sku" IS NULL AND lower(p_from."name") = lower(p_to."name")))
+      JOIN "Branch" b_to ON b_to.id = p_to."branchId" AND b_to."isActive" = true
+      JOIN "Branch" b_from ON b_from.id = p_from."branchId" AND b_from."isActive" = true
+      WHERE p_to."companyId" = ${companyId}
+        AND p_to."isActive" = true AND p_from."isActive" = true
+        AND p_to."trackStock" = true AND p_from."trackStock" = true
+        AND p_to."stock" <= p_to."lowStockThreshold"
+        AND p_from."stock" > p_from."lowStockThreshold" * 2
+      ORDER BY p_to."stock" ASC
+      LIMIT 5`
+  );
+  return rows
+    .filter((r) => r.qty > 0)
+    .map((r) => ({
+      productName: r.name,
+      quantity: r.qty,
+      fromBranchName: r.from_name,
+      toBranchName: r.to_name,
+      reason: `${r.to_name} tiene ${r.to_stock} y ${r.from_name} ${r.from_stock}`,
+    }));
+}
