@@ -1,4 +1,5 @@
-const GRACE_DAYS = 5;
+// Sin días de gracia: el acceso se bloquea al vencer el pago.
+const GRACE_DAYS = 0;
 
 // Free trial granted automatically the moment a new company is created —
 // confirmSignupCode() and the Google signup path (app/api/auth/google/callback) both go

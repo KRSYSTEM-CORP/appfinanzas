@@ -3,9 +3,22 @@
 // se bloquea antes que un gerente.
 
 export const LOCK_AFTER_MS = {
-  GERENTE: 10 * 60_000,
-  VENDEDOR: 5 * 60_000,
+  GERENTE: 15 * 60_000,
+  VENDEDOR: 10 * 60_000,
 } as const;
+
+// Tiempos que cada equipo puede elegir (minutos). Se guarda en el propio navegador.
+export const LOCK_MINUTE_OPTIONS = [5, 10, 15] as const;
+export const LOCK_MINUTES_KEY = "kr-lock-minutes";
+
+export function readLockMinutes(): number | null {
+  try {
+    const v = Number(window.localStorage.getItem(LOCK_MINUTES_KEY));
+    return (LOCK_MINUTE_OPTIONS as readonly number[]).includes(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 // Cuánto antes del bloqueo se avisa.
 export const LOCK_WARNING_MS = 15_000;

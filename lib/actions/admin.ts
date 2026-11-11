@@ -250,13 +250,13 @@ export async function recordMaintenancePayment(companyId: string, input: unknown
 // A lighter alternative to recordMaintenancePayment above — for when the
 // super admin wants to manually restart a company's billing cycle (e.g. a
 // payment confirmed outside the normal report flow) without logging a
-// specific verified amount/period. Resets nextPaymentDueDate to today,
-// which on its own grants the company the standard GRACE_DAYS (5 days —
-// see isCompanyBlocked, lib/billing.ts) before the system blocks it again.
+// specific verified amount/period. Moves nextPaymentDueDate one month ahead
+// (there are no grace days — see isCompanyBlocked, lib/billing.ts — so leaving
+// it at today would block the company again right away).
 export async function renewSubscriptionManually(companyId: string): Promise<ActionResult> {
   await requireSuperAdmin();
   await withSuperAdmin((tx) =>
-    tx.company.update({ where: { id: companyId }, data: { nextPaymentDueDate: new Date() } })
+    tx.company.update({ where: { id: companyId }, data: { nextPaymentDueDate: extendDueDateByMonths(null, 1) } })
   );
   revalidatePath("/admin");
   revalidatePath("/settings");
