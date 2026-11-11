@@ -122,7 +122,7 @@ export default async function BusinessHome({
     actions.push({ tone: "warn", text: `${tasks.lowStock.count} ${tasks.lowStock.count === 1 ? "producto con stock bajo" : "productos con stock bajo"}: ${names}.`, href: "/inventory", cta: "Ver inventario" });
   }
   if (receivables.count > 0) {
-    actions.push({ tone: "warn", text: `${receivables.count} ${receivables.count === 1 ? "venta" : "ventas"} a crédito por cobrar (${money(receivables.totalEurCents)}).`, href: "/accounting/receivables", cta: "Ver cuentas" });
+    actions.push({ tone: "warn", text: `${receivables.count} ${receivables.count === 1 ? "venta" : "ventas"} a crédito por cobrar (${money(receivables.totalEurCents)}).`, href: "/customers/receivables", cta: "Ver cuentas" });
   }
   if (tasks.pendingQuotes > 0) {
     actions.push({ tone: "info", text: `${tasks.pendingQuotes} ${tasks.pendingQuotes === 1 ? "presupuesto espera" : "presupuestos esperan"} respuesta del cliente.`, href: "/quotes/history", cta: "Dar seguimiento" });
@@ -178,7 +178,7 @@ export default async function BusinessHome({
       <section aria-label="Accesos rápidos" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <Shortcut href="/pos" icon={ShoppingCartIcon} title="Vender" sub="POS" tone="#0f9d9a" />
         <Shortcut href="/quotes" icon={ClipboardListIcon} title="Presupuesto" sub="Nuevo" tone="#7a3ff2" />
-        <Shortcut href="/accounting/receivables" icon={HandCoinsIcon} title="Cuentas por cobrar" sub={`${money(receivables.totalEurCents)} por cobrar`} tone="#d6407f" />
+        <Shortcut href="/customers/receivables" icon={HandCoinsIcon} title="Cuentas por cobrar" sub={`${money(receivables.totalEurCents)} por cobrar`} tone="#d6407f" />
         <Shortcut href="/reports" icon={WalletIcon} title="Caja Chica" sub={tasks.pendingClosingCount > 0 ? `${tasks.pendingClosingCount} por cerrar` : "Al día"} tone="#1f8a3c" />
         <Shortcut href="/inventory" icon={PackageIcon} title="Inventario" sub={tasks.lowStock.count > 0 ? `${tasks.lowStock.count} ${tasks.lowStock.count === 1 ? "alerta" : "alertas"}` : "Sin alertas"} tone="#ff9f0a" />
       </section>

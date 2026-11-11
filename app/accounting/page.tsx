@@ -13,7 +13,7 @@ const sections = [
     description: "Cuánto vendió cada vendedor, sus documentos y su comisión.",
   },
   {
-    href: "/accounting/receivables",
+    href: "/customers/receivables",
     title: "Cuentas por cobrar",
     description: "Ventas a crédito con saldo pendiente y abonos por registrar.",
   },

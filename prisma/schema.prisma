@@ -131,6 +131,7 @@ enum QuoteStatus {
 model Company {
   id                    String            @id @default(cuid())
   roles                 CompanyRole[]
+  promotions            Promotion[]
   name                  String
   // Short code (derived from id, see signup()) employees use, together with
   // their name and password, to log in without needing an email address.
@@ -1468,4 +1469,34 @@ model AiCreditRequest {
 
   @@index([companyId, createdAt])
   @@index([status, createdAt])
+}
+
+// Promoción de Marketing: descuento con código y vigencia dirigido a un grupo de clientes.
+model Promotion {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  code            String
+  discountPercent Int
+  segment         String
+  validUntil      DateTime
+  createdAt       DateTime @default(now())
+  redemptions     PromotionRedemption[]
+
+  @@unique([companyId, code])
+  @@index([companyId, validUntil])
+}
+
+model PromotionRedemption {
+  id          String    @id @default(cuid())
+  companyId   String
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  customerId  String?
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  @@index([promotionId])
+  @@index([companyId])
 }

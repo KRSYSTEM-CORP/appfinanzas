@@ -182,7 +182,7 @@ export default async function FinancePage({
         />
         <StatCard
           label={`Por cobrar (${receivables.count})`}
-          href="/accounting/receivables"
+          href="/customers/receivables"
           accent="warning"
           icon={ClockIcon}
           value={
@@ -498,7 +498,7 @@ export default async function FinancePage({
             if (restock[0]) findings.push({ text: `${restock[0].name} ${restock[0].stock <= 0 ? "está agotado" : `tiene ${restock[0].stock}`} y se vende bien: repón pronto.`, href: "/purchases/new", cta: "Crear orden de compra" });
             const totalMix = paymentMix.reduce((t, m) => t + m.totalCents, 0);
             if (totalMix > 0 && paymentMix[0]) findings.push({ text: `${Math.round((paymentMix[0].totalCents / totalMix) * 100)} % de tus cobros llega por ${paymentMix[0].method}.` });
-            if (receivables.count > 0) findings.push({ text: `Tienes ${receivables.count} ${receivables.count === 1 ? "venta a crédito" : "ventas a crédito"} por cobrar.`, href: "/accounting/receivables", cta: "Ver cuentas por cobrar" });
+            if (receivables.count > 0) findings.push({ text: `Tienes ${receivables.count} ${receivables.count === 1 ? "venta a crédito" : "ventas a crédito"} por cobrar.`, href: "/customers/receivables", cta: "Ver cuentas por cobrar" });
             if (findings.length === 0) return <p className="text-sm text-muted-foreground">Aún no hay suficientes datos para hallazgos.</p>;
             return (
               <ul className="flex flex-col divide-y">
