@@ -8,11 +8,6 @@ const sections = [
     description: "Ingresos, gastos, ganancia neta y desglose por moneda.",
   },
   {
-    href: "/accounting/sellers",
-    title: "Ventas por vendedor",
-    description: "Cuánto vendió cada vendedor, sus documentos y su comisión.",
-  },
-  {
     href: "/customers/receivables",
     title: "Cuentas por cobrar",
     description: "Ventas a crédito con saldo pendiente y abonos por registrar.",
@@ -31,6 +26,26 @@ const sections = [
     href: "/payroll",
     title: "Nómina",
     description: "Empleados, pago por quincena con comprobante e historial de pagos.",
+  },
+  {
+    href: "/inventory",
+    title: "Consumo interno",
+    description: "Retiros de inventario por socios o personal.",
+  },
+  {
+    href: "/settings",
+    title: "Cuentas y perfiles",
+    description: "Datos para cobrar, perfiles y PIN del equipo.",
+  },
+  {
+    href: "/documents",
+    title: "Documentos",
+    description: "Notas de entrega, tickets y comprobantes emitidos.",
+  },
+  {
+    href: "/billing",
+    title: "Suscripción",
+    description: "Plan, vencimiento y pagos de tu suscripción mensual.",
   },
   {
     href: "/tax-book",
