@@ -33,6 +33,11 @@ const sections = [
     description: "Retiros de inventario por socios o personal.",
   },
   {
+    href: "/accounting/accounts",
+    title: "Saldos de cuentas",
+    description: "Saldo por cuenta en $ y Bs, y el método de pago que lo alimenta.",
+  },
+  {
     href: "/settings",
     title: "Cuentas y perfiles",
     description: "Datos para cobrar, perfiles y PIN del equipo.",
