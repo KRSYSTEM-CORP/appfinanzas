@@ -167,7 +167,7 @@ export function Cart({
 
   // Lock page scroll behind the sheet (phones only).
   useEffect(() => {
-    if (!open || !window.matchMedia("(max-width: 767px)").matches) return;
+    if (!open || !window.matchMedia("(max-width: 959px)").matches) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {

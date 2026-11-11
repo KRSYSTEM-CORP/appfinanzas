@@ -64,7 +64,7 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
         )}
         renderRow={(c) => (
           <>
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-primary/12 text-sm font-semibold text-primary">
               {`${c.firstName[0] ?? ""}${c.lastName[0] ?? ""}`.toUpperCase()}
             </span>
             <span className="min-w-0 flex-1">

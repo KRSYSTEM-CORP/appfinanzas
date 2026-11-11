@@ -6,7 +6,7 @@ import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { cn } from "@/lib/utils"
 
-const MOBILE_QUERY = "(max-width: 767px)"
+const MOBILE_QUERY = "(max-width: 959px)"
 
 function subscribeIsMobile(onChange: () => void) {
   const mql = window.matchMedia(MOBILE_QUERY)

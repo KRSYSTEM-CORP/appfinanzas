@@ -31,7 +31,7 @@ const buttonVariants = cva(
         default:
           "h-10 pointer-coarse:h-11 gap-1.5 px-3 pointer-coarse:px-3.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         xs: "h-7 pointer-coarse:h-9 gap-1 rounded-full px-2 pointer-coarse:px-3 text-xs in-data-[slot=button-group]:rounded-full has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 pointer-coarse:h-10 gap-1 rounded-full px-2.5 pointer-coarse:px-3.5 text-[0.8rem] pointer-coarse:text-sm in-data-[slot=button-group]:rounded-full has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
+        sm: "h-9 pointer-coarse:h-10 gap-1 rounded-full px-2.5 pointer-coarse:px-3.5 text-[0.8rem] pointer-coarse:text-sm in-data-[slot=button-group]:rounded-full has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-10 pointer-coarse:h-12 gap-1.5 px-3 pointer-coarse:px-4 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         icon: "size-8 pointer-coarse:size-11",
         "icon-xs":
@@ -60,6 +60,7 @@ function Button({
   return (
     <ButtonPrimitive
       data-slot="button"
+      data-kr={variant === "default" ? "btn-primary" : "btn"}
       className={cn(buttonVariants({ variant, size, className }))}
       disabled={disabled || loading}
       aria-busy={loading || undefined}

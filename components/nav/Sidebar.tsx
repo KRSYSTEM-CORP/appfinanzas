@@ -3,149 +3,49 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  BarChart3Icon,
-  CalculatorIcon,
-  ClipboardListIcon,
-  EllipsisIcon,
-  FileTextIcon,
-  GaugeIcon,
-  WalletIcon,
-  GraduationCapIcon,
-  LogOutIcon,
-  MenuIcon,
-  PackageIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
-  SearchIcon,
-  SettingsIcon,
-  ShieldIcon,
-  ShoppingCartIcon,
-  SparklesIcon,
-  StoreIcon,
-  UsersIcon,
-  XIcon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { EllipsisIcon, LockIcon, LogOutIcon, SearchIcon, XIcon } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
 import { BranchSwitcher } from "@/components/nav/BranchSwitcher";
-import { LockButton } from "@/components/lock/LockButton";
+import { NavIcon } from "@/components/nav/nav-icons";
 import { ThemeToggle } from "@/components/nav/ThemeToggle";
 import { CommandPalette, type PaletteItem } from "@/components/nav/CommandPalette";
+import { lockSession } from "@/lib/actions/pin";
+import { useRouter } from "next/navigation";
 import type { Role } from "@prisma/client";
 
-// Color propio de cada módulo (icono en baldosa tintada), igual que el rediseño.
-
-const COLLAPSE_KEY = "kr-pos-sidebar-collapsed";
 const ROLE_LABELS: Record<Role, string> = { GERENTE: "Gerente", VENDEDOR: "Vendedor" };
 
-type NavItem = { href: string; label: string; section?: string; icon: React.ComponentType<{ className?: string }> };
+type NavItem = { key: string; href: string; label: string; section?: string; icon: string; group: "Operación" | "Control" | "Red y plataforma" };
 
-// Estructura de la preview v15: tres grupos. Los accesos que no tienen lugar propio
-// en la preview (Documentos, Administración de perfiles, Suscripción) siguen
-// existiendo: Documentos queda en Control, perfiles y suscripción salen de Ajustes.
-// Operación: lo del día a día (los vendedores solo ven lo que su rol permite).
-const operationItems: NavItem[] = [
-  { href: "/home", label: "Inicio", icon: GaugeIcon },
-  { href: "/pos", label: "POS", section: "pos", icon: ShoppingCartIcon },
-  { href: "/inventory", label: "Inventario", section: "inventory", icon: PackageIcon },
-  { href: "/quotes/history", label: "Presupuestos", section: "quotes", icon: ClipboardListIcon },
+// Los 12 módulos de la preview. Lo que no tiene lugar propio (Documentos, Perfiles y PIN,
+// Suscripción mensual, Nómina, Plataforma) sigue existiendo, enlazado desde Administración o
+// Ajustes y desde el buscador (Ctrl K).
+const MODULES: NavItem[] = [
+  { key: "inicio", href: "/home", label: "Inicio", icon: "home", group: "Operación" },
+  { key: "pos", href: "/pos", label: "POS", section: "pos", icon: "pos", group: "Operación" },
+  { key: "inv", href: "/inventory", label: "Inventario", section: "inventory", icon: "box", group: "Operación" },
+  { key: "pre", href: "/quotes/history", label: "Presupuestos", section: "quotes", icon: "book", group: "Operación" },
+  { key: "caja", href: "/reports", label: "Caja Chica", section: "reports", icon: "caja", group: "Control" },
+  { key: "est", href: "/finance", label: "Estadísticas", icon: "stats", group: "Control" },
+  { key: "mkt", href: "/customers", label: "Marketing", section: "customers", icon: "mkt", group: "Control" },
+  { key: "adm", href: "/accounting", label: "Administración", icon: "admin", group: "Control" },
+  { key: "suc", href: "/branches", label: "Sucursales", icon: "store", group: "Red y plataforma" },
+  { key: "ia", href: "/assistant", label: "Asistente IA", icon: "spark", group: "Red y plataforma" },
+  { key: "learn", href: "/learning", label: "Learning", icon: "grad", group: "Red y plataforma" },
+  { key: "set", href: "/settings", label: "Ajustes", icon: "gear", group: "Red y plataforma" },
 ];
+const GROUPS = ["Operación", "Control", "Red y plataforma"] as const;
 
-// Control: caja, números y administración.
-const controlItems: NavItem[] = [
-  { href: "/reports", label: "Caja Chica", section: "reports", icon: WalletIcon },
-  { href: "/finance", label: "Estadísticas", icon: BarChart3Icon },
-  { href: "/customers", label: "Marketing", section: "customers", icon: UsersIcon },
-  { href: "/accounting", label: "Administración", icon: CalculatorIcon },
-  { href: "/documents", label: "Documentos", section: "documents", icon: FileTextIcon },
-];
-
-// Red y plataforma.
-const networkItemsBase: NavItem[] = [
-  { href: "/branches", label: "Sucursales", icon: StoreIcon },
-  { href: "/assistant", label: "Asistente IA", icon: SparklesIcon },
-];
-
-// The nav collapses Finanzas/Proveedores/Compras/Libro IVA into one
-// "Contabilidad" item, but a user can still land on any of those routes
-// directly (e.g. a bookmark) — this keeps it highlighted while on any of
-// them, not just on /accounting itself.
-const ACCOUNTING_SUBPATHS = ["/accounting", "/suppliers", "/purchases", "/tax-book", "/payroll"];
-
-// Color propio de cada ícono del menú (sin recuadro), como en la preview.
-const NAV_TONES: Record<string, string> = {
-  "/home": "#433ddd",
-  "/pos": "#0f9d9a",
-  "/inventory": "#ff9f0a",
-  "/quotes/history": "#7a3ff2",
-  "/reports": "#34c759",
-  "/finance": "#d6407f",
-  "/customers": "#e0409a",
-  "/accounting": "#1d4ed8",
-  "/documents": "#5b6cff",
-  "/branches": "#c2410c",
-  "/assistant": "#6655e5",
-  "/learning": "#0f7a8a",
-  "/settings": "#6e6e73",
-  "/admin": "#6e6e73",
-};
+// Administración agrupa Compras, Proveedores, Libro IVA y Nómina: sigue resaltada en todas.
+const ACCOUNTING_SUBPATHS = ["/accounting", "/suppliers", "/purchases", "/tax-book", "/payroll", "/documents", "/billing", "/employees"];
 
 function isLinkActive(pathname: string, href: string) {
-  if (href === "/accounting") {
-    return ACCOUNTING_SUBPATHS.some((p) => pathname.startsWith(p));
-  }
+  if (href === "/accounting") return ACCOUNTING_SUBPATHS.some((p) => pathname.startsWith(p));
   if (href === "/quotes/history") return pathname.startsWith("/quotes");
   return pathname.startsWith(href);
 }
 
-function NavGroup({
-  title,
-  items,
-  pathname,
-  collapsed,
-  onNavigate,
-}: {
-  title: string;
-  items: NavItem[];
-  pathname: string;
-  collapsed: boolean;
-  onNavigate: () => void;
-}) {
-  if (items.length === 0) return null;
-  return (
-    <div className="flex flex-col gap-0.5">
-      {!collapsed && (
-        <span className="px-3 pt-3 pb-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-          {title}
-        </span>
-      )}
-      {items.map((item) => {
-        const active = isLinkActive(pathname, item.href);
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            onClick={onNavigate}
-            title={collapsed ? item.label : undefined}
-            className={`group/nav flex min-h-11 items-center gap-3 rounded-xl px-3 py-1.5 text-sm font-bold transition-[background-color,color,box-shadow] duration-150 ease-out ${
-              active
-                ? "bg-primary/15 text-primary"
-                : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            } ${collapsed ? "justify-center" : ""}`}
-          >
-            <span className="shrink-0" style={{ color: active ? "var(--primary)" : (NAV_TONES[item.href] ?? "var(--muted-foreground)") }}>
-              <Icon className="size-[21px]" />
-            </span>
-            <span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span>
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
+const color = (key: string) => `var(--m-${key})`;
 
 export function Sidebar({
   companyName,
@@ -179,76 +79,30 @@ export function Sidebar({
   rateLabel?: string | null;
 }) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const router = useRouter();
+  const [moreOpen, setMoreOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const canManage = role === "GERENTE" || isSuperAdmin;
 
-  useEffect(() => {
-    try {
-      setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
-    } catch {
-      // Private browsing / blocked storage — default expanded, harmless.
-    }
-  }, []);
+  const allowed = (item: NavItem) => canManage || allowedSections.length === 0 || allowedSections.includes(item.section as string);
+  // Sin `section` = solo gerente. Learning lo ve todo el equipo.
+  const visible = MODULES.filter((i) => (i.key === "learn" ? true : i.section ? allowed(i) : canManage));
 
-  function toggleCollapsed() {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
-      } catch {
-        // Nothing to persist to — the toggle still works for this visit.
-      }
-      return next;
-    });
-  }
-
-  // Empty allowedSections means "unrestricted" (see requireSectionAccess,
-  // lib/session.ts) — same rule as before so the nav never hides a link a
-  // never-configured VENDEDOR could actually still open.
-  const allowed = (item: NavItem) =>
-    canManage || allowedSections.length === 0 || allowedSections.includes(item.section as string);
-  // Sin `section` = solo gerente (Inicio, Estadísticas, Administración).
-  const visible = (items: NavItem[]) => items.filter((i) => (i.section ? allowed(i) : canManage));
-
-  const opItems = visible(operationItems);
-  const controlVisible = visible(controlItems);
-
-  const featureItems: NavItem[] = featureLinks
-    .filter((l) => canManage || !l.managerOnly)
-    .map((l) => ({ href: l.href, label: l.label, icon: FileTextIcon }));
-
-  const networkItems: NavItem[] = [
-    ...(canManage ? networkItemsBase : []),
-    { href: "/learning", label: "Learning", icon: GraduationCapIcon },
-    ...(canManage ? [{ href: "/settings", label: "Ajustes", icon: SettingsIcon }] : []),
-    ...(isSuperAdmin ? [{ href: "/admin", label: "Plataforma", icon: ShieldIcon }] : []),
-    ...featureItems,
-  ];
-
-  // Barra inferior (teléfono) de la preview: Inicio · Inventario · POS (botón
-  // central) · Presupuestos · Más. Un vendedor sin Inicio ve lo que sí puede abrir.
-  const tabCandidates: NavItem[] = [
-    { href: "/home", label: "Inicio", icon: GaugeIcon },
-    { href: "/inventory", label: "Inventario", section: "inventory", icon: PackageIcon },
-    { href: "/pos", label: "POS", section: "pos", icon: ShoppingCartIcon },
-    { href: "/quotes/history", label: "Presupuestos", section: "quotes", icon: ClipboardListIcon },
-    { href: "/customers", label: "Marketing", section: "customers", icon: UsersIcon },
-  ];
-  const tabs = tabCandidates.filter((t) => (t.section ? allowed(t) : canManage)).slice(0, 4);
+  const tabCandidates = ["inicio", "inv", "pos", "pre"];
+  const tabs = tabCandidates.map((k) => visible.find((i) => i.key === k)).filter((i): i is NavItem => Boolean(i));
 
   const paletteItems: PaletteItem[] = [
-    ...opItems.map((i) => ({ href: i.href, label: i.label, group: "Operación" })),
-    ...controlVisible.map((i) => ({ href: i.href, label: i.label, group: "Control" })),
-    ...networkItems.map((i) => ({ href: i.href, label: i.label, group: "Red y plataforma" })),
+    ...visible.map((i) => ({ href: i.href, label: i.label, group: i.group })),
     ...(canManage
       ? [
+          { href: "/documents", label: "Documentos", group: "Administración" },
           { href: "/employees", label: "Perfiles y PIN", group: "Ajustes" },
           { href: "/billing", label: "Suscripción mensual", group: "Ajustes" },
-          { href: "/payroll", label: "Nómina", group: "Control" },
+          { href: "/payroll", label: "Nómina", group: "Administración" },
         ]
       : []),
+    ...(isSuperAdmin ? [{ href: "/admin", label: "Plataforma", group: "Plataforma" }] : []),
+    ...featureLinks.filter((l) => canManage || !l.managerOnly).map((l) => ({ href: l.href, label: l.label, group: "Más" })),
   ];
 
   useEffect(() => {
@@ -257,253 +111,223 @@ export function Sidebar({
         e.preventDefault();
         setPaletteOpen((open) => !open);
       }
+      if (e.key === "Escape") setMoreOpen(false);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  async function lock() {
+    const r = await lockSession();
+    if (r.success) router.replace("/lock");
+  }
+
+  const initials = sellerName
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
   const branchControl = canManage ? (
     <BranchSwitcher branches={branches} currentBranchId={currentBranchId} />
   ) : (
-    currentBranchName && <span className="text-xs text-sidebar-foreground/70 truncate">{currentBranchName}</span>
+    currentBranchName && <b className="truncate text-[15px]">{currentBranchName}</b>
   );
 
-  const nav = (collapsedRail: boolean, onNavigate: () => void) => (
-    <nav className="flex-1 overflow-y-auto px-2.5 py-2 flex flex-col gap-1">
-      <NavGroup title="Operación" items={opItems} pathname={pathname} collapsed={collapsedRail} onNavigate={onNavigate} />
-      <NavGroup title="Control" items={controlVisible} pathname={pathname} collapsed={collapsedRail} onNavigate={onNavigate} />
-      <NavGroup title="Red y plataforma" items={networkItems} pathname={pathname} collapsed={collapsedRail} onNavigate={onNavigate} />
-    </nav>
-  );
-
-  const brandMark = logoDataUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={logoDataUrl} alt="" className="size-8 shrink-0 rounded-lg object-cover" />
-  ) : (
-    // The colored KR POS wordmark, transparent background, in both light and
-    // dark mode (its blue-to-pink gradient reads on either surface).
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src="/brand/wordmark-color-transparent.png" alt="KR POS" className="h-7 w-auto shrink-0" />
-  );
+  const pillCls = "flex w-full items-center rounded-full bg-muted px-3.5 py-1.5 text-[13px] font-semibold text-muted-foreground";
 
   return (
     <>
-      {/* Desktop: persistent column, collapsible to an icon rail. */}
-      <aside
-        className={`hidden md:flex md:flex-col shrink-0 border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 ${
-          collapsed ? "md:w-16" : "md:w-[260px]"
-        }`}
-      >
-        <div className={`flex items-center gap-2.5 px-3 h-16 border-b shrink-0 ${collapsed ? "justify-center px-2" : ""}`}>
-          {collapsed ? (
-            brandMark
-          ) : (
-            <div className="flex flex-col gap-1 min-w-0">
-              <div className="flex items-center gap-2">
-                {/* self-start: opts out of this flex column's default stretch
-                    alignment, which some browsers apply to a cross-axis-auto
-                    <img> by ignoring its intrinsic aspect ratio and stretching
-                    it to the column's full width. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/brand/wordmark-color-transparent.png" alt="KR POS" className="h-5 w-auto shrink-0 self-start" />
-                {logoDataUrl && (
-                  <>
-                    <span className="h-4 w-px bg-sidebar-foreground/15 shrink-0" aria-hidden="true" />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={logoDataUrl}
-                      alt=""
-                      className="h-5 w-auto max-w-[88px] shrink-0 self-start rounded object-contain"
-                    />
-                  </>
-                )}
-              </div>
-              <span className="text-xs text-sidebar-foreground/70 truncate max-w-[180px]">{companyName}</span>
-            </div>
-          )}
+      {/* Computadora (≥960px): riel lateral de 260px, sin colapsar. */}
+      <aside data-kr="side" className="hidden md:flex md:w-[260px] md:shrink-0 md:flex-col md:gap-0.5 md:overflow-y-auto border-r bg-card px-3.5 py-3.5">
+        <div className="flex items-center gap-3 px-1.5 pb-2">
+          <span data-kr="side-logo" className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-primary font-extrabold tracking-[-0.04em] text-primary-foreground">
+            {logoDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoDataUrl} alt="" className="size-full object-cover" />
+            ) : (
+              "KR"
+            )}
+          </span>
+          <div className="min-w-0">
+            <b className="block text-[17px] tracking-[-0.02em]">KR POS</b>
+            <small className="block truncate text-muted-foreground">{companyName}</small>
+          </div>
         </div>
 
-        {!collapsed && branchControl && (
-          <div className="mx-3.5 mt-3 rounded-2xl bg-muted px-3.5 py-3">
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Sede activa</span>
-            <div className="mt-0.5">{branchControl}</div>
+        {branchControl && (
+          <div data-kr="side-sede" className="mb-1.5 rounded-[14px] bg-muted px-3 py-2.5">
+            <small className="block text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">Sede activa</small>
+            <div className="[&_svg]:hidden">{branchControl}</div>
           </div>
         )}
 
-        {nav(collapsed, () => {})}
+        <nav aria-label="Módulos" className="flex flex-col gap-0.5">
+          {GROUPS.map((g) => {
+            const items = visible.filter((i) => i.group === g);
+            if (!items.length) return null;
+            return (
+              <div key={g} className="flex flex-col gap-0.5">
+                <span data-kr="nav-group" className="mx-2 mt-2.5 mb-0.5 text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
+                  {g}
+                </span>
+                {items.map((item) => {
+                  const active = isLinkActive(pathname, item.href);
+                  return (
+                    <Link
+                      key={item.key}
+                      href={item.href}
+                      data-kr="nav-item"
+                      aria-current={active ? "page" : undefined}
+                      className="flex min-h-11 w-full items-center gap-3 rounded-[12px] px-3 text-sm font-bold transition-colors duration-150 hover:bg-muted"
+                      style={active ? { background: `color-mix(in srgb, ${color(item.key)} 15%, transparent)`, color: color(item.key) } : undefined}
+                    >
+                      <NavIcon name={item.icon} data-kr="nav-icon" className="size-6 shrink-0" style={{ color: color(item.key) }} />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </nav>
 
-        <div className={`border-t shrink-0 flex flex-col gap-2 p-3 ${collapsed ? "items-center" : ""}`}>
-          {!collapsed && planLabel && (
-            <Link
-              href="/settings"
-              className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
-            >
-              <span>
-                Plan {planLabel} · {planMaxUsers} usuarios
-              </span>
-              {rateLabel && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">Tasa {rateLabel}</span>}
+        <div className="mt-auto flex flex-col gap-1.5 px-1.5 pt-2">
+          {planLabel && (
+            <Link href="/settings" className={pillCls}>
+              Plan {planLabel} · {planMaxUsers} usuarios
             </Link>
           )}
-          {!collapsed && (
-            <div className="flex items-center gap-2.5 min-w-0 px-0.5">
-              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-xs font-extrabold text-primary-foreground" aria-hidden>
-                {sellerName
-                  .split(" ")
-                  .map((w) => w[0])
-                  .slice(0, 2)
-                  .join("")
-                  .toUpperCase()}
-              </span>
-              <div className="flex min-w-0 flex-col leading-tight">
-                <span className="truncate text-sm font-semibold">{sellerName}</span>
-                <span className="text-xs text-muted-foreground">{ROLE_LABELS[role]}</span>
-              </div>
-            </div>
+          {rateLabel && <span className={`${pillCls} bg-primary/12 text-primary`}>Tasa {rateLabel}</span>}
+          {hasPin && (
+            <button type="button" onClick={lock} className="flex min-h-9 w-full items-center justify-center gap-2 rounded-full bg-muted text-[13px] font-bold">
+              <LockIcon className="size-4" aria-hidden /> Bloquear pantalla
+            </button>
           )}
-          {/* Acciones del pie en una sola fila de íconos (como la preview). */}
-          <div className={`flex items-center gap-1 ${collapsed ? "flex-col" : "justify-between"}`}>
-            <Button type="button" variant="ghost" size="icon-sm" onClick={() => setPaletteOpen(true)} title="Buscar (Ctrl K)" aria-label="Buscar pantalla">
-              <SearchIcon className="size-4" />
-            </Button>
-            <ThemeToggle collapsed />
-            {hasPin && <LockButton collapsed />}
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-[38px] shrink-0 place-items-center rounded-full bg-primary text-[13px] font-extrabold text-primary-foreground" aria-hidden>
+              {initials}
+            </span>
+            <div className="min-w-0 flex-1 leading-tight">
+              <b className="block truncate text-sm">{sellerName}</b>
+              <small className="text-muted-foreground">{ROLE_LABELS[role]}</small>
+            </div>
             <form action={logout}>
-              <Button type="submit" variant="ghost" size="icon-sm" title="Salir" aria-label="Salir">
+              <button type="submit" title="Salir" aria-label="Salir" className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-muted">
                 <LogOutIcon className="size-4" />
-              </Button>
+              </button>
             </form>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={toggleCollapsed}
-              title={collapsed ? "Expandir barra lateral" : "Contraer barra lateral"}
-              aria-label={collapsed ? "Expandir barra lateral" : "Contraer barra lateral"}
-            >
-              {collapsed ? <PanelLeftOpenIcon className="size-4" /> : <PanelLeftCloseIcon className="size-4" />}
-            </Button>
           </div>
         </div>
       </aside>
 
-      {/* Mobile: slim top bar + off-canvas drawer. */}
-      <div className="md:hidden sticky top-0 z-40 flex items-center gap-3 border-b glass-bar glass-sidebar text-sidebar-foreground px-4 h-14 shrink-0">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen((v) => !v)}
-        >
-          {mobileOpen ? <XIcon /> : <MenuIcon />}
-        </Button>
-        <div className="flex items-center gap-2 min-w-0">
-          {brandMark}
-          <span className="font-semibold text-sm truncate">{companyName}</span>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="ml-auto"
-          aria-label="Buscar pantalla"
-          onClick={() => setPaletteOpen(true)}
-        >
-          <SearchIcon />
-        </Button>
+      {/* Botón flotante de tema (como en la preview). */}
+      <div className="fixed right-3 top-2.5 z-20 md:right-[18px] md:top-3.5 [&_button]:size-10 [&_button]:rounded-full [&_button]:bg-card [&_button]:text-muted-foreground [&_button]:shadow-(--shadow-card)">
+        <ThemeToggle collapsed />
       </div>
 
-      {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <div className="relative flex flex-col w-72 max-w-[85vw] bg-sidebar text-sidebar-foreground shadow-xl">
-            <div className="flex items-center gap-2.5 px-4 h-14 border-b shrink-0">
-              {brandMark}
-              <span className="font-semibold text-sm truncate">{companyName}</span>
-            </div>
-            {nav(false, () => setMobileOpen(false))}
-            <div className="border-t shrink-0 flex flex-col gap-2 p-3">
-              {branchControl && (
-                <div className="rounded-xl bg-muted p-2.5">
-                  <span className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Sede activa</span>
-                  <div className="mt-1 text-sm font-semibold">{branchControl}</div>
-                </div>
-              )}
-              <div className="flex flex-col leading-tight min-w-0 px-0.5">
-                <span className="text-sm font-medium truncate">{sellerName}</span>
-                <span className="text-xs text-sidebar-foreground/70">{ROLE_LABELS[role]}</span>
-              </div>
-              <ThemeToggle />
-              {hasPin && <LockButton />}
-              <form action={logout}>
-                <Button type="submit" variant="ghost" size="sm" className="w-full justify-start">
-                  Salir
-                </Button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Phones: five fixed destinations always in reach (the rest lives under
-          "Más"). Equal-width columns with icon + label centered in each. */}
-      <nav
-        aria-label="Navegación principal"
-        className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t glass-bar glass-sidebar pb-[env(safe-area-inset-bottom)]"
-      >
-        <ul className="flex h-[var(--tabbar-h)] items-stretch px-1.5">
+      {/* Teléfono: barra inferior con POS al centro y hoja «Más». */}
+      <nav aria-label="Navegación principal" className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t bg-card pb-[env(safe-area-inset-bottom)]">
+        <ul className="grid h-[var(--tabbar-h)] grid-cols-5 items-end px-1.5 pb-1.5">
           {tabs.map((tab) => {
             const active = isLinkActive(pathname, tab.href);
-            const Icon = tab.icon;
+            const center = tab.key === "pos";
             return (
-              <li key={tab.href} className={`flex flex-1 items-center justify-center py-1.5 ${tab.href === "/pos" ? "relative" : ""}`}>
-                {tab.href === "/pos" ? (
-                  <Link
-                    href={tab.href}
-                    aria-current={active ? "page" : undefined}
-                    aria-label="POS"
-                    className="-mt-6 flex flex-col items-center gap-0.5 text-[11px] font-bold text-primary"
-                  >
-                    <span className="grid size-14 place-items-center rounded-full border-4 border-card bg-primary text-primary-foreground shadow-[0_8px_22px_color-mix(in_srgb,var(--primary)_45%,transparent)] transition-transform active:scale-95">
-                      <Icon className="size-6" />
-                    </span>
-                    <span>{tab.label}</span>
-                  </Link>
-                ) : (
+              <li key={tab.key} className={center ? "-mt-[22px]" : ""}>
                 <Link
                   href={tab.href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex h-full w-full flex-col items-center justify-center gap-1 rounded-2xl text-[11px] leading-none font-medium transition-[transform,background-color,color] duration-150 ease-out active:scale-95 ${
-                    active ? "bg-primary/10 text-primary" : "text-sidebar-foreground/65"
-                  }`}
+                  className={`flex flex-col items-center gap-0.5 rounded-[14px] px-0.5 py-1.5 text-[11px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}
                 >
-                  <Icon className="size-5 shrink-0" />
-                  <span className="max-w-full truncate px-0.5">{tab.label}</span>
+                  {center ? (
+                    <span data-kr="tab-center" className="grid size-[54px] place-items-center rounded-full border-4 border-card bg-primary text-primary-foreground shadow-[0_8px_22px_color-mix(in_srgb,var(--primary)_45%,transparent)]">
+                      <NavIcon name={tab.icon} className="size-6 text-white" />
+                    </span>
+                  ) : (
+                    <NavIcon name={tab.icon} className="size-[22px]" />
+                  )}
+                  <span className="max-w-full truncate">{tab.label}</span>
                 </Link>
-                )}
               </li>
             );
           })}
-          <li className="flex flex-1 items-center justify-center py-1.5">
+          <li>
             <button
               type="button"
-              onClick={() => setMobileOpen(true)}
-              aria-label="Abrir menú"
-              className={`flex h-full w-full flex-col items-center justify-center gap-1 rounded-2xl text-[11px] leading-none font-medium transition-[transform,background-color,color] duration-150 ease-out active:scale-95 ${
-                mobileOpen ? "bg-primary/10 text-primary" : "text-sidebar-foreground/65"
-              }`}
+              onClick={() => setMoreOpen(true)}
+              aria-label="Abrir todos los módulos"
+              className={`flex w-full flex-col items-center gap-0.5 rounded-[14px] px-0.5 py-1.5 text-[11px] font-bold ${moreOpen ? "text-primary" : "text-muted-foreground"}`}
             >
-              <EllipsisIcon className="size-5 shrink-0" />
+              <EllipsisIcon className="size-[22px]" />
               <span>Más</span>
             </button>
           </li>
         </ul>
       </nav>
+
+      {moreOpen && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-[rgba(10,14,30,.4)] md:hidden" onClick={() => setMoreOpen(false)} aria-hidden="true" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Todos los módulos"
+            data-kr="sheet"
+            className="fixed inset-x-0 bottom-0 z-[61] mx-auto max-h-[88vh] max-w-[560px] overflow-y-auto rounded-t-[24px] bg-card px-4 pt-4 pb-[calc(20px+env(safe-area-inset-bottom))] shadow-(--shadow-float) md:hidden"
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold tracking-[-0.02em]">Todos los módulos</h2>
+              <button type="button" onClick={() => setMoreOpen(false)} aria-label="Cerrar" className="grid size-9 place-items-center rounded-full bg-muted">
+                <XIcon className="size-[18px]" />
+              </button>
+            </div>
+            {branchControl && (
+              <div className="mt-3 rounded-[14px] bg-muted px-3 py-2.5">
+                <small className="block text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">Sede activa</small>
+                <div className="[&_svg]:hidden">{branchControl}</div>
+              </div>
+            )}
+            <div className="mt-3 grid grid-cols-3 gap-2.5">
+              {visible.map((item) => {
+                const active = isLinkActive(pathname, item.href);
+                return (
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    onClick={() => setMoreOpen(false)}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex flex-col items-center gap-1.5 rounded-[18px] border-2 px-1.5 py-3.5 text-center ${active ? "border-primary bg-primary/12" : "border-transparent bg-muted"}`}
+                  >
+                    <span className="grid size-[42px] place-items-center rounded-[14px] bg-card" style={{ color: color(item.key) }}>
+                      <NavIcon name={item.icon} className="size-[21px]" />
+                    </span>
+                    <b className="text-[13px] leading-tight">{item.label}</b>
+                  </Link>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+              <div className="[&_button]:min-h-10 [&_button]:w-full [&_button]:justify-start [&_button]:rounded-full [&_button]:bg-muted [&_button]:px-4 [&_button]:text-[13px] [&_button]:font-bold">
+                <ThemeToggle />
+              </div>
+              <button type="button" onClick={() => { setMoreOpen(false); setPaletteOpen(true); }} className="flex min-h-10 items-center gap-2 rounded-full bg-muted px-4 text-[13px] font-bold">
+                <SearchIcon className="size-4" aria-hidden /> Buscar pantalla
+              </button>
+              {hasPin && (
+                <button type="button" onClick={lock} className="flex min-h-10 items-center gap-2 rounded-full bg-muted px-4 text-[13px] font-bold">
+                  <LockIcon className="size-4" aria-hidden /> Bloquear pantalla
+                </button>
+              )}
+              <form action={logout}>
+                <button type="submit" className="flex min-h-10 w-full items-center gap-2 rounded-full bg-muted px-4 text-[13px] font-bold">
+                  <LogOutIcon className="size-4" aria-hidden /> Salir
+                </button>
+              </form>
+            </div>
+          </div>
+        </>
+      )}
 
       <CommandPalette items={paletteItems} open={paletteOpen} onOpenChange={setPaletteOpen} />
     </>
