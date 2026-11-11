@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { LOCK_AFTER_MS, LOCK_MINUTE_OPTIONS, LOCK_MINUTES_KEY, readLockMinutes } from "@/lib/lock";
 
 // Cuánto tarda en bloquearse la pantalla sin actividad en este equipo (5, 10 o 15 min).
 export function IdleTimeoutSetting() {
-  const [minutes, setMinutes] = useState<number>(LOCK_AFTER_MS.VENDEDOR / 60_000);
-  useEffect(() => {
-    setMinutes(readLockMinutes() ?? LOCK_AFTER_MS.VENDEDOR / 60_000);
-  }, []);
+  const minutes = useSyncExternalStore(
+    (cb) => {
+      window.addEventListener("kr-lock-minutes", cb);
+      return () => window.removeEventListener("kr-lock-minutes", cb);
+    },
+    () => readLockMinutes() ?? LOCK_AFTER_MS.VENDEDOR / 60_000,
+    () => LOCK_AFTER_MS.VENDEDOR / 60_000
+  );
 
   function choose(m: number) {
-    setMinutes(m);
     try {
       window.localStorage.setItem(LOCK_MINUTES_KEY, String(m));
     } catch {
