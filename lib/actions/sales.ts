@@ -79,6 +79,11 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     offlineExchangeRate,
   } = parsed.data;
 
+  // Una venta a crédito necesita un cliente real a quien cobrarle después.
+  if (paymentStatus === "CREDIT" && customerPhone === "0000-0000000") {
+    return { success: false, error: "La venta a crédito necesita un cliente registrado, no «Cliente general»." };
+  }
+
   try {
     const saleId = await withTenant(companyId, async (tx) => {
       await lockBranchSequence(tx, companyId, branchId);

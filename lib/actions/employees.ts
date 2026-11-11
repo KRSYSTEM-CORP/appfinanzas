@@ -5,9 +5,17 @@ import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { hashPassword } from "@/lib/password";
+import { computePinKey, pinProblem } from "@/lib/pin";
+import { countManagersWithPin } from "@/lib/pin-rules";
 import { EmployeeSchema, EmployeeUpdateSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 import type { UserStatus } from "@prisma/client";
+
+function authSecret(): string {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) throw new Error("AUTH_SECRET no está configurado");
+  return secret;
+}
 
 // select (not a raw findMany) for two reasons: commissionPercent is a
 // Prisma Decimal, which can't cross the Server->Client Component boundary
@@ -74,8 +82,7 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
   const parsed = EmployeeSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
-    loginUsername: formData.get("loginUsername"),
-    password: formData.get("password"),
+    pin: formData.get("pin"),
     role: formData.get("role"),
     branchId: formData.get("branchId"),
     allowedSections: formData.getAll("allowedSections"),
@@ -84,12 +91,14 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const { firstName, lastName, loginUsername, password, role, branchId, allowedSections } = parsed.data;
+  const { firstName, lastName, pin, role, branchId, allowedSections } = parsed.data;
 
-  const existing = await withTenant(companyId, (tx) =>
-    tx.user.findFirst({ where: { companyId, loginUsername } })
-  );
-  if (existing) return { success: false, error: "Ese usuario ya está asignado a otra persona" };
+  const pinIssue = pinProblem(pin);
+  if (pinIssue) return { success: false, error: pinIssue.replace("El PIN", "El código personal") };
+  // Primero el gerente: hasta que un gerente tenga PIN no se crean perfiles nuevos.
+  if ((await withTenant(companyId, (tx) => countManagersWithPin(tx, companyId))) === 0) {
+    return { success: false, error: "Primero crea tu propio PIN de gerente (al entrar con tu correo). Después podrás crear los perfiles." };
+  }
 
   const limitMsg = await withTenant(companyId, (tx) => userLimitError(tx, companyId, plan));
   if (limitMsg) return { success: false, error: limitMsg };
@@ -114,11 +123,12 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
         // still-globally-unique email column satisfied without ever being
         // shown or used to log in (see loginEmployee() in lib/actions/auth.ts).
         email: `empleado.${companyId}.${firstName}.${lastName}.${Date.now()}@kyra.local`.toLowerCase(),
-        passwordHash: hashPassword(password),
+        // Sin contraseña propia: entra por la empresa y su código personal (PIN).
+        pinHash: hashPassword(pin),
+        pinKey: computePinKey(authSecret(), companyId, pin),
         companyId,
         firstName,
         lastName,
-        loginUsername,
         role,
         branchId: resolvedBranchId,
         status: "ACTIVE",
@@ -129,7 +139,7 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
     );
   } catch (error) {
     if (error instanceof Error && "code" in error && (error as { code?: string }).code === "P2002") {
-      return { success: false, error: "Ese usuario ya está asignado a otra persona" };
+      return { success: false, error: "Ese código personal ya lo usa otra persona. Elige uno distinto." };
     }
     throw error;
   }
@@ -143,16 +153,14 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
   const parsed = EmployeeUpdateSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
-    loginUsername: formData.get("loginUsername"),
     role: formData.get("role"),
-    password: formData.get("password"),
     branchId: formData.get("branchId"),
     allowedSections: formData.getAll("allowedSections"),
   });
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
-  const { firstName, lastName, loginUsername, role, password, branchId, allowedSections } = parsed.data;
+  const { firstName, lastName, role, branchId, allowedSections } = parsed.data;
 
   let resolvedBranchId: string | null = null;
   if (role === "VENDEDOR") {
@@ -176,27 +184,14 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
       }
     }
 
-    if (loginUsername) {
-      const duplicate = await tx.user.findFirst({
-        where: {
-          companyId,
-          id: { not: userId },
-          loginUsername: { equals: loginUsername, mode: "insensitive" },
-        },
-      });
-      if (duplicate) return { ok: false as const, error: "Ese usuario ya está asignado a otra persona" };
-    }
-
     await tx.user.update({
       where: { id: userId },
       data: {
         firstName,
         lastName,
-        loginUsername,
         role,
         branchId: resolvedBranchId,
         allowedSections: role === "VENDEDOR" ? allowedSections : [],
-        ...(password ? { passwordHash: hashPassword(password) } : {}),
       },
     });
     return { ok: true as const };

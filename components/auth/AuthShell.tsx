@@ -8,7 +8,7 @@ import { CONTACT_EMAIL, WHATSAPP_URL } from "@/lib/legal";
 // formulario a la derecha, con el soporte (WhatsApp y correo) al pie.
 export function AuthShell({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
   return (
-    <div className="auth-bg relative flex min-h-dvh flex-col items-center justify-center gap-4 overflow-hidden p-3 sm:p-5">
+    <div className="auth-bg relative flex min-h-dvh flex-col items-center justify-center overflow-hidden p-3 pb-14 sm:p-5 sm:pb-14">
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <i className="auth-b1" />
         <i className="auth-b2" />
@@ -33,12 +33,12 @@ export function AuthShell({ children, footer }: { children: React.ReactNode; foo
           </div>
         </section>
       </div>
-      {footer}
+      {footer && <div className="absolute inset-x-0 bottom-0 z-[1]">{footer}</div>}
 
       <style>{`
         .auth-bg { background: radial-gradient(1200px 700px at 15% 10%, #e9e6ff 0, transparent 60%), radial-gradient(900px 600px at 90% 90%, #ffe3ee 0, transparent 55%), var(--background); }
         .dark .auth-bg { background: radial-gradient(1200px 700px at 15% 10%, rgba(123,118,255,.18) 0, transparent 60%), radial-gradient(900px 600px at 90% 90%, rgba(255,127,176,.12) 0, transparent 55%), var(--background); }
-        .auth-card { box-shadow: 0 40px 90px rgba(34,26,84,.28), 0 8px 22px rgba(0,0,0,.08); animation: auth-cardin .7s cubic-bezier(.4,0,.2,1) both, auth-cardfl 9s ease-in-out .7s infinite; }
+        .auth-card { box-shadow: 0 40px 90px rgba(34,26,84,.28), 0 8px 22px rgba(0,0,0,.08); animation: auth-cardin .7s cubic-bezier(.4,0,.2,1) both; }
         .auth-b1, .auth-b2, .auth-b3, .auth-sq { position: absolute; display: block; opacity: .7; }
         .auth-b1 { width: 420px; height: 420px; border-radius: 50%; left: -120px; top: -100px; background: radial-gradient(circle, rgba(102,85,229,.35), transparent 70%); animation: auth-fl1 14s ease-in-out infinite; }
         .auth-b2 { width: 360px; height: 360px; border-radius: 50%; right: -90px; bottom: -90px; background: radial-gradient(circle, rgba(255,118,94,.32), transparent 70%); animation: auth-fl2 12s ease-in-out infinite; }

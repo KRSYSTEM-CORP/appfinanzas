@@ -105,6 +105,7 @@ export function Cart({
   discountPercent,
   onDiscountPercentChange,
   onCheckout,
+  onHold,
   isPending,
   error,
 }: {
@@ -134,6 +135,8 @@ export function Cart({
   discountPercent: string;
   onDiscountPercentChange: (value: string) => void;
   onCheckout: () => void;
+  // Solo modo `bare`: deja la cuenta en espera y abre una nueva.
+  onHold?: () => void;
   isPending: boolean;
   error: string | null;
 }) {
@@ -327,6 +330,7 @@ export function Cart({
 
       <Separator />
 
+      {!bare && (
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor="sale-discount" className="text-sm text-muted-foreground shrink-0">
           Descuento (%)
@@ -353,6 +357,7 @@ export function Cart({
           </Button>
         </div>
       </div>
+      )}
 
       {discountValue > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -417,6 +422,8 @@ export function Cart({
       </div>
       )}
 
+      {!bare && (
+      <>
       {paymentAccounts.length > 0 && !isExonerated && (
         <details className="rounded-lg border bg-card p-2.5">
           <summary className="cursor-pointer text-sm font-medium">
@@ -494,19 +501,26 @@ export function Cart({
           )}
         </>
       )}
+      </>
+      )}
 
       <div className="flex flex-col gap-3">
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <Button
-          type="button"
-          size="lg"
-          disabled={lines.length === 0}
-          loading={isPending}
-          onClick={onCheckout}
-        >
-          {isPending ? "Procesando..." : "Completar venta"}
-        </Button>
+        {bare ? (
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" size="lg" variant="outline" disabled={lines.length === 0} onClick={onHold}>
+              En espera
+            </Button>
+            <Button type="button" size="lg" disabled={lines.length === 0} loading={isPending} onClick={onCheckout}>
+              Cobrar
+            </Button>
+          </div>
+        ) : (
+          <Button type="button" size="lg" disabled={lines.length === 0} loading={isPending} onClick={onCheckout}>
+            {isPending ? "Procesando..." : "Completar venta"}
+          </Button>
+        )}
       </div>
 
     </div>

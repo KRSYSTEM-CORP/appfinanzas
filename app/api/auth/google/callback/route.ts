@@ -89,8 +89,8 @@ export async function GET(request: NextRequest) {
     );
     const bid = user.branchId ?? (branches.length === 1 ? branches[0].id : null);
 
-    await setSessionCookie({ uid: user.id, cid: user.companyId, companyName: user.company.name, bid });
-    const response = NextResponse.redirect(new URL(user.role === "GERENTE" ? "/home" : "/pos", request.url));
+    await setSessionCookie({ uid: user.id, cid: user.companyId, companyName: user.company.name, bid, lk: true });
+    const response = NextResponse.redirect(new URL("/lock", request.url));
     response.cookies.delete("google_oauth_state");
     return response;
   }

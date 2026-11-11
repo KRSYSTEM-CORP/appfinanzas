@@ -21,7 +21,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
 import { formatDate } from "@/lib/format";
 import { joinFullName, splitFullName } from "@/lib/name";
 import { APP_SECTIONS } from "@/lib/sections";
@@ -186,8 +185,7 @@ export function EmployeeTable({
   const [isPending, startTransition] = useTransition();
 
   const [fullName, setFullName] = useState("");
-  const [loginUsername, setLoginUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [pin, setPin] = useState("");
   const [role, setRole] = useState<Role>("VENDEDOR");
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
   const [allowedSections, setAllowedSections] = useState<Set<string>>(new Set());
@@ -200,8 +198,7 @@ export function EmployeeTable({
     const formData = new FormData();
     formData.set("firstName", firstName);
     formData.set("lastName", lastName);
-    formData.set("loginUsername", loginUsername);
-    formData.set("password", password);
+    formData.set("pin", pin);
     formData.set("role", role);
     formData.set("branchId", branchId);
     for (const s of allowedSections) formData.append("allowedSections", s);
@@ -212,8 +209,7 @@ export function EmployeeTable({
         return;
       }
       setFullName("");
-      setLoginUsername("");
-      setPassword("");
+      setPin("");
       setRole("VENDEDOR");
       setBranchId(branches[0]?.id ?? "");
       setAllowedSections(new Set());
@@ -246,28 +242,21 @@ export function EmployeeTable({
                 <p className="text-xs text-muted-foreground">Como aparecerá en ventas y reportes.</p>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="new-loginUsername">Usuario de acceso</Label>
+                <Label htmlFor="new-pin">Código personal (PIN)</Label>
                 <Input
-                  id="new-loginUsername"
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  required
-                  value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
-                />
-                <p className="text-xs text-muted-foreground">3–32 caracteres: letras, números, punto, guion o guion bajo.</p>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="new-password">Contraseña</Label>
-                <Input
-                  id="new-password"
+                  id="new-pin"
                   type="password"
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={6}
+                  pattern="\d{4,6}"
+                  required
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
                 />
-                <PasswordRequirements password={password} />
+                <p className="text-xs text-muted-foreground">
+                  4 a 6 números, distinto al de los demás. Con él esta persona entra a su perfil después de que alguien inicie sesión con el correo y la clave de la empresa.
+                </p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-role">Rol</Label>
@@ -379,10 +368,6 @@ export function EmployeeTable({
                 </dd>
               </div>
               <div className="flex flex-col gap-0.5">
-                <dt className="text-xs text-muted-foreground">Usuario de acceso</dt>
-                <dd className="font-medium">{u.loginUsername ? `@${u.loginUsername}` : "Nombre actual (pendiente de actualizar)"}</dd>
-              </div>
-              <div className="flex flex-col gap-0.5">
                 <dt className="text-xs text-muted-foreground">Sucursal</dt>
                 <dd className="font-medium">
                   {u.branchId ? (branches.find((b) => b.id === u.branchId)?.name ?? "—") : "Todas"}
@@ -428,8 +413,6 @@ function EmployeeActions({
   const [editOpen, setEditOpen] = useState(false);
 
   const [fullName, setFullName] = useState(joinFullName(u.firstName ?? "", u.lastName ?? ""));
-  const [loginUsername, setLoginUsername] = useState(u.loginUsername ?? "");
-  const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>(u.role);
   const [branchId, setBranchId] = useState(u.branchId ?? branches[0]?.id ?? "");
   const [allowedSections, setAllowedSections] = useState<Set<string>>(new Set(u.allowedSections));
@@ -456,9 +439,7 @@ function EmployeeActions({
     const formData = new FormData();
     formData.set("firstName", firstName);
     formData.set("lastName", lastName);
-    formData.set("loginUsername", loginUsername);
     formData.set("role", role);
-    formData.set("password", password);
     formData.set("branchId", branchId);
     for (const s of allowedSections) formData.append("allowedSections", s);
     startTransition(async () => {
@@ -467,7 +448,6 @@ function EmployeeActions({
         setEditError(result.error);
         return;
       }
-      setPassword("");
       setEditOpen(false);
       router.refresh();
     });
@@ -498,36 +478,6 @@ function EmployeeActions({
                     onChange={(e) => setFullName(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">Como aparecerá en ventas y reportes.</p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`edit-loginUsername-${u.id}`}>Usuario de acceso</Label>
-                  <Input
-                    id={`edit-loginUsername-${u.id}`}
-                    autoComplete="off"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    value={loginUsername}
-                    onChange={(e) => setLoginUsername(e.target.value.toLowerCase().replace(/\s/g, ""))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Si queda vacío, seguirá entrando con su nombre actual. Debe ser único en el negocio.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`edit-password-${u.id}`}>Nueva contraseña (opcional)</Label>
-                  <Input
-                    id={`edit-password-${u.id}`}
-                    type="password"
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                  {password && <PasswordRequirements password={password} />}
-                  {!password && (
-                    <p className="text-xs text-muted-foreground">
-                      Déjala en blanco para no cambiarla.
-                    </p>
-                  )}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`edit-role-${u.id}`}>Rol</Label>

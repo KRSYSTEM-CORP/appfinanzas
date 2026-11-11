@@ -18,6 +18,8 @@ import { getPlanUsage } from "@/lib/actions/plan";
 import { Separator } from "@/components/ui/separator";
 import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from "@/lib/actions/settings";
 import { listBranches } from "@/lib/actions/branches";
+import { listEmployees } from "@/lib/actions/employees";
+import { TeamPinPanel } from "@/components/settings/TeamPinPanel";
 import { formatDate } from "@/lib/format";
 import { formatLocalCurrency } from "@/lib/currencies";
 import { requireManager } from "@/lib/session";
@@ -51,6 +53,7 @@ export default async function SettingsPage() {
     ivaSettings,
     paymentAccounts,
     planUsage,
+    people,
   ] = await Promise.all([
     getExchangeRateInfo(),
     getBranding(),
@@ -59,16 +62,24 @@ export default async function SettingsPage() {
     getIvaSettings(),
     canManage ? listPaymentAccounts(false) : Promise.resolve([]),
     getPlanUsage(),
+    canManage ? listEmployees() : Promise.resolve([]),
   ]);
   const stale = isStale(updatedAt);
   const referenceSymbol = referenceCurrency === "USD" ? "$1" : "€1";
 
+  const managersWithPin = people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length;
   const sections: SettingsSection[] = [
     {
       id: "plan",
       label: "Mi plan",
       hint: `Plan ${planUsage.plan.label} · ${planUsage.usedUsers} de ${planUsage.plan.maxUsers} usuarios`,
       content: <MyPlanPanel usage={planUsage} />,
+    },
+    {
+      id: "equipo",
+      label: "Equipo y PIN",
+      hint: `${people.filter((p) => p.hasPin).length} de ${people.length} con PIN`,
+      content: <TeamPinPanel people={people} currentUserId={session.userId} />,
     },
     {
       id: "moneda",
@@ -266,7 +277,7 @@ export default async function SettingsPage() {
           { label: "Tasa de cambio del día", hint: "Para mostrar precios en bolívares con la tasa vigente.", cta: "Revisar la tasa de cambio", sectionId: "moneda", done: !exchangeRateEnabled || (rate != null && !stale) },
           { label: "Marca y apariencia", hint: "Tu logo y tu color en documentos y en el sistema.", cta: "Personalizar la marca", sectionId: "apariencia", done: Boolean(logoDataUrl || brandColor) },
           { label: "Datos para cobrar", hint: "Cuentas y métodos con los que te pagan tus clientes y tu suscripción.", cta: "Agregar datos para cobrar", sectionId: "cobros", done: paymentAccounts.length > 0 },
-          { label: "Equipo", hint: "Invita a tus vendedores con su código de empresa.", cta: "Ver mi plan y usuarios", sectionId: "plan", done: planUsage.usedUsers > 1 },
+          { label: "Equipo y PIN", hint: "Crea tu PIN de gerente y asigna el código personal de cada persona.", cta: "Abrir Equipo y PIN", sectionId: "equipo", done: managersWithPin > 0 && people.every((p) => p.hasPin) },
         ]}
       />
     </div>

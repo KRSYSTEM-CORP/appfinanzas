@@ -35,18 +35,6 @@ function passwordField(label: string) {
     .regex(/[^a-zA-Z0-9]/, `${label} debe incluir al menos un símbolo especial`);
 }
 
-// Same bar as passwordField, as a plain predicate — for the one place
-// (EmployeeUpdateSchema below) where a password is optional (blank means
-// "keep the current one") and only needs a single combined message once a
-// manager actually types something.
-function isStrongPassword(v: string): boolean {
-  return (
-    v.length >= 8 && /[A-Z]/.test(v) && /[a-z]/.test(v) && /[0-9]/.test(v) && /[^a-zA-Z0-9]/.test(v)
-  );
-}
-const PASSWORD_STRENGTH_MESSAGE =
-  "La contraseña debe tener al menos 8 caracteres, con una mayúscula, una minúscula, un número y un símbolo especial";
-
 // Derived directly from the Prisma enum (rather than hand-listed) so adding
 // a new payment method to the schema can't silently drift from what this
 // validator accepts — a mismatch here previously made new methods fail
@@ -404,14 +392,6 @@ export const EmployeeLoginSchema = z.object({
   password: z.string().min(1, "La contraseña es obligatoria"),
 });
 
-const employeeUsernameField = z
-  .string()
-  .trim()
-  .min(3, "El usuario debe tener al menos 3 caracteres")
-  .max(32, "El usuario no puede superar 32 caracteres")
-  .regex(/^[a-zA-Z0-9._-]+$/, "Usa solo letras, números, punto, guion o guion bajo")
-  .transform((value) => value.toLowerCase());
-
 const RoleSchema = z.enum(["GERENTE", "VENDEDOR"]);
 
 // A GERENTE has no fixed branch (sees "Todas las sucursales"), but a
@@ -427,8 +407,8 @@ export const EmployeeSchema = z
   .object({
     firstName: nameField("El nombre es obligatorio"),
     lastName: nameField("El apellido es obligatorio"),
-    loginUsername: employeeUsernameField,
-    password: passwordField("La contraseña"),
+    // Código personal (PIN) con el que esta persona entra a su perfil (4 a 6 números).
+    pin: z.string().trim().regex(/^\d{4,6}$/, "El código personal debe tener de 4 a 6 números"),
     role: RoleSchema,
     branchId: branchIdField,
     // Which sections this employee can access (see lib/sections.ts) —
@@ -461,19 +441,8 @@ export const EmployeeUpdateSchema = z
   .object({
     firstName: nameField("El nombre es obligatorio"),
     lastName: nameField("El apellido es obligatorio"),
-    loginUsername: z.preprocess(
-      (value) => (value == null ? "" : value),
-      z.string().trim().transform((value) => (value ? employeeUsernameField.parse(value) : null)),
-    ),
     role: RoleSchema,
     branchId: branchIdField,
-    // Empty string means "keep the current password" — only validated as a
-    // password when the manager actually typed a new one.
-    password: z
-      .string()
-      .optional()
-      .transform((v) => (v === "" ? undefined : v))
-      .refine((v) => v === undefined || isStrongPassword(v), PASSWORD_STRENGTH_MESSAGE),
     allowedSections: z.array(z.string()).default([]),
   })
   .refine((data) => data.role !== "VENDEDOR" || data.branchId, {

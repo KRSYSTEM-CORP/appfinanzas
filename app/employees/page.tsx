@@ -31,8 +31,9 @@ export default async function EmployeesPage() {
         <CardContent className="flex flex-col gap-2">
           <p className="text-2xl font-mono font-semibold tracking-wider">{company?.loginCode}</p>
           <p className="text-sm text-muted-foreground">
-            Comparte este código con tus empleados. Junto con su nombre, apellido y contraseña, les
-            permite iniciar sesión desde la pestaña &quot;Soy empleado&quot; en la pantalla de acceso.
+            Es el identificador de tu empresa. Todas las personas entran con el correo y la clave de la
+            empresa y luego eligen su perfil con su código personal (PIN). El PIN de cada persona lo crea y
+            lo cambia solo un gerente, desde Ajustes → Equipo y PIN.
           </p>
         </CardContent>
       </Card>
