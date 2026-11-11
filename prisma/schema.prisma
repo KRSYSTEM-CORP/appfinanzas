@@ -793,6 +793,10 @@ model Quote {
   sentAt            DateTime?
   viewedAt          DateTime?
   lostReason        String?
+  // Vigencia («válido hasta») y recordatorio de seguimiento; historial de seguimiento.
+  validUntil        DateTime?
+  remindAt          DateTime?
+  followUps         QuoteFollowUp[]
   // Virtual back-relation — no column here, see Sale.quoteId (the actual FK,
   // unique so a quote can never be linked to more than one sale).
   sale              Sale?
@@ -800,6 +804,22 @@ model Quote {
   @@unique([branchId, controlNumber])
   @@index([companyId, createdAt])
   @@index([branchId, createdAt])
+}
+
+// Seguimiento de un presupuesto: llamadas, mensajes por WhatsApp y notas.
+model QuoteFollowUp {
+  id          String   @id @default(cuid())
+  companyId   String
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  kind        String
+  text        String?
+  createdById String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  @@index([quoteId, createdAt])
+  @@index([companyId])
 }
 
 model QuoteItem {
