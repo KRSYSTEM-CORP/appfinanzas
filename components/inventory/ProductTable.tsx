@@ -44,6 +44,7 @@ export function ProductTable({
   referenceCurrency,
   categories,
   canManage,
+  canSeeCosts = true,
   companyId,
 }: {
   products: ListedProduct[];
@@ -54,6 +55,7 @@ export function ProductTable({
   referenceCurrency: ReferenceCurrency;
   categories: string[];
   canManage: boolean;
+  canSeeCosts?: boolean;
   companyId: string;
 }) {
   useLiveRefresh(`pos:${companyId}`, "product");
@@ -307,6 +309,7 @@ export function ProductTable({
           exchangeRateEnabled={exchangeRateEnabled}
           referenceCurrency={referenceCurrency}
           canManage={canManage}
+          canSeeCosts={canSeeCosts}
           isPending={isPending}
           onToggleActive={toggleActive}
           onDelete={handleDelete}

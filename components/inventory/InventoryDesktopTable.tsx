@@ -45,6 +45,7 @@ export function InventoryDesktopTable({
   exchangeRateEnabled,
   referenceCurrency,
   canManage,
+  canSeeCosts = true,
   isPending,
   onToggleActive,
   onDelete,
@@ -55,6 +56,8 @@ export function InventoryDesktopTable({
   exchangeRateEnabled: boolean;
   referenceCurrency: ReferenceCurrency;
   canManage: boolean;
+  // Permiso «Ver costos y ganancias»: apagado oculta costo y valor en stock.
+  canSeeCosts?: boolean;
   isPending: boolean;
   onToggleActive: (id: string, isActive: boolean) => void;
   onDelete: (id: string) => void;
@@ -71,9 +74,9 @@ export function InventoryDesktopTable({
               <th className="px-2 py-3 font-medium">Categoría</th>
               <th className="px-2 py-3 font-medium">Existencia vs. mínimo</th>
               <th className="px-2 py-3 font-medium">Estado</th>
-              <th className="px-2 py-3 text-right font-medium">Costo</th>
+              {canSeeCosts && <th className="px-2 py-3 text-right font-medium">Costo</th>}
               <th className="px-2 py-3 text-right font-medium">Precio</th>
-              <th className="px-2 py-3 text-right font-medium">Valor en stock</th>
+              {canSeeCosts && <th className="px-2 py-3 text-right font-medium">Valor en stock</th>}
               <th className="px-4 py-3 text-right font-medium">Ajustar</th>
             </tr>
           </thead>
@@ -124,11 +127,11 @@ export function InventoryDesktopTable({
                       {ui.label}
                     </span>
                   </td>
-                  <td className="px-2 py-3 text-right tabular-nums text-muted-foreground">{p.costCents != null ? formatCurrencyCents(referenceCurrency, p.costCents) : "—"}</td>
+                  {canSeeCosts && <td className="px-2 py-3 text-right tabular-nums text-muted-foreground">{p.costCents != null ? formatCurrencyCents(referenceCurrency, p.costCents) : "—"}</td>}
                   <td className="px-2 py-3 text-right whitespace-nowrap [&_*]:whitespace-nowrap">
                     <Price eurCents={p.priceCents} rate={rate} currencyCode={currencyCode} exchangeRateEnabled={exchangeRateEnabled} referenceCurrency={referenceCurrency} className="items-end" />
                   </td>
-                  <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">{value != null ? formatCurrencyCents(referenceCurrency, value) : "—"}</td>
+                  {canSeeCosts && <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">{value != null ? formatCurrencyCents(referenceCurrency, value) : "—"}</td>}
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <span className="whitespace-nowrap tabular-nums font-semibold">{p.trackStock ? `${p.stock} und.` : ""}</span>

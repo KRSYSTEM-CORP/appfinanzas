@@ -1,3 +1,4 @@
+import { requirePermission } from "@/lib/session";
 import { ZapIcon } from "lucide-react";
 import { AssistantChat } from "@/components/assistant/AssistantChat";
 import { BuyCredits } from "@/components/assistant/BuyCredits";
@@ -7,6 +8,7 @@ import { AI_APPLY_COST } from "@/lib/assistant";
 export const dynamic = "force-dynamic";
 
 export default async function AssistantPage() {
+  await requirePermission("assistant");
   const [status, history, requests] = await Promise.all([getAssistantStatus(), listAssistantHistory(), listMyCreditRequests()]);
   return (
     <div className="flex flex-col gap-4 px-4 py-5">

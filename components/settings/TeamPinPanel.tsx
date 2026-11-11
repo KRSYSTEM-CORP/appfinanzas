@@ -2,12 +2,14 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { PinControl } from "@/components/employees/PinControl";
 import { IdleTimeoutSetting } from "@/components/settings/IdleTimeoutSetting";
+import { RoleSelect, RolesMatrix } from "@/components/settings/RolesPanel";
 import type { EmployeeListItem } from "@/lib/actions/employees";
+import type { RoleRow } from "@/lib/actions/roles";
 
 // Ajustes → Equipo y PIN: solo un gerente crea y cambia el código personal (PIN) de cada
 // persona. Cada quien lo usa para entrar a su perfil tras iniciar sesión con el correo y la
 // clave de la empresa.
-export function TeamPinPanel({ people, currentUserId }: { people: EmployeeListItem[]; currentUserId: string }) {
+export function TeamPinPanel({ people, currentUserId, roles }: { people: EmployeeListItem[]; currentUserId: string; roles: RoleRow[] }) {
   const managersWithPin = people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length;
   return (
     <div className="flex flex-col gap-4">
@@ -33,10 +35,11 @@ export function TeamPinPanel({ people, currentUserId }: { people: EmployeeListIt
                   {p.id === currentUserId && <span className="ml-2 text-xs font-medium text-muted-foreground">(tú)</span>}
                 </p>
                 <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  {p.role === "GERENTE" ? "Gerente" : "Vendedor"}
+                  {roles.find((r) => r.id === p.roleId)?.name ?? (p.role === "GERENTE" ? "Gerente" : "Vendedor")}
                   {p.status !== "ACTIVE" && <Badge variant="destructive">Inactivo</Badge>}
                 </p>
               </div>
+              <RoleSelect userId={p.id} roleId={p.roleId} roles={roles} />
               {locked ? (
                 <span className="text-xs text-muted-foreground">Disponible cuando un gerente tenga PIN</span>
               ) : (
@@ -46,6 +49,7 @@ export function TeamPinPanel({ people, currentUserId }: { people: EmployeeListIt
           );
         })}
       </ul>
+      <RolesMatrix roles={roles} />
       <p className="text-xs text-muted-foreground">
         Para agregar personas o cambiar su rol y sucursal usa{" "}
         <Link href="/employees" className="underline underline-offset-4">

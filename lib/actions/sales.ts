@@ -4,7 +4,7 @@ import { computeIgtfCents } from "@/lib/igtf";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
 import { Prisma, type PaymentStatus } from "@prisma/client";
-import { requireManager, requireSession } from "@/lib/session";
+import { hasPermission, requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { notifyLive, posChannel } from "@/lib/realtime";
 import { SaleSchema, RegisterPaymentSchema } from "@/lib/validations";
@@ -391,7 +391,9 @@ async function restoreStock(tx: Prisma.TransactionClient, saleId: string, compan
 }
 
 export async function voidSale(saleId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
+  const session = await requireManager();
+  if (!hasPermission(session, "void")) return { success: false, error: "No tienes permiso para anular ventas" };
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = session;
 
   try {
     await withTenant(companyId, async (tx) => {

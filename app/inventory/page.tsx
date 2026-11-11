@@ -7,7 +7,7 @@ import { PriceListButton } from "@/components/inventory/PriceListButton";
 import { InternalUseButton } from "@/components/inventory/InternalUseButton";
 import { getInventoryOverview, listAllProducts, listCategories } from "@/lib/actions/products";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
-import { requireSectionAccess } from "@/lib/session";
+import { hasPermission, requireSectionAccess } from "@/lib/session";
 import { getPlan } from "@/lib/plans";
 import { formatCurrencyCents } from "@/lib/currencies";
 
@@ -160,6 +160,7 @@ export default async function InventoryPage() {
         referenceCurrency={referenceCurrency}
         categories={categories}
         canManage={canManage}
+        canSeeCosts={hasPermission(session, "costs")}
         companyId={session.companyId}
       />
     </div>
