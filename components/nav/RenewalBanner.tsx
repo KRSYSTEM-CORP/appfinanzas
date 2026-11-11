@@ -21,13 +21,13 @@ export function RenewalBanner({ days, text }: { days: number; text: string }) {
   return (
     <div
       role="status"
-      className="fixed inset-x-3 bottom-3 z-50 mx-auto flex max-w-md items-center gap-3 rounded-xl border bg-card p-3 text-sm shadow-lg md:bottom-4 md:left-auto md:right-4 md:mx-0"
+      className={`fixed inset-x-3 bottom-[calc(var(--tabbar-h)+0.75rem)] z-50 mx-auto flex max-w-md items-center gap-3 rounded-[19px] border-l-[6px] bg-card p-3.5 text-sm shadow-(--shadow-float) md:bottom-4 md:left-auto md:right-4 md:mx-0 ${days <= 1 ? "border-destructive" : "border-warning"}`}
     >
-      <BellRingIcon className="size-5 shrink-0 text-warning" aria-hidden />
+      <BellRingIcon className={`size-5 shrink-0 ${days <= 1 ? "text-destructive" : "text-warning"}`} aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{text}</p>
-        <Link href="/billing" className="text-primary underline-offset-2 hover:underline">
-          Ir a Suscripción mensual
+        <Link href="/settings" className="text-primary underline-offset-2 hover:underline">
+          Ir a Mi Plan
         </Link>
       </div>
       <button

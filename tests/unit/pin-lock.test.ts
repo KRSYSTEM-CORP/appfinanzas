@@ -3,11 +3,11 @@ import { computePinKey, pinProblem } from "@/lib/pin";
 import { LOCK_AFTER_MS, LOCK_WARNING_MS, lockState, lockTimeoutFor } from "@/lib/lock";
 
 describe("PIN", () => {
-  it("acepta de 4 a 6 números que no sean triviales", () => {
-    for (const ok of ["4827", "93015", "270681"]) expect(pinProblem(ok)).toBeNull();
+  it("acepta 4 números que no sean triviales", () => {
+    for (const ok of ["4827", "9301", "2706"]) expect(pinProblem(ok)).toBeNull();
   });
   it("rechaza largo incorrecto o caracteres que no son números", () => {
-    for (const bad of ["123", "1234567", "12a4", "", "12 34", "４８２７"]) expect(pinProblem(bad)).not.toBeNull();
+    for (const bad of ["123", "12345", "123456", "12a4", "", "12 34", "４８２７"]) expect(pinProblem(bad)).not.toBeNull();
   });
   it("rechaza repetidos y secuencias", () => {
     for (const bad of ["0000", "7777", "111111", "1234", "4321", "123456", "6543", "7890", "9012", "3210"]) {
