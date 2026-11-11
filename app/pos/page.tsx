@@ -88,6 +88,7 @@ export default async function PosPage({
       )}
       <div className="flex-1 min-h-0">
         <PosClient
+          topMethod={[...(todaySummary?.byMethod ?? [])].sort((a, b) => b.totalCents - a.totalCents)[0]?.paymentMethod ?? null}
           paymentAccounts={paymentAccounts}
           products={products}
           rate={rate}

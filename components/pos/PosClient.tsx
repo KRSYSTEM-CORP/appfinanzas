@@ -11,6 +11,7 @@ import { searchCustomers } from "@/lib/actions/customers";
 import { CustomerForm, type CustomerInfo } from "@/components/pos/CustomerForm";
 import { ProductPicker } from "@/components/pos/ProductPicker";
 import { Cart, type CartLine } from "@/components/pos/Cart";
+import { PayScreen } from "@/components/pos/PayScreen";
 import { ReceiptView } from "@/components/pos/ReceiptView";
 import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { useDefaultPaymentRow } from "@/components/payments/useDefaultPaymentRow";
@@ -26,10 +27,10 @@ import { useCart } from "@/lib/pos/use-cart";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { PaymentAccountRow } from "@/lib/actions/payment-accounts";
-import type { PrintPaperSize, ReferenceCurrency, SaleChannel } from "@prisma/client";
+import type { PaymentMethod, PrintPaperSize, ReferenceCurrency, SaleChannel } from "@prisma/client";
 
 type SaleWithItems = NonNullable<Awaited<ReturnType<typeof getSaleReceipt>>>;
-type Step = "customer" | "cart" | "receipt";
+type Step = "customer" | "cart" | "pay" | "receipt";
 
 function PosSession({
   paymentAccounts = [],
@@ -45,6 +46,8 @@ function PosSession({
   sellerName,
   initialQuote,
   accountTabs,
+  onHold,
+  topMethod = null,
   companyId,
   companyName,
   branchId,
@@ -74,6 +77,10 @@ function PosSession({
   initialQuote?: QuoteForConversion | null;
   // Pestañas de cuentas (las pone PosClient dentro de la tarjeta de venta).
   accountTabs?: React.ReactNode;
+  // Deja esta cuenta en espera y abre otra (la pone PosClient).
+  onHold?: () => void;
+  // Método de pago más usado hoy, para marcarlo en la pantalla de cobro.
+  topMethod?: PaymentMethod | null;
   companyId: string;
   // Only used to keep this terminal's offline catalog snapshot up to date
   // (see useCatalogSync below) — nothing here changes this component's own
@@ -200,7 +207,8 @@ const [step, setStep] = useState<Step>("cart");
 
   function continueFromCustomer(info: CustomerInfo) {
     setCustomer(info);
-    setStep("cart");
+    // Si venía de «Cobrar», sigue directo a la pantalla de cobro.
+    setStep(fromPay && lines.length > 0 ? "pay" : "cart");
     setDialog(null);
     setFromPay(false);
   }
@@ -227,7 +235,8 @@ const [step, setStep] = useState<Step>("cart");
       setDialog("register");
       return;
     }
-    checkout();
+    setError(null);
+    setStep("pay");
   }
 
   // Builds a stand-in Sale (matching what ReceiptView expects) from data
@@ -386,6 +395,42 @@ const [step, setStep] = useState<Step>("cart");
     );
   }
 
+  if (step === "pay" && customer) {
+    const isGeneral = customer.phone === "0000-0000000";
+    return (
+      <div className="flex h-full flex-col gap-3">
+        {accountTabs}
+        <div className="min-h-0 flex-1">
+          <PayScreen
+            customerName={`${customer.firstName} ${customer.lastName}`}
+            rawTotal={rawTotal}
+            total={total}
+            discountPercent={discountPercent}
+            onDiscountPercentChange={setDiscountPercent}
+            paymentStatus={paymentStatus}
+            onPaymentStatusChange={setPaymentStatus}
+            paymentRows={paymentRows}
+            onPaymentRowsChange={setPaymentRows}
+            note={note}
+            onNoteChange={setNote}
+            paymentAccounts={paymentAccounts}
+            rate={rate}
+            currencyCode={currencyCode}
+            exchangeRateEnabled={exchangeRateEnabled}
+            referenceCurrency={referenceCurrency}
+            igtfRatePercent={igtfRatePercent}
+            isGeneralCustomer={isGeneral}
+            topMethod={topMethod}
+            isPending={isPending}
+            error={error}
+            onBack={() => setStep("cart")}
+            onConfirm={checkout}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3 h-full">
       <div className={`grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_360px] md:gap-6 md:flex-1 md:min-h-0 ${lines.length ? "pb-[calc(var(--tabbar-h)+5rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>
@@ -476,6 +521,7 @@ const [step, setStep] = useState<Step>("cart");
           discountPercent={discountPercent}
           onDiscountPercentChange={setDiscountPercent}
           onCheckout={requestCheckout}
+          onHold={onHold}
           isPending={isPending}
           error={error}
         />
@@ -595,7 +641,7 @@ export function PosClient(props: React.ComponentProps<typeof PosSession>) {
     <div className="flex h-full flex-col gap-3">
       {accounts.map((id) => (
         <div key={id} className={id === active ? "min-h-0 flex-1" : "hidden"}>
-          <PosSession {...props} initialQuote={id === 1 ? props.initialQuote : null} accountTabs={tabs} />
+          <PosSession {...props} initialQuote={id === 1 ? props.initialQuote : null} accountTabs={tabs} onHold={addAccount} />
         </div>
       ))}
     </div>

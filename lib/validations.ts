@@ -35,18 +35,6 @@ function passwordField(label: string) {
     .regex(/[^a-zA-Z0-9]/, `${label} debe incluir al menos un símbolo especial`);
 }
 
-// Same bar as passwordField, as a plain predicate — for the one place
-// (EmployeeUpdateSchema below) where a password is optional (blank means
-// "keep the current one") and only needs a single combined message once a
-// manager actually types something.
-function isStrongPassword(v: string): boolean {
-  return (
-    v.length >= 8 && /[A-Z]/.test(v) && /[a-z]/.test(v) && /[0-9]/.test(v) && /[^a-zA-Z0-9]/.test(v)
-  );
-}
-const PASSWORD_STRENGTH_MESSAGE =
-  "La contraseña debe tener al menos 8 caracteres, con una mayúscula, una minúscula, un número y un símbolo especial";
-
 // Derived directly from the Prisma enum (rather than hand-listed) so adding
 // a new payment method to the schema can't silently drift from what this
 // validator accepts — a mismatch here previously made new methods fail
@@ -403,14 +391,6 @@ export const EmployeeLoginSchema = z.object({
   username: z.string().trim().min(1, "El usuario es obligatorio").max(120, "El usuario es demasiado largo"),
   password: z.string().min(1, "La contraseña es obligatoria"),
 });
-
-const employeeUsernameField = z
-  .string()
-  .trim()
-  .min(3, "El usuario debe tener al menos 3 caracteres")
-  .max(32, "El usuario no puede superar 32 caracteres")
-  .regex(/^[a-zA-Z0-9._-]+$/, "Usa solo letras, números, punto, guion o guion bajo")
-  .transform((value) => value.toLowerCase());
 
 const RoleSchema = z.enum(["GERENTE", "VENDEDOR"]);
 
