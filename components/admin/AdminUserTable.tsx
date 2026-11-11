@@ -405,9 +405,8 @@ function AdminCompanyDetail({
             <DialogHeader>
               <DialogTitle>¿Renovar la suscripción de {company.name} manualmente?</DialogTitle>
               <DialogDescription>
-                Esto reinicia su ciclo de cobro a partir de hoy, sin registrar un monto pagado.
-                La empresa tendrá 5 días para reportar y completar su pago — si no lo hace, el
-                sistema se bloqueará de nuevo automáticamente.
+                Esto reinicia su ciclo de cobro a partir de hoy (próximo pago en 30 días), sin registrar un monto
+                pagado. No hay días de gracia: si no paga al vencer, el sistema se bloquea automáticamente.
               </DialogDescription>
             </DialogHeader>
             {renewError && <p className="text-sm text-destructive">{renewError}</p>}

@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { InventoryActions } from "@/components/inventory/InventoryActions";
 import { ProductMasterDetail } from "@/components/inventory/ProductMasterDetail";
 import { InventoryDesktopTable } from "@/components/inventory/InventoryDesktopTable";
 import { deleteProduct, setProductActive, type getInventoryOverview } from "@/lib/actions/products";
@@ -240,6 +241,7 @@ export function ProductTable({
             ))}
           </SelectContent>
         </Select>
+        <InventoryActions products={products} referenceCurrency={referenceCurrency} />
         {hasActiveFilters && (
           <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
             <XIcon /> Limpiar filtros

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LockIcon } from "lucide-react";
 import { lockSession } from "@/lib/actions/pin";
-import { lockState, lockTimeoutFor } from "@/lib/lock";
+import { lockState, lockTimeoutFor, readLockMinutes } from "@/lib/lock";
 
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart", "scroll"] as const;
 
@@ -12,7 +12,14 @@ const ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart", "scrol
 // Solo se monta para quien ya tiene PIN.
 export function IdleLock({ role }: { role: "GERENTE" | "VENDEDOR" }) {
   const router = useRouter();
-  const timeout = lockTimeoutFor(role);
+  const [chosen, setChosen] = useState<number | null>(null);
+  useEffect(() => {
+    const read = () => setChosen(readLockMinutes());
+    read();
+    window.addEventListener("kr-lock-minutes", read);
+    return () => window.removeEventListener("kr-lock-minutes", read);
+  }, []);
+  const timeout = chosen ? chosen * 60_000 : lockTimeoutFor(role);
   const last = useRef(0);
   const locking = useRef(false);
   const [warning, setWarning] = useState<number | null>(null);

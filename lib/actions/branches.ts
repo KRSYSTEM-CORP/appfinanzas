@@ -108,8 +108,11 @@ export type BranchSummary = {
   salesMonth: number;
   salesMonthCents: number;
   lowStock: number;
-  // Ganancia estimada del mes = ventas − costo de lo vendido − gastos cargados a la sede.
+  // Ganancia neta estimada del mes = ventas − costo de lo vendido − gastos de la sede − comisiones.
   profitMonthCents: number;
+  cogsMonthCents: number;
+  expensesMonthCents: number;
+  commissionsMonthCents: number;
   goalCents: number | null;
 };
 
@@ -126,7 +129,7 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
     ]);
     const summaries = await Promise.all(
       branches.map(async (b) => {
-        const [sales, products, users, month, low, cogs, expenses] = await Promise.all([
+        const [sales, products, users, month, low, cogs, expenses, commissions] = await Promise.all([
           tx.sale.aggregate({
             where: { companyId, branchId: b.id, voided: false, createdAt: { gte: start, lt: end } },
             _sum: { totalCents: true },
@@ -154,7 +157,18 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
             _sum: { amountCents: true },
             where: { companyId, branchId: b.id, spentAt: { gte: monthStart, lt: end } },
           }),
+          // Comisiones de vendedores sobre las ventas del mes en esta sede.
+          tx.$queryRaw<{ c: number | null }[]>`
+            SELECT COALESCE(SUM(s."totalCents" * u."commissionPercent" / 100), 0)::float8 AS c
+            FROM "Sale" s
+            JOIN "User" u ON u.id = s."sellerId"
+            WHERE s."companyId" = ${companyId} AND s."branchId" = ${b.id} AND s."voided" = false
+              AND u."commissionPercent" IS NOT NULL
+              AND s."createdAt" >= ${monthStart} AND s."createdAt" < ${end}`,
         ]);
+        const cogsCents = Number(cogs[0]?.c ?? 0);
+        const expensesCents = expenses._sum.amountCents ?? 0;
+        const commissionsCents = Math.round(Number(commissions[0]?.c ?? 0));
         return {
           id: b.id,
           name: b.name,
@@ -166,7 +180,10 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
           salesMonth: month._count,
           salesMonthCents: month._sum.totalCents ?? 0,
           lowStock: Number(low[0]?.n ?? 0),
-          profitMonthCents: (month._sum.totalCents ?? 0) - Number(cogs[0]?.c ?? 0) - (expenses._sum.amountCents ?? 0),
+          profitMonthCents: (month._sum.totalCents ?? 0) - cogsCents - expensesCents - commissionsCents,
+          cogsMonthCents: cogsCents,
+          expensesMonthCents: expensesCents,
+          commissionsMonthCents: commissionsCents,
           goalCents: b.monthlyGoalCents,
         };
       })

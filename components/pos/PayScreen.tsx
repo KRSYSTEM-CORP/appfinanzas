@@ -134,6 +134,7 @@ export function PayScreen({
     }
   }
 
+  const topOptionId = topMethod ? METHOD_OPTIONS.find((o) => o.method === topMethod)?.id ?? null : null;
   const activeIds = new Set(
     paymentRows.map((r) => METHOD_OPTIONS.find((o) => o.method === r.paymentMethod && (r.paymentMethod !== "CASH" || o.foreign === r.paidInForeignCurrency))?.id)
   );
@@ -150,7 +151,7 @@ export function PayScreen({
       : 0;
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-[22px] bg-card p-5 shadow-(--shadow-card)">
+    <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-[22px] bg-card p-5 pb-[calc(var(--tabbar-h)+1.25rem+env(safe-area-inset-bottom))] shadow-(--shadow-card) md:pb-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
           <ArrowLeftIcon className="size-4" /> Volver a la venta
@@ -219,8 +220,8 @@ export function PayScreen({
                         o.icon
                       )}
                       {o.label}
-                      {topMethod === o.method && (
-                        <span className="absolute right-1.5 top-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold text-primary-foreground">Más usado hoy</span>
+                      {topOptionId === o.id && (
+                        <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">Más usado hoy</span>
                       )}
                     </button>
                   ))}

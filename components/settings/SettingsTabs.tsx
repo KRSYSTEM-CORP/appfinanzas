@@ -29,6 +29,16 @@ export type SetupStep = { label: string; hint: string; cta: string; sectionId: s
 
 const OVERVIEW = "__overview";
 
+// Las secciones se agrupan en los seis bloques de la preview.
+const GROUPS: { id: string; label: string; icon: string; sections: string[] }[] = [
+  { id: "g-plan", label: "Mi Plan", icon: "plan", sections: ["plan"] },
+  { id: "g-marca", label: "Marca", icon: "apariencia", sections: ["apariencia"] },
+  { id: "g-negocio", label: "Negocio", icon: "fiscales", sections: ["fiscales", "iva", "sucursales"] },
+  { id: "g-pagos", label: "Pagos y Moneda", icon: "moneda", sections: ["moneda", "cobros"] },
+  { id: "g-equipo", label: "Equipo y Seguridad", icon: "equipo", sections: ["equipo", "clave"] },
+  { id: "g-imp", label: "Impresión y Datos", icon: "impresion", sections: ["impresion", "aplicacion"] },
+];
+
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   plan: CrownIcon,
   equipo: UsersIcon,
@@ -51,7 +61,9 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
     const first = steps.findIndex((s) => !s.done);
     return first >= 0 ? first : 0;
   });
-  const active = sections.find((s) => s.id === activeId);
+  const groups = GROUPS.map((g) => ({ ...g, items: sections.filter((s) => g.sections.includes(s.id)) })).filter((g) => g.items.length > 0);
+  const groupOf = (sectionId: string) => groups.find((g) => g.sections.includes(sectionId))?.id ?? sectionId;
+  const active = groups.find((g) => g.id === activeId);
   const done = steps.filter((s) => s.done).length;
   const pct = steps.length ? Math.round((done / steps.length) * 100) : 0;
   const step = steps[stepIdx];
@@ -67,18 +79,25 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
         <button type="button" role="tab" aria-selected={activeId === OVERVIEW} onClick={() => setActiveId(OVERVIEW)} className={pill(activeId === OVERVIEW)}>
           <LayoutGridIcon className="size-4" aria-hidden /> Todo en una vista
         </button>
-        {sections.map((section) => {
-          const Icon = ICONS[section.id];
+        {groups.map((g) => {
+          const Icon = ICONS[g.icon];
           return (
-            <button key={section.id} type="button" role="tab" aria-selected={section.id === activeId} onClick={() => setActiveId(section.id)} className={pill(section.id === activeId)}>
-              {Icon && <Icon className="size-4" aria-hidden />} {section.label}
+            <button key={g.id} type="button" role="tab" aria-selected={g.id === activeId} onClick={() => setActiveId(g.id)} className={pill(g.id === activeId)}>
+              {Icon && <Icon className="size-4" aria-hidden />} {g.label}
             </button>
           );
         })}
       </div>
 
       {active ? (
-        <div className="max-w-5xl">{active.content}</div>
+        <div className="flex max-w-5xl flex-col gap-6">
+          {active.items.map((section) => (
+            <section key={section.id} aria-label={section.label} className="flex flex-col gap-3">
+              {active.items.length > 1 && <h2 className="text-lg font-bold tracking-tight">{section.label}</h2>}
+              {section.content}
+            </section>
+          ))}
+        </div>
       ) : (
         <>
           {step && (
@@ -104,7 +123,7 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
                   Paso {stepIdx + 1} de {steps.length} · {step.label}
                 </h3>
                 <p className="text-sm text-muted-foreground">{step.hint}</p>
-                <button type="button" onClick={() => setActiveId(step.sectionId)} className="mt-1 w-fit rounded-full bg-primary px-4 py-2.5 text-[13px] font-bold text-primary-foreground">
+                <button type="button" onClick={() => setActiveId(groupOf(step.sectionId))} className="mt-1 w-fit rounded-full bg-primary px-4 py-2.5 text-[13px] font-bold text-primary-foreground">
                   {step.cta} →
                 </button>
               </div>
@@ -137,21 +156,22 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
             </section>
           )}
           <ul className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-            {sections.map((section) => {
-              const Icon = ICONS[section.id] ?? CrownIcon;
+            {groups.map((g) => {
+              const Icon = ICONS[g.icon] ?? CrownIcon;
+              const hint = g.items.map((i) => i.hint).filter(Boolean).join(" · ");
               return (
-                <li key={section.id}>
+                <li key={g.id}>
                   <button
                     type="button"
-                    onClick={() => setActiveId(section.id)}
+                    onClick={() => setActiveId(g.id)}
                     className="flex w-full items-center gap-3.5 rounded-[19px] bg-card p-4 text-left shadow-(--shadow-card) transition-transform hover:-translate-y-0.5"
                   >
                     <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary">
                       <Icon className="size-5" aria-hidden />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block font-bold">{section.label}</span>
-                      {section.hint && <span className="block truncate text-[13px] text-muted-foreground">{section.hint}</span>}
+                      <span className="block font-bold">{g.label}</span>
+                      {hint && <span className="block truncate text-[13px] text-muted-foreground">{hint}</span>}
                     </span>
                     <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                   </button>

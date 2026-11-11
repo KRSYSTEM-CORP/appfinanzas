@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowDownIcon, ArrowUpIcon, CheckIcon, EyeIcon, EyeOffIcon, ExternalLinkIcon, FileTextIcon, StarIcon, UsersIcon, XIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -192,6 +193,12 @@ export function LearningPanel({
                       <Button size="sm" variant={v.watched ? "outline" : "default"} disabled={isPending} onClick={() => toggleWatched(v)}>
                         {v.watched ? "Marcar como no visto" : "Marcar como visto"}
                       </Button>
+                      <Link href="/pos" className={buttonVariants({ size: "sm", variant: "outline" })}>
+                        Practicar en mi sistema
+                      </Link>
+                      <Link href="/assistant" className={buttonVariants({ size: "sm", variant: "outline" })}>
+                        Preguntar al Asistente IA
+                      </Link>
                       {isAdmin && (
                         <Button size="sm" variant="ghost" disabled={isPending} onClick={() => remove(v)}>
                           Quitar
