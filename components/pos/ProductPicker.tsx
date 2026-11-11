@@ -38,10 +38,16 @@ export function ProductPicker({
   const [scanNotice, setScanNotice] = useState<ScanFeedback | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Focus the catalog search for keyboard users on desktop; on touch devices
-  // opening the catalog must not summon the keyboard and hide the products.
+  // Sin foco al entrar (en táctil taparía los productos); la tecla «/» enfoca el buscador.
   useEffect(() => {
-    if (window.matchMedia("(pointer: fine)").matches) searchRef.current?.focus();
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== "/" || (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const filtered = useMemo(() => {
@@ -111,8 +117,8 @@ export function ProductPicker({
           <Input
             ref={searchRef}
             type="search"
-            aria-label="Buscar producto por nombre o SKU"
-            placeholder="Buscar producto por nombre o SKU..."
+            aria-label="Buscar producto, SKU o escanear"
+            placeholder="Buscar producto, SKU o escanear (/)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {

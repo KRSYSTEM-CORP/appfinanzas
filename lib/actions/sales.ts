@@ -1,5 +1,6 @@
 "use server";
 
+import { rangeToDates } from "@/lib/report-types";
 import { computeIgtfCents } from "@/lib/igtf";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
@@ -741,4 +742,35 @@ export async function listRecentSales(
       include: { items: true, payments: true, creditNote: { select: { controlNumber: true, createdAt: true, reason: true } }, debitNotes: { select: { controlNumber: true, createdAt: true, reason: true, totalCents: true, baseImponibleCents: true, taxCents: true }, orderBy: { controlNumber: "asc" } } },
     })
   );
+}
+
+export type PosSaleRow = {
+  id: string;
+  number: number | null;
+  createdAt: string;
+  customer: string;
+  channel: string;
+  method: string;
+  paymentStatus: PaymentStatus;
+  voided: boolean;
+  totalCents: number;
+  items: { productId: string; quantity: number }[];
+};
+
+// «Ventas del día / del periodo» dentro del POS (con «Volver a vender»).
+export async function listPosSales(preset: "today" | "7d" | "month"): Promise<PosSaleRow[]> {
+  const win = rangeToDates(preset);
+  const sales = await listRecentSales(40, [win]);
+  return sales.map((s) => ({
+    id: s.id,
+    number: s.controlNumber,
+    createdAt: s.createdAt.toISOString(),
+    customer: [s.customerFirstName, s.customerLastName].filter(Boolean).join(" ") || "Cliente general",
+    channel: s.channel,
+    method: s.payments[0]?.paymentMethod ?? "",
+    paymentStatus: s.paymentStatus,
+    voided: s.voided,
+    totalCents: s.totalCents,
+    items: s.items.filter((i) => i.productId).map((i) => ({ productId: i.productId as string, quantity: i.quantity })),
+  }));
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PosSalesSheet } from "@/components/pos/PosSalesSheet";
 import { PosClient } from "@/components/pos/PosClient";
 import { OfflineSyncBanner } from "@/components/pos/OfflineSyncBanner";
 import { listActiveProducts, listCategories } from "@/lib/actions/products";
@@ -63,9 +64,7 @@ export default async function PosPage({
                 {todaySummary.closed ? "Caja cerrada" : todaySummary.openingCents != null ? "Caja abierta" : "Caja sin abrir"}
               </span>
             )}
-            <Link href="/reports" className="rounded-full bg-muted px-3.5 py-1.5 text-xs font-bold text-primary">
-              Ventas del día
-            </Link>
+            <PosSalesSheet referenceCurrency={referenceCurrency} />
           </div>
         </div>
       </div>

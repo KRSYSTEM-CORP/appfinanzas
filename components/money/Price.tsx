@@ -32,10 +32,10 @@ export function Price({
 
   return (
     <span className={`inline-flex min-w-0 max-w-full flex-col ${className ?? ""}`}>
-      <span className={`tabular-nums [overflow-wrap:anywhere] ${size === "lg" ? "text-lg font-bold" : "font-bold"}`}>
+      <span className={`tabular-nums [overflow-wrap:anywhere] ${size === "lg" ? "text-lg font-bold" : "font-bold"}`}>{referenceLabel}</span>
+      <span className="tabular-nums text-xs text-muted-foreground">
         {rate != null ? formatLocalCurrency(eurCentsToLocal(eurCents, rate), currencyCode) : "—"}
       </span>
-      <span className="tabular-nums text-xs text-muted-foreground">{referenceLabel}</span>
     </span>
   );
 }

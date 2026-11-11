@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { MinusIcon, PlusIcon, XIcon } from "lucide-react";
+import { MinusIcon, PauseIcon, PlusIcon, ShoppingCartIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -248,9 +248,11 @@ export function Cart({
 
       <div className="md:flex-1 md:overflow-y-auto flex flex-col gap-2">
         {lines.length === 0 && (
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            Agrega productos para empezar una venta.
-          </p>
+          <div className="flex flex-col items-center gap-1 py-8 text-center">
+            <ShoppingCartIcon className="size-8 text-muted-foreground" aria-hidden />
+            <p className="font-bold">Aún no hay productos</p>
+            <p className="text-sm text-muted-foreground">Toca un producto para agregarlo</p>
+          </div>
         )}
         {lines.map((line) => (
           <div
@@ -388,6 +390,26 @@ export function Cart({
         </div>
       )}
 
+      {bare ? (
+        <>
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>Subtotal</span>
+            <span className="tabular-nums">{formatCurrencyCents(referenceCurrency, rawTotal)}</span>
+          </div>
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total estimado</p>
+              <p className="text-[34px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums">{formatCurrencyCents(referenceCurrency, total)}</p>
+            </div>
+            {exchangeRateEnabled && rate != null && (
+              <div className="text-right">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Equivalente</p>
+                <p className="text-sm font-bold tabular-nums">{formatLocalCurrency(eurCentsToLocal(total, rate), currencyCode)}</p>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
       <div className="flex items-center justify-between">
         <span className="text-lg font-semibold">Total</span>
         <Price
@@ -400,6 +422,8 @@ export function Cart({
           className="items-end"
         />
       </div>
+
+      )}
 
       {!bare && (
       <div className="flex flex-col gap-1.5">
@@ -510,10 +534,10 @@ export function Cart({
         {bare ? (
           <div className="grid grid-cols-2 gap-2">
             <Button type="button" size="lg" variant="outline" disabled={lines.length === 0} onClick={onHold}>
-              En espera
+              <PauseIcon /> En espera
             </Button>
             <Button type="button" size="lg" disabled={lines.length === 0} loading={isPending} onClick={onCheckout}>
-              Cobrar
+              Cobrar {formatCurrencyCents(referenceCurrency, total)}
             </Button>
           </div>
         ) : (

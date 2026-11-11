@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { PlusIcon, UsersIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { PaymentStatus } from "@prisma/client";
 import type { ListedProduct } from "@/lib/product-image";
@@ -136,6 +137,7 @@ function PosSession({
   // Como en la preview: se entra directo al catálogo y el cliente se pide al cobrar
 // (registrar uno, elegirlo en el Directorio o «Cliente general» solo desde el Directorio).
 const [step, setStep] = useState<Step>("cart");
+  const containerRef = useRef<HTMLDivElement>(null);
   const [dialog, setDialog] = useState<null | "register" | "directory">(null);
   const [fromPay, setFromPay] = useState(false);
   const [dirQuery, setDirQuery] = useState("");
@@ -199,6 +201,21 @@ const [step, setStep] = useState<Step>("cart");
   // requires the user to manually retype the amount. Once a second row is
   // added (an intentional split), amounts are fully user-controlled.
   useDefaultPaymentRow(total, rate, exchangeRateEnabled, setPaymentRows);
+
+  // «Volver a vender» (lista de ventas): suma los artículos de una venta anterior a la cuenta visible.
+  useEffect(() => {
+    function onResell(e: Event) {
+      if (!containerRef.current || containerRef.current.offsetParent === null) return;
+      const items = (e as CustomEvent<{ productId: string; quantity: number }[]>).detail;
+      for (const it of items) {
+        const product = productById.get(it.productId);
+        if (!product) continue;
+        for (let i = 0; i < it.quantity; i++) addProductToCart(product);
+      }
+    }
+    window.addEventListener("kr-pos-resell", onResell);
+    return () => window.removeEventListener("kr-pos-resell", onResell);
+  });
 
   function addProduct(product: ListedProduct) {
     setError(null);
@@ -432,7 +449,7 @@ const [step, setStep] = useState<Step>("cart");
   }
 
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div ref={containerRef} className="flex flex-col gap-3 h-full">
       <div className={`grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_360px] md:gap-6 md:flex-1 md:min-h-0 ${lines.length ? "pb-[calc(var(--tabbar-h)+5rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>
         <ProductPicker
           products={products}
@@ -482,11 +499,11 @@ const [step, setStep] = useState<Step>("cart");
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
-            <Button type="button" size="lg" onClick={() => { setFromPay(false); setDialog("register"); }}>
-              + Registrar cliente
+            <Button type="button" size="lg" className="min-h-[46px]" onClick={() => { setFromPay(false); setDialog("register"); }}>
+              <PlusIcon /> Registrar cliente
             </Button>
-            <Button type="button" size="lg" variant="outline" onClick={() => { setDirQuery(""); setDirResults([]); setDialog("directory"); }}>
-              Directorio
+            <Button type="button" size="lg" variant="outline" className="min-h-[46px]" onClick={() => { setDirQuery(""); setDirResults([]); setDialog("directory"); }}>
+              <UsersIcon /> Directorio
             </Button>
           </div>
         <Cart
