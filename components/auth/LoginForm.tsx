@@ -9,12 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   login,
-  loginEmployee,
   getCompanyBrandingByEmail,
-  getCompanyBrandingByCode,
-  forgetDeviceCompany,
   type CompanyBranding,
-  type RememberedCompany,
 } from "@/lib/actions/auth";
 import { deriveBrandVars, BRAND_VAR_NAMES } from "@/lib/theme-color";
 import { SUSPENDED_WHATSAPP_URL, CONTACT_EMAIL } from "@/lib/legal";
@@ -36,29 +32,19 @@ const GOOGLE_ERRORS: Record<string, string> = {
 type BranchOption = { id: string; name: string };
 
 export function LoginForm({
-  rememberedCompany,
   googleConfigured = false,
   authError,
   initiallyBlocked = false,
 }: {
-  rememberedCompany: RememberedCompany | null;
   googleConfigured?: boolean;
   authError?: string;
   initiallyBlocked?: boolean;
 }) {
-  const [mode, setMode] = useState<"owner" | "employee">("owner");
   const [suspended, setSuspended] = useState(initiallyBlocked);
   const [error, setError] = useState<string | null>(null);
   const [branding, setBranding] = useState<CompanyBranding>(NO_BRANDING);
   const [isPending, startTransition] = useTransition();
-  // Whether we're still trusting the device's remembered company code —
-  // starts true whenever one exists, so a returning employee skips typing
-  // it; "Usar otro código" below flips this off for the rest of the session.
-  const [useRemembered, setUseRemembered] = useState(!!rememberedCompany);
-  // Only ever populated for the owner flow (loginEmployee never needs a
-  // picker — an employee's branch is fixed, see lib/actions/auth.ts). Kept
-  // alongside the credentials so re-submitting with a chosen branchId
-  // doesn't require the user to retype anything.
+  // Con varias sucursales activas se elige a cuál entrar antes del acceso por perfil.
   const [branchChoices, setBranchChoices] = useState<BranchOption[] | null>(null);
   const [pendingCredentials, setPendingCredentials] = useState<{ email: string; password: string } | null>(null);
   const [turnstileToken, setTurnstileToken] = useState("");
@@ -68,24 +54,6 @@ export function LoginForm({
     setTurnstileToken("");
     setTurnstileGeneration((generation) => generation + 1);
   }
-
-  // Preview the remembered company's branding right away, same as if the
-  // employee had just typed its code themselves.
-  useEffect(() => {
-    if (!rememberedCompany || !useRemembered) return;
-    let cancelled = false;
-    getCompanyBrandingByCode(rememberedCompany.code)
-      .then((b) => {
-        if (!cancelled) setBranding(b);
-      })
-      .catch(() => {
-        if (!cancelled) setBranding(NO_BRANDING);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Live-preview a company's own colors/logo on the login screen itself, as
   // soon as it's identified (by email for owners, by company code for
@@ -110,16 +78,6 @@ export function LoginForm({
     }
     formData.set("cf-turnstile-response", turnstileToken);
     startTransition(async () => {
-      if (mode === "employee") {
-        formData.set("username", String(formData.get("employeeUsername") ?? ""));
-        const result = await loginEmployee(formData);
-        if (!result.success) {
-          setError(result.error);
-          resetTurnstile();
-        }
-        return;
-      }
-
       const result = await login(formData);
       if (result.success) return;
       if ("suspended" in result) {
@@ -186,19 +144,6 @@ export function LoginForm({
     window.location.href = url.toString();
   }
 
-  async function handleCompanyCodeBlur(e: React.FocusEvent<HTMLInputElement>) {
-    const code = e.target.value;
-    if (!code) {
-      setBranding(NO_BRANDING);
-      return;
-    }
-    try {
-      setBranding(await getCompanyBrandingByCode(code));
-    } catch {
-      setBranding(NO_BRANDING);
-    }
-  }
-
   if (suspended) {
     return (
       <div className="flex flex-col gap-4 max-w-sm mx-auto rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
@@ -230,7 +175,6 @@ export function LoginForm({
         </div>
         <button
           type="button"
-          aria-pressed={mode === "owner"}
           onClick={() => setSuspended(false)}
           className="text-sm text-muted-foreground underline underline-offset-4"
         >
@@ -242,44 +186,6 @@ export function LoginForm({
 
   return (
     <div className="flex flex-col gap-4 max-w-sm mx-auto">
-      <div className="mx-auto grid w-full grid-cols-2 gap-1 rounded-full bg-muted p-1">
-        <button
-          type="button"
-          aria-pressed={mode === "owner"}
-          onClick={() => {
-            setMode("owner");
-            setError(null);
-            setBranding(NO_BRANDING);
-            setBranchChoices(null);
-            setPendingCredentials(null);
-          }}
-          className={`min-h-11 min-w-0 rounded-full px-2 py-2 text-center text-xs transition-colors sm:text-sm ${
-            mode === "owner" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-          }`}
-        >
-          Soy administrador
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === "employee"}
-          onClick={() => {
-            setMode("employee");
-            setError(null);
-            setBranding(NO_BRANDING);
-            if (rememberedCompany && useRemembered) {
-              getCompanyBrandingByCode(rememberedCompany.code).then(setBranding).catch(() => {});
-            }
-            setBranchChoices(null);
-            setPendingCredentials(null);
-          }}
-          className={`min-h-11 min-w-0 rounded-full px-2 py-2 text-center text-xs transition-colors sm:text-sm ${
-            mode === "employee" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-          }`}
-        >
-          Soy empleado
-        </button>
-      </div>
-
       {authError && GOOGLE_ERRORS[authError] && (
         <p className="text-sm text-destructive text-center">{GOOGLE_ERRORS[authError]}</p>
       )}
@@ -335,78 +241,27 @@ export function LoginForm({
           </div>
         )}
 
-        {mode === "owner" ? (
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <Label htmlFor="email">Correo</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="username"
-              onBlur={handleEmailBlur}
-              required
-            />
-          </div>
-        ) : rememberedCompany && useRemembered ? (
-          <>
-            <input type="hidden" name="companyCode" value={rememberedCompany.code} />
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border bg-card px-3 py-2 text-sm">
-              <span className="min-w-0 flex-1 text-muted-foreground">
-                Negocio: <span className="text-foreground font-medium">{rememberedCompany.companyName ?? "recordado en este dispositivo"}</span>
-              </span>
-              <button
-                type="button"
-                className="shrink-0 text-xs text-muted-foreground underline underline-offset-4"
-                onClick={() => {
-                  setUseRemembered(false);
-                  setBranding(NO_BRANDING);
-                  forgetDeviceCompany().catch(() => {});
-                }}
-              >
-                Usar otro código
-              </button>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="employeeUsername">Usuario o nombre actual</Label>
-              <Input id="employeeUsername" name="employeeUsername" autoComplete="username" autoCapitalize="none" autoCorrect="off" required />
-              <p className="text-xs text-muted-foreground">Usa el usuario asignado por tu gerente o, por ahora, tu nombre y apellido.</p>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="companyCode">Código de empresa</Label>
-              <Input
-                id="companyCode"
-                name="companyCode"
-                autoComplete="organization"
-                autoCapitalize="characters"
-                autoCorrect="off"
-                spellCheck={false}
-                onBlur={handleCompanyCodeBlur}
-                required
-              />
-              <p className="text-xs text-muted-foreground">Solicítalo al administrador de tu negocio.</p>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="employeeUsername">Usuario o nombre actual</Label>
-              <Input id="employeeUsername" name="employeeUsername" autoComplete="username" autoCapitalize="none" autoCorrect="off" required />
-              <p className="text-xs text-muted-foreground">Usa el usuario asignado por tu gerente o, por ahora, tu nombre y apellido.</p>
-            </div>
-          </>
-        )}
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Label htmlFor="email">Correo</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="username"
+            onBlur={handleEmailBlur}
+            required
+          />
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <Label htmlFor="password">Contraseña</Label>
-            {mode === "owner" && (
-              <Link
-                href="/forgot-password"
-                className="shrink-0 text-xs text-muted-foreground underline underline-offset-4"
-              >
-                ¿Olvidaste tu contraseña?
-              </Link>
-            )}
+            <Link
+              href="/forgot-password"
+              className="shrink-0 text-xs text-muted-foreground underline underline-offset-4"
+            >
+              ¿Olvidaste tu contraseña?
+            </Link>
           </div>
           <Input id="password" name="password" type="password" autoComplete="current-password" required />
         </div>
@@ -417,17 +272,15 @@ export function LoginForm({
           {isPending ? "Entrando..." : "Entrar"}
         </Button>
 
-        {mode === "owner" && (
-          <p className="text-sm text-muted-foreground text-center">
-            ¿No tienes cuenta?{" "}
-            <Link href="/signup" className="text-foreground underline underline-offset-4">
-              Crea una
-            </Link>
-          </p>
-        )}
+        <p className="text-sm text-muted-foreground text-center">
+          ¿No tienes cuenta?{" "}
+          <Link href="/signup" className="text-foreground underline underline-offset-4">
+            Crea una
+          </Link>
+        </p>
       </form>
       )}
-      {mode === "owner" && googleConfigured && !branchChoices && (
+      {googleConfigured && !branchChoices && (
         <>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <div className="h-px flex-1 bg-border" />o<div className="h-px flex-1 bg-border" />

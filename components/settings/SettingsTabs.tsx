@@ -13,6 +13,7 @@ import {
   PercentIcon,
   PrinterIcon,
   StoreIcon,
+  UsersIcon,
   WalletIcon,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ const OVERVIEW = "__overview";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   plan: CrownIcon,
+  equipo: UsersIcon,
   moneda: BanknoteIcon,
   apariencia: PaletteIcon,
   impresion: PrinterIcon,

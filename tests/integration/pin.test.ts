@@ -18,7 +18,8 @@ vi.mock("@/lib/session", () => {
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 vi.stubEnv("AUTH_SECRET", "secreto-de-pruebas-de-integracion");
-const { setUserPin, lockSession, unlockWithPin, listLockProfiles } = await import("@/lib/actions/pin");
+const { setUserPin, lockSession, unlockWithPin, listLockProfiles, createFirstManagerPin } = await import("@/lib/actions/pin");
+const { createEmployee } = await import("@/lib/actions/employees");
 
 const SELLER_EMAIL = "vendedor-pin@pruebas.test";
 let sellerId = "";
@@ -48,6 +49,27 @@ describe("PIN por persona", () => {
     expect((await setUserPin(sellerId, "12ab")).success).toBe(false);
   });
 
+  it("primero el gerente: nadie más recibe PIN hasta que un gerente tenga el suyo", async () => {
+    const early = await setUserPin(sellerId, "4827");
+    expect(early.success).toBe(false);
+    if (!early.success) expect(early.error).toMatch(/Primero crea el PIN de un gerente/);
+    expect((await setUserPin(ctx.userId, "905163")).success).toBe(true);
+  });
+
+  it("no se crean perfiles nuevos mientras ningún gerente tenga PIN", async () => {
+    await owner.user.update({ where: { id: ctx.userId }, data: { pinHash: null, pinKey: null } });
+    const fd = new FormData();
+    fd.set("firstName", "Nueva");
+    fd.set("lastName", "Persona");
+    fd.set("pin", "7316");
+    fd.set("role", "VENDEDOR");
+    fd.set("branchId", ctx.branchId);
+    const r = await createEmployee(fd);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error).toMatch(/Primero crea tu propio PIN/);
+    expect((await setUserPin(ctx.userId, "905163")).success).toBe(true);
+  });
+
   it("guarda el PIN (solo como hash) y no se puede repetir en la empresa", async () => {
     expect((await setUserPin(sellerId, "4827")).success).toBe(true);
     const u = await owner.user.findUniqueOrThrow({ where: { id: sellerId } });
@@ -56,7 +78,6 @@ describe("PIN por persona", () => {
     const dup = await setUserPin(ctx.userId, "4827");
     expect(dup.success).toBe(false);
     if (!dup.success) expect(dup.error).toMatch(/ya lo usa/);
-    expect((await setUserPin(ctx.userId, "905163")).success).toBe(true);
   });
 
   it("no toca a personas de otra empresa", async () => {
@@ -77,7 +98,10 @@ describe("bloquear y desbloquear", () => {
     expect(await listLockProfiles()).toEqual([]);
     lockedMode = true;
     const profiles = await listLockProfiles();
-    expect(profiles.map((p) => p.id).sort()).toEqual([ctx.userId, sellerId].sort());
+    const ids = profiles.map((p) => p.id);
+    expect(ids).toContain(ctx.userId);
+    expect(ids).toContain(sellerId);
+    expect(profiles.find((p) => p.id === sellerId)?.access).toBe("pin");
     expect(JSON.stringify(profiles)).not.toMatch(/pinHash|pinKey|passwordHash/);
   });
 
@@ -86,7 +110,9 @@ describe("bloquear y desbloquear", () => {
     setCookie.mockClear();
     expect((await unlockWithPin(sellerId, "9999")).success).toBe(false);
     expect(setCookie).not.toHaveBeenCalled();
-    expect((await unlockWithPin(sellerId, "4827")).success).toBe(true);
+    const ok = await unlockWithPin(sellerId, "4827");
+    expect(ok.success).toBe(true);
+    expect(ok.success && ok.redirectTo).toBe("/pos");
     expect(setCookie).toHaveBeenCalledWith(expect.objectContaining({ uid: sellerId, lk: false }));
   });
 
@@ -104,11 +130,52 @@ describe("bloquear y desbloquear", () => {
     if (!r.success) expect(r.error).toMatch(/Demasiados intentos/);
   });
 
-  it("quitar el PIN deja a esa persona fuera de la pantalla de bloqueo", async () => {
+  it("quitar el PIN deja a esa persona en «pídelo a tu gerente», pero la sigue mostrando", async () => {
     lockedMode = false;
     expect((await setUserPin(sellerId, null)).success).toBe(true);
     lockedMode = true;
-    const ids = (await listLockProfiles()).map((p) => p.id);
-    expect(ids).not.toContain(sellerId);
+    const seller = (await listLockProfiles()).find((p) => p.id === sellerId);
+    expect(seller?.access).toBe("ask-manager");
+    expect(seller?.managerPinReady).toBe(true);
+  });
+});
+
+describe("primer PIN de gerente en empresas existentes", () => {
+  it("sin ningún PIN: el gerente puede crearlo y el vendedor queda esperando al gerente", async () => {
+    await owner.user.updateMany({ where: { companyId: ctx.companyId }, data: { pinHash: null, pinKey: null } });
+    lockedMode = true;
+    const profiles = await listLockProfiles();
+    expect(profiles.find((p) => p.id === ctx.userId)?.access).toBe("create");
+    const seller = profiles.find((p) => p.id === sellerId);
+    expect(seller?.access).toBe("ask-manager");
+    expect(seller?.managerPinReady).toBe(false);
+  });
+
+  it("el vendedor no puede crear su PIN por esta vía", async () => {
+    const r = await createFirstManagerPin(sellerId, "6159", "6159");
+    expect(r.success).toBe(false);
+  });
+
+  it("rechaza si los dos PIN no coinciden o es débil", async () => {
+    expect((await createFirstManagerPin(ctx.userId, "6159", "6150")).success).toBe(false);
+    expect((await createFirstManagerPin(ctx.userId, "1234", "1234")).success).toBe(false);
+  });
+
+  it("el gerente crea su PIN, entra y desde ahí el resto ya depende de él", async () => {
+    setCookie.mockClear();
+    const r = await createFirstManagerPin(ctx.userId, "6159", "6159");
+    expect(r.success).toBe(true);
+    expect(r.success && r.redirectTo).toBe("/home");
+    expect(setCookie).toHaveBeenCalledWith(expect.objectContaining({ uid: ctx.userId, lk: false }));
+    // Ya hay un gerente con PIN: no se puede crear otro «primer PIN» por esta vía.
+    expect((await createFirstManagerPin(ctx.userId, "7391", "7391")).success).toBe(false);
+    lockedMode = false;
+    expect((await setUserPin(sellerId, "4827")).success).toBe(true);
+  });
+
+  it("no se puede quitar el único PIN de gerente mientras otros dependen de él", async () => {
+    const r = await setUserPin(ctx.userId, null);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error).toMatch(/único PIN de gerente/);
   });
 });

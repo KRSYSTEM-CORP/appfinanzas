@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { DeleteIcon, LockIcon, LogOutIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/actions/auth";
-import { unlockWithPin, type LockProfile } from "@/lib/actions/pin";
+import { createFirstManagerPin, unlockWithPin, type LockProfile } from "@/lib/actions/pin";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 const MAX_LEN = 6;
@@ -28,6 +28,8 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
   const router = useRouter();
   const [selected, setSelected] = useState<LockProfile | null>(profiles.length === 1 ? profiles[0] : null);
   const [pin, setPin] = useState("");
+  // Crear el primer PIN de gerente: se escribe y se confirma.
+  const [firstPin, setFirstPin] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -35,18 +37,28 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
     (value: string) => {
       if (!selected || value.length < MIN_LEN) return;
       setError(null);
+      if (selected.access === "create" && firstPin === null) {
+        // Primer paso: guardar el PIN escrito y pedir que lo repita.
+        setFirstPin(value);
+        setPin("");
+        return;
+      }
       startTransition(async () => {
-        const r = await unlockWithPin(selected.id, value);
+        const r =
+          selected.access === "create"
+            ? await createFirstManagerPin(selected.id, firstPin ?? "", value)
+            : await unlockWithPin(selected.id, value);
         if (r.success) {
-          router.replace("/pos");
+          router.replace(r.redirectTo ?? "/pos");
           router.refresh();
         } else {
           setError(r.error);
           setPin("");
+          if (selected.access === "create") setFirstPin(null);
         }
       });
     },
-    [selected, router]
+    [selected, firstPin, router]
   );
 
   const press = useCallback(
@@ -56,11 +68,11 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
       setPin((prev) => {
         if (prev.length >= MAX_LEN) return prev;
         const next = prev + digit;
-        if (next.length === MAX_LEN) queueMicrotask(() => submit(next));
+        if (next.length === MAX_LEN && selected?.access === "pin") queueMicrotask(() => submit(next));
         return next;
       });
     },
-    [isPending, submit]
+    [isPending, submit, selected]
   );
 
   // Teclado físico.
@@ -73,6 +85,7 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
       else if (e.key === "Escape") {
         setSelected(null);
         setPin("");
+        setFirstPin(null);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -96,14 +109,22 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
             {companyName}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {selected ? `Hola, ${selected.name.split(" ")[0]}. Escribe tu PIN.` : "Elige tu perfil para continuar"}
+            {!selected
+              ? "Elige tu perfil para continuar"
+              : selected.access === "create"
+                ? firstPin === null
+                  ? `Hola, ${selected.name.split(" ")[0]}. Crea tu PIN (4 a 6 números).`
+                  : "Escribe tu PIN otra vez para confirmarlo."
+                : selected.access === "ask-manager"
+                  ? `Hola, ${selected.name.split(" ")[0]}.`
+                  : `Hola, ${selected.name.split(" ")[0]}. Escribe tu PIN.`}
           </p>
         </div>
 
         {!selected ? (
           profiles.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground">
-              Ningún perfil tiene PIN todavía. Cierra la sesión y entra con tu correo y clave.
+              No hay perfiles activos en esta empresa. Cierra la sesión y entra con otra cuenta.
             </p>
           ) : (
             <ul className="flex flex-wrap justify-center gap-4">
@@ -114,19 +135,36 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
                     onClick={() => {
                       setSelected(p);
                       setPin("");
+                      setFirstPin(null);
                       setError(null);
                     }}
                     className="flex w-24 flex-col items-center gap-1.5 rounded-2xl p-2 transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-primary active:scale-95"
                   >
                     <Avatar p={p} size="md" />
                     <span className="w-full truncate text-center text-sm font-medium">{p.name}</span>
-                    <span className="text-xs text-muted-foreground">{p.role === "GERENTE" ? "Gerente" : "Vendedor"}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {p.role === "GERENTE" ? "Gerente" : "Vendedor"}
+                      {p.access !== "pin" && " · sin PIN"}
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
           )
         ) : (
+          selected.access === "ask-manager" ? (
+            <>
+              <Avatar p={selected} size="lg" />
+              <p className="text-center text-sm text-muted-foreground">
+                {selected.managerPinReady
+                  ? "Todavía no tienes tu código personal (PIN). Pídele a tu gerente que te lo asigne en Ajustes."
+                  : "Todavía no hay un gerente con PIN. Primero el gerente debe crear el suyo; después podrá asignarte el tuyo."}
+              </p>
+              <Button variant="outline" onClick={() => { setSelected(null); setError(null); }}>
+                Elegir otro perfil
+              </Button>
+            </>
+          ) : (
           <>
             <Avatar p={selected} size="lg" />
             <div className="flex h-4 items-center gap-3" role="status" aria-label={`${pin.length} dígitos escritos`}>
@@ -157,6 +195,7 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
                 onClick={() => {
                   setSelected(null);
                   setPin("");
+                  setFirstPin(null);
                   setError(null);
                 }}
                 className="size-16 rounded-full text-sm text-muted-foreground"
@@ -182,9 +221,16 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
               </button>
             </div>
             <Button className="w-full" disabled={isPending || pin.length < MIN_LEN} onClick={() => submit(pin)}>
-              {isPending ? "Verificando…" : "Entrar"}
+              {isPending
+                ? "Verificando…"
+                : selected.access === "create"
+                  ? firstPin === null
+                    ? "Continuar"
+                    : "Guardar mi PIN y entrar"
+                  : "Entrar"}
             </Button>
           </>
+          )
         )}
 
         <form action={logout}>

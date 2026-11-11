@@ -19,10 +19,8 @@ import {
 import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { verifyTurnstileToken } from "@/lib/turnstile";
-import { splitFullName } from "@/lib/name";
 import type { Role } from "@prisma/client";
 import {
-  EmployeeLoginSchema,
   LoginSchema,
   RequestPasswordResetSchema,
   ResetPasswordSchema,
@@ -295,13 +293,15 @@ export async function login(formData: FormData): Promise<LoginResult> {
     );
     if (!branch) return { success: false, error: genericError };
 
+    // Tras el correo y la clave siempre se elige el perfil con su PIN (pantalla de acceso).
     await setSessionCookie({
       uid: user.id,
       cid: user.companyId,
       companyName: user.company.name,
       bid: branch.id,
+      lk: true,
     });
-    redirect(postLoginPath(user.role));
+    redirect("/lock");
   }
 
   const branches = await withTenant(user.companyId, (tx) =>
@@ -319,105 +319,10 @@ export async function login(formData: FormData): Promise<LoginResult> {
     cid: user.companyId,
     companyName: user.company.name,
     bid: branches[0]?.id ?? null,
+    lk: true,
   });
 
-  redirect(postLoginPath(user.role));
-}
-
-// Employee login: a unique username is preferred. Existing staff can keep
-// signing in with their old full name until a manager assigns a username.
-export async function loginEmployee(formData: FormData): Promise<ActionResult> {
-  const ip = await getClientIp();
-  const turnstileToken = formData.get("cf-turnstile-response");
-  const turnstileOk = await verifyTurnstileToken(
-    typeof turnstileToken === "string" ? turnstileToken : "",
-    ip
-  );
-  if (!turnstileOk) {
-    return { success: false, error: "No pudimos verificar que eres humano. Intenta de nuevo." };
-  }
-
-  const parsed = EmployeeLoginSchema.safeParse({
-    companyCode: formData.get("companyCode"),
-    username: formData.get("username"),
-    password: formData.get("password"),
-  });
-
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
-  }
-
-  const { companyCode, username, password } = parsed.data;
-  const genericError = "Código de empresa, usuario o contraseña incorrectos";
-  const normalizedUsername = username.toLowerCase().replace(/\s+/g, " ");
-  const rateLimitKey = `${companyCode.toUpperCase()}:${normalizedUsername}`;
-
-  const limit = await checkRateLimit("login-employee", rateLimitKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
-  if (!limit.allowed) {
-    return { success: false, error: rateLimitMessage(limit.retryAfterMinutes) };
-  }
-
-  const company = await prisma.company.findUnique({
-    where: { loginCode: companyCode.toUpperCase() },
-  });
-  if (!company) {
-    await recordFailedAttempt("login-employee", rateLimitKey);
-    return { success: false, error: genericError };
-  }
-
-  // Resolve new unique usernames first. Name-based matching remains available
-  // for existing accounts until their manager sets a username. The legacy
-  // path refuses an ambiguous match rather than silently choosing someone.
-  const user = await withTenant(company.id, async (tx) => {
-    const byUsername = await tx.user.findFirst({
-      where: { companyId: company.id, loginUsername: { equals: normalizedUsername, mode: "insensitive" } },
-    });
-    if (byUsername) return byUsername;
-    const { firstName, lastName } = splitFullName(username);
-    if (!firstName || !lastName) return null;
-    const legacyMatches = await tx.user.findMany({
-      where: {
-        companyId: company.id,
-        loginUsername: null,
-        firstName: { equals: firstName, mode: "insensitive" },
-        lastName: { equals: lastName, mode: "insensitive" },
-      },
-      take: 2,
-    });
-    return legacyMatches.length === 1 ? legacyMatches[0] : null;
-  });
-  if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
-    await recordFailedAttempt("login-employee", rateLimitKey);
-    return { success: false, error: genericError };
-  }
-  await clearAttempts("login-employee", rateLimitKey);
-
-  if (user.status === "PENDING") {
-    return {
-      success: false,
-      error:
-        "Tu cuenta está pendiente de aprobación por un administrador de KR System. Te avisaremos cuando puedas ingresar.",
-    };
-  }
-  if (user.status === "SUSPENDED") {
-    return {
-      success: false,
-      error: "Tu acceso ha sido suspendido. Contacta al gerente de tu empresa.",
-    };
-  }
-
-  await rememberDeviceCompany(company.loginCode);
-
-  await setSessionCookie({
-    uid: user.id,
-    cid: user.companyId,
-    companyName: company.name,
-    // Employees are always pinned to whichever branch they were created
-    // under (see createEmployee, lib/actions/employees.ts) — no picker.
-    bid: user.branchId,
-  });
-
-  redirect("/pos");
+  redirect("/lock");
 }
 
 export async function logout(): Promise<void> {

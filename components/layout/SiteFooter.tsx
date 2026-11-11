@@ -3,9 +3,9 @@ import { COPYRIGHT_LINE } from "@/lib/legal";
 
 // Public pages only (login/signup) — the authenticated app doesn't carry
 // this, to keep working screens like the POS or Inventario uncluttered.
-export function SiteFooter() {
+export function SiteFooter({ showCopyright = true }: { showCopyright?: boolean }) {
   return (
-    <footer className="mt-auto flex flex-col items-center gap-2 px-6 pt-10 pb-6 text-center text-xs text-muted-foreground">
+    <footer className={`flex flex-col items-center gap-2 px-6 text-center text-xs text-muted-foreground ${showCopyright ? "mt-auto pt-10 pb-6" : "py-3"}`}>
       <div className="flex flex-wrap justify-center gap-x-3 gap-y-1">
         <Link href="/privacidad" className="hover:underline">
           Política de Privacidad
@@ -19,7 +19,7 @@ export function SiteFooter() {
           Aviso de Cookies
         </Link>
       </div>
-      <p>{COPYRIGHT_LINE}</p>
+      {showCopyright && <p>{COPYRIGHT_LINE}</p>}
     </footer>
   );
 }

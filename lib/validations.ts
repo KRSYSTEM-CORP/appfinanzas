@@ -427,8 +427,8 @@ export const EmployeeSchema = z
   .object({
     firstName: nameField("El nombre es obligatorio"),
     lastName: nameField("El apellido es obligatorio"),
-    loginUsername: employeeUsernameField,
-    password: passwordField("La contraseña"),
+    // Código personal (PIN) con el que esta persona entra a su perfil (4 a 6 números).
+    pin: z.string().trim().regex(/^\d{4,6}$/, "El código personal debe tener de 4 a 6 números"),
     role: RoleSchema,
     branchId: branchIdField,
     // Which sections this employee can access (see lib/sections.ts) —
@@ -461,19 +461,8 @@ export const EmployeeUpdateSchema = z
   .object({
     firstName: nameField("El nombre es obligatorio"),
     lastName: nameField("El apellido es obligatorio"),
-    loginUsername: z.preprocess(
-      (value) => (value == null ? "" : value),
-      z.string().trim().transform((value) => (value ? employeeUsernameField.parse(value) : null)),
-    ),
     role: RoleSchema,
     branchId: branchIdField,
-    // Empty string means "keep the current password" — only validated as a
-    // password when the manager actually typed a new one.
-    password: z
-      .string()
-      .optional()
-      .transform((v) => (v === "" ? undefined : v))
-      .refine((v) => v === undefined || isStrongPassword(v), PASSWORD_STRENGTH_MESSAGE),
     allowedSections: z.array(z.string()).default([]),
   })
   .refine((data) => data.role !== "VENDEDOR" || data.branchId, {
