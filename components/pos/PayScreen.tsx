@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { ArrowLeftIcon, BanknoteIcon, CreditCardIcon, LandmarkIcon, SmartphoneIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Price } from "@/components/money/Price";
+import { CustomerDisplay } from "@/components/pos/CustomerDisplay";
+import { LockIcon } from "lucide-react";
 import { PaymentAccountsList } from "@/components/payments/PaymentAccountsList";
 import {
   PaymentSplitBuilder,
@@ -38,7 +41,7 @@ const METHOD_OPTIONS: MethodOption[] = [
   { id: "paypal", label: "PayPal", method: "PAYPAL", foreign: false, logo: bankLogoSrc("paypal") ?? undefined },
 ];
 
-const DISCOUNT_CHIPS = [0, 5, 10, 15];
+const DISCOUNT_CHIPS = [0, 5, 10, 15, 20];
 
 export function PayScreen({
   customerName,
@@ -62,6 +65,8 @@ export function PayScreen({
   topMethod,
   isPending,
   error,
+  documentKind,
+  onDocumentKindChange,
   onBack,
   onConfirm,
 }: {
@@ -87,9 +92,14 @@ export function PayScreen({
   topMethod: PaymentMethod | null;
   isPending: boolean;
   error: string | null;
+  documentKind: "delivery" | "ticket";
+  onDocumentKindChange: (k: "delivery" | "ticket") => void;
   onBack: () => void;
-  onConfirm: () => void;
+  onConfirm: (extraNote?: string) => void;
 }) {
+  const [reason, setReason] = useState("");
+  const [given, setGiven] = useState("");
+  const [amountOff, setAmountOff] = useState("");
   const discountValue = Math.min(100, Math.max(0, Number(discountPercent) || 0));
   const exonerated = total <= 0;
   const fractional = paymentStatus === "PAID" && paymentRows.length > 1;
@@ -138,7 +148,8 @@ export function PayScreen({
   const activeIds = new Set(
     paymentRows.map((r) => METHOD_OPTIONS.find((o) => o.method === r.paymentMethod && (r.paymentMethod !== "CASH" || o.foreign === r.paidInForeignCurrency))?.id)
   );
-  const canConfirm = !isPending && (exonerated || mode === "credit" ? !(mode === "credit" && isGeneralCustomer) : pending === 0 || Math.abs(pending) <= 2);
+  const needsReason = exonerated && reason.trim().length < 3;
+  const canConfirm = !isPending && !needsReason && (exonerated || mode === "credit" ? !(mode === "credit" && isGeneralCustomer) : pending === 0 || Math.abs(pending) <= 2);
   const igtfCents =
     paymentStatus === "PAID" && igtfRatePercent != null
       ? Math.round(
@@ -228,6 +239,28 @@ export function PayScreen({
                 </div>
               </div>
 
+              {mode === "full" && paymentRows.length === 1 && paymentRows[0].paymentMethod === "CASH" && (() => {
+                const row = paymentRows[0];
+                const due = Number(row.amount.replace(",", ".")) || 0;
+                const handed = Number(given.replace(",", ".")) || 0;
+                const diff = handed - due;
+                return (
+                  <div className="flex flex-wrap items-end gap-3 rounded-[14px] bg-muted p-3">
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="pay-given" className="text-xs">El cliente entrega</Label>
+                      <Input id="pay-given" inputMode="decimal" value={given} onChange={(e) => setGiven(e.target.value)} className="h-10 w-32" />
+                    </div>
+                    <button type="button" onClick={() => setGiven(due.toFixed(2))} className="min-h-10 rounded-full bg-background px-3.5 text-[13px] font-bold">
+                      Exacto
+                    </button>
+                    {given !== "" && (
+                      <p className={`text-sm font-bold ${diff >= 0 ? "text-success" : "text-destructive"}`}>
+                        {diff >= 0 ? `Vuelto: ${diff.toFixed(2)}` : `Faltan: ${Math.abs(diff).toFixed(2)}`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
               <PaymentSplitBuilder
                 rows={paymentRows}
                 onChange={onPaymentRowsChange}
@@ -260,6 +293,9 @@ export function PayScreen({
           <div className="rounded-2xl bg-muted p-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cliente de esta venta</p>
             <p className="truncate font-semibold">{customerName}</p>
+            <div className="mt-2">
+              <CustomerDisplay totalCents={total} rate={rate} currencyCode={currencyCode} exchangeRateEnabled={exchangeRateEnabled} referenceCurrency={referenceCurrency} account={paymentAccounts[0] ?? null} />
+            </div>
           </div>
 
           {!exonerated && mode !== "credit" && (
@@ -296,6 +332,26 @@ export function PayScreen({
                 Exonerada
               </button>
             </div>
+            {exonerated && (
+              <div className="mt-2 flex flex-col gap-1">
+                <Label htmlFor="pay-reason" className="text-xs">Motivo de la exoneración (obligatorio)</Label>
+                <Input id="pay-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ej. cortesía, muestra, error de precio" />
+              </div>
+            )}
+            <div className="mt-2 flex items-center gap-2">
+              <Label htmlFor="pay-off" className="shrink-0 text-xs text-muted-foreground">Descuento en monto</Label>
+              <Input
+                id="pay-off"
+                inputMode="decimal"
+                value={amountOff}
+                onChange={(e) => {
+                  setAmountOff(e.target.value);
+                  const n = Number(e.target.value.replace(",", "."));
+                  onDiscountPercentChange(rawTotal > 0 && Number.isFinite(n) && n > 0 ? String(Math.min(100, Math.round(((n * 100) / rawTotal) * 100) / 100)) : "0");
+                }}
+                className="h-8 w-24 text-right text-sm"
+              />
+            </div>
             <div className="mt-2 flex items-center gap-2">
               <Label htmlFor="pay-discount" className="shrink-0 text-xs text-muted-foreground">Otro descuento (%)</Label>
               <Input id="pay-discount" type="number" min="0" max="100" step="1" value={discountPercent} onChange={(e) => onDiscountPercentChange(e.target.value)} className="h-8 w-20 text-right text-sm" />
@@ -309,8 +365,24 @@ export function PayScreen({
 
           <div className="rounded-2xl bg-muted p-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Documento</p>
-            <p className="text-sm font-semibold">Nota de entrega</p>
-            <p className="text-xs text-muted-foreground">Podrás emitir la factura al terminar la venta.</p>
+            <div className="mt-1 flex flex-col gap-1.5" role="radiogroup" aria-label="Documento">
+              {([["delivery", "Nota de entrega"], ["ticket", "Ticket rápido de caja"]] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={documentKind === k}
+                  onClick={() => onDocumentKindChange(k)}
+                  className={`min-h-10 rounded-[12px] border-2 px-3 text-left text-[13px] font-bold ${documentKind === k ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-background"}`}
+                >
+                  {label}
+                </button>
+              ))}
+              <div aria-disabled="true" className="flex min-h-10 items-center justify-between rounded-[12px] bg-background px-3 text-[13px] font-bold opacity-55">
+                <span className="inline-flex items-center gap-1.5"><LockIcon className="size-3.5" aria-hidden /> Factura fiscal</span>
+                <small className="text-[11px] font-semibold">Próximamente</small>
+              </div>
+            </div>
             <Label htmlFor="pay-note" className="mt-2 block text-xs text-muted-foreground">Nota (opcional)</Label>
             <Textarea id="pay-note" value={note} onChange={(e) => onNoteChange(e.target.value)} rows={2} className="mt-1" />
           </div>
@@ -324,7 +396,7 @@ export function PayScreen({
             Estado tras este cobro:{" "}
             <strong className="text-foreground">{exonerated ? "Exonerada" : mode === "credit" ? "A crédito" : pending === 0 ? "Pagada" : "Falta cobrar"}</strong>
           </p>
-          <Button type="button" size="lg" disabled={!canConfirm} loading={isPending} onClick={onConfirm}>
+          <Button type="button" size="lg" disabled={!canConfirm} loading={isPending} onClick={() => onConfirm(exonerated ? `Exonerada: ${reason.trim()}` : undefined)}>
             {isPending ? "Procesando..." : "Confirmar cobro"}
           </Button>
         </div>
