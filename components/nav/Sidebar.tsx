@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { EllipsisIcon, LockIcon, LogOutIcon, SearchIcon, XIcon } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
 import { BranchSwitcher } from "@/components/nav/BranchSwitcher";
+import { SedeZoom } from "@/components/nav/SedeZoom";
 import { NavIcon } from "@/components/nav/nav-icons";
 import { ThemeToggle } from "@/components/nav/ThemeToggle";
 import { CommandPalette, type PaletteItem } from "@/components/nav/CommandPalette";
@@ -329,6 +330,7 @@ export function Sidebar({
         </>
       )}
 
+      <SedeZoom currentName={currentBranchName} branches={branches} />
       <CommandPalette items={paletteItems} open={paletteOpen} onOpenChange={setPaletteOpen} />
     </>
   );

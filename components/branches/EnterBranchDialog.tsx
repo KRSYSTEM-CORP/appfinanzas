@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { LockIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { enterBranch } from "@/lib/actions/branches";
+import { SEDE_SWITCH_EVENT } from "@/components/nav/SedeZoom";
 
 // Pide la clave de la cuenta antes de entrar a una sede (o a «Todas»).
 export function EnterBranchDialog({
@@ -24,7 +24,6 @@ export function EnterBranchDialog({
   target: { id: string | null; name: string };
   onClose: () => void;
 }) {
-  const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -39,7 +38,8 @@ export function EnterBranchDialog({
         return;
       }
       onClose();
-      router.refresh();
+      // La animación de cambio de sede se encarga de volver a Inicio y refrescar los datos.
+      window.dispatchEvent(new CustomEvent(SEDE_SWITCH_EVENT, { detail: { toId: target.id, toName: target.name } }));
     });
   }
 
