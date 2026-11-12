@@ -1,0 +1,361 @@
+{
+ "_nota": "Valores calculados (getComputedStyle) que cada componente compartido debe dar en la app real. Salen de la preview. Se marcan en el código con el atributo data-kr.",
+ "desktop": {
+  "width": 1440,
+  "height": 900
+ },
+ "mobile": {
+  "width": 390,
+  "height": 844
+ },
+ "reglas": [
+  {
+   "kr": "body",
+   "css": {
+    "fontSize": "14px",
+    "backgroundColor": "rgb(245, 247, 251)",
+    "color": "rgb(29, 29, 31)"
+   },
+   "fontFamilyIncluye": "Hanken Grotesk"
+  },
+  {
+   "kr": "h1",
+   "css": {
+    "fontWeight": "800",
+    "letterSpacing": "-1.344px",
+    "lineHeight": "40.32px",
+    "fontSize": "38.4px"
+   },
+   "solo": "desktop"
+  },
+  {
+   "kr": "h1",
+   "css": {
+    "fontWeight": "800",
+    "fontSize": "28.8px"
+   },
+   "solo": "mobile"
+  },
+  {
+   "kr": "eyebrow",
+   "css": {
+    "fontSize": "12px",
+    "fontWeight": "600",
+    "letterSpacing": "1.44px",
+    "textTransform": "uppercase",
+    "color": "rgb(110, 110, 115)"
+   }
+  },
+  {
+   "kr": "card",
+   "css": {
+    "borderTopLeftRadius": "19px",
+    "paddingTop": "16px",
+    "paddingLeft": "16px",
+    "backgroundColor": "rgb(255, 255, 255)",
+    "boxShadow": "rgba(0, 0, 0, 0.04) 0px 1px 2px 0px, rgba(0, 0, 0, 0.05) 0px 6px 24px 0px"
+   }
+  },
+  {
+   "kr": "kpi",
+   "css": {
+    "borderTopLeftRadius": "19px",
+    "paddingTop": "17px",
+    "minHeight": "128px"
+   }
+  },
+  {
+   "kr": "kpi-num",
+   "css": {
+    "fontSize": "30px",
+    "fontWeight": "700",
+    "letterSpacing": "-0.9px"
+   }
+  },
+  {
+   "kr": "kpi-lbl",
+   "css": {
+    "fontSize": "12px",
+    "fontWeight": "600",
+    "textTransform": "uppercase"
+   }
+  },
+  {
+   "kr": "btn",
+   "css": {
+    "minHeight": "40px",
+    "paddingLeft": "14px",
+    "paddingRight": "14px",
+    "fontSize": "13px",
+    "fontWeight": "600",
+    "borderTopLeftRadius": "999px"
+   }
+  },
+  {
+   "kr": "btn-primary",
+   "css": {
+    "backgroundColor": "rgb(67, 61, 221)",
+    "color": "rgb(255, 255, 255)"
+   }
+  },
+  {
+   "kr": "pill",
+   "css": {
+    "fontSize": "12px",
+    "fontWeight": "600",
+    "paddingLeft": "10px",
+    "paddingTop": "3px",
+    "borderTopLeftRadius": "999px"
+   }
+  },
+  {
+   "kr": "chip",
+   "css": {
+    "minHeight": "38px",
+    "borderTopLeftRadius": "12px",
+    "fontSize": "13px",
+    "fontWeight": "700",
+    "paddingLeft": "14px"
+   }
+  },
+  {
+   "kr": "seg-btn",
+   "css": {
+    "minHeight": "34px",
+    "fontSize": "13px",
+    "fontWeight": "700",
+    "paddingLeft": "14px"
+   }
+  },
+  {
+   "kr": "input",
+   "css": {
+    "minHeight": "50px",
+    "borderTopLeftRadius": "14px",
+    "fontSize": "16px",
+    "borderTopWidth": "1.5px"
+   }
+  },
+  {
+   "kr": "th",
+   "css": {
+    "fontSize": "12px",
+    "fontWeight": "700",
+    "paddingTop": "11px",
+    "paddingLeft": "14px"
+   }
+  },
+  {
+   "kr": "td",
+   "css": {
+    "paddingTop": "11px",
+    "paddingLeft": "14px"
+   }
+  },
+  {
+   "kr": "sheet",
+   "css": {
+    "maxWidth": "560px",
+    "borderTopLeftRadius": "24px",
+    "borderBottomLeftRadius": "0px",
+    "paddingTop": "18px",
+    "paddingLeft": "18px",
+    "bottom": "0px"
+   }
+  },
+  {
+   "kr": "sheet-title",
+   "css": {
+    "fontSize": "20px",
+    "letterSpacing": "-0.4px"
+   }
+  },
+  {
+   "kr": "toast",
+   "css": {
+    "backgroundColor": "rgb(29, 29, 31)",
+    "color": "rgb(255, 255, 255)",
+    "borderTopLeftRadius": "999px",
+    "fontWeight": "600"
+   }
+  },
+  {
+   "kr": "side",
+   "css": {
+    "width": "260px",
+    "backgroundColor": "rgb(255, 255, 255)"
+   },
+   "solo": "desktop"
+  },
+  {
+   "kr": "nav-item",
+   "css": {
+    "minHeight": "44px",
+    "borderTopLeftRadius": "12px",
+    "fontSize": "14px",
+    "fontWeight": "700",
+    "paddingLeft": "12px",
+    "columnGap": "12px"
+   },
+   "solo": "desktop"
+  },
+  {
+   "kr": "tabbar",
+   "css": {
+    "position": "fixed",
+    "bottom": "0px"
+   },
+   "solo": "mobile"
+  },
+  {
+   "kr": "tab-center",
+   "css": {
+    "width": "54px",
+    "height": "54px",
+    "backgroundColor": "rgb(67, 61, 221)"
+   },
+   "solo": "mobile"
+  },
+  {
+   "kr": "wrap",
+   "css": {
+    "maxWidth": "1120px",
+    "paddingLeft": "16px",
+    "rowGap": "18px"
+   }
+  },
+  {
+   "kr": "nav-group",
+   "css": {
+    "fontSize": "11px",
+    "fontWeight": "800",
+    "letterSpacing": "1.1px",
+    "textTransform": "uppercase"
+   },
+   "solo": "desktop"
+  },
+  {
+   "kr": "side-logo",
+   "css": {
+    "width": "44px",
+    "height": "44px",
+    "borderTopLeftRadius": "14px",
+    "backgroundColor": "rgb(67, 61, 221)"
+   },
+   "solo": "desktop"
+  },
+  {
+   "kr": "side-sede",
+   "css": {
+    "borderTopLeftRadius": "14px",
+    "paddingTop": "10px",
+    "paddingLeft": "12px"
+   },
+   "solo": "desktop"
+  },
+  {
+   "kr": "card-title",
+   "css": {
+    "fontSize": "16px",
+    "fontWeight": "700",
+    "letterSpacing": "-0.24px"
+   }
+  },
+  {
+   "kr": "sede",
+   "css": {
+    "borderTopLeftRadius": "14px",
+    "paddingTop": "10px",
+    "paddingLeft": "12px"
+   },
+   "solo": "desktop"
+  },
+  {
+   "kr": "nav-group",
+   "css": {
+    "fontSize": "11px",
+    "fontWeight": "800",
+    "letterSpacing": "1.1px",
+    "textTransform": "uppercase"
+   },
+   "solo": "desktop"
+  },
+  {
+   "kr": "brand-logo",
+   "css": {
+    "width": "44px",
+    "height": "44px",
+    "borderTopLeftRadius": "14px"
+   },
+   "solo": "desktop"
+  },
+  {
+   "kr": "icon-tile",
+   "css": {
+    "borderTopLeftRadius": "14px"
+   }
+  }
+ ],
+ "rutas": [
+  {
+   "modulo": "inicio",
+   "app": "/home",
+   "preview": "01-inicio.html?embed"
+  },
+  {
+   "modulo": "pos",
+   "app": "/pos",
+   "preview": "02-pos.html?embed"
+  },
+  {
+   "modulo": "inventario",
+   "app": "/inventory",
+   "preview": "03-inventario.html?embed"
+  },
+  {
+   "modulo": "presupuestos",
+   "app": "/quotes/history",
+   "preview": "04-presupuestos.html?embed"
+  },
+  {
+   "modulo": "caja",
+   "app": "/reports",
+   "preview": "05-administracion-caja-estadisticas-marketing.html?embed#caja"
+  },
+  {
+   "modulo": "estadisticas",
+   "app": "/finance",
+   "preview": "05-administracion-caja-estadisticas-marketing.html?embed#est"
+  },
+  {
+   "modulo": "marketing",
+   "app": "/customers",
+   "preview": "05-administracion-caja-estadisticas-marketing.html?embed#mkt"
+  },
+  {
+   "modulo": "administracion",
+   "app": "/accounting",
+   "preview": "05-administracion-caja-estadisticas-marketing.html?embed#adm"
+  },
+  {
+   "modulo": "sucursales",
+   "app": "/branches",
+   "preview": "06-sucursales.html?embed"
+  },
+  {
+   "modulo": "asistente",
+   "app": "/assistant",
+   "preview": "07-asistente-ia.html?embed"
+  },
+  {
+   "modulo": "learning",
+   "app": "/learning",
+   "preview": "08-learning.html?embed"
+  },
+  {
+   "modulo": "ajustes",
+   "app": "/settings",
+   "preview": "10-ajustes.html?embed"
+  }
+ ]
+}

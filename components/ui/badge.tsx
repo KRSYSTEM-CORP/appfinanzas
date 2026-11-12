@@ -41,6 +41,7 @@ function Badge({
     defaultTagName: "span",
     props: mergeProps<"span">(
       {
+        ...({ "data-kr": "pill" } as object),
         className: cn(badgeVariants({ variant }), className),
       },
       props
