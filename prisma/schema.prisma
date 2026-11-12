@@ -1123,6 +1123,12 @@ model CashClosing {
   totalCents  Int
   salesCount  Int
   note        String?
+  // Conteo físico al cerrar: total contado en $ y en Bs, efectivo esperado y diferencia
+  // (en centavos de la divisa de referencia). Nulos en cierres anteriores.
+  countedUsdCents  Int?
+  countedBsCents   Int?
+  expectedCashCents Int?
+  differenceCents  Int?
   closedById  String
   closedAt    DateTime @default(now())
 
@@ -1240,6 +1246,9 @@ model CashOpening {
   branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
   date        DateTime @db.Date
   amountCents Int
+  // Saldo inicial por método de efectivo (Bs en céntimos de bolívar; $ en céntimos de la referencia).
+  openingBsCents  Int?
+  openingUsdCents Int?
   setById     String
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())

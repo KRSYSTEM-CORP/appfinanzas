@@ -34,6 +34,7 @@ export function CajaChicaCard({
   onChanged: () => void;
 }) {
   const [opening, setOpening] = useState(summary.openingCents != null ? String(summary.openingCents / 100) : "");
+  const [openingBs, setOpeningBs] = useState("");
   const [concept, setConcept] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -88,12 +89,13 @@ export function CajaChicaCard({
           className="flex items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            const cents = Math.round(Number(opening) * 100);
-            run(() => setCashOpening(summary.date, cents));
+            const cents = Math.round((Number(opening) || 0) * 100);
+            const bsCents = Math.round((Number(openingBs) || 0) * 100);
+            run(() => setCashOpening(summary.date, cents, { usdCents: cents, bsCents }));
           }}
         >
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cc-opening">{summary.openingCents == null ? "Abrir caja con" : "Ajustar apertura"}</Label>
+            <Label htmlFor="cc-opening">{summary.openingCents == null ? "Abrir caja con · Efectivo $" : "Ajustar apertura · Efectivo $"}</Label>
             <Input
               id="cc-opening"
               type="number"
@@ -103,8 +105,11 @@ export function CajaChicaCard({
               value={opening}
               onChange={(e) => setOpening(e.target.value)}
               className="w-36"
-              required
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cc-opening-bs">Efectivo Bs</Label>
+            <Input id="cc-opening-bs" type="number" min="0" step="0.01" inputMode="decimal" value={openingBs} onChange={(e) => setOpeningBs(e.target.value)} className="w-36" />
           </div>
           <Button type="submit" size="sm" disabled={isPending}>
             {summary.openingCents == null ? "Abrir caja" : "Guardar"}

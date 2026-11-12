@@ -117,7 +117,11 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
   });
 }
 
-export async function closeCashRegister(dateStr: string, note?: string): Promise<ActionResult> {
+export async function closeCashRegister(
+  dateStr: string,
+  note?: string,
+  counted?: { usdCents: number; bsCents: number }
+): Promise<ActionResult> {
   // Closing the day is the manager's call (KRPOS-SEC-004); sellers still see
   // the summary through the read actions below.
   const session = await requireManager();
@@ -132,6 +136,7 @@ export async function closeCashRegister(dateStr: string, note?: string): Promise
   const { start, end } = dayBoundsUtc(dateStr);
   const closingDate = closingDateFromString(dateStr);
 
+  const summaryForCount = counted ? await getDailyClosingSummary(dateStr) : null;
   try {
     await withTenant(companyId, async (tx) => {
       const existing = await tx.cashClosing.findUnique({
@@ -145,8 +150,25 @@ export async function closeCashRegister(dateStr: string, note?: string): Promise
         _count: true,
       });
 
+      // Diferencia entre lo contado y el efectivo esperado, en la divisa de referencia.
+      let countedFields = {};
+      if (counted) {
+        if (counted.usdCents < 0 || counted.bsCents < 0) throw new Error("Los montos contados no pueden ser negativos");
+        const company = await tx.company.findUnique({ where: { id: companyId }, select: { exchangeRate: true, exchangeRateEnabled: true } });
+        const rate = company?.exchangeRateEnabled && company.exchangeRate ? Number(company.exchangeRate) : null;
+        if (counted.bsCents > 0 && rate == null) throw new Error("No hay tasa de cambio para convertir los bolívares contados");
+        const countedRef = counted.usdCents + (rate ? Math.round(counted.bsCents / rate) : 0);
+        countedFields = {
+          countedUsdCents: counted.usdCents,
+          countedBsCents: counted.bsCents,
+          expectedCashCents: summaryForCount!.expectedCashCents,
+          differenceCents: countedRef - summaryForCount!.expectedCashCents,
+        };
+      }
+
       await tx.cashClosing.create({
         data: {
+          ...countedFields,
           companyId,
           branchId,
           closingDate,
@@ -237,20 +259,33 @@ async function requireOpenBranchDay(dateStr: string) {
 }
 
 // Fija (o corrige) el efectivo con el que abre la caja ese día.
-export async function setCashOpening(dateStr: string, amountCents: number): Promise<ActionResult> {
+export async function setCashOpening(
+  dateStr: string,
+  amountCents: number,
+  byMethod?: { bsCents: number; usdCents: number }
+): Promise<ActionResult> {
   const ctx = await requireOpenBranchDay(dateStr);
   if (!ctx.ok) return { success: false, error: ctx.error };
   if (!Number.isInteger(amountCents) || amountCents < 0) {
     return { success: false, error: "El monto de apertura no puede ser negativo" };
   }
   const { session, branchId, closingDate } = ctx;
-  await withTenant(session.companyId, (tx) =>
-    tx.cashOpening.upsert({
+  await withTenant(session.companyId, async (tx) => {
+    let total = amountCents;
+    let methodFields = {};
+    if (byMethod) {
+      if (byMethod.bsCents < 0 || byMethod.usdCents < 0) throw new Error("El monto de apertura no puede ser negativo");
+      const company = await tx.company.findUnique({ where: { id: session.companyId }, select: { exchangeRate: true, exchangeRateEnabled: true } });
+      const rate = company?.exchangeRateEnabled && company.exchangeRate ? Number(company.exchangeRate) : null;
+      total = byMethod.usdCents + (rate ? Math.round(byMethod.bsCents / rate) : 0);
+      methodFields = { openingBsCents: byMethod.bsCents, openingUsdCents: byMethod.usdCents };
+    }
+    await tx.cashOpening.upsert({
       where: { branchId_date: { branchId, date: closingDate } },
-      create: { companyId: session.companyId, branchId, date: closingDate, amountCents, setById: session.userId },
-      update: { amountCents, setById: session.userId },
-    })
-  );
+      create: { companyId: session.companyId, branchId, date: closingDate, amountCents: total, setById: session.userId, ...methodFields },
+      update: { amountCents: total, setById: session.userId, ...methodFields },
+    });
+  });
   revalidatePath("/reports");
   return { success: true };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { formatCurrencyCents } from "@/lib/currencies";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,8 @@ export function CashClosingPanel({
   const [date, setDate] = useState(todayStr);
   const [summary, setSummary] = useState(initialSummary);
   const [note, setNote] = useState("");
+  const [countedUsd, setCountedUsd] = useState("");
+  const [countedBs, setCountedBs] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
@@ -97,7 +100,10 @@ export function CashClosingPanel({
   function handleClose() {
     setError(null);
     startTransition(async () => {
-      const result = await closeCashRegister(date, note);
+      const result = await closeCashRegister(date, note, {
+        usdCents: Math.round((Number(countedUsd) || 0) * 100),
+        bsCents: Math.round((Number(countedBs) || 0) * 100),
+      });
       if (result.success) {
         setNote("");
         setSummary(await getDailyClosingSummary(date));
@@ -233,6 +239,20 @@ export function CashClosingPanel({
         <p className="text-sm text-muted-foreground">Pendiente de cierre — solo el gerente puede cerrar la caja.</p>
       ) : (
         <div className="flex flex-col gap-2 max-w-sm">
+          <Label htmlFor="counted-usd">Total contado en $</Label>
+          <Input id="counted-usd" type="number" min="0" step="0.01" inputMode="decimal" value={countedUsd} onChange={(e) => setCountedUsd(e.target.value)} />
+          <Label htmlFor="counted-bs">Total contado en Bs</Label>
+          <Input id="counted-bs" type="number" min="0" step="0.01" inputMode="decimal" value={countedBs} onChange={(e) => setCountedBs(e.target.value)} />
+          {(countedUsd !== "" || countedBs !== "") && (() => {
+            const ref = (Number(countedUsd) || 0) * 100 + (exchangeRateEnabled && rate ? ((Number(countedBs) || 0) * 100) / rate : 0);
+            const diff = Math.round(ref - summary.expectedCashCents);
+            return (
+              <p className={`text-sm font-bold ${diff === 0 ? "text-success" : diff > 0 ? "text-warning" : "text-destructive"}`}>
+                {diff === 0 ? "Caja cuadrada" : diff > 0 ? "Sobrante" : "Faltante"}
+                {diff !== 0 && `: ${formatCurrencyCents(referenceCurrency, Math.abs(diff))}`}
+              </p>
+            );
+          })()}
           <Label htmlFor="closing-note">Nota (opcional)</Label>
           <Input
             id="closing-note"
