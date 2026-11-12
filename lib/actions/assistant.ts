@@ -1,5 +1,6 @@
 "use server";
 
+import { aiConfigured, askModel } from "@/lib/ai-provider";
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/session";
@@ -33,10 +34,8 @@ export type AssistantStatus = {
   askCap: number;
 };
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
-
 function isConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+  return aiConfigured();
 }
 
 export async function getAssistantStatus(): Promise<AssistantStatus> {
@@ -135,29 +134,12 @@ export async function askAssistant(question: string): Promise<{ success: true; r
   if (!allowed) return { success: false, error: `Llegaste al límite de ${cap} consultas de hoy. Mañana se reinicia.` };
 
   const ctx = await buildContext(companyId, branchId);
-  let raw = "";
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY as string,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 700,
-        system: `${SYSTEM}\n\n<manual>\n${supportKnowledge()}\n</manual>`,
-        messages: [{ role: "user", content: `<datos>\n${ctx.text}\n</datos>\n\nPregunta del usuario: ${q}` }],
-      }),
-      signal: AbortSignal.timeout(25_000),
-    });
-    if (!res.ok) return { success: false, error: "El asistente no pudo responder ahora. Intenta de nuevo en un momento." };
-    const json = (await res.json()) as { content?: { type: string; text?: string }[] };
-    raw = json.content?.find((c) => c.type === "text")?.text ?? "";
-  } catch {
-    return { success: false, error: "El asistente tardó demasiado. Intenta de nuevo." };
-  }
+  const model = await askModel(
+    `${SYSTEM}\n\n<manual>\n${supportKnowledge()}\n</manual>`,
+    `<datos>\n${ctx.text}\n</datos>\n\nPregunta del usuario: ${q}`
+  );
+  if (!model.ok) return { success: false, error: "El asistente no pudo responder ahora. Intenta de nuevo en un momento." };
+  const raw = model.text;
   const reply = parseAssistantReply(raw);
   // El historial es un extra: si no se puede guardar, la respuesta igual se entrega.
   let entryId: string | null = null;
