@@ -1,6 +1,6 @@
 "use server";
 
-import { QUOTE_LOST_REASONS } from "@/lib/quote-follow-up";
+import { QUOTE_LOST_REASONS, QUOTE_LOST_REASONS_LEGACY, type FollowUpKind } from "@/lib/quote-follow-up";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
 import { requireSectionAccess, requireSession } from "@/lib/session";
@@ -35,6 +35,7 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
     customerAddress,
     note,
     useLocalCurrency,
+    validDays,
   } = parsed.data;
 
   try {
@@ -105,6 +106,7 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
           sellerId: userId,
           sellerName,
           note: note ?? null,
+          validUntil: new Date(Date.now() + validDays * 86_400_000),
           items: { create: itemsData },
         },
       });
@@ -230,7 +232,7 @@ export async function listQuotes(limit = 200, windows?: { start: Date; end: Date
       },
       orderBy: { createdAt: "desc" },
       take: limit,
-      include: { sale: { select: { id: true, controlNumber: true } } },
+      include: { sale: { select: { id: true, controlNumber: true } }, followUps: { orderBy: { createdAt: "desc" }, take: 20 } },
     })
   );
   // Prisma's Decimal can't cross the Server->Client Component boundary
@@ -244,7 +246,7 @@ export async function updateQuoteStatus(quoteId: string, status: QuoteStatus, lo
   const result = await withTenant(companyId, (tx) =>
     tx.quote.updateMany({
       where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) },
-      data: { status, lostReason: status === "LOST" ? (QUOTE_LOST_REASONS as readonly string[]).includes(lostReason ?? "") ? lostReason : null : null },
+      data: { status, lostReason: status === "LOST" ? ([...QUOTE_LOST_REASONS, ...QUOTE_LOST_REASONS_LEGACY] as readonly string[]).includes(lostReason ?? "") ? lostReason : null : null },
     })
   );
   if (result.count === 0) {
@@ -284,6 +286,85 @@ export async function markQuoteStage(quoteId: string, stage: "SENT" | "VIEWED", 
     })
   );
   if (result.count === 0) return { success: false, error: "Presupuesto no encontrado" };
+  revalidatePath("/quotes/history");
+  return { success: true };
+}
+
+// Registra una llamada, un mensaje por WhatsApp o una nota en el historial de un presupuesto.
+export async function addQuoteFollowUp(quoteId: string, kind: FollowUpKind, text?: string): Promise<ActionResult> {
+  const { companyId, branchId, userId, sellerName } = await requireSession();
+  if (!["CALL", "WHATSAPP", "NOTE"].includes(kind)) return { success: false, error: "Tipo de seguimiento no válido" };
+  const ok = await withTenant(companyId, async (tx) => {
+    const quote = await tx.quote.findFirst({ where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) }, select: { id: true } });
+    if (!quote) return false;
+    await tx.quoteFollowUp.create({ data: { companyId, quoteId, kind, text: text?.trim() || null, createdById: userId, createdBy: sellerName } });
+    if (kind === "WHATSAPP") await tx.quote.update({ where: { id: quoteId }, data: { sentAt: new Date() } });
+    return true;
+  });
+  if (!ok) return { success: false, error: "Presupuesto no encontrado" };
+  revalidatePath("/quotes/history");
+  return { success: true };
+}
+
+// «Recordarme en N días» (null quita el recordatorio).
+export async function setQuoteReminder(quoteId: string, days: number | null): Promise<ActionResult> {
+  const { companyId, branchId } = await requireSession();
+  const remindAt = days == null ? null : new Date(Date.now() + days * 86_400_000);
+  const r = await withTenant(companyId, (tx) =>
+    tx.quote.updateMany({ where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) }, data: { remindAt } })
+  );
+  if (r.count === 0) return { success: false, error: "Presupuesto no encontrado" };
+  revalidatePath("/quotes/history");
+  return { success: true };
+}
+
+// Copia un presupuesto (mismos productos y cliente, vigencia nueva) con número nuevo.
+export async function duplicateQuote(quoteId: string): Promise<ActionResult> {
+  const session = await requireSession();
+  const { companyId, userId, sellerName } = session;
+  if (!session.branchId) return { success: false, error: "Selecciona una sucursal antes de duplicar." };
+  const branchId = session.branchId;
+  const done = await withTenant(companyId, async (tx) => {
+    const q = await tx.quote.findFirst({ where: { id: quoteId, companyId, branchId }, include: { items: true } });
+    if (!q) return false;
+    const controlNumber = await nextDocumentNumber(tx, branchId, "quote");
+    await tx.quote.create({
+      data: {
+        totalCents: q.totalCents,
+        customerFirstName: q.customerFirstName,
+        customerLastName: q.customerLastName,
+        customerPhone: q.customerPhone,
+        customerAddress: q.customerAddress,
+        companyId,
+        branchId,
+        exchangeRate: q.exchangeRate,
+        useLocalCurrency: q.useLocalCurrency,
+        controlNumber,
+        sellerId: userId,
+        sellerName,
+        note: q.note,
+        validUntil: new Date(Date.now() + 15 * 86_400_000),
+        items: { create: q.items.map((i) => ({ productId: i.productId, productName: i.productName, category: i.category, unitPriceCents: i.unitPriceCents, quantity: i.quantity, subtotalCents: i.subtotalCents })) },
+      },
+    });
+    return true;
+  });
+  if (!done) return { success: false, error: "Presupuesto no encontrado" };
+  revalidatePath("/quotes/history");
+  return { success: true };
+}
+
+// Elimina un presupuesto que no se haya facturado.
+export async function deleteQuote(quoteId: string): Promise<ActionResult> {
+  const { companyId, branchId } = await requireSession();
+  const result = await withTenant(companyId, async (tx) => {
+    const q = await tx.quote.findFirst({ where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) }, include: { sale: { select: { id: true } } } });
+    if (!q) return "Presupuesto no encontrado";
+    if (q.sale) return "Este presupuesto ya se facturó y no se puede eliminar";
+    await tx.quote.delete({ where: { id: quoteId } });
+    return null;
+  });
+  if (result) return { success: false, error: result };
   revalidatePath("/quotes/history");
   return { success: true };
 }

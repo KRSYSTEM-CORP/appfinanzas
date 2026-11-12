@@ -13,11 +13,13 @@ import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { formatDate, QUOTE_STATUS_LABELS } from "@/lib/format";
 import { markQuoteStage, updateQuoteStatus, updateQuoteStatusBulk } from "@/lib/actions/quotes";
-import { QUOTE_LOST_REASONS } from "@/lib/quote-follow-up";
+import { FOLLOW_UP_KINDS, QUOTE_LOST_REASONS, daysToExpire, expiryLabel, nextStepSuggestion, type FollowUpKind } from "@/lib/quote-follow-up";
+import { addQuoteFollowUp, deleteQuote, duplicateQuote, setQuoteReminder } from "@/lib/actions/quotes";
 
 type QuoteWithSale = Omit<Quote, "exchangeRate"> & {
   exchangeRate: number | null;
   sale: { id: string; controlNumber: number | null } | null;
+  followUps?: { id: string; kind: string; text: string | null; createdAt: Date }[];
 };
 
 const STATUSES: QuoteStatus[] = ["PENDING", "CONVERTED", "LOST"];
@@ -172,6 +174,68 @@ export function QuoteHistoryTable({
                   <dd className="font-medium">{q.lostReason ?? "Sin motivo"}</dd>
                 </div>
               )}
+              {q.status === "PENDING" && (
+                <div className="col-span-2 flex flex-col gap-1 rounded-[14px] bg-primary/10 p-3">
+                  {expiryLabel(daysToExpire(q.validUntil)) && <p className="text-xs font-bold text-primary">{expiryLabel(daysToExpire(q.validUntil))}</p>}
+                  {nextStepSuggestion(q) && <p className="text-sm">{nextStepSuggestion(q)}</p>}
+                </div>
+              )}
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <dt className="text-xs text-muted-foreground">Historial y seguimiento</dt>
+                <dd className="flex flex-col gap-2">
+                  <ul className="flex flex-col gap-1 text-xs">
+                    <li>Creado · {formatDate(q.createdAt)}</li>
+                    {q.sentAt && <li>Enviado · {formatDate(q.sentAt)}</li>}
+                    {q.viewedAt && <li>Abierto · {formatDate(q.viewedAt)}</li>}
+                    {(q.followUps ?? []).map((f) => (
+                      <li key={f.id}>
+                        {FOLLOW_UP_KINDS[f.kind as FollowUpKind] ?? f.kind} · {formatDate(f.createdAt)}
+                        {f.text ? ` — ${f.text}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-wrap gap-2">
+                    {(Object.keys(FOLLOW_UP_KINDS) as FollowUpKind[]).map((k) => (
+                      <Button
+                        key={k}
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        disabled={isPending}
+                        onClick={() => {
+                          const text = k === "NOTE" ? window.prompt("Escribe la nota") ?? undefined : undefined;
+                          if (k === "NOTE" && !text) return;
+                          startTransition(async () => {
+                            await addQuoteFollowUp(q.id, k, text);
+                            router.refresh();
+                          });
+                        }}
+                      >
+                        {FOLLOW_UP_KINDS[k]}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span>Recordarme en</span>
+                    {[1, 3, 7].map((d) => (
+                      <Button key={d} type="button" size="xs" variant="outline" disabled={isPending} onClick={() => startTransition(async () => { await setQuoteReminder(q.id, d); router.refresh(); })}>
+                        {d} {d === 1 ? "día" : "días"}
+                      </Button>
+                    ))}
+                    {q.remindAt && <span className="text-muted-foreground">Recordatorio: {formatDate(q.remindAt)}</span>}
+                  </div>
+                </dd>
+              </div>
+              <div className="col-span-2 flex flex-wrap gap-2">
+                <Button type="button" size="xs" variant="outline" disabled={isPending} onClick={() => startTransition(async () => { await duplicateQuote(q.id); router.refresh(); })}>
+                  Duplicar
+                </Button>
+                {!q.sale && (
+                  <Button type="button" size="xs" variant="destructive" disabled={isPending} onClick={() => { if (window.confirm("¿Eliminar este presupuesto?")) startTransition(async () => { await deleteQuote(q.id); router.refresh(); }); }}>
+                    Eliminar
+                  </Button>
+                )}
+              </div>
               <div className="col-span-2 flex flex-col gap-1.5">
                 <dt className="text-xs text-muted-foreground">Seguimiento</dt>
                 <dd className="flex flex-wrap gap-2">

@@ -31,6 +31,8 @@ export function QuoteCart({
   onRemove,
   note,
   onNoteChange,
+  validDays,
+  onValidDaysChange,
   onGenerate,
   isPending,
   error,
@@ -48,6 +50,8 @@ export function QuoteCart({
   onRemove: (productId: string) => void;
   note: string;
   onNoteChange: (note: string) => void;
+  validDays: 7 | 15 | 30;
+  onValidDaysChange: (d: 7 | 15 | 30) => void;
   onGenerate: () => void;
   isPending: boolean;
   error: string | null;
@@ -146,6 +150,21 @@ export function QuoteCart({
       </div>
 
       <div className="flex flex-col gap-1.5">
+        <Label>Vigencia</Label>
+        <div role="radiogroup" aria-label="Vigencia del presupuesto" className="flex gap-2">
+          {([7, 15, 30] as const).map((d) => (
+            <button
+              key={d}
+              type="button"
+              role="radio"
+              aria-checked={validDays === d}
+              onClick={() => onValidDaysChange(d)}
+              className={`min-h-[38px] rounded-[12px] border-2 px-3.5 text-[13px] font-bold ${validDays === d ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted"}`}
+            >
+              {d} días
+            </button>
+          ))}
+        </div>
         <Label htmlFor="quote-note">Nota (opcional)</Label>
         <Textarea id="quote-note" value={note} onChange={(e) => onNoteChange(e.target.value)} rows={2} />
         <p className="text-xs text-muted-foreground">Se imprime en el presupuesto</p>

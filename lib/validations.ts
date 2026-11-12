@@ -346,6 +346,8 @@ export const QuoteSchema = z.object({
   items: z.array(CartItemSchema).min(1, "El carrito está vacío"),
   note: z.preprocess(blankToUndefined, z.string().trim().optional()),
   useLocalCurrency: z.boolean().default(true),
+  // Vigencia del presupuesto en días (7, 15 o 30).
+  validDays: z.union([z.literal(7), z.literal(15), z.literal(30)]).default(15),
 }).merge(CustomerSchema);
 
 export type QuoteInput = z.infer<typeof QuoteSchema>;
