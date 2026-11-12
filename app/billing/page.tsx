@@ -67,7 +67,7 @@ export default async function BillingPage({
                   <span className="text-2xl font-semibold">{formatUSD(info.amountDueUsdCents)}</span>
                   {info.monthlyFeeUsdCents != null && info.amountDueUsdCents < info.monthlyFeeUsdCents && (
                     <span className="text-sm text-muted-foreground">
-                      Precio de bienvenida: solo el primer mes. Desde el segundo mes,{" "}
+                      Primer mes del plan Emprende a este precio. Desde el segundo mes,{" "}
                       {formatUSD(info.monthlyFeeUsdCents)}.
                     </span>
                   )}
