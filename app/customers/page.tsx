@@ -115,7 +115,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         </Card>
       )}
 
-      <CustomerTable customers={customers} canManage={canManage} />
+      <CustomerTable customers={customers} canManage={canManage} businessName={session.companyName} />
     </div>
   );
 }
