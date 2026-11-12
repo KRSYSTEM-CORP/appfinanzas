@@ -131,6 +131,7 @@ enum QuoteStatus {
 model Company {
   id                    String            @id @default(cuid())
   roles                 CompanyRole[]
+  promotions            Promotion[]
   name                  String
   // Short code (derived from id, see signup()) employees use, together with
   // their name and password, to log in without needing an email address.
@@ -175,6 +176,12 @@ model Company {
   fiscalRif             String?
   fiscalAddress         String?           @db.Text
   fiscalPhone           String?
+  // Contacto del negocio (Ajustes · Negocio).
+  businessCountry       String?
+  // Si está activo, no se puede vender como «Cliente general»: cada venta pide nombre y teléfono.
+  requireCustomerOnSale Boolean           @default(false)
+  businessWhatsapp      String?
+  businessInstagram     String?
   // Default paper size for the "Imprimir" browser print view. Editable
   // per-print from the print dialog itself; this is just the preselected
   // default.
@@ -229,6 +236,8 @@ model Company {
   planChosen            Boolean           @default(true)
   // Reporte semanal por correo a los gerentes (domingo por la noche); opt-in.
   weeklyReportEnabled   Boolean           @default(false)
+  // Destinatarios (hasta 5) del reporte diario de ventas por correo.
+  dailyReportEmails     String[]          @default([])
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?
   payments              Payment[]
@@ -268,6 +277,8 @@ model Branch {
   isActive             Boolean  @default(true)
   // Meta de ventas del mes de esta sede (se ve en Sucursales); null = sin meta.
   monthlyGoalCents     Int?
+  // Clave de 4 dígitos para entrar a la sede (hash); null = se pide la clave de la cuenta.
+  accessKeyHash        String?
   createdAt            DateTime @default(now())
   // Last document number handed out per sequence (see lib/document-sequence.ts).
   // Never derived from count(*): a deleted document must not free its number.
@@ -306,6 +317,8 @@ model CompanyRole {
   name        String
   baseRole    Role     @default(VENDEDOR)
   permissions String[] @default([])
+  // Minutos sin actividad antes de bloquear la pantalla (5, 10 o 15). Null = valor por defecto del rol.
+  lockMinutes Int?
   isSystem    Boolean  @default(false)
   createdAt   DateTime @default(now())
   users       User[]
@@ -552,6 +565,8 @@ model Customer {
   nextContactDate DateTime? @db.Date
   // Fecha de nacimiento (solo día y mes importan; el año es opcional en la práctica).
   birthDate       DateTime? @db.Date
+  // Correo del cliente (opcional, se pide al registrarlo en el POS).
+  email           String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   sales           Sale[]
@@ -789,6 +804,10 @@ model Quote {
   sentAt            DateTime?
   viewedAt          DateTime?
   lostReason        String?
+  // Vigencia («válido hasta») y recordatorio de seguimiento; historial de seguimiento.
+  validUntil        DateTime?
+  remindAt          DateTime?
+  followUps         QuoteFollowUp[]
   // Virtual back-relation — no column here, see Sale.quoteId (the actual FK,
   // unique so a quote can never be linked to more than one sale).
   sale              Sale?
@@ -796,6 +815,22 @@ model Quote {
   @@unique([branchId, controlNumber])
   @@index([companyId, createdAt])
   @@index([branchId, createdAt])
+}
+
+// Seguimiento de un presupuesto: llamadas, mensajes por WhatsApp y notas.
+model QuoteFollowUp {
+  id          String   @id @default(cuid())
+  companyId   String
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  kind        String
+  text        String?
+  createdById String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  @@index([quoteId, createdAt])
+  @@index([companyId])
 }
 
 model QuoteItem {
@@ -828,6 +863,8 @@ model Supplier {
   address   String?
   email     String?
   isActive  Boolean    @default(true)
+  // Calificación del proveedor de 1 a 5 (opcional).
+  rating    Int?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   purchases Purchase[]
@@ -1119,6 +1156,12 @@ model CashClosing {
   totalCents  Int
   salesCount  Int
   note        String?
+  // Conteo físico al cerrar: total contado en $ y en Bs, efectivo esperado y diferencia
+  // (en centavos de la divisa de referencia). Nulos en cierres anteriores.
+  countedUsdCents  Int?
+  countedBsCents   Int?
+  expectedCashCents Int?
+  differenceCents  Int?
   closedById  String
   closedAt    DateTime @default(now())
 
@@ -1236,6 +1279,9 @@ model CashOpening {
   branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
   date        DateTime @db.Date
   amountCents Int
+  // Saldo inicial por método de efectivo (Bs en céntimos de bolívar; $ en céntimos de la referencia).
+  openingBsCents  Int?
+  openingUsdCents Int?
   setById     String
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
@@ -1333,6 +1379,11 @@ model PaymentAccount {
   note          String?
   active        Boolean            @default(true)
   createdAt     DateTime           @default(now())
+  // Saldo: inicial + cobros del método vinculado desde balanceSince.
+  currency      String             @default("USD")
+  openingCents  Int                @default(0)
+  linkedMethod  PaymentMethod?
+  balanceSince  DateTime           @default(now())
 
   @@index([companyId, active])
 }
@@ -1435,4 +1486,34 @@ model AiCreditRequest {
 
   @@index([companyId, createdAt])
   @@index([status, createdAt])
+}
+
+// Promoción de Marketing: descuento con código y vigencia dirigido a un grupo de clientes.
+model Promotion {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  code            String
+  discountPercent Int
+  segment         String
+  validUntil      DateTime
+  createdAt       DateTime @default(now())
+  redemptions     PromotionRedemption[]
+
+  @@unique([companyId, code])
+  @@index([companyId, validUntil])
+}
+
+model PromotionRedemption {
+  id          String    @id @default(cuid())
+  companyId   String
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  customerId  String?
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  @@index([promotionId])
+  @@index([companyId])
 }

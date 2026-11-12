@@ -27,6 +27,7 @@ export function LearningPanel({
   storageReady,
   max,
   maxUploadMb,
+  defaultRoute,
 }: {
   videos: LearningVideoRow[];
   stats: LearningStats | null;
@@ -34,6 +35,7 @@ export function LearningPanel({
   storageReady: boolean;
   max: number;
   maxUploadMb: number;
+  defaultRoute?: string;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -48,7 +50,8 @@ export function LearningPanel({
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [route, setRoute] = useState<string>("Todo");
+  const [route, setRoute] = useState<string>(defaultRoute ?? "Todo");
+  const allDone = allVideos.length > 0 && allVideos.every((v) => v.watched);
   const videos = allVideos.filter((v) => route === "Todo" || v.audience === "Todo" || v.audience === route);
   const watchedCount = videos.filter((v) => v.watched).length;
   const pct = videos.length > 0 ? Math.round((watchedCount / videos.length) * 100) : 0;
@@ -227,6 +230,11 @@ export function LearningPanel({
                 <b className="text-foreground">{watchedCount}</b> de {videos.length} videos completados
               </p>
             </div>
+            {allDone && (
+              <p className="flex items-center gap-2 rounded-xl bg-success/14 px-3 py-2 text-sm font-bold text-success">
+                <span aria-hidden>🏅</span> Experto KR POS: completaste todos los videos
+              </p>
+            )}
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tu ruta</p>
             <div className="flex flex-wrap gap-2">
               {LEARNING_AUDIENCES.map((a) => (

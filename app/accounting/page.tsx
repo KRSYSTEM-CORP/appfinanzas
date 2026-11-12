@@ -8,12 +8,7 @@ const sections = [
     description: "Ingresos, gastos, ganancia neta y desglose por moneda.",
   },
   {
-    href: "/accounting/sellers",
-    title: "Ventas por vendedor",
-    description: "Cuánto vendió cada vendedor, sus documentos y su comisión.",
-  },
-  {
-    href: "/accounting/receivables",
+    href: "/customers/receivables",
     title: "Cuentas por cobrar",
     description: "Ventas a crédito con saldo pendiente y abonos por registrar.",
   },
@@ -28,9 +23,44 @@ const sections = [
     description: "Órdenes de compra, cuentas por pagar y estado de cada una.",
   },
   {
+    href: "/purchases/orders",
+    title: "Órdenes de pago",
+    description: "Lo que debes a cada proveedor, con antigüedad, abonos y comparativa de costos.",
+  },
+  {
     href: "/payroll",
     title: "Nómina",
     description: "Empleados, pago por quincena con comprobante e historial de pagos.",
+  },
+  {
+    href: "/accounting/consumption",
+    title: "Consumo interno",
+    description: "Retiros de inventario por socios o personal.",
+  },
+  {
+    href: "/accounting/accounts",
+    title: "Saldos de cuentas",
+    description: "Saldo por cuenta en $ y Bs, y el método de pago que lo alimenta.",
+  },
+  {
+    href: "/settings",
+    title: "Cuentas y perfiles",
+    description: "Datos para cobrar, perfiles y PIN del equipo.",
+  },
+  {
+    href: "/documents",
+    title: "Documentos",
+    description: "Notas de entrega, tickets y comprobantes emitidos.",
+  },
+  {
+    href: "/billing",
+    title: "Suscripción",
+    description: "Plan, vencimiento y pagos de tu suscripción mensual.",
+  },
+  {
+    href: "/accounting/statements",
+    title: "Estados financieros",
+    description: "Movimientos, estado de resultados, situación financiera, análisis de costo y resumen de IVA.",
   },
   {
     href: "/tax-book",

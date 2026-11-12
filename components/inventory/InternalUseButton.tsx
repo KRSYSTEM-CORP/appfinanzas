@@ -26,6 +26,8 @@ export function InternalUseButton({ products }: { products: Option[] }) {
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [note, setNote] = useState("");
+  const [kind, setKind] = useState<"SOCIO" | "PERSONAL">("SOCIO");
+  const [who, setWho] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -36,13 +38,14 @@ export function InternalUseButton({ products }: { products: Option[] }) {
   function save() {
     setError(null);
     startTransition(async () => {
-      const result = await registerInternalUse(productId, Number(quantity), note);
+      const result = await registerInternalUse(productId, Number(quantity), note, who.trim() ? { kind, name: who } : undefined);
       if (result.success) {
         setOpen(false);
         setSearch("");
         setProductId("");
         setQuantity("1");
         setNote("");
+        setWho("");
         router.refresh();
       } else {
         setError(result.error);
@@ -111,6 +114,19 @@ export function InternalUseButton({ products }: { products: Option[] }) {
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="iu-note">Motivo (opcional)</Label>
                 <Input id="iu-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. Muestra" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="iu-kind">Quién retira</Label>
+                <select id="iu-kind" value={kind} onChange={(e) => setKind(e.target.value as "SOCIO" | "PERSONAL")} className="h-10 rounded-xl border bg-background px-2 text-sm">
+                  <option value="SOCIO">Socio</option>
+                  <option value="PERSONAL">Personal</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="iu-who">Nombre</Label>
+                <Input id="iu-who" value={who} onChange={(e) => setWho(e.target.value)} placeholder="Ej. Carlos" />
               </div>
             </div>
             {error && (

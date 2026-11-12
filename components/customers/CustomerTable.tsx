@@ -19,8 +19,9 @@ import {
 } from "@/components/ui/dialog";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { deleteCustomer } from "@/lib/actions/customers";
+import { whatsappLink } from "@/lib/marketing";
 
-export function CustomerTable({ customers, canManage }: { customers: Customer[]; canManage: boolean }) {
+export function CustomerTable({ customers, canManage, businessName = "nuestro negocio" }: { customers: Customer[]; canManage: boolean; businessName?: string }) {
   const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -109,6 +110,35 @@ export function CustomerTable({ customers, canManage }: { customers: Customer[];
               <Button variant="outline" nativeButton={false} render={<Link href={`/customers/${c.id}/crm`} />}>
                 Marketing
               </Button>
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={
+                  <a
+                    href={whatsappLink(c.phone, `Hola ${c.firstName} 👋 te escribimos de ${businessName}. `)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
+                }
+              >
+                WhatsApp
+              </Button>
+              {c.birthDate &&
+                c.birthDate.toISOString().slice(5, 10) === new Intl.DateTimeFormat("en-CA", { timeZone: "America/Caracas", month: "2-digit", day: "2-digit" }).format(new Date()) && (
+                  <Button
+                    variant="outline"
+                    nativeButton={false}
+                    render={
+                      <a
+                        href={whatsappLink(c.phone, `¡Feliz cumpleaños, ${c.firstName}! 🎂 De parte de todo el equipo de ${businessName}.`)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      />
+                    }
+                  >
+                    Felicitar 🎂
+                  </Button>
+                )}
               {canManage && (
                 <Button variant="outline" nativeButton={false} render={<Link href={`/customers/${c.id}`} />}>
                   Editar

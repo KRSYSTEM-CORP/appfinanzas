@@ -5,6 +5,8 @@ import { ReferenceCurrencyForm } from "@/components/settings/ReferenceCurrencyFo
 import { BrandingForm } from "@/components/settings/BrandingForm";
 import { FiscalDataForm } from "@/components/settings/FiscalDataForm";
 import { PrintPaperSizeForm } from "@/components/settings/PrintPaperSizeForm";
+import { DataPanel } from "@/components/settings/DataPanel";
+import { getDailyReportEmails } from "@/lib/actions/data-export";
 import { AppInstallGuide } from "@/components/settings/AppInstallGuide";
 import { ChangePasswordForm } from "@/components/settings/ChangePasswordForm";
 import { BcvRateButton } from "@/components/settings/BcvRateButton";
@@ -53,6 +55,7 @@ export default async function SettingsPage() {
     branches,
     ivaSettings,
     paymentAccounts,
+    dailyEmails,
     planUsage,
     people,
   ] = await Promise.all([
@@ -62,6 +65,7 @@ export default async function SettingsPage() {
     canManage ? listBranches() : Promise.resolve([]),
     getIvaSettings(),
     canManage ? listPaymentAccounts(false) : Promise.resolve([]),
+    canManage ? getDailyReportEmails() : Promise.resolve([] as string[]),
     getPlanUsage(),
     canManage ? listEmployees() : Promise.resolve([]),
   ]);
@@ -152,7 +156,7 @@ export default async function SettingsPage() {
     },
     {
       id: "impresion",
-      label: "Impresión",
+      label: "Impresión y Datos",
       content: (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
           <p className="text-sm text-muted-foreground">
@@ -160,6 +164,11 @@ export default async function SettingsPage() {
             recibos de pago.
           </p>
           <PrintPaperSizeForm currentPaperSize={printPaperSize} />
+          {canManage && (
+            <div className="lg:col-span-2">
+              <DataPanel initialEmails={dailyEmails} />
+            </div>
+          )}
         </div>
       ),
     },

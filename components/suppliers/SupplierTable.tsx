@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
-import { deleteSupplier, setSupplierActive } from "@/lib/actions/suppliers";
+import { deleteSupplier, setSupplierActive, setSupplierRating } from "@/lib/actions/suppliers";
 
 export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
   const [query, setQuery] = useState("");
@@ -40,6 +40,13 @@ export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
     startTransition(async () => {
       const result = await deleteSupplier(id);
       if (!result.success) setError(result.error);
+      router.refresh();
+    });
+  }
+
+  function handleRate(id: string, rating: number | null) {
+    startTransition(async () => {
+      await setSupplierRating(id, rating);
       router.refresh();
     });
   }
@@ -116,6 +123,21 @@ export function SupplierTable({ suppliers }: { suppliers: Supplier[] }) {
                 </dd>
               </div>
             </dl>
+            <div className="flex items-center gap-1.5 text-sm" role="group" aria-label="Calificación del proveedor">
+              <span className="mr-1 text-xs text-muted-foreground">Calificación</span>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  disabled={isPending}
+                  aria-label={`${n} de 5`}
+                  onClick={() => handleRate(s.id, s.rating === n ? null : n)}
+                  className={`text-lg leading-none ${(s.rating ?? 0) >= n ? "text-amber-500" : "text-muted-foreground/40"}`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap items-center gap-2 border-t pt-4">
               <Button nativeButton={false} render={<Link href={`/suppliers/${s.id}`} />}>
                 Editar proveedor

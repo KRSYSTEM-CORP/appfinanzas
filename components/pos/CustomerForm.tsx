@@ -5,7 +5,7 @@ import { UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { searchCustomers } from "@/lib/actions/customers";
+import { savePosCustomer, searchCustomers } from "@/lib/actions/customers";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import type { Customer } from "@prisma/client";
 
@@ -17,6 +17,8 @@ export type CustomerInfo = {
   // Cédula/RIF — optional, only useful for a Factura the customer wants to
   // deduct/declare; most retail sales stay "Consumidor Final" without one.
   rif: string;
+  birthDate?: string;
+  email?: string;
 };
 
 export function CustomerForm({
@@ -40,6 +42,8 @@ export function CustomerForm({
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [address, setAddress] = useState(initial?.address ?? "");
   const [rif, setRif] = useState(initial?.rif ?? "");
+  const [birthDate, setBirthDate] = useState(initial?.birthDate ?? "");
+  const [email, setEmail] = useState(initial?.email ?? "");
   const [suggestions, setSuggestions] = useState<Customer[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [, startSearch] = useTransition();
@@ -82,13 +86,20 @@ export function CustomerForm({
     setPhone(customer.phone);
     setAddress(customer.address ?? "");
     setRif(customer.rif ?? "");
+    setEmail(customer.email ?? "");
+    setBirthDate(customer.birthDate ? new Date(customer.birthDate).toISOString().slice(0, 10) : "");
     setSuggestions([]);
     setShowSuggestions(false);
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    onContinue({ firstName, lastName, phone, address, rif });
+    const info = { firstName, lastName, phone, address, rif, birthDate, email };
+    // En línea se guarda en el CRM con nacimiento y correo; sin conexión la venta sigue igual.
+    if (online) {
+      void savePosCustomer({ firstName, lastName, phone, address, rif, birthDate, email }).catch(() => undefined);
+    }
+    onContinue(info);
   }
 
   return (
@@ -184,6 +195,17 @@ export function CustomerForm({
         <Label htmlFor="rif">Cédula/RIF (opcional)</Label>
         <Input id="rif" value={rif} onChange={(e) => setRif(e.target.value)} autoComplete="off" />
         <p className="text-xs text-muted-foreground">Ej. V-12345678 o J-12345678-9</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="birthDate">Fecha de nacimiento</Label>
+          <Input id="birthDate" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="email">Correo</Label>
+          <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
+        </div>
       </div>
 
       <Button type="submit" size="lg" className="w-full">

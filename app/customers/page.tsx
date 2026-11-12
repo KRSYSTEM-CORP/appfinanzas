@@ -3,6 +3,13 @@ import { AlertTriangleIcon, CakeIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ImportCustomers } from "@/components/customers/ImportCustomers";
+import { MarketingInsights } from "@/components/customers/MarketingInsights";
+import { MarketingTabs } from "@/components/customers/MarketingTabs";
+import { RequireCustomerToggle } from "@/components/customers/RequireCustomerToggle";
+import { getRequireCustomerOnSale } from "@/lib/actions/marketing";
+import { getMarketingInsights } from "@/lib/actions/marketing";
+import { SEGMENTS, type SegmentId } from "@/lib/marketing";
 import { CustomerTable } from "@/components/customers/CustomerTable";
 import { listCustomers, listCustomersToContact, listUpcomingBirthdays } from "@/lib/actions/customers";
 import { formatDateOnly } from "@/lib/format";
@@ -10,13 +17,19 @@ import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function CustomersPage() {
-  const [session, customers, toContact, birthdays] = await Promise.all([
+export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ grupo?: string }> }) {
+  const { grupo } = await searchParams;
+  const activeSegment = SEGMENTS.find((s) => s.id === grupo)?.id ?? null;
+  const requireCustomer = await getRequireCustomerOnSale();
+  const [session, allCustomers, toContact, birthdays, insights] = await Promise.all([
     requireSectionAccess("customers"),
     listCustomers(),
     listCustomersToContact(),
     listUpcomingBirthdays(30),
+    getMarketingInsights(),
   ]);
+  const segmentOfId = new Map(insights.customers.map((c) => [c.id, c.segment as SegmentId]));
+  const customers = activeSegment ? allCustomers.filter((c) => segmentOfId.get(c.id) === activeSegment) : allCustomers;
   const canManage = session.role === "GERENTE" || session.isSuperAdmin;
 
   return (
@@ -27,9 +40,13 @@ export default async function CustomersPage() {
         <h1 className="kr-h1">Marketing</h1>
         </div>
         <Button nativeButton={false} render={<Link href="/customers/new" />}>
-          Nuevo cliente
+          + Añadir cliente
         </Button>
       </div>
+      <MarketingTabs active="/customers" />
+      <MarketingInsights data={insights} active={activeSegment} />
+      <RequireCustomerToggle initial={requireCustomer} canChange={canManage} />
+      <ImportCustomers />
 
       {toContact.length > 0 && (
         <Card>
@@ -102,7 +119,7 @@ export default async function CustomersPage() {
         </Card>
       )}
 
-      <CustomerTable customers={customers} canManage={canManage} />
+      <CustomerTable customers={customers} canManage={canManage} businessName={session.companyName} />
     </div>
   );
 }

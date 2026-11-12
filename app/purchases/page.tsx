@@ -36,6 +36,9 @@ export default async function PurchasesPage({
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" nativeButton={false} render={<Link href="/purchases/orders" />}>
+            Órdenes de pago
+          </Button>
           <Button variant="outline" nativeButton={false} render={<Link href="/purchases/import" />}>
             Importar desde Excel
           </Button>

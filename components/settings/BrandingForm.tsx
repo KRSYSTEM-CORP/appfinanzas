@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { updateBranding } from "@/lib/actions/settings";
 import { resizeImageToDataUrl } from "@/lib/image-utils";
+import { dominantColors } from "@/lib/logo-palette";
 
 const MAX_DIMENSION = 160;
 
@@ -23,6 +24,18 @@ export function BrandingForm({
   const [logoDataUrl, setLogoDataUrl] = useState(currentLogo ?? "");
   const [brandColor, setBrandColor] = useState(currentColor ?? "#2a78d6");
   const [brandBackground, setBrandBackground] = useState(currentBackground ?? "#f9f9f7");
+  const [suggested, setSuggested] = useState<string[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!logoDataUrl) return;
+    dominantColors(logoDataUrl)
+      .then((c) => alive && setSuggested(c))
+      .catch(() => alive && setSuggested([]));
+    return () => {
+      alive = false;
+    };
+  }, [logoDataUrl]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,6 +92,27 @@ export function BrandingForm({
           />
         </div>
       </div>
+
+      {logoDataUrl && suggested.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label>Paletas recomendadas desde tu logo</Label>
+          <div className="flex flex-wrap gap-2">
+            {suggested.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setBrandColor(c)}
+                aria-label={`Usar ${c} como color de botones`}
+                aria-pressed={brandColor.toLowerCase() === c}
+                className="flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold"
+              >
+                <span className="size-4 rounded-full border" style={{ background: c }} aria-hidden />
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="brandColorInput">Color de botones e iconos</Label>

@@ -9,6 +9,9 @@ export type PlanUsage = {
   plan: PlanDef;
   usedUsers: number;
   usedProducts: number;
+  usedBranches: number;
+  companyName: string;
+  lastReport: { status: "PENDING" | "APPROVED" | "REJECTED"; createdAt: Date } | null;
   creditsLeft: number;
   nextPaymentDueDate: Date | null;
   isExempt: boolean;
@@ -21,11 +24,13 @@ export async function getPlanUsage(): Promise<PlanUsage> {
   const { companyId } = session;
   const [counts, status] = await Promise.all([
     withTenant(companyId, async (tx) => {
-      const [users, products] = await Promise.all([
+      const [users, products, branches, report] = await Promise.all([
         tx.user.count({ where: { companyId, status: "ACTIVE" } }),
         tx.product.count({ where: { companyId } }),
+        tx.branch.count({ where: { companyId, isActive: true } }),
+        tx.paymentReport.findFirst({ where: { companyId }, orderBy: { createdAt: "desc" }, select: { status: true, createdAt: true } }),
       ]);
-      return { users, products };
+      return { users, products, branches, report };
     }),
     getAssistantStatus(),
   ]);
@@ -33,6 +38,9 @@ export async function getPlanUsage(): Promise<PlanUsage> {
     plan: getPlan(session.plan),
     usedUsers: counts.users,
     usedProducts: counts.products,
+    usedBranches: counts.branches,
+    companyName: session.companyName,
+    lastReport: counts.report,
     creditsLeft: status.creditsLeft,
     nextPaymentDueDate: session.nextPaymentDueDate,
     isExempt: session.isExempt,

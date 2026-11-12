@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requirePermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { ALL_PERMISSIONS, DEFAULT_ROLES } from "@/lib/permissions";
+import { ALL_PERMISSIONS, DEFAULT_LOCK_MINUTES, DEFAULT_ROLES, LOCK_MINUTE_CHOICES } from "@/lib/permissions";
 import type { ActionResult } from "@/lib/types";
 
 export type RoleRow = {
@@ -12,6 +12,7 @@ export type RoleRow = {
   name: string;
   baseRole: "GERENTE" | "VENDEDOR";
   permissions: string[];
+  lockMinutes: number;
   isSystem: boolean;
   users: number;
 };
@@ -40,6 +41,7 @@ export async function listRoles(): Promise<RoleRow[]> {
       name: r.name,
       baseRole: r.baseRole,
       permissions: r.permissions,
+      lockMinutes: r.lockMinutes ?? DEFAULT_LOCK_MINUTES[r.name] ?? 10,
       isSystem: r.isSystem,
       users: r._count.users,
     }));
@@ -129,5 +131,20 @@ export async function assignRole(userId: string, roleId: string | null): Promise
   if (result) return { success: false, error: result };
   revalidatePath("/settings");
   revalidatePath("/employees");
+  return { success: true };
+}
+
+// Minutos sin actividad antes de bloquear la pantalla de las personas con este rol (5, 10 o 15).
+export async function updateRoleLockMinutes(roleId: string, minutes: number): Promise<ActionResult> {
+  const { companyId } = await requirePermission("settings");
+  if (!(LOCK_MINUTE_CHOICES as readonly number[]).includes(minutes)) return { success: false, error: "Elige 5, 10 o 15 minutos" };
+  const done = await withTenant(companyId, async (tx) => {
+    const role = await tx.companyRole.findFirst({ where: { id: roleId, companyId }, select: { id: true } });
+    if (!role) return false;
+    await tx.companyRole.update({ where: { id: roleId }, data: { lockMinutes: minutes } });
+    return true;
+  });
+  if (!done) return { success: false, error: "Rol no encontrado" };
+  revalidatePath("/settings");
   return { success: true };
 }

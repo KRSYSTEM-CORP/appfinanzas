@@ -1,5 +1,6 @@
 "use client";
 
+import { whatsappLink } from "@/lib/marketing";
 import { ReceiptTextIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -145,6 +146,23 @@ export function SalesMasterDetail({
                 </dd>
               </div>
             </dl>
+            {s.paymentStatus === "CREDIT" && !s.voided && s.customerPhone && s.customerPhone !== "0000-0000000" && (
+              <a
+                href={whatsappLink(
+                  s.customerPhone,
+                  `Hola ${s.customerFirstName ?? ""} 👋 te escribimos de ${company.name}. Tienes un saldo pendiente de ${
+                    exchangeRateEnabled && rate != null
+                      ? formatLocalCurrency(eurCentsToLocal(remaining, rate), localCurrencyCode)
+                      : formatCurrencyCents(referenceCurrency, remaining)
+                  } por la venta Nº ${s.controlNumber ?? ""}. ¡Gracias!`
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-fit items-center gap-2 rounded-full border border-primary px-3.5 py-2 text-sm font-semibold text-primary"
+              >
+                Recordar pago por WhatsApp
+              </a>
+            )}
             <div className="flex flex-col gap-3 border-t pt-4">
               <SaleDocumentButtons
                 sale={s}

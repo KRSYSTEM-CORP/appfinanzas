@@ -44,6 +44,7 @@ export function QuoteClient({
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);
   const [lines, setLines] = useState<QuoteCartLine[]>([]);
   const [note, setNote] = useState("");
+  const [validDays, setValidDays] = useState<7 | 15 | 30>(15);
   const [useLocalCurrency, setUseLocalCurrency] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completedQuote, setCompletedQuote] = useState<QuoteWithItems | null>(null);
@@ -120,6 +121,7 @@ export function QuoteClient({
         customerAddress: customer.address,
         note: note.trim() || undefined,
         useLocalCurrency,
+        validDays,
       });
       if (!result.success) {
         setError(result.error);
@@ -198,6 +200,8 @@ export function QuoteClient({
           onRemove={remove}
           note={note}
           onNoteChange={setNote}
+          validDays={validDays}
+          onValidDaysChange={setValidDays}
           onGenerate={generate}
           isPending={isPending}
           error={error}

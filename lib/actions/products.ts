@@ -666,7 +666,12 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
 // Consumo interno: mercancía que sale del inventario para uso de la propia
 // empresa (no es una venta). Descuenta el stock y queda en el historial de
 // movimientos del producto.
-export async function registerInternalUse(productId: string, quantity: number, note?: string): Promise<ActionResult> {
+export async function registerInternalUse(
+  productId: string,
+  quantity: number,
+  note?: string,
+  taker?: { kind: "SOCIO" | "PERSONAL"; name: string }
+): Promise<ActionResult> {
   const session = await requireManager();
   const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
@@ -688,7 +693,10 @@ export async function registerInternalUse(productId: string, quantity: number, n
       await tx.product.update({ where: { id: product.id }, data: { stock: after, isActive: after > 0 } });
       await recordStockMovement(tx, {
         companyId, branchId, productId: product.id, productName: product.name, actorId, actorName,
-        reason: "INTERNAL_USE", sourceType: note?.trim() ? `note:${note.trim().slice(0, 120)}` : "internal_use",
+        reason: "INTERNAL_USE",
+        sourceType: taker?.name.trim()
+          ? `taker:${taker.kind}|${taker.name.trim().slice(0, 60).replace(/\|/g, " ")}|${(note ?? "").trim().slice(0, 120)}`
+          : note?.trim() ? `note:${note.trim().slice(0, 120)}` : "internal_use",
         quantityChange: -quantity, stockBefore: product.stock,
       });
     });
@@ -696,6 +704,118 @@ export async function registerInternalUse(productId: string, quantity: number, n
     return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar el consumo" };
   }
 
+  await invalidateProductsCache(companyId, branchId);
+  revalidatePath("/inventory");
+  revalidatePath("/pos");
+  void notifyLive(posChannel(companyId), "product");
+  return { success: true };
+}
+
+export type InternalUseRow = {
+  id: string;
+  date: string;
+  productName: string;
+  quantity: number;
+  costCents: number;
+  kind: "SOCIO" | "PERSONAL" | null;
+  who: string;
+  note: string;
+};
+
+function parseTaker(sourceType: string | null, actorName: string) {
+  if (sourceType?.startsWith("taker:")) {
+    const [head, name, ...rest] = sourceType.slice(6).split("|");
+    return { kind: (head === "SOCIO" ? "SOCIO" : "PERSONAL") as "SOCIO" | "PERSONAL", who: name || actorName, note: rest.join("|") };
+  }
+  if (sourceType?.startsWith("note:")) return { kind: null, who: actorName, note: sourceType.slice(5) };
+  return { kind: null, who: actorName, note: "" };
+}
+
+export async function listInternalUse(): Promise<InternalUseRow[]> {
+  const session = await requireManager();
+  const { companyId } = session;
+  return withTenant(companyId, async (tx) => {
+    const moves = await tx.stockMovement.findMany({
+      where: { companyId, reason: "INTERNAL_USE", ...(session.branchId ? { branchId: session.branchId } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    const ids = [...new Set(moves.map((m) => m.productId).filter((x): x is string => !!x))];
+    const products = await tx.product.findMany({ where: { companyId, id: { in: ids } }, select: { id: true, costCents: true } });
+    const cost = new Map(products.map((p) => [p.id, p.costCents ?? 0]));
+    return moves.map((m) => {
+      const t = parseTaker(m.sourceType, m.actorName);
+      const qty = Math.abs(m.quantityChange);
+      return {
+        id: m.id,
+        date: m.createdAt.toISOString(),
+        productName: m.productName,
+        quantity: qty,
+        costCents: (m.productId ? cost.get(m.productId) ?? 0 : 0) * qty,
+        ...t,
+      };
+    });
+  });
+}
+
+// Eliminar un retiro devuelve la mercancía al inventario.
+export async function deleteInternalUse(movementId: string): Promise<ActionResult> {
+  const session = await requireManager();
+  const { companyId } = session;
+  try {
+    await withTenant(companyId, async (tx) => {
+      const m = await tx.stockMovement.findFirst({ where: { id: movementId, companyId, reason: "INTERNAL_USE" } });
+      if (!m) throw new Error("Retiro no encontrado");
+      if (m.productId) {
+        const p = await tx.product.findFirst({ where: { id: m.productId, companyId } });
+        if (p && p.trackStock) await tx.product.update({ where: { id: p.id }, data: { stock: p.stock + Math.abs(m.quantityChange), isActive: true } });
+      }
+      await tx.stockMovement.delete({ where: { id: m.id } });
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo eliminar" };
+  }
+  revalidatePath("/accounting/consumption");
+  revalidatePath("/inventory");
+  return { success: true };
+}
+
+// Ajuste manual de existencias: Entrada suma, Salida resta y Conteo físico fija la cantidad contada.
+// Todo queda en el historial de movimientos del producto con motivo «ADJUSTMENT».
+export async function adjustStock(
+  productId: string,
+  type: "ENTRADA" | "SALIDA" | "CONTEO",
+  quantity: number,
+  note?: string
+): Promise<ActionResult> {
+  const session = await requireManager();
+  const { companyId, userId: actorId, sellerName: actorName } = session;
+  if (!session.branchId) {
+    return { success: false, error: 'Selecciona una sucursal — no se puede con "Todas las sucursales".' };
+  }
+  const branchId = session.branchId;
+  if (!Number.isInteger(quantity) || quantity < 0 || (type !== "CONTEO" && quantity === 0)) {
+    return { success: false, error: type === "CONTEO" ? "La cantidad contada debe ser un número entero de 0 o más" : "La cantidad debe ser un número entero mayor a 0" };
+  }
+  try {
+    await withTenant(companyId, async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId} FOR UPDATE`;
+      const product = await tx.product.findFirst({ where: { id: productId, companyId, branchId } });
+      if (!product) throw new Error("Producto no encontrado");
+      if (!product.trackStock) throw new Error("Este producto no lleva control de existencias");
+      const after = type === "ENTRADA" ? product.stock + quantity : type === "SALIDA" ? product.stock - quantity : quantity;
+      if (after < 0) throw new Error(`Solo hay ${product.stock} en existencia`);
+      await tx.product.update({ where: { id: product.id }, data: { stock: after, isActive: after > 0 ? true : product.isActive } });
+      await recordStockMovement(tx, {
+        companyId, branchId, productId: product.id, productName: product.name, actorId, actorName,
+        reason: "ADJUSTMENT",
+        sourceType: `${type.toLowerCase()}${note?.trim() ? `:${note.trim().slice(0, 120)}` : ""}`,
+        quantityChange: after - product.stock, stockBefore: product.stock, stockAfter: after,
+      });
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo ajustar" };
+  }
   await invalidateProductsCache(companyId, branchId);
   revalidatePath("/inventory");
   revalidatePath("/pos");

@@ -10,12 +10,12 @@ describe("aviso de renovación", () => {
     // Vence hoy a las 11:59 p. m. de Venezuela.
     const n = renewalNotice(due("2026-11-11T03:59:00Z"), false, NOW);
     expect(n?.days).toBe(0);
-    expect(n?.text).toContain("11:59 p. m.");
+    expect(n?.text).toBe("Tu plan vence hoy");
   });
   it("cuenta días calendario: vence mañana = 1 día", () => {
     expect(renewalNotice(due("2026-11-11T16:00:00Z"), false, NOW)).toEqual({
       days: 1,
-      text: "Tu suscripción vence en 1 día.",
+      text: "Mañana vence tu plan",
     });
   });
   it("avisa desde 5 días antes, no antes", () => {

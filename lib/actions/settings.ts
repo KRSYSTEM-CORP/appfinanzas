@@ -357,6 +357,9 @@ export type FiscalData = {
   fiscalRif: string | null;
   fiscalAddress: string | null;
   fiscalPhone: string | null;
+  businessCountry: string | null;
+  businessWhatsapp: string | null;
+  businessInstagram: string | null;
 };
 
 export async function getFiscalData(): Promise<FiscalData> {
@@ -364,7 +367,10 @@ export async function getFiscalData(): Promise<FiscalData> {
   const company = await withTenant(companyId, (tx) =>
     tx.company.findUnique({
       where: { id: companyId },
-      select: { fiscalLegalName: true, fiscalRif: true, fiscalAddress: true, fiscalPhone: true },
+      select: {
+        fiscalLegalName: true, fiscalRif: true, fiscalAddress: true, fiscalPhone: true,
+        businessCountry: true, businessWhatsapp: true, businessInstagram: true,
+      },
     })
   );
   return {
@@ -372,7 +378,15 @@ export async function getFiscalData(): Promise<FiscalData> {
     fiscalRif: company?.fiscalRif ?? null,
     fiscalAddress: company?.fiscalAddress ?? null,
     fiscalPhone: company?.fiscalPhone ?? null,
+    businessCountry: company?.businessCountry ?? null,
+    businessWhatsapp: company?.businessWhatsapp ?? null,
+    businessInstagram: company?.businessInstagram ?? null,
   };
+}
+
+function clean(v: FormDataEntryValue | null, max: number): string | null {
+  const t = typeof v === "string" ? v.trim().slice(0, max) : "";
+  return t === "" ? null : t;
 }
 
 export async function updateFiscalData(formData: FormData): Promise<ActionResult> {
@@ -396,6 +410,9 @@ export async function updateFiscalData(formData: FormData): Promise<ActionResult
         fiscalRif: parsed.data.fiscalRif ?? null,
         fiscalAddress: parsed.data.fiscalAddress ?? null,
         fiscalPhone: parsed.data.fiscalPhone ?? null,
+        businessCountry: clean(formData.get("businessCountry"), 60),
+        businessWhatsapp: clean(formData.get("businessWhatsapp"), 30)?.replace(/[^\d+]/g, "") || null,
+        businessInstagram: clean(formData.get("businessInstagram"), 40)?.replace(/^@/, "") || null,
       },
     })
   );

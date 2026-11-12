@@ -20,6 +20,7 @@ export function renewalNotice(
   if (isExempt || !dueDate) return null;
   const days = veDayNumber(dueDate) - veDayNumber(now);
   if (days < 0 || days > RENEWAL_NOTICE_DAYS) return null;
-  if (days === 0) return { days, text: "Tu suscripción vence hoy: paga antes de las 11:59 p. m." };
-  return { days, text: `Tu suscripción vence en ${days} ${days === 1 ? "día" : "días"}.` };
+  if (days === 0) return { days, text: "Tu plan vence hoy" };
+  if (days === 1) return { days, text: "Mañana vence tu plan" };
+  return { days, text: `Te quedan ${days} días para renovar` };
 }

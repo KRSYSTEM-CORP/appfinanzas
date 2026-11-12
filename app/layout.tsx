@@ -58,7 +58,7 @@ export default async function RootLayout({
   // Con la pantalla bloqueada no se carga el menú ni el contenido: solo /lock responde.
   const canLoadAppChrome = Boolean(session && !session.billingBlocked && !session.locked && !session.needsPlanChoice);
   const renewal =
-    canLoadAppChrome && session && !session.isSuperAdmin ? renewalNotice(session.nextPaymentDueDate, session.isExempt) : null;
+    canLoadAppChrome && session && !session.isSuperAdmin && session.role === "GERENTE" && (session.roleName == null || session.roleName === "Dueño") ? renewalNotice(session.nextPaymentDueDate, session.isExempt) : null;
   const [branding, branches, sidebarRate] = await Promise.all([
     session ? getBranding() : Promise.resolve({ logoDataUrl: null, brandColor: null, brandBackground: null }),
     canManage && canLoadAppChrome ? listBranches() : Promise.resolve([]),
@@ -95,7 +95,7 @@ export default async function RootLayout({
         </Script>
         <ServiceWorkerRegistration />
         {renewal && <RenewalBanner days={renewal.days} text={renewal.text} />}
-        {canLoadAppChrome && session?.hasPin && <IdleLock role={session.role} />}
+        {canLoadAppChrome && session?.hasPin && <IdleLock role={session.role} minutes={session.lockMinutes} />}
         {canLoadAppChrome && session && (
           <Sidebar
             companyName={session.companyName}

@@ -8,7 +8,7 @@ import { logout } from "@/lib/actions/auth";
 import { createFirstManagerPin, unlockWithPin, type LockProfile } from "@/lib/actions/pin";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
-const MAX_LEN = 6;
+const MAX_LEN = 4;
 const MIN_LEN = 4;
 
 function Avatar({ p, size }: { p: LockProfile; size: "md" | "lg" }) {
@@ -23,7 +23,7 @@ function Avatar({ p, size }: { p: LockProfile; size: "md" | "lg" }) {
   );
 }
 
-// Pantalla de bloqueo: se elige el perfil y se escribe el PIN (4 a 6 números).
+// Pantalla de bloqueo: se elige el perfil y se escribe el PIN (4 números).
 export function LockScreen({ companyName, profiles }: { companyName: string; profiles: LockProfile[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<LockProfile | null>(profiles.length === 1 ? profiles[0] : null);
@@ -113,7 +113,7 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
               ? "Elige tu perfil para continuar"
               : selected.access === "create"
                 ? firstPin === null
-                  ? `Hola, ${selected.name.split(" ")[0]}. Crea tu PIN (4 a 6 números).`
+                  ? `Hola, ${selected.name.split(" ")[0]}. Crea tu PIN (4 números).`
                   : "Escribe tu PIN otra vez para confirmarlo."
                 : selected.access === "ask-manager"
                   ? `Hola, ${selected.name.split(" ")[0]}.`

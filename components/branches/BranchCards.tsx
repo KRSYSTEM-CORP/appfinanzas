@@ -7,7 +7,56 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EnterBranchDialog } from "@/components/branches/EnterBranchDialog";
 import { formatCurrencyCents } from "@/lib/currencies";
-import { setBranchGoal, type BranchSummary } from "@/lib/actions/branches";
+import { setBranchGoal, setBranchKey, type BranchSummary } from "@/lib/actions/branches";
+
+function KeyEditor({ branchId }: { branchId: string }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  if (!editing)
+    return (
+      <button type="button" onClick={() => setEditing(true)} className="text-xs font-semibold text-primary underline underline-offset-4">
+        Clave de la sede
+      </button>
+    );
+  function save(key: string | null) {
+    start(async () => {
+      const r = await setBranchKey(branchId, key);
+      if (r.success) {
+        setEditing(false);
+        setValue("");
+        setError(null);
+        router.refresh();
+      } else setError(r.error ?? "No se pudo guardar");
+    });
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        type="password"
+        inputMode="numeric"
+        maxLength={4}
+        value={value}
+        onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
+        aria-label="Clave de 4 dígitos"
+        placeholder="4 dígitos"
+        className="h-9 w-24 rounded-full border-[1.5px] border-input bg-card px-3 text-sm outline-none focus-visible:border-ring"
+      />
+      <Button size="sm" disabled={pending || value.length !== 4} onClick={() => save(value)}>
+        Guardar
+      </Button>
+      <Button size="sm" variant="outline" disabled={pending} onClick={() => save(null)}>
+        Quitar clave
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+        Cancelar
+      </Button>
+      {error && <p className="w-full text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
 
 function GoalEditor({ branchId, goalCents, currency }: { branchId: string; goalCents: number | null; currency: string }) {
   const router = useRouter();
@@ -183,6 +232,7 @@ export function BranchCards({
                       </>
                     )}
                     {s.isActive && <GoalEditor branchId={s.id} goalCents={s.goalCents} currency={currency} />}
+                    {s.isActive && <KeyEditor branchId={s.id} />}
                   </div>
                   <dl className="grid grid-cols-3 gap-2 text-center text-xs">
                     <div className="rounded-xl bg-muted p-2.5">

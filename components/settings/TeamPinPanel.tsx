@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { PinControl } from "@/components/employees/PinControl";
-import { IdleTimeoutSetting } from "@/components/settings/IdleTimeoutSetting";
 import { RoleSelect, RolesMatrix } from "@/components/settings/RolesPanel";
 import type { EmployeeListItem } from "@/lib/actions/employees";
 import type { RoleRow } from "@/lib/actions/roles";
@@ -13,7 +12,6 @@ export function TeamPinPanel({ people, currentUserId, roles }: { people: Employe
   const managersWithPin = people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length;
   return (
     <div className="flex flex-col gap-4">
-      <IdleTimeoutSetting />
       <p className="text-sm text-muted-foreground">
         Todas las personas entran con el correo y la clave de la empresa y luego eligen su perfil con su código
         personal (PIN). Aquí lo creas o lo cambias; solo un gerente puede hacerlo.

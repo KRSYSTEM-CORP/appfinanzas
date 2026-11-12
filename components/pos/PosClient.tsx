@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { PlusIcon, UsersIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { PaymentStatus } from "@prisma/client";
 import type { ListedProduct } from "@/lib/product-image";
@@ -34,6 +35,7 @@ type Step = "customer" | "cart" | "pay" | "receipt";
 
 function PosSession({
   paymentAccounts = [],
+  requireCustomer = false,
   products,
   rate,
   currencyCode,
@@ -56,6 +58,7 @@ function PosSession({
   ivaReducedRatePercent,
 }: {
   paymentAccounts?: PaymentAccountRow[];
+  requireCustomer?: boolean;
   products: ListedProduct[];
   rate: number | null;
   currencyCode: string;
@@ -136,6 +139,7 @@ function PosSession({
   // Como en la preview: se entra directo al catálogo y el cliente se pide al cobrar
 // (registrar uno, elegirlo en el Directorio o «Cliente general» solo desde el Directorio).
 const [step, setStep] = useState<Step>("cart");
+  const containerRef = useRef<HTMLDivElement>(null);
   const [dialog, setDialog] = useState<null | "register" | "directory">(null);
   const [fromPay, setFromPay] = useState(false);
   const [dirQuery, setDirQuery] = useState("");
@@ -168,6 +172,7 @@ const [step, setStep] = useState<Step>("cart");
     defaultPaymentSplitRows(0, rate, exchangeRateEnabled)
   );
   const [note, setNote] = useState("");
+  const [documentKind, setDocumentKind] = useState<"delivery" | "ticket">("delivery");
   const [channel, setChannel] = useState<SaleChannel>("MOSTRADOR");
   const [discountPercent, setDiscountPercent] = useState("0");
   const [error, setError] = useState<string | null>(null);
@@ -199,6 +204,21 @@ const [step, setStep] = useState<Step>("cart");
   // requires the user to manually retype the amount. Once a second row is
   // added (an intentional split), amounts are fully user-controlled.
   useDefaultPaymentRow(total, rate, exchangeRateEnabled, setPaymentRows);
+
+  // «Volver a vender» (lista de ventas): suma los artículos de una venta anterior a la cuenta visible.
+  useEffect(() => {
+    function onResell(e: Event) {
+      if (!containerRef.current || containerRef.current.offsetParent === null) return;
+      const items = (e as CustomEvent<{ productId: string; quantity: number }[]>).detail;
+      for (const it of items) {
+        const product = productById.get(it.productId);
+        if (!product) continue;
+        for (let i = 0; i < it.quantity; i++) addProductToCart(product);
+      }
+    }
+    window.addEventListener("kr-pos-resell", onResell);
+    return () => window.removeEventListener("kr-pos-resell", onResell);
+  });
 
   function addProduct(product: ListedProduct) {
     setError(null);
@@ -273,8 +293,9 @@ const [step, setStep] = useState<Step>("cart");
     });
   }
 
-  function checkout() {
+  function checkout(extraNote?: string) {
     if (!customer) return;
+    const finalNote = [extraNote, note.trim()].filter(Boolean).join(" · ");
     setError(null);
     // One key per checkout, sent on the online attempt AND kept in the
     // offline queue: if the server saved the sale but the response never
@@ -304,7 +325,7 @@ const [step, setStep] = useState<Step>("cart");
       customerPhone: customer.phone,
       customerAddress: customer.address,
       customerRif: customer.rif || undefined,
-      note: note.trim() || undefined,
+      note: finalNote || undefined,
       quoteId: quoteId ?? undefined,
     };
 
@@ -319,7 +340,7 @@ const [step, setStep] = useState<Step>("cart");
           subtotalCents: l.unitPriceCents * l.quantity - computeItemDiscountCents(l.unitPriceCents * l.quantity, discountValue),
         })),
         sellerName,
-        note: note.trim() || null,
+        note: finalNote || null,
       });
       setCompletedSale(buildReceiptPreview(customerInfo));
       setPendingSync(true);
@@ -387,7 +408,7 @@ const [step, setStep] = useState<Step>("cart");
         currencyCode={currencyCode}
         exchangeRateEnabled={exchangeRateEnabled}
         referenceCurrency={referenceCurrency}
-        printPaperSize={printPaperSize}
+        printPaperSize={documentKind === "ticket" ? "THERMAL_80" : printPaperSize}
         company={company}
         onNewSale={newSale}
         pendingSync={pendingSync}
@@ -424,6 +445,8 @@ const [step, setStep] = useState<Step>("cart");
             isPending={isPending}
             error={error}
             onBack={() => setStep("cart")}
+            documentKind={documentKind}
+            onDocumentKindChange={setDocumentKind}
             onConfirm={checkout}
           />
         </div>
@@ -432,7 +455,7 @@ const [step, setStep] = useState<Step>("cart");
   }
 
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div ref={containerRef} className="flex flex-col gap-3 h-full">
       <div className={`grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_360px] md:gap-6 md:flex-1 md:min-h-0 ${lines.length ? "pb-[calc(var(--tabbar-h)+5rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>
         <ProductPicker
           products={products}
@@ -482,11 +505,11 @@ const [step, setStep] = useState<Step>("cart");
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
-            <Button type="button" size="lg" onClick={() => { setFromPay(false); setDialog("register"); }}>
-              + Registrar cliente
+            <Button type="button" size="lg" className="min-h-[46px]" onClick={() => { setFromPay(false); setDialog("register"); }}>
+              <PlusIcon /> Registrar cliente
             </Button>
-            <Button type="button" size="lg" variant="outline" onClick={() => { setDirQuery(""); setDirResults([]); setDialog("directory"); }}>
-              Directorio
+            <Button type="button" size="lg" variant="outline" className="min-h-[46px]" onClick={() => { setDirQuery(""); setDirResults([]); setDialog("directory"); }}>
+              <UsersIcon /> Directorio
             </Button>
           </div>
         <Cart
@@ -550,16 +573,18 @@ const [step, setStep] = useState<Step>("cart");
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Directorio de clientes</DialogTitle>
-            <DialogDescription>Busca un cliente o usa «Cliente general» para una venta sin datos.</DialogDescription>
+            <DialogDescription>{requireCustomer ? "Busca o registra al cliente: esta empresa exige nombre y teléfono en cada venta." : "Busca un cliente o usa «Cliente general» para una venta sin datos."}</DialogDescription>
           </DialogHeader>
           <Input autoFocus value={dirQuery} onChange={(e) => runDirectorySearch(e.target.value)} placeholder="Buscar por nombre o apellido" />
           <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
-            <li>
-              <button type="button" onClick={useGeneralCustomer} className="flex w-full flex-col rounded-xl bg-muted p-3 text-left hover:bg-muted/70">
-                <span className="font-semibold">Cliente general</span>
-                <span className="text-xs text-muted-foreground">Venta sin datos</span>
-              </button>
-            </li>
+            {!requireCustomer && (
+              <li>
+                <button type="button" onClick={useGeneralCustomer} className="flex w-full flex-col rounded-xl bg-muted p-3 text-left hover:bg-muted/70">
+                  <span className="font-semibold">Cliente general</span>
+                  <span className="text-xs text-muted-foreground">Venta sin datos</span>
+                </button>
+              </li>
+            )}
             {dirResults.map((c) => (
               <li key={c.id}>
                 <button

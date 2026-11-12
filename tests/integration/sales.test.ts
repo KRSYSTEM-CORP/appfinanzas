@@ -71,6 +71,25 @@ describe("completeSale", () => {
     expect(await owner.sale.count({ where: { companyId: ctx.companyId, idempotencyKey: key } })).toBe(1);
   });
 
+  it("con «exigir cliente» activo, rechaza «Cliente general» y acepta un cliente real", async () => {
+    await owner.company.update({ where: { id: ctx.companyId }, data: { requireCustomerOnSale: true } });
+    try {
+      const product = await owner.product.findUniqueOrThrow({ where: { id: ctx.productId } });
+      const company = await owner.company.findUniqueOrThrow({ where: { id: ctx.companyId } });
+      const totalRef = product.priceCents / 100;
+      const payments =
+        company.referenceCurrency === "USD"
+          ? [{ paymentMethod: "ZELLE", amount: totalRef, reference: "INT-REQ" }]
+          : [{ paymentMethod: "CASH", amount: Math.round(totalRef * Number(company.exchangeRate) * 100) / 100 }];
+      const general = await completeSale({ ...customer, customerPhone: "0000-0000000", items: [{ productId: ctx.productId, quantity: 1 }], payments });
+      expect(general.success).toBe(false);
+      const real = await completeSale({ ...customer, items: [{ productId: ctx.productId, quantity: 1 }], payments });
+      expect(real.success).toBe(true);
+    } finally {
+      await owner.company.update({ where: { id: ctx.companyId }, data: { requireCustomerOnSale: false } });
+    }
+  });
+
   it("rechaza vender más que el stock disponible", async () => {
     const stock = await stockOf(ctx.productId);
     await expect(sell(stock + 1)).rejects.toThrow(/Stock insuficiente/);
