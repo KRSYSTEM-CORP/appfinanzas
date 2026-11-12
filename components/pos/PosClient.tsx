@@ -170,6 +170,7 @@ const [step, setStep] = useState<Step>("cart");
     defaultPaymentSplitRows(0, rate, exchangeRateEnabled)
   );
   const [note, setNote] = useState("");
+  const [documentKind, setDocumentKind] = useState<"delivery" | "ticket">("delivery");
   const [channel, setChannel] = useState<SaleChannel>("MOSTRADOR");
   const [discountPercent, setDiscountPercent] = useState("0");
   const [error, setError] = useState<string | null>(null);
@@ -290,8 +291,9 @@ const [step, setStep] = useState<Step>("cart");
     });
   }
 
-  function checkout() {
+  function checkout(extraNote?: string) {
     if (!customer) return;
+    const finalNote = [extraNote, note.trim()].filter(Boolean).join(" · ");
     setError(null);
     // One key per checkout, sent on the online attempt AND kept in the
     // offline queue: if the server saved the sale but the response never
@@ -321,7 +323,7 @@ const [step, setStep] = useState<Step>("cart");
       customerPhone: customer.phone,
       customerAddress: customer.address,
       customerRif: customer.rif || undefined,
-      note: note.trim() || undefined,
+      note: finalNote || undefined,
       quoteId: quoteId ?? undefined,
     };
 
@@ -336,7 +338,7 @@ const [step, setStep] = useState<Step>("cart");
           subtotalCents: l.unitPriceCents * l.quantity - computeItemDiscountCents(l.unitPriceCents * l.quantity, discountValue),
         })),
         sellerName,
-        note: note.trim() || null,
+        note: finalNote || null,
       });
       setCompletedSale(buildReceiptPreview(customerInfo));
       setPendingSync(true);
@@ -404,7 +406,7 @@ const [step, setStep] = useState<Step>("cart");
         currencyCode={currencyCode}
         exchangeRateEnabled={exchangeRateEnabled}
         referenceCurrency={referenceCurrency}
-        printPaperSize={printPaperSize}
+        printPaperSize={documentKind === "ticket" ? "THERMAL_80" : printPaperSize}
         company={company}
         onNewSale={newSale}
         pendingSync={pendingSync}
@@ -441,6 +443,8 @@ const [step, setStep] = useState<Step>("cart");
             isPending={isPending}
             error={error}
             onBack={() => setStep("cart")}
+            documentKind={documentKind}
+            onDocumentKindChange={setDocumentKind}
             onConfirm={checkout}
           />
         </div>
