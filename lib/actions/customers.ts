@@ -230,3 +230,41 @@ export async function listUpcomingBirthdays(withinDays = 30) {
   );
   return upcomingBirthdays(customers, todayDateString(), withinDays);
 }
+
+// Guarda (o actualiza por teléfono) al cliente que se registra desde el POS, con nacimiento y correo.
+export async function savePosCustomer(input: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address: string;
+  rif?: string;
+  email?: string;
+  birthDate?: string;
+}): Promise<ActionResult> {
+  const { companyId } = await requireSession();
+  const phone = input.phone.trim();
+  if (!input.firstName.trim() || !input.lastName.trim() || !phone || !input.address.trim()) {
+    return { success: false, error: "Nombre, apellido, teléfono y dirección son obligatorios" };
+  }
+  const email = input.email?.trim() || null;
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { success: false, error: "El correo no es válido" };
+  const birth = input.birthDate ? new Date(`${input.birthDate}T00:00:00Z`) : null;
+  if (birth && Number.isNaN(birth.getTime())) return { success: false, error: "La fecha de nacimiento no es válida" };
+  const data = {
+    firstName: input.firstName.trim(),
+    lastName: input.lastName.trim(),
+    address: input.address.trim(),
+    rif: input.rif?.trim() || null,
+    email,
+    birthDate: birth,
+  };
+  await withTenant(companyId, (tx) =>
+    tx.customer.upsert({
+      where: { companyId_phone: { companyId, phone } },
+      create: { ...data, companyId, phone },
+      update: data,
+    })
+  );
+  revalidatePath("/customers");
+  return { success: true };
+}

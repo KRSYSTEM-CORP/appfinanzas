@@ -554,6 +554,8 @@ model Customer {
   nextContactDate DateTime? @db.Date
   // Fecha de nacimiento (solo día y mes importan; el año es opcional en la práctica).
   birthDate       DateTime? @db.Date
+  // Correo del cliente (opcional, se pide al registrarlo en el POS).
+  email           String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   sales           Sale[]
