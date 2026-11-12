@@ -6,6 +6,7 @@ import { PLATFORM_SETTINGS_ID } from "@/lib/billing";
 import { invalidateCache } from "@/lib/cache";
 import { todayDateString } from "@/lib/report-types";
 import { sendWeeklyReports } from "@/lib/weekly-report";
+import { sendDailyReports } from "@/lib/daily-report";
 
 // Runs once a day at 7:00 p. m. Venezuela time (23:00 UTC — Vercel cron schedules
 // always run in UTC, see vercel.json's "crons" entry), when the BCV has already
@@ -75,9 +76,18 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Reporte diario por correo: también aquí por el límite de crons del plan Hobby.
+  let daily: { companies: number; sent: number } | null = null;
+  try {
+    daily = await sendDailyReports();
+  } catch (err) {
+    console.error("[cron bcv-rate] daily report failed:", err);
+  }
+
   return NextResponse.json({
     ok: true,
     weekly,
+    daily,
     usdRate: usdRate.status === "fulfilled" ? usdRate.value.rate : null,
     eurRate: eurRate.status === "fulfilled" ? eurRate.value.rate : null,
     source: usdRate.status === "fulfilled" ? usdRate.value.source : null,
