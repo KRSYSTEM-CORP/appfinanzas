@@ -1,3 +1,4 @@
+import { getSession } from "@/lib/session";
 import { LearningPanel } from "@/components/learning/LearningPanel";
 import { getLearningStats, isLearningAdmin, isLearningStorageReady, listLearningVideos } from "@/lib/actions/learning";
 import { MAX_LEARNING_UPLOAD_BYTES, MAX_LEARNING_VIDEOS } from "@/lib/learning";
@@ -5,6 +6,14 @@ import { MAX_LEARNING_UPLOAD_BYTES, MAX_LEARNING_VIDEOS } from "@/lib/learning";
 export const dynamic = "force-dynamic";
 
 export default async function LearningPage() {
+  const session = await getSession();
+  // «Para ti»: la ruta que corresponde al rol de quien entra (rol personalizado si coincide con una ruta).
+  const defaultRoute =
+    session?.roleName && ["Dueño", "Cajero", "Vendedor", "Contador"].includes(session.roleName)
+      ? session.roleName
+      : session?.role === "GERENTE"
+        ? "Dueño"
+        : "Vendedor";
   const [videos, admin, storageReady, stats] = await Promise.all([
     listLearningVideos(),
     isLearningAdmin(),
@@ -34,6 +43,7 @@ export default async function LearningPage() {
         storageReady={storageReady}
         max={MAX_LEARNING_VIDEOS}
         maxUploadMb={MAX_LEARNING_UPLOAD_BYTES / 1024 / 1024}
+        defaultRoute={defaultRoute}
       />
     </div>
   );
