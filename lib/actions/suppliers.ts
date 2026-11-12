@@ -63,6 +63,16 @@ export async function updateSupplier(id: string, formData: FormData): Promise<Ac
   return { success: true };
 }
 
+export async function setSupplierRating(id: string, rating: number | null): Promise<ActionResult> {
+  const { companyId } = await requireManager();
+  if (rating !== null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
+    return { success: false, error: "La calificación va de 1 a 5" };
+  }
+  await withTenant(companyId, (tx) => tx.supplier.updateMany({ where: { id, companyId }, data: { rating } }));
+  revalidatePath("/suppliers");
+  return { success: true };
+}
+
 export async function setSupplierActive(id: string, isActive: boolean): Promise<ActionResult> {
   const { companyId } = await requireManager();
   await withTenant(companyId, (tx) => tx.supplier.updateMany({ where: { id, companyId }, data: { isActive } }));

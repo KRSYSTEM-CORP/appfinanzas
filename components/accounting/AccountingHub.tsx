@@ -15,6 +15,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "/payroll": BanknoteIcon,
   "/tax-book": FileTextIcon,
   "/inventory": PackageIcon,
+  "/accounting/consumption": PackageIcon,
   "/accounting/accounts": LandmarkIcon,
   "/documents": FileTextIcon,
   "/settings": UsersIcon,
@@ -25,7 +26,7 @@ const GROUPS = [
   { value: "balance", label: "Balance", hrefs: ["/finance", "/customers/receivables"] },
   { value: "cuentas", label: "Cuentas Bancarias", hrefs: ["/accounting/accounts", "/settings"] },
   { value: "compras", label: "Compras", hrefs: ["/purchases", "/suppliers"] },
-  { value: "consumo", label: "Consumo Interno", hrefs: ["/inventory"] },
+  { value: "consumo", label: "Consumo Interno", hrefs: ["/accounting/consumption"] },
   { value: "contabilidad", label: "Contabilidad", hrefs: ["/tax-book", "/payroll", "/documents", "/billing"] },
 ] as const;
 type GroupId = (typeof GROUPS)[number]["value"];
