@@ -51,6 +51,19 @@ export function FiscalDataForm({ initial }: { initial: FiscalData }) {
         <Input id="fiscalPhone" name="fiscalPhone" defaultValue={initial.fiscalPhone ?? ""} />
         <p className="text-xs text-muted-foreground">Ej. 0212-1234567</p>
       </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="businessCountry">País</Label>
+        <Input id="businessCountry" name="businessCountry" defaultValue={initial.businessCountry ?? ""} placeholder="Venezuela" />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="businessWhatsapp">WhatsApp</Label>
+        <Input id="businessWhatsapp" name="businessWhatsapp" inputMode="tel" defaultValue={initial.businessWhatsapp ?? ""} />
+        <p className="text-xs text-muted-foreground">Con código de país. Ej. 584121234567</p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="businessInstagram">Instagram</Label>
+        <Input id="businessInstagram" name="businessInstagram" defaultValue={initial.businessInstagram ?? ""} placeholder="minegocio" />
+      </div>
 
       <Button type="submit" disabled={isPending}>
         {isPending ? "Guardando..." : "Guardar datos fiscales"}
