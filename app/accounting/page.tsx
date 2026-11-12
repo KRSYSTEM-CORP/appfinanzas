@@ -28,7 +28,7 @@ const sections = [
     description: "Empleados, pago por quincena con comprobante e historial de pagos.",
   },
   {
-    href: "/inventory",
+    href: "/accounting/consumption",
     title: "Consumo interno",
     description: "Retiros de inventario por socios o personal.",
   },
