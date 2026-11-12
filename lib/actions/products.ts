@@ -779,3 +779,46 @@ export async function deleteInternalUse(movementId: string): Promise<ActionResul
   revalidatePath("/inventory");
   return { success: true };
 }
+
+// Ajuste manual de existencias: Entrada suma, Salida resta y Conteo físico fija la cantidad contada.
+// Todo queda en el historial de movimientos del producto con motivo «ADJUSTMENT».
+export async function adjustStock(
+  productId: string,
+  type: "ENTRADA" | "SALIDA" | "CONTEO",
+  quantity: number,
+  note?: string
+): Promise<ActionResult> {
+  const session = await requireManager();
+  const { companyId, userId: actorId, sellerName: actorName } = session;
+  if (!session.branchId) {
+    return { success: false, error: 'Selecciona una sucursal — no se puede con "Todas las sucursales".' };
+  }
+  const branchId = session.branchId;
+  if (!Number.isInteger(quantity) || quantity < 0 || (type !== "CONTEO" && quantity === 0)) {
+    return { success: false, error: type === "CONTEO" ? "La cantidad contada debe ser un número entero de 0 o más" : "La cantidad debe ser un número entero mayor a 0" };
+  }
+  try {
+    await withTenant(companyId, async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId} FOR UPDATE`;
+      const product = await tx.product.findFirst({ where: { id: productId, companyId, branchId } });
+      if (!product) throw new Error("Producto no encontrado");
+      if (!product.trackStock) throw new Error("Este producto no lleva control de existencias");
+      const after = type === "ENTRADA" ? product.stock + quantity : type === "SALIDA" ? product.stock - quantity : quantity;
+      if (after < 0) throw new Error(`Solo hay ${product.stock} en existencia`);
+      await tx.product.update({ where: { id: product.id }, data: { stock: after, isActive: after > 0 ? true : product.isActive } });
+      await recordStockMovement(tx, {
+        companyId, branchId, productId: product.id, productName: product.name, actorId, actorName,
+        reason: "ADJUSTMENT",
+        sourceType: `${type.toLowerCase()}${note?.trim() ? `:${note.trim().slice(0, 120)}` : ""}`,
+        quantityChange: after - product.stock, stockBefore: product.stock, stockAfter: after,
+      });
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo ajustar" };
+  }
+  await invalidateProductsCache(companyId, branchId);
+  revalidatePath("/inventory");
+  revalidatePath("/pos");
+  void notifyLive(posChannel(companyId), "product");
+  return { success: true };
+}
