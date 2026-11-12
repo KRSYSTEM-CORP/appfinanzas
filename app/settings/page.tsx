@@ -19,10 +19,11 @@ import { Separator } from "@/components/ui/separator";
 import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from "@/lib/actions/settings";
 import { listBranches } from "@/lib/actions/branches";
 import { listEmployees } from "@/lib/actions/employees";
+import { listRoles } from "@/lib/actions/roles";
 import { TeamPinPanel } from "@/components/settings/TeamPinPanel";
 import { formatDate } from "@/lib/format";
 import { formatLocalCurrency } from "@/lib/currencies";
-import { requireManager } from "@/lib/session";
+import { requirePermission } from "@/lib/session";
 import { SHOP_TIME_ZONE, zonedDateParts } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ function isStale(updatedAt: Date | null): boolean {
 }
 
 export default async function SettingsPage() {
-  const session = await requireManager();
+  const session = await requirePermission("settings");
   // Settings is now fully manager-gated (see requireManager above) — every
   // tab below is reachable, so this is always true. Kept as a named
   // constant rather than deleted since the IVA/Sucursales tabs below still
@@ -67,6 +68,7 @@ export default async function SettingsPage() {
   const stale = isStale(updatedAt);
   const referenceSymbol = referenceCurrency === "USD" ? "$1" : "€1";
 
+  const roles = await listRoles();
   const managersWithPin = people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length;
   const sections: SettingsSection[] = [
     {
@@ -79,7 +81,7 @@ export default async function SettingsPage() {
       id: "equipo",
       label: "Equipo y PIN",
       hint: `${people.filter((p) => p.hasPin).length} de ${people.length} con PIN`,
-      content: <TeamPinPanel people={people} currentUserId={session.userId} />,
+      content: <TeamPinPanel people={people} currentUserId={session.userId} roles={roles} />,
     },
     {
       id: "moneda",

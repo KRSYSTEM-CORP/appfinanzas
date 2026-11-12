@@ -1,3 +1,4 @@
+import { SECTION_PERMISSION, type PermissionId } from "@/lib/permissions";
 import { getPlan, type PlanId } from "@/lib/plans";
 import "server-only";
 import { cache } from "react";
@@ -54,6 +55,9 @@ export type Session = {
   // Which sections a VENDEDOR can access — see lib/sections.ts. Empty means
   // unrestricted (see requireSectionAccess below); irrelevant for GERENTE.
   allowedSections: string[];
+  // Permisos del rol asignado (lib/permissions.ts). null = sin rol: comportamiento anterior.
+  permissions: string[] | null;
+  roleName: string | null;
   // Custom per-company features a platform admin enabled for this company
   // (lib/features.ts) — only ids still present in the registry.
   enabledFeatures: string[];
@@ -136,6 +140,11 @@ async function readSession(): Promise<Session | null> {
     );
     branchId = branch?.id ?? null;
   }
+  const customRole = user.roleId
+    ? await withTenant(user.companyId, (tx) =>
+        tx.companyRole.findUnique({ where: { id: user.roleId as string }, select: { name: true, permissions: true } })
+      )
+    : null;
   const branch = branchId
     ? await withTenant(user.companyId, (tx) => tx.branch.findUnique({ where: { id: branchId }, select: { name: true } }))
     : null;
@@ -155,6 +164,8 @@ async function readSession(): Promise<Session | null> {
     role: user.role,
     sellerName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email,
     allowedSections: user.allowedSections,
+    permissions: customRole ? customRole.permissions : null,
+    roleName: customRole?.name ?? null,
     enabledFeatures: user.company.enabledFeatures.filter(isKnownFeature),
     plan: user.company.plan,
     needsPlanChoice: !user.company.planChosen && user.role === "GERENTE",
@@ -221,6 +232,10 @@ export async function requireSectionAccess(section: AppSection | AppSection[]): 
   const session = await requireSession();
   if (session.role === "GERENTE" || session.isSuperAdmin) return session;
   const sections = Array.isArray(section) ? section : [section];
+  if (session.permissions) {
+    if (sections.some((s) => session.permissions!.includes(SECTION_PERMISSION[s]))) return session;
+    redirect("/pos");
+  }
   if (session.allowedSections.length === 0 || sections.some((s) => session.allowedSections.includes(s))) return session;
   redirect("/pos");
 }
@@ -253,4 +268,21 @@ export function requireBranchId(session: Session): string {
     throw new Error('Selecciona una sucursal antes de hacer esto — no se puede con "Todas las sucursales".');
   }
   return session.branchId;
+}
+
+// ¿Tiene esta persona el permiso? Un super admin y un gerente sin rol asignado lo tienen todo
+// (comportamiento anterior); un vendedor sin rol solo lo que sus secciones habilitan.
+export function hasPermission(session: Pick<Session, "isSuperAdmin" | "role" | "permissions" | "allowedSections">, permission: PermissionId): boolean {
+  if (session.isSuperAdmin) return true;
+  if (session.permissions) return session.permissions.includes(permission);
+  if (session.role === "GERENTE") return true;
+  const enabled = session.allowedSections.length === 0 ? Object.keys(SECTION_PERMISSION) : session.allowedSections;
+  return enabled.some((sec) => SECTION_PERMISSION[sec] === permission);
+}
+
+// Valida un permiso en el servidor: quien no lo tiene vuelve al POS.
+export async function requirePermission(permission: PermissionId): Promise<Session> {
+  const session = await requireSession();
+  if (!hasPermission(session, permission)) redirect("/pos");
+  return session;
 }

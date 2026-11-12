@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAccountingPlan } from "@/lib/session";
+import { requireAccountingPlan, requirePermission } from "@/lib/session";
 import { ClockIcon, PackageIcon, TrendingUpIcon, WalletIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/reports/StatCard";
@@ -42,6 +42,7 @@ export default async function FinancePage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string; q?: string }>;
 }) {
+  await requirePermission("stats");
   await requireAccountingPlan();
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "7d" });

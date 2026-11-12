@@ -3,12 +3,12 @@ import { listTransferSuggestions, listTransfers } from "@/lib/actions/transfers"
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { BranchCards } from "@/components/branches/BranchCards";
 import { branchOverview } from "@/lib/actions/branches";
-import { requireManager } from "@/lib/session";
+import { requirePermission } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function BranchesPage() {
-  const session = await requireManager();
+  const session = await requirePermission("branches");
   const [{ summaries, currency }, suggestions, transfers, { exchangeRateEnabled }] = await Promise.all([
     branchOverview(),
     listTransferSuggestions(),
