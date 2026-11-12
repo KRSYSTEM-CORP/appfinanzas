@@ -234,6 +234,8 @@ model Company {
   planChosen            Boolean           @default(true)
   // Reporte semanal por correo a los gerentes (domingo por la noche); opt-in.
   weeklyReportEnabled   Boolean           @default(false)
+  // Destinatarios (hasta 5) del reporte diario de ventas por correo.
+  dailyReportEmails     String[]          @default([])
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?
   payments              Payment[]
