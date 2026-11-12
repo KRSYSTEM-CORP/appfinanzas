@@ -31,6 +31,8 @@ import { commissionsTotal, sellersSalesOverview } from "@/lib/actions/seller-rep
 import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, productMargins, getProfitGoal } from "@/lib/actions/finance";
 import { WeeklyReportToggle } from "@/components/finance/WeeklyReportToggle";
 import { BreakevenCard } from "@/components/finance/BreakevenCard";
+import { ProductPerformance } from "@/components/finance/ProductPerformance";
+import { ProductMarginsCard } from "@/components/finance/ProductMarginsCard";
 import { StatsInsights } from "@/components/finance/StatsInsights";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { parseDateRangeSelection } from "@/lib/report-types";
@@ -448,41 +450,14 @@ export default async function FinancePage({
       <Card>
         <CardHeader>
           <CardTitle>Rendimiento de productos</CardTitle>
-          <p className="text-sm text-muted-foreground">Pareto 80/20: qué productos generan la mayor parte de la venta</p>
+          <p className="text-sm text-muted-foreground">Pareto 80/20 de lo más vendido, o los productos que menos se mueven</p>
         </CardHeader>
         <CardContent>
-          {(() => {
-            const items = [...top].sort((a, b) => b.revenueCents - a.revenueCents);
-            const total = items.reduce((t, i) => t + i.revenueCents, 0);
-            if (items.length === 0 || total <= 0) return <p className="text-sm text-muted-foreground">Sin ventas de productos en este período.</p>;
-            const rows = items.map((i, idx) => {
-              const before = items.slice(0, idx).reduce((t, x) => t + x.revenueCents, 0);
-              return { ...i, before, cum: Math.round(((before + i.revenueCents) / total) * 100) };
-            });
-            const classA = rows.filter((r) => r.before < total * 0.8).length;
-            const max = items[0].revenueCents;
-            return (
-              <div className="flex flex-col gap-3">
-                <ul className="flex flex-col gap-2.5">
-                  {rows.map((r) => (
-                    <li key={`${r.productId}-${r.productName}`} className="grid grid-cols-[130px_1fr_84px_44px] items-center gap-3 text-sm">
-                      <span className="truncate font-medium">{r.productName}</span>
-                      <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-                        <div className={`h-full rounded-full ${r.before < total * 0.8 ? "bg-primary" : "bg-muted-foreground/40"}`} style={{ width: `${Math.max(2, Math.round((r.revenueCents / max) * 100))}%` }} />
-                      </div>
-                      <span className="text-right font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, r.revenueCents)}</span>
-                      <span className="text-right text-xs text-muted-foreground tabular-nums">{r.cum} %</span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-sm text-muted-foreground">
-                  Los primeros {classA} {classA === 1 ? "producto genera" : "productos generan"} el 80 % de la venta (clase A). Cuídalos de agotarse.
-                </p>
-              </div>
-            );
-          })()}
+          <ProductPerformance top={top} bottom={bottom} currency={referenceCurrency} />
         </CardContent>
       </Card>
+
+      <ProductMarginsCard rows={products} currency={referenceCurrency} />
 
       <Card>
         <CardHeader>
