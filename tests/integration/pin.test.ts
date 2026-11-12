@@ -53,7 +53,7 @@ describe("PIN por persona", () => {
     const early = await setUserPin(sellerId, "4827");
     expect(early.success).toBe(false);
     if (!early.success) expect(early.error).toMatch(/Primero crea el PIN de un gerente/);
-    expect((await setUserPin(ctx.userId, "905163")).success).toBe(true);
+    expect((await setUserPin(ctx.userId, "9051")).success).toBe(true);
   });
 
   it("no se crean perfiles nuevos mientras ningún gerente tenga PIN", async () => {
@@ -67,7 +67,7 @@ describe("PIN por persona", () => {
     const r = await createEmployee(fd);
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error).toMatch(/Primero crea tu propio PIN/);
-    expect((await setUserPin(ctx.userId, "905163")).success).toBe(true);
+    expect((await setUserPin(ctx.userId, "9051")).success).toBe(true);
   });
 
   it("guarda el PIN (solo como hash) y no se puede repetir en la empresa", async () => {
@@ -118,7 +118,7 @@ describe("bloquear y desbloquear", () => {
 
   it("el PIN de otra persona no abre este perfil", async () => {
     setCookie.mockClear();
-    expect((await unlockWithPin(sellerId, "905163")).success).toBe(false);
+    expect((await unlockWithPin(sellerId, "9051")).success).toBe(false);
     expect(setCookie).not.toHaveBeenCalled();
   });
 
