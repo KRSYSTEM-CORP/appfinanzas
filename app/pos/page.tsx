@@ -7,6 +7,7 @@ import { getQuoteForConversion } from "@/lib/actions/quotes";
 import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from "@/lib/actions/settings";
 import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { requireSession } from "@/lib/session";
+import { getRequireCustomerOnSale } from "@/lib/actions/marketing";
 import { getDailyClosingSummary } from "@/lib/actions/cash-closing";
 import { todayDateString } from "@/lib/report-types";
 
@@ -28,6 +29,7 @@ export default async function PosPage({
     { ivaGeneralRatePercent, ivaReducedRatePercent, isIgtfAgent, igtfRatePercent },
     paymentAccounts,
     todaySummary,
+    requireCustomer,
   ] = await Promise.all([
     requireSession(),
     listActiveProducts(),
@@ -38,6 +40,7 @@ export default async function PosPage({
     getIvaSettings(),
     listPaymentAccounts(true),
     getDailyClosingSummary(todayDateString()).catch(() => null),
+    getRequireCustomerOnSale().catch(() => false),
   ]);
   const company = { name: companyName, logoDataUrl, ...fiscalData };
 
@@ -89,6 +92,7 @@ export default async function PosPage({
         <PosClient
           topMethod={[...(todaySummary?.byMethod ?? [])].sort((a, b) => b.totalCents - a.totalCents)[0]?.paymentMethod ?? null}
           paymentAccounts={paymentAccounts}
+          requireCustomer={requireCustomer}
           products={products}
           rate={rate}
           currencyCode={localCurrencyCode}

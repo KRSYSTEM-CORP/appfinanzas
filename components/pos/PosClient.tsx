@@ -35,6 +35,7 @@ type Step = "customer" | "cart" | "pay" | "receipt";
 
 function PosSession({
   paymentAccounts = [],
+  requireCustomer = false,
   products,
   rate,
   currencyCode,
@@ -57,6 +58,7 @@ function PosSession({
   ivaReducedRatePercent,
 }: {
   paymentAccounts?: PaymentAccountRow[];
+  requireCustomer?: boolean;
   products: ListedProduct[];
   rate: number | null;
   currencyCode: string;
@@ -571,16 +573,18 @@ const [step, setStep] = useState<Step>("cart");
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Directorio de clientes</DialogTitle>
-            <DialogDescription>Busca un cliente o usa «Cliente general» para una venta sin datos.</DialogDescription>
+            <DialogDescription>{requireCustomer ? "Busca o registra al cliente: esta empresa exige nombre y teléfono en cada venta." : "Busca un cliente o usa «Cliente general» para una venta sin datos."}</DialogDescription>
           </DialogHeader>
           <Input autoFocus value={dirQuery} onChange={(e) => runDirectorySearch(e.target.value)} placeholder="Buscar por nombre o apellido" />
           <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
-            <li>
-              <button type="button" onClick={useGeneralCustomer} className="flex w-full flex-col rounded-xl bg-muted p-3 text-left hover:bg-muted/70">
-                <span className="font-semibold">Cliente general</span>
-                <span className="text-xs text-muted-foreground">Venta sin datos</span>
-              </button>
-            </li>
+            {!requireCustomer && (
+              <li>
+                <button type="button" onClick={useGeneralCustomer} className="flex w-full flex-col rounded-xl bg-muted p-3 text-left hover:bg-muted/70">
+                  <span className="font-semibold">Cliente general</span>
+                  <span className="text-xs text-muted-foreground">Venta sin datos</span>
+                </button>
+              </li>
+            )}
             {dirResults.map((c) => (
               <li key={c.id}>
                 <button

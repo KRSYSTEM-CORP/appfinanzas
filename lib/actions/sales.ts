@@ -107,8 +107,12 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           ivaReducedRatePercent: true,
           isIgtfAgent: true,
           igtfRatePercent: true,
+          requireCustomerOnSale: true,
         },
       });
+      if (company?.requireCustomerOnSale && customerPhone === "0000-0000000") {
+        throw new Error("Esta empresa exige nombre y teléfono del cliente en cada venta. Registra o elige un cliente.");
+      }
       const exchangeRateEnabled = company?.exchangeRateEnabled ?? true;
       if (exchangeRateEnabled && company?.exchangeRate == null) {
         throw new Error("Configura la tasa de cambio antes de completar una venta.");

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireSectionAccess } from "@/lib/session";
+import { requireSectionAccess, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { FREQUENT_VISITS, INACTIVE_DAYS, segmentOf, type SegmentId } from "@/lib/marketing";
 import type { ActionResult } from "@/lib/types";
@@ -179,5 +179,23 @@ export async function registerRedemption(promotionId: string, note?: string): Pr
   });
   if (ok) return { success: false, error: ok };
   revalidatePath("/customers/promotions");
+  return { success: true };
+}
+
+
+// Interruptor «Exigir nombre y teléfono en cada venta» (Marketing). El POS lo respeta y el
+// servidor lo vuelve a validar al completar la venta.
+export async function getRequireCustomerOnSale(): Promise<boolean> {
+  const { companyId } = await requireSession();
+  const c = await withTenant(companyId, (tx) => tx.company.findUnique({ where: { id: companyId }, select: { requireCustomerOnSale: true } }));
+  return c?.requireCustomerOnSale ?? false;
+}
+
+export async function setRequireCustomerOnSale(value: boolean): Promise<ActionResult> {
+  const { companyId, role } = await requireSectionAccess("customers");
+  if (role !== "GERENTE") return { success: false, error: "Solo el gerente puede cambiar esta regla." };
+  await withTenant(companyId, (tx) => tx.company.update({ where: { id: companyId }, data: { requireCustomerOnSale: value } }));
+  revalidatePath("/customers");
+  revalidatePath("/pos");
   return { success: true };
 }

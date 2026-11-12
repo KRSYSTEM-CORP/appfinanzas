@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { ImportCustomers } from "@/components/customers/ImportCustomers";
 import { MarketingInsights } from "@/components/customers/MarketingInsights";
 import { MarketingTabs } from "@/components/customers/MarketingTabs";
+import { RequireCustomerToggle } from "@/components/customers/RequireCustomerToggle";
+import { getRequireCustomerOnSale } from "@/lib/actions/marketing";
 import { getMarketingInsights } from "@/lib/actions/marketing";
 import { SEGMENTS, type SegmentId } from "@/lib/marketing";
 import { CustomerTable } from "@/components/customers/CustomerTable";
@@ -18,6 +20,7 @@ export const dynamic = "force-dynamic";
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ grupo?: string }> }) {
   const { grupo } = await searchParams;
   const activeSegment = SEGMENTS.find((s) => s.id === grupo)?.id ?? null;
+  const requireCustomer = await getRequireCustomerOnSale();
   const [session, allCustomers, toContact, birthdays, insights] = await Promise.all([
     requireSectionAccess("customers"),
     listCustomers(),
@@ -42,6 +45,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       </div>
       <MarketingTabs active="/customers" />
       <MarketingInsights data={insights} active={activeSegment} />
+      <RequireCustomerToggle initial={requireCustomer} canChange={canManage} />
       <ImportCustomers />
 
       {toContact.length > 0 && (

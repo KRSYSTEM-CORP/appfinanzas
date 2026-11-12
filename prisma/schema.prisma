@@ -178,6 +178,8 @@ model Company {
   fiscalPhone           String?
   // Contacto del negocio (Ajustes · Negocio).
   businessCountry       String?
+  // Si está activo, no se puede vender como «Cliente general»: cada venta pide nombre y teléfono.
+  requireCustomerOnSale Boolean           @default(false)
   businessWhatsapp      String?
   businessInstagram     String?
   // Default paper size for the "Imprimir" browser print view. Editable
