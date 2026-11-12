@@ -269,6 +269,8 @@ model Branch {
   isActive             Boolean  @default(true)
   // Meta de ventas del mes de esta sede (se ve en Sucursales); null = sin meta.
   monthlyGoalCents     Int?
+  // Clave de 4 dígitos para entrar a la sede (hash); null = se pide la clave de la cuenta.
+  accessKeyHash        String?
   createdAt            DateTime @default(now())
   // Last document number handed out per sequence (see lib/document-sequence.ts).
   // Never derived from count(*): a deleted document must not free its number.

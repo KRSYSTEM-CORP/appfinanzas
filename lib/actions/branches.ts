@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireManager, requireSession, setSessionCookie } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
-import { verifyPassword } from "@/lib/password";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { dayBoundsUtc, todayDateString } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
@@ -14,9 +14,32 @@ export async function listBranches() {
   // Read on every page via the root layout (for the branch switcher) —
   // branches change only when a manager adds/edits one, which invalidates
   // this key below.
-  return getOrSetCache(`branches:${companyId}`, 600, () =>
+  const rows = await getOrSetCache(`branches:${companyId}`, 600, () =>
     withTenant(companyId, (tx) => tx.branch.findMany({ where: { companyId }, orderBy: { createdAt: "asc" } }))
   );
+  // El hash de la clave nunca sale del servidor: solo se informa si la sede tiene clave.
+  // accessKeyHash se devuelve siempre null para que los tipos de Branch sigan valiendo.
+  return rows.map(({ accessKeyHash, ...rest }) => ({ ...rest, accessKeyHash: null as string | null, hasKey: !!accessKeyHash }));
+}
+
+export async function branchNeedsKey(branchId: string | null): Promise<boolean> {
+  const { companyId } = await requireManager();
+  if (!branchId) return false;
+  const b = await withTenant(companyId, (tx) => tx.branch.findFirst({ where: { id: branchId, companyId }, select: { accessKeyHash: true } }));
+  return !!b?.accessKeyHash;
+}
+
+// Define o cambia la clave de 4 dígitos de una sede (null la quita).
+export async function setBranchKey(branchId: string, key: string | null): Promise<ActionResult> {
+  const { companyId } = await requireManager();
+  if (key !== null && !/^\d{4}$/.test(key)) return { success: false, error: "La clave debe tener exactamente 4 números" };
+  const r = await withTenant(companyId, (tx) =>
+    tx.branch.updateMany({ where: { id: branchId, companyId }, data: { accessKeyHash: key === null ? null : hashPassword(key) } })
+  );
+  if (r.count === 0) return { success: false, error: "Sucursal no encontrada" };
+  await invalidateCache(`branches:${companyId}`);
+  revalidatePath("/branches");
+  return { success: true };
 }
 
 export async function createBranch(formData: FormData): Promise<ActionResult> {
@@ -67,15 +90,29 @@ export async function enterBranch(branchId: string | null, password: string): Pr
   const limit = await checkRateLimit("branch-enter", session.userId, 5, 15 * 60_000);
   if (!limit.allowed) return { success: false, error: rateLimitMessage(limit.retryAfterMinutes) };
 
-  const user = await withTenant(session.companyId, (tx) =>
-    tx.user.findUnique({ where: { id: session.userId }, select: { passwordHash: true } })
-  );
-  if (user?.passwordHash) {
-    if (!password || !verifyPassword(password, user.passwordHash)) {
+  const target = branchId
+    ? await withTenant(session.companyId, (tx) =>
+        tx.branch.findFirst({ where: { id: branchId, companyId: session.companyId }, select: { accessKeyHash: true } })
+      )
+    : null;
+  if (target?.accessKeyHash) {
+    // La sede tiene su propia clave de 4 dígitos: se valida contra ella.
+    if (!verifyPassword(password, target.accessKeyHash)) {
       await recordFailedAttempt("branch-enter", session.userId);
       return { success: false, error: "Clave incorrecta" };
     }
     await clearAttempts("branch-enter", session.userId);
+  } else {
+    const user = await withTenant(session.companyId, (tx) =>
+      tx.user.findUnique({ where: { id: session.userId }, select: { passwordHash: true } })
+    );
+    if (user?.passwordHash) {
+      if (!password || !verifyPassword(password, user.passwordHash)) {
+        await recordFailedAttempt("branch-enter", session.userId);
+        return { success: false, error: "Clave incorrecta" };
+      }
+      await clearAttempts("branch-enter", session.userId);
+    }
   }
 
   if (branchId) {
