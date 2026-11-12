@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "/finance": BarChart3Icon,
   "/accounting/sellers": UsersIcon,
-  "/accounting/receivables": WalletIcon,
+  "/customers/receivables": WalletIcon,
   "/suppliers": LandmarkIcon,
   "/purchases": ShoppingCartIcon,
   "/payroll": BanknoteIcon,
