@@ -57,6 +57,7 @@ export function StatementsTabs({
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="max-w-full overflow-x-auto pb-1">
       <Segmented
         label="Contabilidad"
         value={tab}
@@ -69,6 +70,7 @@ export function StatementsTabs({
           { value: "iva", label: "Resumen de IVA" },
         ]}
       />
+      </div>
 
       {tab === "mov" && (
         <>
