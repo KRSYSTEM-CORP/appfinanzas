@@ -53,6 +53,11 @@ const sections = [
     description: "Plan, vencimiento y pagos de tu suscripción mensual.",
   },
   {
+    href: "/accounting/statements",
+    title: "Estados financieros",
+    description: "Movimientos, estado de resultados, situación financiera, análisis de costo y resumen de IVA.",
+  },
+  {
     href: "/tax-book",
     title: "Libro de Contabilidad",
     description: "Libro de compras y ventas para la declaración de IVA.",
