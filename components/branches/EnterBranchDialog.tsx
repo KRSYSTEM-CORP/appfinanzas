@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { LockIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { enterBranch } from "@/lib/actions/branches";
+import { branchNeedsKey, enterBranch } from "@/lib/actions/branches";
 import { SEDE_SWITCH_EVENT } from "@/components/nav/SedeZoom";
 
 // Pide la clave de la cuenta antes de entrar a una sede (o a «Todas»).
@@ -27,6 +27,15 @@ export function EnterBranchDialog({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [needsKey, setNeedsKey] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    branchNeedsKey(target.id).then((v) => alive && setNeedsKey(v)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [target.id]);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,13 +60,15 @@ export function EnterBranchDialog({
             <DialogTitle className="flex items-center gap-2">
               <LockIcon className="size-4" aria-hidden /> Entrar a {target.name}
             </DialogTitle>
-            <DialogDescription>Escribe tu clave de administrador para cambiar de sede.</DialogDescription>
+            <DialogDescription>{needsKey ? "Escribe la clave de 4 dígitos de esta sede." : "Escribe tu clave de administrador para cambiar de sede."}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="branch-password">Clave</Label>
             <Input
               id="branch-password"
               type="password"
+              inputMode={needsKey ? "numeric" : undefined}
+              maxLength={needsKey ? 4 : undefined}
               autoComplete="current-password"
               autoFocus
               value={password}
