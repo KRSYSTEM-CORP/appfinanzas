@@ -12,6 +12,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "/customers/receivables": WalletIcon,
   "/suppliers": LandmarkIcon,
   "/purchases": ShoppingCartIcon,
+  "/purchases/orders": WalletIcon,
   "/payroll": BanknoteIcon,
   "/tax-book": FileTextIcon,
   "/inventory": PackageIcon,
@@ -26,7 +27,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 const GROUPS = [
   { value: "balance", label: "Balance", hrefs: ["/finance", "/customers/receivables"] },
   { value: "cuentas", label: "Cuentas Bancarias", hrefs: ["/accounting/accounts", "/settings"] },
-  { value: "compras", label: "Compras", hrefs: ["/purchases", "/suppliers"] },
+  { value: "compras", label: "Compras", hrefs: ["/purchases", "/purchases/orders", "/suppliers"] },
   { value: "consumo", label: "Consumo Interno", hrefs: ["/accounting/consumption"] },
   { value: "contabilidad", label: "Contabilidad", hrefs: ["/accounting/statements", "/tax-book", "/payroll", "/documents", "/billing"] },
 ] as const;

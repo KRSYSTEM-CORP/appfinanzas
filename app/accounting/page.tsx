@@ -23,6 +23,11 @@ const sections = [
     description: "Órdenes de compra, cuentas por pagar y estado de cada una.",
   },
   {
+    href: "/purchases/orders",
+    title: "Órdenes de pago",
+    description: "Lo que debes a cada proveedor, con antigüedad, abonos y comparativa de costos.",
+  },
+  {
     href: "/payroll",
     title: "Nómina",
     description: "Empleados, pago por quincena con comprobante e historial de pagos.",

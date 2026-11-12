@@ -563,3 +563,121 @@ export async function listRecentPurchases(limit = 100, windows?: { start: Date; 
     })),
   }));
 }
+
+export type PaymentOrderRow = {
+  id: string;
+  controlNumber: number | null;
+  supplierName: string;
+  createdAt: string;
+  ageDays: number;
+  totalCents: number;
+  owedCents: number; // lo que se le debe al proveedor (total menos IVA retenido)
+  paidCents: number;
+  remainingCents: number;
+};
+
+// Órdenes de pago: compras a crédito con saldo pendiente, de la más antigua a la más reciente.
+export async function listPaymentOrders(): Promise<PaymentOrderRow[]> {
+  const { companyId, branchId } = await requireManager();
+  const rows = await withTenant(companyId, (tx) =>
+    tx.purchase.findMany({
+      where: { companyId, ...(branchId ? { branchId } : {}), voided: false, paymentStatus: "PENDING" },
+      orderBy: { createdAt: "asc" },
+      take: 300,
+      include: { supplier: { select: { name: true } }, payments: { select: { amountEurCents: true } } },
+    })
+  );
+  const now = Date.now();
+  return rows.map((p) => {
+    const owed = p.totalCents - p.ivaRetainedCents;
+    const paid = p.payments.reduce((n, x) => n + x.amountEurCents, 0);
+    return {
+      id: p.id,
+      controlNumber: p.controlNumber,
+      supplierName: p.supplier?.name ?? p.manualSupplierName ?? "Proveedor sin registrar",
+      createdAt: p.createdAt.toISOString(),
+      ageDays: Math.floor((now - p.createdAt.getTime()) / 86_400_000),
+      totalCents: p.totalCents,
+      owedCents: owed,
+      paidCents: paid,
+      remainingCents: Math.max(0, owed - paid),
+    };
+  });
+}
+
+const PAY_METHODS = ["CASH", "CARD", "OTHER", "ZELLE", "BINANCE", "PAYPAL", "POS", "TRANSFER"] as const;
+
+// Fraccionar pago: registra un abono a una compra. Cuando los abonos cubren lo que se le debe
+// al proveedor, la compra pasa a pagada. El monto va en la moneda de referencia.
+export async function registerPurchasePayment(
+  purchaseId: string,
+  method: string,
+  amountCents: number,
+  reference?: string
+): Promise<ActionResult> {
+  const { companyId, branchId: sessionBranchId } = await requireManager();
+  if (!(PAY_METHODS as readonly string[]).includes(method)) return { success: false, error: "Elige un método de pago" };
+  if (!Number.isInteger(amountCents) || amountCents <= 0) return { success: false, error: "El monto debe ser mayor a 0" };
+  try {
+    await withTenant(companyId, async (tx) => {
+      const p = await tx.purchase.findFirst({
+        where: { id: purchaseId, companyId, voided: false, paymentStatus: "PENDING", ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
+        include: { payments: { select: { amountEurCents: true } } },
+      });
+      if (!p) throw new Error("Compra no encontrada o ya estaba pagada");
+      const owed = p.totalCents - p.ivaRetainedCents;
+      const paid = p.payments.reduce((n, x) => n + x.amountEurCents, 0);
+      const remaining = owed - paid;
+      if (amountCents > remaining) throw new Error("El abono es mayor al saldo pendiente");
+      await tx.purchasePayment.create({
+        data: { purchaseId: p.id, paymentMethod: method as (typeof PAY_METHODS)[number], amountEurCents: amountCents, reference: reference?.trim().slice(0, 80) || null },
+      });
+      if (amountCents === remaining) {
+        await tx.purchase.update({ where: { id: p.id }, data: { paymentStatus: "PAID", paidAt: new Date() } });
+      }
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar el pago" };
+  }
+  revalidatePath("/purchases");
+  revalidatePath("/purchases/orders");
+  return { success: true };
+}
+
+export type CostOffer = { supplier: string; lastCostCents: number; date: string };
+export type CostComparisonRow = { productName: string; offers: CostOffer[]; bestCostCents: number; savingPct: number };
+
+// Comparativa de último costo: por producto, lo último que se pagó a cada proveedor. Solo productos
+// comprados a 2 o más proveedores; el más barato va primero.
+export async function costComparison(): Promise<CostComparisonRow[]> {
+  const { companyId, branchId } = await requireManager();
+  const items = await withTenant(companyId, (tx) =>
+    tx.purchaseItem.findMany({
+      where: { productId: { not: null }, purchase: { companyId, voided: false, ...(branchId ? { branchId } : {}) } },
+      orderBy: { purchase: { createdAt: "desc" } },
+      take: 3000,
+      select: {
+        productId: true, productName: true, unitCostCents: true,
+        purchase: { select: { createdAt: true, manualSupplierName: true, supplier: { select: { name: true } } } },
+      },
+    })
+  );
+  const byProduct = new Map<string, { name: string; offers: Map<string, CostOffer> }>();
+  for (const it of items) {
+    const supplier = it.purchase.supplier?.name ?? it.purchase.manualSupplierName;
+    if (!supplier || !it.productId) continue;
+    const entry = byProduct.get(it.productId) ?? { name: it.productName, offers: new Map<string, CostOffer>() };
+    // Las compras vienen de la más reciente a la más antigua: la primera por proveedor es la última.
+    if (!entry.offers.has(supplier)) entry.offers.set(supplier, { supplier, lastCostCents: it.unitCostCents, date: it.purchase.createdAt.toISOString() });
+    byProduct.set(it.productId, entry);
+  }
+  const rows: CostComparisonRow[] = [];
+  for (const { name, offers } of byProduct.values()) {
+    if (offers.size < 2) continue;
+    const list = [...offers.values()].sort((a, b) => a.lastCostCents - b.lastCostCents);
+    const best = list[0].lastCostCents;
+    const worst = list[list.length - 1].lastCostCents;
+    rows.push({ productName: name, offers: list, bestCostCents: best, savingPct: worst > 0 ? Math.round(((worst - best) / worst) * 100) : 0 });
+  }
+  return rows.sort((a, b) => b.savingPct - a.savingPct).slice(0, 50);
+}
