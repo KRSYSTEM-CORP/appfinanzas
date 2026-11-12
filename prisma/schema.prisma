@@ -176,6 +176,10 @@ model Company {
   fiscalRif             String?
   fiscalAddress         String?           @db.Text
   fiscalPhone           String?
+  // Contacto del negocio (Ajustes · Negocio).
+  businessCountry       String?
+  businessWhatsapp      String?
+  businessInstagram     String?
   // Default paper size for the "Imprimir" browser print view. Editable
   // per-print from the print dialog itself; this is just the preselected
   // default.
