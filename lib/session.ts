@@ -1,4 +1,4 @@
-import { SECTION_PERMISSION, type PermissionId } from "@/lib/permissions";
+import { DEFAULT_LOCK_MINUTES, SECTION_PERMISSION, type PermissionId } from "@/lib/permissions";
 import { getPlan, type PlanId } from "@/lib/plans";
 import "server-only";
 import { cache } from "react";
@@ -58,6 +58,8 @@ export type Session = {
   // Permisos del rol asignado (lib/permissions.ts). null = sin rol: comportamiento anterior.
   permissions: string[] | null;
   roleName: string | null;
+  // Minutos de inactividad antes de bloquear (rol); null = valor por defecto.
+  lockMinutes: number | null;
   // Custom per-company features a platform admin enabled for this company
   // (lib/features.ts) — only ids still present in the registry.
   enabledFeatures: string[];
@@ -142,7 +144,7 @@ async function readSession(): Promise<Session | null> {
   }
   const customRole = user.roleId
     ? await withTenant(user.companyId, (tx) =>
-        tx.companyRole.findUnique({ where: { id: user.roleId as string }, select: { name: true, permissions: true } })
+        tx.companyRole.findUnique({ where: { id: user.roleId as string }, select: { name: true, permissions: true, lockMinutes: true } })
       )
     : null;
   const branch = branchId
@@ -166,6 +168,7 @@ async function readSession(): Promise<Session | null> {
     allowedSections: user.allowedSections,
     permissions: customRole ? customRole.permissions : null,
     roleName: customRole?.name ?? null,
+    lockMinutes: customRole?.lockMinutes ?? (customRole ? DEFAULT_LOCK_MINUTES[customRole.name] ?? null : null),
     enabledFeatures: user.company.enabledFeatures.filter(isKnownFeature),
     plan: user.company.plan,
     needsPlanChoice: !user.company.planChosen && user.role === "GERENTE",

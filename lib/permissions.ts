@@ -39,3 +39,14 @@ export const SECTION_PERMISSION: Record<string, PermissionId> = {
   reports: "cash",
   documents: "admin",
 };
+
+// Minutos de inactividad por defecto de cada rol base (editables en Ajustes → Equipo y Seguridad).
+export const DEFAULT_LOCK_MINUTES: Record<string, number> = {
+  Dueño: 10,
+  Administrador: 10,
+  Gerente: 5,
+  Cajero: 5,
+  Vendedor: 5,
+  Contador: 10,
+};
+export const LOCK_MINUTE_CHOICES = [5, 10, 15] as const;

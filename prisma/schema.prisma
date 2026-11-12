@@ -306,6 +306,8 @@ model CompanyRole {
   name        String
   baseRole    Role     @default(VENDEDOR)
   permissions String[] @default([])
+  // Minutos sin actividad antes de bloquear la pantalla (5, 10 o 15). Null = valor por defecto del rol.
+  lockMinutes Int?
   isSystem    Boolean  @default(false)
   createdAt   DateTime @default(now())
   users       User[]

@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Chip } from "@/components/ui/chip";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PERMISSIONS } from "@/lib/permissions";
-import { assignRole, createRole, deleteRole, updateRolePermissions, type RoleRow } from "@/lib/actions/roles";
+import { LOCK_MINUTE_CHOICES, PERMISSIONS } from "@/lib/permissions";
+import { lockSession } from "@/lib/actions/pin";
+import { assignRole, createRole, deleteRole, updateRoleLockMinutes, updateRolePermissions, type RoleRow } from "@/lib/actions/roles";
 
 // Matriz de roles y permisos (Ajustes → Equipo y Seguridad): una fila por permiso, una columna por rol.
 export function RolesMatrix({ roles }: { roles: RoleRow[] }) {
@@ -58,9 +59,24 @@ export function RolesMatrix({ roles }: { roles: RoleRow[] }) {
           <h3 className="font-bold">Roles y permisos</h3>
           <p className="text-sm text-muted-foreground">Edita lo que puede hacer cada rol. Los permisos se validan también en el servidor.</p>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
-          <PlusIcon /> Crear un rol nuevo
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              start(async () => {
+                const r = await lockSession();
+                if (r.success) router.replace("/lock");
+              })
+            }
+          >
+            Probar bloqueo
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
+            <PlusIcon /> Crear un rol nuevo
+          </Button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
@@ -99,6 +115,32 @@ export function RolesMatrix({ roles }: { roles: RoleRow[] }) {
                 ))}
               </tr>
             ))}
+            <tr>
+              <td className="py-2 pr-3 font-semibold">Bloqueo por inactividad (min)</td>
+              {roles.map((r) => (
+                <td key={r.id} className="px-2 text-center">
+                  <select
+                    aria-label={`Minutos de bloqueo · ${r.name}`}
+                    value={r.lockMinutes}
+                    disabled={pending}
+                    onChange={(e) =>
+                      start(async () => {
+                        const res = await updateRoleLockMinutes(r.id, Number(e.target.value));
+                        if (!res.success) toast.error(res.error);
+                        router.refresh();
+                      })
+                    }
+                    className="h-8 rounded-[10px] border bg-background px-1 text-xs"
+                  >
+                    {LOCK_MINUTE_CHOICES.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              ))}
+            </tr>
           </tbody>
         </table>
       </div>

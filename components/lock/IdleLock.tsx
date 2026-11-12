@@ -4,22 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LockIcon } from "lucide-react";
 import { lockSession } from "@/lib/actions/pin";
-import { lockState, lockTimeoutFor, readLockMinutes } from "@/lib/lock";
+import { lockState, lockTimeoutFor } from "@/lib/lock";
 
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart", "scroll"] as const;
 
 // Bloquea la pantalla tras un rato sin actividad (según el rol) y avisa 15 s antes.
 // Solo se monta para quien ya tiene PIN.
-export function IdleLock({ role }: { role: "GERENTE" | "VENDEDOR" }) {
+export function IdleLock({ role, minutes }: { role: "GERENTE" | "VENDEDOR"; minutes?: number | null }) {
   const router = useRouter();
-  const [chosen, setChosen] = useState<number | null>(null);
-  useEffect(() => {
-    const read = () => setChosen(readLockMinutes());
-    read();
-    window.addEventListener("kr-lock-minutes", read);
-    return () => window.removeEventListener("kr-lock-minutes", read);
-  }, []);
-  const timeout = chosen ? chosen * 60_000 : lockTimeoutFor(role);
+  const timeout = minutes ? minutes * 60_000 : lockTimeoutFor(role);
   const last = useRef(0);
   const locking = useRef(false);
   const [warning, setWarning] = useState<number | null>(null);
@@ -54,12 +47,15 @@ export function IdleLock({ role }: { role: "GERENTE" | "VENDEDOR" }) {
   return (
     <div
       role="alert"
-      className="fixed inset-x-3 top-3 z-50 mx-auto flex max-w-sm items-center gap-3 rounded-xl border bg-card p-3 text-sm shadow-lg"
+      className="fixed inset-x-3 top-3 z-50 mx-auto flex max-w-sm items-center gap-3 rounded-[19px] border bg-card p-3 text-sm shadow-(--shadow-float)"
     >
       <LockIcon className="size-5 shrink-0 text-warning" aria-hidden />
       <p className="min-w-0 flex-1">
-        Por seguridad, la pantalla se bloqueará en <b className="tabular-nums">{warning}</b> s. Toca para continuar.
+        Se bloqueará en <b className="tabular-nums">{warning}</b> s
       </p>
+      <button type="button" className="min-h-9 rounded-full bg-primary px-3.5 text-[13px] font-bold text-primary-foreground">
+        Seguir aquí
+      </button>
     </div>
   );
 }
