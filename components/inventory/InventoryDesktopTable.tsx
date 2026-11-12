@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Price } from "@/components/money/Price";
+import { StockAdjustDialog } from "@/components/inventory/StockAdjustDialog";
 import { formatCurrencyCents } from "@/lib/currencies";
 
 type Status = "ok" | "low" | "out" | "inactive";
@@ -63,6 +64,7 @@ export function InventoryDesktopTable({
   onDelete: (id: string) => void;
 }) {
   const [toDelete, setToDelete] = useState<ListedProduct | null>(null);
+  const [toAdjust, setToAdjust] = useState<ListedProduct | null>(null);
 
   return (
     <>
@@ -145,6 +147,11 @@ export function InventoryDesktopTable({
                         </Button>
                         {canManage && (
                           <>
+                            {p.trackStock && (
+                              <Button variant="ghost" className="w-full justify-start" onClick={() => setToAdjust(p)}>
+                                Ajustar existencias
+                              </Button>
+                            )}
                             <Button variant="ghost" className="w-full justify-start" nativeButton={false} render={<Link href={`/inventory/${p.id}`} />}>
                               Editar
                             </Button>
@@ -165,6 +172,8 @@ export function InventoryDesktopTable({
           </tbody>
         </table>
       </div>
+
+      {toAdjust && <StockAdjustDialog product={toAdjust} onClose={() => setToAdjust(null)} />}
 
       <Dialog open={toDelete != null} onOpenChange={(o) => !o && setToDelete(null)}>
         <DialogContent>
