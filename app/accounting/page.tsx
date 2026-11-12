@@ -1,4 +1,4 @@
-import { requireAccountingPlan } from "@/lib/session";
+import { requireAccountingPlan, requirePermission } from "@/lib/session";
 import { AccountingHub } from "@/components/accounting/AccountingHub";
 
 const sections = [
@@ -40,6 +40,7 @@ const sections = [
 ];
 
 export default async function AccountingPage() {
+  await requirePermission("admin");
   await requireAccountingPlan();
   return (
     <div className="flex flex-col gap-4 px-4 py-5">
