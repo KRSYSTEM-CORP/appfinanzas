@@ -1367,6 +1367,11 @@ model PaymentAccount {
   note          String?
   active        Boolean            @default(true)
   createdAt     DateTime           @default(now())
+  // Saldo: inicial + cobros del método vinculado desde balanceSince.
+  currency      String             @default("USD")
+  openingCents  Int                @default(0)
+  linkedMethod  PaymentMethod?
+  balanceSince  DateTime           @default(now())
 
   @@index([companyId, active])
 }
