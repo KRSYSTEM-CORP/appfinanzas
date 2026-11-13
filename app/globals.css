@@ -584,3 +584,43 @@
   .kr-sede-zoom { animation: none; }
   .kr-pulse { animation: none; }
 }
+
+/* ===== Pantalla de bloqueo estilo iPhone (liquid glass), copiada de la preview ===== */
+.kr-ios{position:fixed;inset:0;z-index:96;overflow:hidden auto;background:linear-gradient(165deg,#150f3d 0%,#3b2fb5 42%,#d6407f 100%);color:#fff;display:flex;align-items:stretch}
+.kr-ios button{font:inherit;color:inherit;cursor:pointer}
+.kr-ios .iw{position:absolute;border-radius:50%;filter:blur(40px);opacity:.75;pointer-events:none}
+.kr-ios .w1{width:420px;height:420px;left:-120px;top:-80px;background:#6f69ff;animation:kr-fl1 14s ease-in-out infinite}
+.kr-ios .w2{width:380px;height:380px;right:-100px;bottom:-60px;background:#ff7a9c;animation:kr-fl2 12s ease-in-out infinite}
+.kr-ios .w3{width:260px;height:260px;left:40%;top:45%;background:#17d4c5;opacity:.35;animation:kr-fl1 18s ease-in-out infinite reverse}
+.kr-ios .iosc{position:relative;z-index:1;width:100%;max-width:440px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;align-items:center;gap:12px;padding:max(44px,env(safe-area-inset-top)) 24px max(28px,env(safe-area-inset-bottom));text-align:center;animation:kr-rvin .45s var(--ease) both}
+.kr-ios .ilock{width:22px;height:22px;opacity:.9}
+.kr-ios .ioscl{font-size:clamp(76px,22vw,118px);font-weight:200;letter-spacing:-.045em;line-height:1;margin-top:4px;text-shadow:0 4px 30px rgba(0,0,0,.25)}
+.kr-ios .iosd{font-size:19px;font-weight:600;opacity:.92;text-transform:capitalize}
+.kr-ios .ihint{font-size:15px;opacity:.85;margin:10px 0 0;font-weight:400}
+.kr-ios .iusers{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:6px}
+.kr-ios .glass{background:rgba(255,255,255,.14);-webkit-backdrop-filter:blur(26px) saturate(180%);backdrop-filter:blur(26px) saturate(180%);border:1px solid rgba(255,255,255,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(255,255,255,.08),0 12px 34px rgba(0,0,0,.25);color:#fff}
+.kr-ios .iu{display:flex;gap:14px;align-items:center;width:100%;border-radius:26px;padding:10px 16px 10px 10px;text-align:left;transition:transform .15s var(--ease),background .15s}
+.kr-ios .iu:active{transform:scale(.97);background:rgba(255,255,255,.26)}
+.kr-ios .iu .ia{width:50px;height:50px;border-radius:999px;overflow:hidden;flex:none;border:2px solid rgba(255,255,255,.7)}
+.kr-ios .iu b{display:block;font-size:17px}.kr-ios .iu small{opacity:.8;font-size:13px}
+.kr-ios .photo{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+.kr-ios .ipav{width:86px;height:86px;border-radius:999px;overflow:hidden;border:3px solid rgba(255,255,255,.8);box-shadow:0 10px 30px rgba(0,0,0,.3);animation:kr-popb .5s var(--ease)}
+.kr-ios .idots{display:flex;gap:18px;justify-content:center;margin:8px 0 2px}
+.kr-ios .idots i{width:15px;height:15px;border-radius:999px;border:1.5px solid rgba(255,255,255,.85);transition:background .12s,transform .12s}
+.kr-ios .idots i.on{background:#fff;transform:scale(1.1)}
+.kr-ios .idots.shake{animation:kr-shk .35s}
+.kr-ios .ipad{display:grid;grid-template-columns:repeat(3,78px);gap:14px 20px;justify-content:center;margin:10px 0}
+.kr-ios .gkey{width:78px;height:78px;border-radius:999px;font-size:32px;font-weight:300;line-height:1;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform .1s,background .1s}
+.kr-ios .gkey small{font-size:9px;font-weight:700;letter-spacing:.2em;opacity:.8;margin-top:2px;min-height:10px}
+.kr-ios .gkey:active{background:rgba(255,255,255,.42);transform:scale(.94)}
+.kr-ios .gkey:disabled{opacity:.5}
+.kr-ios .gkey.sp{visibility:hidden}
+.kr-ios .gkey.ghost{background:transparent;border-color:transparent;box-shadow:none;font-size:15px;font-weight:600;-webkit-backdrop-filter:none;backdrop-filter:none}
+.kr-ios .ilinks{display:flex;gap:18px;justify-content:center;margin-top:4px}
+.kr-ios .ilinks button{border:0;background:transparent;color:#fff;font-weight:600;font-size:15px;padding:8px 4px;opacity:.9}
+@keyframes kr-fl1{0%,100%{transform:translate(0,0) rotate(0)}50%{transform:translate(30px,24px) rotate(8deg)}}
+@keyframes kr-fl2{0%,100%{transform:translate(0,0)}50%{transform:translate(-26px,-30px) rotate(-8deg)}}
+@keyframes kr-rvin{from{opacity:0;transform:translateX(14px)}}
+@keyframes kr-popb{40%{transform:scale(1.14) rotate(-4deg)}}
+@keyframes kr-shk{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+@media(prefers-reduced-motion:reduce){.kr-ios .iw,.kr-ios .iosc,.kr-ios .ipav,.kr-ios .idots{animation:none!important}}
