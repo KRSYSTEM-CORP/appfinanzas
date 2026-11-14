@@ -618,10 +618,6 @@ export const PlatformSettingsSchema = z.object({
     .trim()
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
-  defaultMonthlyFee: z.preprocess(
-    blankToUndefined,
-    z.coerce.number().positive("El monto debe ser mayor a 0").transform(toCents).optional()
-  ),
 });
 
 export const FiscalDataSchema = z.object({

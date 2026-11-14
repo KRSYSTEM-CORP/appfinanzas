@@ -25,7 +25,7 @@ import { PLANS, planAmountDueUsdCents, recommendPlan, type PlanDef } from "@/lib
 import { TRIAL_DAYS } from "@/lib/billing";
 import { WHATSAPP_PHONE } from "@/lib/legal";
 import { formatDate } from "@/lib/format";
-import { reportPlanPayment, type PlanUsage } from "@/lib/actions/plan";
+import { previewPlanCoupon, reportPlanPayment, type PlanUsage } from "@/lib/actions/plan";
 import { requestCreditPack } from "@/lib/actions/assistant";
 
 type View = "home" | "plans" | "pay" | "status" | "hist";
@@ -139,7 +139,8 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
   const [view, setView] = useState<View>(wantedView === "planes" ? "plans" : "home");
   const [sel, setSel] = useState<Sel | null>(null);
   const [step, setStep] = useState(1);
-  const [method, setMethod] = useState<Method>("CARD");
+  const enabledMethods = ((["CARD", "BINANCE"] as Method[]).filter((k) => (k === "CARD" ? usage.pagoMovil.enabled : usage.binance.enabled)));
+  const [method, setMethod] = useState<Method>(enabledMethods[0] ?? "CARD");
   const [okTerms, setOkTerms] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", email: "", ref: "" });
   const [proof, setProof] = useState<{ dataUrl: string; name: string } | null>(null);
@@ -159,11 +160,17 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
     if (top) window.scrollTo({ top: 0 });
   }
 
-  const dueCents = !sel
+  // Cupón de plataforma (solo suscripciones): lo valida y calcula el servidor.
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState<{ code: string; label: string; discountCents: number } | null>(null);
+  const [couponErr, setCouponErr] = useState<string | null>(null);
+  const baseDueCents = !sel
     ? 0
     : sel.kind === "pack"
       ? sel.priceCents
       : planAmountDueUsdCents({ selected: sel.plan.id, current: current.id, monthlyFeeUsdCents: usage.monthlyFeeUsdCents, hasApprovedPayment: usage.hasApprovedPayment });
+  const couponCents = sel?.kind === "plan" && coupon ? Math.min(coupon.discountCents, Math.max(0, baseDueCents - 1)) : 0;
+  const dueCents = baseDueCents - couponCents;
   const rate = step === 2 ? lock.rate : usage.platformRate;
   const bsDue = rate != null ? (dueCents / 100) * rate : null;
   const isBs = method === "CARD";
@@ -176,7 +183,27 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
     return () => clearInterval(id);
   }, [view, step]);
 
+  function applyCoupon() {
+    if (sel?.kind !== "plan" || !couponCode.trim()) return;
+    const planId = sel.plan.id;
+    setCouponErr(null);
+    startTransition(async () => {
+      const r = await previewPlanCoupon({ plan: planId, code: couponCode });
+      if (!r.success) {
+        setCoupon(null);
+        setCouponErr(r.error);
+        return;
+      }
+      setCoupon({ code: r.code, label: r.label, discountCents: r.discountCents });
+      setCouponCode(r.code);
+      toast(`Cupón aplicado: ${r.label}`);
+    });
+  }
+
   function pick(s: Sel) {
+    setCoupon(null);
+    setCouponCode("");
+    setCouponErr(null);
     setSel(s);
     setStep(1);
     setOkTerms(false);
@@ -240,6 +267,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
               phone: form.phone,
               email: form.email,
               proofImageDataUrl: proof.dataUrl,
+              coupon: coupon?.code,
             })
           : await requestCreditPack(sel.credits, `${METHOD_NAME[method]} ref. ${ref} · ${form.name.trim()} · ${form.phone.trim()}`);
       if (!r.success) {
@@ -414,7 +442,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
     const steps = ["Método", "Datos de pago", "Comprobante"];
     const name = isPack ? `Recarga de ${sel.credits} créditos` : sel.plan.label;
     const listCents = isPack ? sel.priceCents : sel.plan.priceUsdCents;
-    const promo = !isPack && dueCents < listCents && dueCents === sel.plan.firstMonthUsdCents;
+    const promo = !isPack && baseDueCents < listCents && baseDueCents === sel.plan.firstMonthUsdCents;
     const pmLogo = <Logo src={bankLogo(usage.pagoMovil.bank)} alt={usage.pagoMovil.bank ?? "Pago Móvil"} icon={<SmartphoneIcon aria-hidden />} />;
     const bnLogo = <Logo src="/banks/binance.png" alt="Binance" icon={<WalletIcon aria-hidden />} />;
     const rows: [string, string][] =
@@ -430,9 +458,12 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
         <div className="kp-li"><span className="kp-muted">Tasa dólar BCV del día</span><b className="kp-mono">{usage.platformRate != null ? bs(usage.platformRate) : "No disponible"}</b></div>
         {promo && (
           <>
-            <div className="kp-li"><span className="kp-pos">Nuevos usuarios · solo el 1.er mes</span><b className="kp-pos kp-mono">−{usd(listCents - dueCents, 2)}</b></div>
+            <div className="kp-li"><span className="kp-pos">Nuevos usuarios · solo el 1.er mes</span><b className="kp-pos kp-mono">−{usd(listCents - baseDueCents, 2)}</b></div>
             <div className="kp-li"><span className="kp-muted">Desde el 2.º mes</span><b className="kp-mono">{usd(listCents, 2)} / mes</b></div>
           </>
+        )}
+        {coupon && couponCents > 0 && (
+          <div className="kp-li"><span className="kp-pos">Cupón {coupon.code} · {coupon.label}</span><b className="kp-pos kp-mono">−{usd(couponCents, 2)}</b></div>
         )}
         <div className="kp-li">
           <b>Total a pagar</b>
@@ -444,7 +475,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
 
     let body: React.ReactNode;
     if (step === 1) {
-      const options: Method[] = ["CARD", "BINANCE"];
+      const options = enabledMethods;
       body = (
         <section className="kp-card">
           <h3>¿Cómo prefieres pagar?</h3>
@@ -468,6 +499,26 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
               );
             })}
           </div>
+          {!isPack && (
+            <div>
+              <div className="kp-field">
+                <label htmlFor="kp-coupon">¿Tienes un cupón?</label>
+                <div className="kp-row">
+                  <input
+                    id="kp-coupon"
+                    style={{ flex: 1, minWidth: 0, textTransform: "uppercase" }}
+                    value={couponCode}
+                    placeholder="Código del cupón"
+                    onChange={(e) => { setCouponCode(e.target.value); setCoupon(null); setCouponErr(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyCoupon(); } }}
+                  />
+                  <Btn onClick={applyCoupon}>Canjear</Btn>
+                </div>
+              </div>
+              {coupon && <p className="kp-pos" style={{ margin: "6px 0 0", fontSize: 13 }}>Cupón aplicado: {coupon.label}. Total {usd(dueCents, 2)}{usage.platformRate != null ? ` · ${bs((dueCents / 100) * usage.platformRate)}` : ""}.</p>}
+              {couponErr && <p role="alert" style={{ margin: "6px 0 0", fontSize: 13, color: "var(--kp-bad)" }}>{couponErr}</p>}
+            </div>
+          )}
           <label className="kp-li" style={{ cursor: "pointer", marginTop: 12 }}>
             <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <input className="kp-ck2" type="checkbox" checked={okTerms} onChange={(e) => setOkTerms(e.target.checked)} /> Confirmo las condiciones del plan seleccionado.

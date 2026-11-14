@@ -1,119 +1,102 @@
-import { redirect } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatCard } from "@/components/reports/StatCard";
-import { AdminUserTable } from "@/components/admin/AdminUserTable";
-import { PlatformSettingsForm, PlatformExchangeRateForm, PendingReportsTable } from "@/components/admin/PaymentReportsPanel";
-import { CreditRequestsPanel } from "@/components/admin/CreditRequestsPanel";
-import { AnnouncementForm } from "@/components/admin/AnnouncementForm";
-import {
-  listAllCompanies,
-  listPendingPaymentReports,
-  getPlatformSettings,
-  listAnnouncementRecipients,
-  listPendingCreditRequests,
-} from "@/lib/actions/admin";
-import { getPlatformExchangeRateInfo } from "@/lib/actions/billing";
-import { getSession } from "@/lib/session";
+import Link from "next/link";
+import { AlertTriangleIcon, BanknoteIcon, BellIcon, Building2Icon, ClockIcon, SparklesIcon, UserPlusIcon } from "lucide-react";
+import { PlatformShell } from "@/components/admin/PlatformShell";
+import { Kpi, KpiGrid } from "@/components/shared/Kpi";
+import { SectionCard, ListRow } from "@/components/shared/SectionCard";
+import { Pill } from "@/components/shared/Pills";
+import { requireSuperAdmin } from "@/lib/platform-guard";
+import { listPendingCreditRequests, listPendingPaymentReports } from "@/lib/actions/admin";
+import { getCompanyDirectory, getMonthIncomeUsdCents, getPlatformHealth } from "@/lib/actions/platform";
+import { platformKpis } from "@/lib/platform-logic";
+import { formatDate, formatUSD } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
-  const session = await getSession();
-  // See app/api/auth/clear-session/route.ts — this is a plain page render,
-  // so a stale-but-signed cookie (deleted/suspended user) must be cleared
-  // through the Route Handler rather than by redirecting straight to /login.
-  if (!session) redirect("/api/auth/clear-session");
-  if (session.locked) redirect("/lock");
-  if (!session.isSuperAdmin) redirect("/pos");
-
-  const [companies, pendingReports, platformSettings, platformExchangeRate, announcementRecipients, creditRequests] = await Promise.all([
-    listAllCompanies(),
+export default async function PlatformSummaryPage() {
+  await requireSuperAdmin();
+  const now = new Date();
+  const [rows, reports, credits, income, health] = await Promise.all([
+    getCompanyDirectory(),
     listPendingPaymentReports(),
-    getPlatformSettings(),
-    getPlatformExchangeRateInfo(),
-    listAnnouncementRecipients(),
     listPendingCreditRequests(),
+    getMonthIncomeUsdCents(),
+    getPlatformHealth(),
   ]);
-  // Each company's own status is its owner account's status (users[0] —
-  // see listAllCompanies()), same semantics as before this was grouped.
-  const owners = companies.map((c) => c.users[0]).filter(Boolean);
-  const pendingCount = owners.filter((u) => u.status === "PENDING").length;
-  const activeCount = owners.filter((u) => u.status === "ACTIVE").length;
-  const suspendedCount = owners.filter((u) => u.status === "SUSPENDED").length;
+  const k = platformKpis(rows, now, { monthIncomeUsdCents: income, pendingCreditRequests: credits.length });
+  const pendingApprovals = k.pending + reports.length + credits.length;
+
+  const alerts: { href: string; text: string; tone: "warn" | "bad" }[] = [];
+  if (k.overdueOrBlocked > 0) alerts.push({ href: "/admin/cobranza", text: `${k.overdueOrBlocked} empresa(s) vencidas o bloqueadas`, tone: "bad" });
+  if (k.expiring > 0) alerts.push({ href: "/admin/cobranza", text: `${k.expiring} empresa(s) vencen en los próximos 5 días`, tone: "warn" });
+  if (reports.length > 0) alerts.push({ href: "/admin/aprobaciones", text: `${reports.length} pago(s) por revisar`, tone: "warn" });
+  if (k.pending > 0) alerts.push({ href: "/admin/aprobaciones", text: `${k.pending} registro(s) esperan aprobación`, tone: "warn" });
+  if (credits.length > 0) alerts.push({ href: "/admin/aprobaciones", text: `${credits.length} solicitud(es) de créditos IA`, tone: "warn" });
+  if (health.dbSizeMb != null && health.dbSizeMb >= health.dbAlertMb) alerts.push({ href: "/admin", text: `La base de datos pesa ${health.dbSizeMb} MB (aviso desde ${health.dbAlertMb} MB)`, tone: "warn" });
+
+  const shortcuts = [
+    { href: "/admin/empresas", label: "Empresas" },
+    { href: "/admin/aprobaciones", label: `Aprobaciones${pendingApprovals ? ` (${pendingApprovals})` : ""}` },
+    { href: "/admin/cobranza", label: "Cobranza" },
+    { href: "/admin/pagos", label: "Pagos de suscripción" },
+    { href: "/admin/cupones", label: "Cupones" },
+    { href: "/admin/marketing", label: "Marketing y correos" },
+  ];
 
   return (
-    <div className="flex flex-col gap-6 px-4 py-5">
-      <div>
-        <h1 className="kr-h1">Administración de KR System</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Aprueba, deniega y controla el acceso de cada empresa registrada en la plataforma.
-        </p>
-      </div>
+    <PlatformShell sub="resumen">
+      <KpiGrid>
+        <Kpi label="Empresas activas" value={k.active} hint={`${rows.length} registradas`} icon={<Building2Icon />} tone="ok" />
+        <Kpi label="Por vencer en 5 días" value={k.expiring} icon={<ClockIcon />} tone={k.expiring ? "warn" : "ok"} />
+        <Kpi label="Vencidas o bloqueadas" value={k.overdueOrBlocked} icon={<AlertTriangleIcon />} tone={k.overdueOrBlocked ? "bad" : "ok"} />
+        <Kpi label="Pendientes de aprobar" value={k.pending} icon={<UserPlusIcon />} tone={k.pending ? "warn" : "ok"} />
+        <Kpi label="Ingresos del mes" value={formatUSD(k.incomeUsdCents)} hint="Pagos de suscripción" icon={<BanknoteIcon />} />
+        <Kpi label="Créditos IA pendientes" value={k.creditRequests} hint="Solicitudes por resolver" icon={<SparklesIcon />} tone={k.creditRequests ? "warn" : "ok"} />
+      </KpiGrid>
 
-      <div className="rounded-lg border bg-card shadow-xs stat-grid divide-y sm:divide-y-0 sm:divide-x grid grid-cols-1 sm:grid-cols-3 [&>*]:p-4">
-        <StatCard label="Pendientes de aprobación" value={String(pendingCount)} />
-        <StatCard label="Usuarios activos" value={String(activeCount)} />
-        <StatCard label="Suspendidos" value={String(suspendedCount)} />
-      </div>
+      <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,330px),1fr))] gap-3.5">
+        <SectionCard title="Alertas" subtitle="Lo que pide tu atención">
+          {alerts.length === 0 ? (
+            <p className="rounded-[14px] bg-muted px-4 py-6 text-center text-[13px] text-muted-foreground">Todo en orden: no hay alertas.</p>
+          ) : (
+            alerts.map((a) => (
+              <ListRow key={a.text}>
+                <div><BellIcon className="mr-1.5 inline size-3.5 align-[-2px] text-muted-foreground" aria-hidden />{a.text}</div>
+                <Link href={a.href} className="text-[13px] font-bold text-primary">Ver</Link>
+              </ListRow>
+            ))
+          )}
+        </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Cobro de suscripción mensual</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PlatformSettingsForm
-            initialInstructions={platformSettings.paymentInstructions}
-            initialBinanceQrDataUrl={platformSettings.binanceQrDataUrl}
-            initialBinanceId={platformSettings.binanceId}
-            initialPagoMovilBank={platformSettings.pagoMovilBank}
-            initialPagoMovilPhone={platformSettings.pagoMovilPhone}
-            initialPagoMovilId={platformSettings.pagoMovilId}
-            initialDefaultMonthlyFeeUsdCents={platformSettings.defaultMonthlyFeeUsdCents}
-          />
-          <div className="mt-4">
-            <PlatformExchangeRateForm
-              currentRate={platformExchangeRate.rate}
-              currentUpdatedAt={platformExchangeRate.updatedAt}
-            />
+        <SectionCard title="Atajos">
+          <div className="flex flex-wrap gap-2">
+            {shortcuts.map((s) => (
+              <Link key={s.href} href={s.href} data-kr="chip" className="inline-flex min-h-[38px] items-center rounded-[12px] bg-muted px-3.5 text-[13px] font-bold hover:bg-accent hover:text-primary">
+                {s.label}
+              </Link>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Reportes de pago pendientes ({pendingReports.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PendingReportsTable reports={pendingReports} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Compras de créditos IA pendientes ({creditRequests.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CreditRequestsPanel requests={creditRequests} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Empresas registradas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <AdminUserTable companies={companies} currentUserId={session.userId} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Enviar anuncio a las empresas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <AnnouncementForm recipientCount={announcementRecipients.length} />
-        </CardContent>
-      </Card>
-    </div>
+        <SectionCard title="Salud de la plataforma" subtitle="Solo lectura, con los datos que ya existen">
+          <dl className="text-[13px]">
+            {[
+              ["Dólar BCV de la plataforma", health.bcvRate != null ? `Bs ${health.bcvRate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Sin tasa"],
+              ["Última actualización de la tasa", health.bcvUpdatedAt ? formatDate(health.bcvUpdatedAt) : "—"],
+              ["Tamaño de la base de datos", health.dbSizeMb != null ? `${health.dbSizeMb} MB` : "No disponible"],
+              ["Empresas · usuarios", `${health.companies} · ${health.users}`],
+              ["Último registro de empresa", health.lastSignupAt ? formatDate(health.lastSignupAt) : "—"],
+            ].map(([a, b]) => (
+              <div key={a} className="flex justify-between gap-4 border-b py-1.5 last:border-0">
+                <dt className="text-muted-foreground">{a}</dt>
+                <dd className="text-right font-semibold tabular-nums">{b}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-2 text-[13px] text-muted-foreground">
+            <Pill>Respaldos</Pill> El sistema aún no guarda un registro del último respaldo, por eso no se muestra aquí.
+          </p>
+        </SectionCard>
+      </div>
+    </PlatformShell>
   );
 }

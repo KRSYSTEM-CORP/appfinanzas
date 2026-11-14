@@ -14,6 +14,7 @@ import {
   LEARNING_AUDIENCES,
 } from "@/lib/learning";
 import { r2Config, r2Delete, r2ReadUrl, r2UploadUrl } from "@/lib/r2";
+import { logPlatformAudit } from "@/lib/platform-audit";
 import type { ActionResult } from "@/lib/types";
 
 export type LearningVideoRow = {
@@ -102,6 +103,7 @@ const VideoSchema = z
 // Paso 2: registrar el video (ya subido a R2, o un enlace de YouTube/Vimeo).
 export async function addLearningVideo(input: unknown): Promise<ActionResult> {
   if (!(await isLearningAdmin())) return { success: false, error: "No tienes permiso para subir videos" };
+  const { userId } = await requireSession();
   const parsed = VideoSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   const count = await prisma.learningVideo.count();
@@ -121,13 +123,16 @@ export async function addLearningVideo(input: unknown): Promise<ActionResult> {
       learns: parsed.data.learns ?? [],
     },
   });
+  await logPlatformAudit(userId, "video.subir", { detail: parsed.data.title });
   revalidatePath("/learning");
+  revalidatePath("/admin/aprendizaje");
   return { success: true };
 }
 
 export async function deleteLearningVideo(id: string): Promise<ActionResult> {
   if (!(await isLearningAdmin())) return { success: false, error: "No tienes permiso para quitar videos" };
-  const video = await prisma.learningVideo.findUnique({ where: { id }, select: { r2Key: true } });
+  const { userId } = await requireSession();
+  const video = await prisma.learningVideo.findUnique({ where: { id }, select: { r2Key: true, title: true } });
   await prisma.learningVideo.deleteMany({ where: { id } });
   await prisma.learningProgress.deleteMany({ where: { videoId: id } });
   if (video?.r2Key && r2Config()) {
@@ -137,7 +142,9 @@ export async function deleteLearningVideo(id: string): Promise<ActionResult> {
       // El video ya no está en la lista; si el archivo quedó huérfano, se puede borrar luego desde Cloudflare.
     }
   }
+  await logPlatformAudit(userId, "video.quitar", { detail: video?.title });
   revalidatePath("/learning");
+  revalidatePath("/admin/aprendizaje");
   return { success: true };
 }
 
