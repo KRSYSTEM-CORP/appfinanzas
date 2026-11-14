@@ -565,3 +565,35 @@ export async function setWeeklyReportEnabled(enabled: boolean): Promise<{ succes
   await withTenant(companyId, (tx) => tx.company.update({ where: { id: companyId }, data: { weeklyReportEnabled: enabled } }));
   return { success: true };
 }
+
+export type TicketBucketRow = { bucket: number; count: number };
+
+// Distribución de ventas: cuántas ventas del periodo caen en cada tramo de monto
+// (en la divisa de referencia). Tramos de TICKET_BUCKET_LIMITS (lib/stats-view.ts):
+// 0-10, 10-20, 20-30, 30-50, 50-80 y 80+. Igual que el resto de cifras de
+// ventas, solo cuenta días con cierre de caja. Solo lectura.
+export async function ticketDistribution(range: DateRangeSelection): Promise<TicketBucketRow[]> {
+  const { companyId, branchId } = await requireManager();
+  const requestedWindows = selectionToWindows(range);
+  return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return [];
+    const rows = await tx.$queryRaw<{ b: number; n: bigint }[]>`
+      SELECT CASE
+               WHEN "totalCents" < 1000 THEN 0
+               WHEN "totalCents" < 2000 THEN 1
+               WHEN "totalCents" < 3000 THEN 2
+               WHEN "totalCents" < 5000 THEN 3
+               WHEN "totalCents" < 8000 THEN 4
+               ELSE 5
+             END AS b,
+             COUNT(*)::bigint AS n
+      FROM "Sale"
+      WHERE "companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+        AND ${windowsSql('"createdAt"', windows)} AND "voided" = false
+      GROUP BY 1
+    `;
+    return rows.map((r) => ({ bucket: Number(r.b), count: Number(r.n) }));
+  });
+}
