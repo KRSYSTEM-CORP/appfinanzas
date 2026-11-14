@@ -37,7 +37,7 @@ const OVERVIEW = "__overview";
 const GROUPS: { id: string; label: string; icon: string; sections: string[] }[] = [
   { id: "g-plan", label: "Mi Plan", icon: "plan", sections: ["plan"] },
   { id: "g-marca", label: "Marca", icon: "apariencia", sections: ["apariencia"] },
-  { id: "g-negocio", label: "Negocio", icon: "sucursales", sections: ["fiscales", "iva", "sucursales"] },
+  { id: "g-negocio", label: "Negocio", icon: "sucursales", sections: ["fiscales", "sucursales"] },
   { id: "g-pagos", label: "Pagos y Moneda", icon: "moneda", sections: ["moneda", "cobros"] },
   { id: "g-equipo", label: "Equipo y Seguridad", icon: "seguridad", sections: ["equipo", "clave"] },
   { id: "g-imp", label: "Impresión y Datos", icon: "impresion", sections: ["impresion", "aplicacion"] },
@@ -101,7 +101,7 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
         <div className="flex flex-col gap-3.5">
           {active.items.map((section) =>
             section.bare ? (
-              <div key={section.id} className="min-w-0">
+              <div key={section.id} aria-label={section.label} className="flex min-w-0 flex-col gap-3.5">
                 {section.content}
               </div>
             ) : (

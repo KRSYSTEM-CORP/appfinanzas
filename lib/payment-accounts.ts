@@ -80,3 +80,32 @@ export function accountClipboardText(a: {
   ];
   return lines.filter(Boolean).join("\n");
 }
+
+// Métodos de pago de Ajustes → Pagos y Moneda, en el orden de la preview. «kind» es el tipo de
+// cuenta de cobro cuyos datos ve el cliente al pagar; los métodos sin tipo (efectivo, punto de
+// venta) no necesitan datos y siempre están disponibles en el POS.
+export type SettingsMethodIcon = "cash" | "phone" | "card" | "bank" | "zelle" | "binance" | "paypal";
+export type SettingsMethod = { id: string; label: string; foreign: boolean; icon: SettingsMethodIcon; kind: AccountKind | null };
+
+export const SETTINGS_METHODS: SettingsMethod[] = [
+  { id: "ebs", label: "Efectivo Bs", foreign: false, icon: "cash", kind: null },
+  { id: "ed", label: "Efectivo $", foreign: true, icon: "cash", kind: null },
+  { id: "pm", label: "Pago Móvil", foreign: false, icon: "phone", kind: "PAGO_MOVIL" },
+  { id: "pv", label: "Punto de venta", foreign: false, icon: "card", kind: null },
+  { id: "zl", label: "Zelle", foreign: true, icon: "zelle", kind: "ZELLE" },
+  { id: "bn", label: "Binance", foreign: true, icon: "binance", kind: "BINANCE" },
+  { id: "pp", label: "PayPal", foreign: true, icon: "paypal", kind: "PAYPAL" },
+  { id: "tr", label: "Transferencia", foreign: false, icon: "bank", kind: "TRANSFER" },
+];
+
+// Sin tasa de cambio activa el efectivo es uno solo («Efectivo»), igual que en el POS.
+export function settingsMethods(exchangeRateEnabled: boolean): SettingsMethod[] {
+  if (exchangeRateEnabled) return SETTINGS_METHODS;
+  return SETTINGS_METHODS.filter((m) => m.id !== "ebs").map((m) => (m.id === "ed" ? { ...m, label: "Efectivo" } : m));
+}
+
+// Métodos activos hoy: los que no necesitan datos cuentan siempre; los demás, si tienen al
+// menos una cuenta visible en el POS.
+export function activeMethodCount(accounts: { kind: AccountKind; active: boolean }[], exchangeRateEnabled: boolean): number {
+  return settingsMethods(exchangeRateEnabled).filter((m) => m.kind === null || accounts.some((a) => a.kind === m.kind && a.active)).length;
+}
