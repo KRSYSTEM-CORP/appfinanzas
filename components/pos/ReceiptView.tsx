@@ -1,23 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { CheckIcon, PlusIcon, PrinterIcon, StampIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Price } from "@/components/money/Price";
-import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, formatDate } from "@/lib/format";
-import { formatCurrencyCents, formatLocalCurrency, getCurrency } from "@/lib/currencies";
-import { legacyCurrencyForPayment } from "@/lib/payment-currency";
-import {
-  buildDeliveryNotePDF,
-  controlNumberLabel,
-  itemDescription,
-  type DeliveryNoteCompany,
-} from "@/lib/delivery-note";
-import { pdfFormatForPaperSize } from "@/lib/print-paper-sizes";
-import { PrintDialog } from "@/components/print/PrintDialog";
-import { PrintableSaleDocument } from "@/components/print/PrintableSaleDocument";
-import { ShareDialog } from "@/components/print/ShareDialog";
-import { getOrCreateInvoiceNumber } from "@/lib/actions/sales";
+import { Confetti } from "@/components/pos/Confetti";
+import { PosDocumentSheet } from "@/components/pos/PosDocumentSheet";
+import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { controlNumberLabel, type DeliveryNoteCompany } from "@/lib/delivery-note";
 import type {
   PaymentMethod,
   PaymentStatus,
@@ -52,6 +41,10 @@ type ReceiptSale = {
   payments: (Omit<SalePayment, "exchangeRate"> & { exchangeRate: number | null })[];
 };
 
+// Paso 3 de la preview («Venta registrada»): check verde, monto, vuelto,
+// «Imprimir o compartir» y «Nueva venta», con confeti de celebración. La
+// factura no se genera aquí: queda bloqueada hasta que se active el módulo de
+// factura fiscal en el cobro.
 export function ReceiptView({
   sale,
   rate,
@@ -62,6 +55,8 @@ export function ReceiptView({
   company,
   onNewSale,
   pendingSync = false,
+  documentKind = "delivery",
+  change = null,
 }: {
   sale: ReceiptSale;
   rate: number | null;
@@ -74,386 +69,78 @@ export function ReceiptView({
   // True for a sale queued offline (see PosClient.tsx) that hasn't reached
   // the server yet — no real control number until it syncs.
   pendingSync?: boolean;
+  // Documento elegido en el cobro: Nota de entrega o Ticket de caja.
+  documentKind?: "delivery" | "ticket";
+  // Vuelto entregado en efectivo, ya formateado.
+  change?: string | null;
 }) {
   // Prefer the rate that was actually in effect when this sale was charged;
   // fall back to the company's current rate only for pre-feature sales that
   // have no snapshot.
   const effectiveRate = sale.exchangeRate != null ? Number(sale.exchangeRate) : rate;
-  const localCurrencyName = getCurrency(currencyCode).name.split(" (")[0];
-  const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [noteError, setNoteError] = useState<string | null>(null);
-  // Lazily assigned (see getOrCreateInvoiceNumber) the moment the cashier
-  // asks for a Factura on this receipt — kept in state so the rest of the
-  // screen reflects the real number right away instead of waiting for a
-  // full reload.
-  const [invoiceNumber, setInvoiceNumber] = useState(sale.invoiceNumber);
-  const [invoiceBusy, setInvoiceBusy] = useState(false);
-
-  async function generatePdfBlob(paperSize?: PrintPaperSize) {
-    const doc = await buildDeliveryNotePDF(
-      sale,
-      company,
-      effectiveRate,
-      currencyCode,
-      exchangeRateEnabled,
-      referenceCurrency,
-      paperSize ? pdfFormatForPaperSize(paperSize) : "letter"
-    );
-    return doc.output("blob") as Blob;
-  }
-
-  async function ensureInvoiceNumber(): Promise<number> {
-    if (invoiceNumber != null) return invoiceNumber;
-    const result = await getOrCreateInvoiceNumber(sale.id);
-    if (!result) throw new Error("No se pudo generar la factura");
-    setInvoiceNumber(result.invoiceNumber);
-    return result.invoiceNumber;
-  }
-
-  async function generateInvoice() {
-    setInvoiceBusy(true);
-    try {
-      await ensureInvoiceNumber();
-    } finally {
-      setInvoiceBusy(false);
-    }
-  }
-
-  async function generateInvoicePdfBlob(paperSize?: PrintPaperSize) {
-    const number = await ensureInvoiceNumber();
-    const doc = await buildDeliveryNotePDF(
-      { ...sale, invoiceNumber: number },
-      company,
-      effectiveRate,
-      currencyCode,
-      exchangeRateEnabled,
-      referenceCurrency,
-      paperSize ? pdfFormatForPaperSize(paperSize) : "letter",
-      "invoice"
-    );
-    return { blob: doc.output("blob") as Blob, number };
-  }
-
-  async function downloadInvoice() {
-    setInvoiceBusy(true);
-    try {
-      const { blob, number } = await generateInvoicePdfBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `factura-${String(number).padStart(6, "0")}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } finally {
-      setInvoiceBusy(false);
-    }
-  }
-
-  async function copyNote() {
-    setNoteError(null);
-    setBusy(true);
-    try {
-      const blob = await generatePdfBlob();
-      // Clipboard PDF writes are only supported in Chromium-based browsers;
-      // fall back to a plain download everywhere else.
-      if (typeof ClipboardItem !== "undefined") {
-        await navigator.clipboard.write([new ClipboardItem({ "application/pdf": blob })]);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } else {
-        throw new Error("Clipboard no soportado");
-      }
-    } catch {
-      setNoteError("Tu navegador no permite copiar el PDF; se descargó en su lugar.");
-      await downloadNote();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function downloadNote() {
-    setBusy(true);
-    try {
-      const blob = await generatePdfBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `nota-entrega-${controlNumberLabel(sale)}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const credit = sale.paymentStatus === "CREDIT";
+  const exonerated = sale.totalCents === 0 && sale.discountCents > 0;
+  const docName = documentKind === "ticket" ? "Ticket de caja" : "Nota de entrega";
+  const number = pendingSync ? "pendiente" : controlNumberLabel(sale);
+  const customer = `${sale.customerFirstName ?? ""} ${sale.customerLastName ?? ""}`.trim() || "Mostrador";
+  const total = formatCurrencyCents(referenceCurrency, sale.totalCents);
+  const local =
+    exchangeRateEnabled && effectiveRate != null
+      ? formatLocalCurrency(eurCentsToLocal(sale.totalCents, effectiveRate), currencyCode)
+      : null;
+  const message = `Hola ${customer.split(" ")[0]}, te comparto tu ${docName.toLowerCase()} N.º ${number} por ${total}${local ? ` (${local})` : ""}. Gracias por tu compra en ${company.name}.`;
+  const Icon = credit ? StampIcon : CheckIcon;
 
   return (
-    <div className="flex flex-col gap-4 max-w-sm mx-auto py-8">
+    <div className="flex flex-col gap-3">
+      <Confetti burstKey={sale.id} />
       {pendingSync && (
-        <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
-          Sin conexión — esta venta se guardó en este dispositivo y se sincronizará (con su número
-          de control real) apenas vuelva el internet.
+        <div className="mx-auto w-full max-w-[520px] rounded-[14px] bg-warning/18 px-3 py-2 text-sm font-semibold text-warning">
+          Sin conexión — esta venta se guardó en este dispositivo y se sincronizará (con su número de control real) apenas vuelva el internet.
         </div>
       )}
-      <div className="text-center">
-        <h2 className="text-xl font-semibold">Venta completada</h2>
-        <p className="text-sm text-muted-foreground">{formatDate(sale.createdAt)}</p>
-        <p className="text-xs text-muted-foreground">
-          {pendingSync ? "Nota de entrega pendiente de sincronizar" : `Nota de entrega Nº ${controlNumberLabel(sale)}`}
-        </p>
-        {sale.sellerName && (
-          <p className="text-xs text-muted-foreground">Vendedor: {sale.sellerName}</p>
-        )}
-      </div>
-
-      {sale.customerFirstName && (
-        <>
-          <Separator />
-          <div className="flex flex-col gap-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Cliente</span>
-              <span className="font-medium">
-                {sale.customerFirstName} {sale.customerLastName}
-              </span>
-            </div>
-            {sale.customerPhone && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Teléfono</span>
-                <span>{sale.customerPhone}</span>
-              </div>
-            )}
-            {sale.customerAddress && (
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground shrink-0">Dirección</span>
-                <span className="text-right">{sale.customerAddress}</span>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {sale.note && (
-        <div className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">Nota</span>
-          <p>{sale.note}</p>
-        </div>
-      )}
-
-      <Separator />
-
-      <div className="flex flex-col gap-1.5">
-        {sale.items.map((item) => (
-          <div key={item.id} className="flex justify-between items-center text-sm">
-            <span>
-              {item.quantity} × {itemDescription(item)}
-            </span>
-            <Price
-              eurCents={item.subtotalCents}
-              rate={effectiveRate}
-              currencyCode={currencyCode}
-              exchangeRateEnabled={exchangeRateEnabled}
-              referenceCurrency={referenceCurrency}
-            />
-          </div>
-        ))}
-      </div>
-
-      <Separator />
-
-      {sale.discountCents > 0 && (
-        <>
-          <div className="flex justify-between items-center text-sm text-muted-foreground">
-            <span>Subtotal</span>
-            <Price
-              eurCents={sale.totalCents + sale.discountCents}
-              rate={effectiveRate}
-              currencyCode={currencyCode}
-              exchangeRateEnabled={exchangeRateEnabled}
-              referenceCurrency={referenceCurrency}
-            />
-          </div>
-          <div className="flex justify-between items-center text-sm text-destructive">
-            <span>Descuento</span>
-            <span>
-              −
-              <Price
-                eurCents={sale.discountCents}
-                rate={effectiveRate}
-                currencyCode={currencyCode}
-                exchangeRateEnabled={exchangeRateEnabled}
-                referenceCurrency={referenceCurrency}
-                className="inline-flex"
-              />
-            </span>
-          </div>
-        </>
-      )}
-
-      <div className="flex justify-between items-center">
-        <span className="font-semibold text-lg">Total</span>
-        <Price
-          eurCents={sale.totalCents}
-          rate={effectiveRate}
-          currencyCode={currencyCode}
-          exchangeRateEnabled={exchangeRateEnabled}
-          referenceCurrency={referenceCurrency}
-          size="lg"
-          className="items-end"
-        />
-      </div>
-      <div className="flex justify-between text-sm">
-        <span className="text-muted-foreground">Estado</span>
-        <span className={sale.paymentStatus === "CREDIT" ? "font-medium text-destructive" : "font-medium"}>
-          {PAYMENT_STATUS_LABELS[sale.paymentStatus]}
+      <div className="mx-auto my-5 w-full max-w-[520px] rounded-[19px] bg-card px-5 py-[30px] text-center shadow-(--shadow-card)">
+        <span className="mx-auto grid size-[76px] place-items-center rounded-full bg-success/14 text-success">
+          <Icon className="size-10" strokeWidth={3} aria-hidden />
         </span>
-      </div>
-      {sale.paymentStatus === "PAID" && sale.payments.length > 1 ? (
-        <div className="flex flex-col gap-1 text-sm text-muted-foreground">
-          <span>Métodos de pago</span>
-          {sale.payments.map((p) => (
-            <div key={p.id} className="flex justify-between">
-              <span>
-                {PAYMENT_METHOD_LABELS[p.paymentMethod]}
-                {p.reference && ` (${p.reference})`}
-              </span>
-              <span>
-                {formatCurrencyCents(
-                  p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency),
-                  p.amountCurrencyCents ?? p.amountEurCents
-                )}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <>
-          {sale.paymentStatus === "PAID" && sale.paymentMethod && (
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Método de pago</span>
-              <span>{PAYMENT_METHOD_LABELS[sale.paymentMethod]}</span>
-            </div>
-          )}
-          {sale.paymentReference && (
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Referencia</span>
-              <span>{sale.paymentReference}</span>
-            </div>
-          )}
-        </>
-      )}
-      {exchangeRateEnabled && (
-        <div className="flex justify-between text-sm text-muted-foreground">
-          <span>Moneda</span>
-          <span>{sale.paidInForeignCurrency ? "Divisas (USD/EUR)" : localCurrencyName}</span>
-        </div>
-      )}
-      {exchangeRateEnabled && effectiveRate != null && (
-        <div className="flex justify-between text-sm text-muted-foreground">
-          <span>Tasa del día</span>
-          <span>
-            {formatLocalCurrency(effectiveRate, currencyCode)} por 1{referenceCurrency === "USD" ? "$" : "€"}
-          </span>
-        </div>
-      )}
-
-      {noteError && <p className="text-xs text-muted-foreground">{noteError}</p>}
-
-      <div className="flex flex-col sm:flex-row gap-2">
-        <Button variant="outline" className="flex-1" onClick={copyNote} disabled={busy}>
-          {copied ? "¡Copiado!" : "Copiar nota de entrega"}
-        </Button>
-        <Button variant="outline" className="flex-1" onClick={downloadNote} disabled={busy}>
-          Descargar nota de entrega
-        </Button>
-      </div>
-
-      <PrintDialog
-        triggerLabel="Imprimir nota de entrega"
-        title="Imprimir nota de entrega"
-        defaultPaperSize={printPaperSize}
-        buildPdfBlob={(paperSize) => generatePdfBlob(paperSize)}
-      >
-        {(paperSize) => (
-          <PrintableSaleDocument
-            sale={sale}
-            company={company}
-            rate={effectiveRate}
-            currencyCode={currencyCode}
-            exchangeRateEnabled={exchangeRateEnabled}
-            referenceCurrency={referenceCurrency}
-            variant="delivery-note"
-            paperSize={paperSize}
-          />
+        <h2 className="mt-3 mb-0.5 text-[21px] font-bold">
+          {exonerated ? "Venta exonerada registrada" : credit ? "Venta a crédito registrada" : "¡Venta cobrada!"}
+        </h2>
+        <p className="mb-1 text-muted-foreground">
+          {docName} N.º {number} · {customer}
+        </p>
+        <div className="text-[44px] leading-[1.05] font-extrabold tracking-[-0.04em] tabular-nums">{total}</div>
+        {local && <div className="text-muted-foreground">{local}</div>}
+        {change && (
+          <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-success/14 px-2.5 py-[3px] text-xs font-semibold text-success">
+            Vuelto entregado {change}
+          </div>
         )}
-      </PrintDialog>
-
-      {!pendingSync && (
-        <ShareDialog
-          triggerLabel="Compartir por WhatsApp"
-          title="Compartir nota de entrega"
-          path={`/api/public/sales/${sale.id}?doc=note`}
-          customerPhone={sale.customerPhone}
-          message="Aquí tienes tu nota de entrega:"
-          buildPdfBlob={() => generatePdfBlob()}
-          fileName={`nota-entrega-${controlNumberLabel(sale)}.pdf`}
-        />
-      )}
-
-      {/* Factura, unlike Nota de entrega, is never generated automatically —
-          this is the only place it can ever be created, since it's a choice
-          made at (or right after) the moment of sale. Once this receipt
-          screen is left, Reports/Documents only ever show a Factura that
-          was already generated here. */}
-      {!pendingSync && (
-        <>
-          <Separator />
-          {invoiceNumber == null ? (
-            <Button variant="outline" size="lg" onClick={generateInvoice} disabled={invoiceBusy}>
-              Generar factura
-            </Button>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button variant="outline" className="flex-1" onClick={downloadInvoice} disabled={invoiceBusy}>
-                  Descargar factura
-                </Button>
-              </div>
-              <PrintDialog
-                triggerLabel="Imprimir factura"
-                title="Imprimir factura"
-                defaultPaperSize={printPaperSize}
-                buildPdfBlob={async (paperSize) => (await generateInvoicePdfBlob(paperSize)).blob}
-              >
-                {(paperSize) => (
-                  <PrintableSaleDocument
-                    sale={{ ...sale, invoiceNumber }}
-                    company={company}
-                    rate={effectiveRate}
-                    currencyCode={currencyCode}
-                    exchangeRateEnabled={exchangeRateEnabled}
-                    referenceCurrency={referenceCurrency}
-                    variant="invoice"
-                    paperSize={paperSize}
-                  />
-                )}
-              </PrintDialog>
-              <ShareDialog
-                triggerLabel="Compartir factura por WhatsApp"
-                title="Compartir factura"
-                path={`/api/public/sales/${sale.id}?doc=invoice`}
-                customerPhone={sale.customerPhone}
-                message="Aquí tienes tu factura:"
-                buildPdfBlob={async () => (await generateInvoicePdfBlob()).blob}
-                fileName={`factura-${String(invoiceNumber ?? 0).padStart(6, "0")}.pdf`}
-              />
-            </div>
-          )}
-        </>
-      )}
-
-      <Button size="lg" onClick={onNewSale}>
-        Nueva venta
-      </Button>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Button type="button" onClick={() => setSheetOpen(true)}>
+            <PrinterIcon className="size-4" strokeWidth={2.2} /> Imprimir o compartir
+          </Button>
+          <Button type="button" variant="outline" onClick={onNewSale}>
+            <PlusIcon className="size-4" strokeWidth={2.2} /> Nueva venta
+          </Button>
+        </div>
+        <p className="mt-2 text-[13px] text-muted-foreground">Ticket 58/80 mm, carta, PDF y WhatsApp.</p>
+      </div>
+      <PosDocumentSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        sale={sale}
+        company={company}
+        rate={effectiveRate}
+        currencyCode={currencyCode}
+        exchangeRateEnabled={exchangeRateEnabled}
+        referenceCurrency={referenceCurrency}
+        kind={documentKind}
+        defaultFormat={documentKind === "ticket" ? (printPaperSize === "THERMAL_58" ? "58" : "80") : "c"}
+        message={message}
+        pendingSync={pendingSync}
+      />
     </div>
   );
 }

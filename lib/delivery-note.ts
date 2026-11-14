@@ -425,7 +425,7 @@ export async function buildDeliveryNotePDF(
   // different title/sequence — selectable as an alternative document for
   // the same sale (see getOrCreateInvoiceNumber, lib/actions/sales.ts).
   // Not fiscally SENIAT-compliant yet; that's deferred, separate work.
-  variant: "delivery-note" | "invoice" | "credit-note" | "debit-note" = "delivery-note",
+  variant: "delivery-note" | "invoice" | "credit-note" | "debit-note" | "ticket" = "delivery-note",
   // Required for variant "credit-note": the note's own number, date and
   // reason; the sale's lines are the ones being credited.
   creditNote?: { controlNumber: number; createdAt: Date; reason: string }
@@ -445,7 +445,7 @@ export async function buildDeliveryNotePDF(
   const isCreditNote = (variant === "credit-note" || isDebitNote) && creditNote != null;
   const titleBottomY = renderDocumentTitleBlock(
     doc,
-    isDebitNote ? "NOTA DE DÉBITO" : isCreditNote ? "NOTA DE CRÉDITO" : isInvoice ? "FACTURA" : "NOTA DE ENTREGA",
+    isDebitNote ? "NOTA DE DÉBITO" : isCreditNote ? "NOTA DE CRÉDITO" : isInvoice ? "FACTURA" : variant === "ticket" ? "TICKET DE CAJA" : "NOTA DE ENTREGA",
     isCreditNote
       ? [
           `Nº de control: ${String(creditNote.controlNumber).padStart(6, "0")}`,

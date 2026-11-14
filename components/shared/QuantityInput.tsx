@@ -12,10 +12,13 @@ export function QuantityInput({
   quantity,
   maxStock,
   onCommit,
+  className,
 }: {
   quantity: number;
   maxStock: number;
   onCommit: (quantity: number) => void;
+  // Reemplaza el estilo por defecto (el POS lo muestra dentro de su stepper).
+  className?: string;
 }) {
   const [draft, setDraft] = useState(String(quantity));
   // Re-sync the draft when the quantity changes from outside (−/+ buttons).
@@ -49,7 +52,8 @@ export function QuantityInput({
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
       }}
-      className="w-12 rounded border border-input bg-background px-1 py-0.5 text-center text-sm tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      aria-label="Cantidad"
+      className={className ? `${className} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none` : "w-12 rounded border border-input bg-background px-1 py-0.5 text-center text-sm tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"}
     />
   );
 }
