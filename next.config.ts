@@ -47,6 +47,8 @@ const nextConfig: NextConfig = {
   // Default is 1MB — raised for the payment-proof image upload (a resized,
   // compressed photo can still run a couple MB as base64).
   experimental: {
+    // Caché del navegador entre módulos: volver a uno ya visitado es instantáneo.
+    staleTimes: { dynamic: 30, static: 180 },
     serverActions: {
       bodySizeLimit: "4mb",
     },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconTile } from "@/components/ui/icon-tile";
 import {
   BanknoteIcon,
   ChevronRightIcon,
@@ -8,7 +9,8 @@ import {
   DownloadIcon,
   FileTextIcon,
   KeyRoundIcon,
-  LayoutGridIcon,
+  SettingsIcon,
+  ShieldCheckIcon,
   PaletteIcon,
   PercentIcon,
   PrinterIcon,
@@ -22,6 +24,8 @@ export type SettingsSection = {
   label: string;
   // Línea corta bajo el título en la vista general (estado actual de la sección).
   hint?: string;
+  // Sin tarjeta ni título propios: el contenido ya trae sus tarjetas (Equipo, Impresión).
+  bare?: boolean;
   content: React.ReactNode;
 };
 
@@ -33,15 +37,19 @@ const OVERVIEW = "__overview";
 const GROUPS: { id: string; label: string; icon: string; sections: string[] }[] = [
   { id: "g-plan", label: "Mi Plan", icon: "plan", sections: ["plan"] },
   { id: "g-marca", label: "Marca", icon: "apariencia", sections: ["apariencia"] },
-  { id: "g-negocio", label: "Negocio", icon: "fiscales", sections: ["fiscales", "iva", "sucursales"] },
+  { id: "g-negocio", label: "Negocio", icon: "sucursales", sections: ["fiscales", "sucursales"] },
   { id: "g-pagos", label: "Pagos y Moneda", icon: "moneda", sections: ["moneda", "cobros"] },
-  { id: "g-equipo", label: "Equipo y Seguridad", icon: "equipo", sections: ["equipo", "clave"] },
+  { id: "g-equipo", label: "Equipo y Seguridad", icon: "seguridad", sections: ["equipo", "clave"] },
   { id: "g-imp", label: "Impresión y Datos", icon: "impresion", sections: ["impresion", "aplicacion"] },
 ];
+
+// Orden de las tarjetas de la vista general (la preview deja Mi Plan al final).
+const CARD_ORDER = ["g-marca", "g-negocio", "g-pagos", "g-equipo", "g-imp", "g-plan"];
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   plan: CrownIcon,
   equipo: UsersIcon,
+  seguridad: ShieldCheckIcon,
   moneda: BanknoteIcon,
   apariencia: PaletteIcon,
   impresion: PrinterIcon,
@@ -69,83 +77,90 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
   const step = steps[stepIdx];
 
   const pill = (on: boolean) =>
-    `inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold whitespace-nowrap transition-colors ${
-      on ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-(--shadow-card) hover:bg-muted"
+    `inline-flex min-h-11 flex-none items-center gap-2 rounded-full px-4 text-sm font-bold whitespace-nowrap shadow-(--shadow-card) transition duration-150 active:scale-[0.97] ${
+      on ? "bg-primary text-primary-foreground" : "bg-card text-foreground"
     }`;
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Secciones de ajustes">
+    <div className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap gap-2 p-0.5" role="tablist" aria-label="Secciones de ajustes">
         <button type="button" role="tab" aria-selected={activeId === OVERVIEW} onClick={() => setActiveId(OVERVIEW)} className={pill(activeId === OVERVIEW)}>
-          <LayoutGridIcon className="size-4" aria-hidden /> Todo en una vista
+          <SettingsIcon className="size-[18px]" aria-hidden /> Todo en una vista
         </button>
         {groups.map((g) => {
           const Icon = ICONS[g.icon];
           return (
             <button key={g.id} type="button" role="tab" aria-selected={g.id === activeId} onClick={() => setActiveId(g.id)} className={pill(g.id === activeId)}>
-              {Icon && <Icon className="size-4" aria-hidden />} {g.label}
+              {Icon && <Icon className="size-[18px]" aria-hidden />} {g.label}
             </button>
           );
         })}
       </div>
 
       {active ? (
-        <div className="flex max-w-5xl flex-col gap-6">
-          {active.items.map((section) => (
-            <section key={section.id} aria-label={section.label} className="flex flex-col gap-3">
-              {active.items.length > 1 && <h2 className="text-lg font-bold tracking-tight">{section.label}</h2>}
+        <div className="flex flex-col gap-3.5">
+          {active.items.map((section) =>
+            section.bare ? (
+              <div key={section.id} aria-label={section.label} className="flex min-w-0 flex-col gap-3.5">
+                {section.content}
+              </div>
+            ) : (
+            <section key={section.id} aria-label={section.label} className="relative min-w-0 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
+              <h2 className="mb-3 text-base font-bold">{section.label}</h2>
               {section.content}
             </section>
-          ))}
+            )
+          )}
         </div>
       ) : (
         <>
           {step && (
-            <section className="flex flex-col gap-3 rounded-[22px] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary)_10%,var(--card)),var(--card))] p-5 shadow-(--shadow-card)">
-              <div className="flex items-start justify-between gap-3">
+            <section className="relative rounded-[19px] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary)_14%,var(--card)),var(--card))] p-4 shadow-(--shadow-card)">
+              <div className="flex items-start justify-between gap-2.5">
                 <div>
-                  <p className="kr-eyebrow">Preparación para estar al 100 %</p>
-                  <h2 className="text-xl font-bold tracking-tight">Guía paso a paso</h2>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Preparación para estar al 100 %</p>
+                  <h2 className="text-xl font-bold">Guía paso a paso</h2>
                 </div>
-                <span className="text-4xl font-extrabold tracking-tight text-primary tabular-nums">{pct} %</span>
+                <b className="text-[34px] tracking-[-0.04em] text-primary tabular-nums">{pct} %</b>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Avance de la configuración">
-                <div className="h-full rounded-full bg-success transition-[width]" style={{ width: `${pct}%` }} />
+              <div className="my-2.5 h-2 min-w-[60px] overflow-hidden rounded-full bg-[var(--track)]" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Avance de la configuración">
+                <div className="h-full rounded-full bg-[var(--ok-solid)] transition-[width] duration-300" style={{ width: `${pct}%` }} />
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="mb-3 text-muted-foreground">
                 {done} de {steps.length} requisitos listos. Completa uno por uno para que tu negocio funcione a la perfección.
               </p>
-              <div className="flex flex-col gap-2 rounded-2xl bg-card p-4">
-                <span className={`w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold ${step.done ? "bg-success/14 text-success" : "bg-warning/18 text-warning"}`}>
-                  {step.done ? "● Listo" : "● Pendiente"}
+              <div className="rounded-2xl bg-card p-3.5 shadow-(--shadow-card)">
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-xs font-bold ${step.done ? "bg-success/14 text-success" : "bg-warning/18 text-warning"}`}>
+                  <i className="size-[7px] rounded-full bg-current" />
+                  {step.done ? "Listo" : "Pendiente"}
                 </span>
-                <h3 className="text-base font-bold">
+                <b className="mt-1.5 block text-base">
                   Paso {stepIdx + 1} de {steps.length} · {step.label}
-                </h3>
-                <p className="text-sm text-muted-foreground">{step.hint}</p>
-                <button type="button" onClick={() => setActiveId(groupOf(step.sectionId))} className="mt-1 w-fit rounded-full bg-primary px-4 py-2.5 text-[13px] font-bold text-primary-foreground">
+                </b>
+                <p className="mb-3 mt-1 text-muted-foreground">{step.hint}</p>
+                <button type="button" onClick={() => setActiveId(groupOf(step.sectionId))} className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-transform active:scale-[0.97]">
                   {step.cta} →
                 </button>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex gap-2">
-                  <button type="button" disabled={stepIdx === 0} onClick={() => setStepIdx((i) => Math.max(0, i - 1))} className="rounded-full bg-muted px-4 py-2 text-[13px] font-bold text-primary disabled:opacity-50">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" disabled={stepIdx === 0} onClick={() => setStepIdx((i) => Math.max(0, i - 1))} className="inline-flex min-h-10 items-center rounded-full bg-muted px-3.5 text-[13px] font-semibold text-primary transition-transform active:scale-[0.97] disabled:opacity-50">
                     ← Anterior
                   </button>
-                  <button type="button" disabled={stepIdx === steps.length - 1} onClick={() => setStepIdx((i) => Math.min(steps.length - 1, i + 1))} className="rounded-full bg-muted px-4 py-2 text-[13px] font-bold text-primary disabled:opacity-50">
+                  <button type="button" disabled={stepIdx === steps.length - 1} onClick={() => setStepIdx((i) => Math.min(steps.length - 1, i + 1))} className="inline-flex min-h-10 items-center rounded-full bg-muted px-3.5 text-[13px] font-semibold text-primary transition-transform active:scale-[0.97] disabled:opacity-50">
                     Siguiente paso →
                   </button>
                 </div>
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5" role="group" aria-label="Pasos">
                   {steps.map((s, i) => (
                     <button
                       key={s.label}
                       type="button"
                       onClick={() => setStepIdx(i)}
                       aria-label={`Paso ${i + 1}: ${s.label}`}
-                      aria-current={i === stepIdx}
-                      className={`grid size-10 place-items-center rounded-full text-sm font-bold ${
-                        i === stepIdx ? "bg-primary text-primary-foreground" : s.done ? "bg-success/14 text-success" : "bg-muted text-foreground"
+                      aria-pressed={i === stepIdx}
+                      className={`size-[38px] rounded-full border-2 font-extrabold ${
+                        i === stepIdx ? "border-primary bg-primary text-primary-foreground" : s.done ? "border-transparent bg-success/14 text-success" : "border-transparent bg-muted"
                       }`}
                     >
                       {i + 1}
@@ -155,8 +170,8 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
               </div>
             </section>
           )}
-          <ul className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-            {groups.map((g) => {
+          <ul className="grid gap-3.5" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,300px),1fr))" }}>
+            {CARD_ORDER.map((id) => groups.find((x) => x.id === id)).filter((g): g is (typeof groups)[number] => !!g).map((g) => {
               const Icon = ICONS[g.icon] ?? CrownIcon;
               const hint = g.items.map((i) => i.hint).filter(Boolean).join(" · ");
               return (
@@ -164,14 +179,14 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
                   <button
                     type="button"
                     onClick={() => setActiveId(g.id)}
-                    className="flex w-full items-center gap-3.5 rounded-[19px] bg-card p-4 text-left shadow-(--shadow-card) transition-transform hover:-translate-y-0.5"
+                    className="flex h-full w-full items-center gap-3 rounded-[19px] border-2 border-transparent bg-card p-4 text-left shadow-(--shadow-card) transition duration-150 hover:-translate-y-0.5 hover:border-primary"
                   >
-                    <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary">
-                      <Icon className="size-5" aria-hidden />
-                    </span>
+                    <IconTile>
+                      <Icon className="size-[22px]" aria-hidden />
+                    </IconTile>
                     <span className="min-w-0 flex-1">
-                      <span className="block font-bold">{g.label}</span>
-                      {hint && <span className="block truncate text-[13px] text-muted-foreground">{hint}</span>}
+                      <b className="block text-base">{g.label}</b>
+                      {hint && <span className="text-[13px] text-muted-foreground">{hint}</span>}
                     </span>
                     <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                   </button>

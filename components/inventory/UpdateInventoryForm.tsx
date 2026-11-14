@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { parseImageUrlCell } from "@/lib/bulk-image";
 import { Badge } from "@/components/ui/badge";
 import { ProductUpdateRowSchema } from "@/lib/validations";
 import { bulkUpdateProducts, listAllProducts, type BulkUpdateResult } from "@/lib/actions/products";
@@ -48,6 +49,10 @@ const HEADER_MAP: Record<string, string> = {
   bulkprice: "bulkPrice",
   "cantidad minima gran mayor": "bulkMinQty",
   bulkminqty: "bulkMinQty",
+  imagen: "imageUrl",
+  "url de imagen": "imageUrl",
+  imageurl: "imageUrl",
+  image: "imageUrl",
 };
 
 function normalizeHeader(header: string): string {
@@ -75,6 +80,7 @@ type ParsedRow = {
   wholesaleMinQty?: unknown;
   bulkPrice?: unknown;
   bulkMinQty?: unknown;
+  imageUrl?: unknown;
   error: string | null;
 };
 
@@ -88,10 +94,13 @@ async function parseWorkbook(buffer: ArrayBuffer): Promise<ParsedRow[]> {
       if (canonical) mapped[canonical] = value;
     }
     const parsed = ProductUpdateRowSchema.safeParse(mapped);
+    const imageCell = parseImageUrlCell(mapped.imageUrl);
     return {
       row: index + 2, // +1 for header row, +1 for 1-indexing
       ...mapped,
-      error: parsed.success ? null : (parsed.error.issues[0]?.message ?? "Datos inválidos"),
+      error: parsed.success
+        ? imageCell.kind === "error" ? imageCell.error : null
+        : (parsed.error.issues[0]?.message ?? "Datos inválidos"),
     };
   });
 }
@@ -127,6 +136,7 @@ export function UpdateInventoryForm() {
           "Cantidad mínima mayor",
           "Precio gran mayor",
           "Cantidad mínima gran mayor",
+          "Imagen",
         ],
         ...products.map((p) => [
           p.id,
@@ -144,6 +154,7 @@ export function UpdateInventoryForm() {
           p.wholesaleMinQty ?? "",
           p.bulkPriceCents != null ? p.bulkPriceCents / 100 : "",
           p.bulkMinQty ?? "",
+          "",
         ]),
       ]);
       appendSheet(wb, ws, "Inventario");
@@ -196,6 +207,7 @@ export function UpdateInventoryForm() {
           wholesaleMinQty: r.wholesaleMinQty,
           bulkPrice: r.bulkPrice,
           bulkMinQty: r.bulkMinQty,
+          imageUrl: r.imageUrl,
         }))
       );
       setResult(res);
@@ -212,7 +224,7 @@ export function UpdateInventoryForm() {
           nuevos. Descarga el inventario actual, edita lo que necesites y vuelve a subir el mismo
           archivo: la columna <strong>ID no debe editarse ni borrarse</strong> (identifica cada
           producto internamente). El SKU es opcional, igual que al crear o editar un producto a
-          mano. Deja una columna en blanco para conservar el valor actual de ese campo.
+          mano. La columna <strong>Imagen</strong> acepta una URL https de la foto (JPG/PNG/WEBP, máx. 480 KB); en blanco conserva la actual. Deja una columna en blanco para conservar el valor actual de ese campo.
         </p>
         <div className="flex gap-2 mt-2">
           <Button type="button" variant="outline" disabled={isExporting} onClick={handleExport}>

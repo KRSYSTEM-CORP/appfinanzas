@@ -91,7 +91,18 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const { firstName, lastName, pin, role, branchId, allowedSections } = parsed.data;
+  const { firstName, lastName, pin, branchId, allowedSections } = parsed.data;
+  let role = parsed.data.role;
+
+  // Rol de la empresa (Ajustes → Equipo y Seguridad): su rol base manda sobre el campo «role».
+  const roleIdRaw = formData.get("roleId");
+  let companyRoleId: string | null = null;
+  if (typeof roleIdRaw === "string" && roleIdRaw) {
+    const companyRole = await withTenant(companyId, (tx) => tx.companyRole.findFirst({ where: { id: roleIdRaw, companyId } }));
+    if (!companyRole) return { success: false, error: "Rol no encontrado" };
+    companyRoleId = companyRole.id;
+    role = companyRole.baseRole;
+  }
 
   const pinIssue = pinProblem(pin);
   if (pinIssue) return { success: false, error: pinIssue.replace("El PIN", "El código personal") };
@@ -130,6 +141,7 @@ export async function createEmployee(formData: FormData): Promise<ActionResult> 
         firstName,
         lastName,
         role,
+        roleId: companyRoleId,
         branchId: resolvedBranchId,
         status: "ACTIVE",
         allowedSections: role === "VENDEDOR" ? allowedSections : [],

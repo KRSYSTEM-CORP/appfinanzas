@@ -2,8 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field, FieldInput, SCard } from "@/components/settings/team-print-kit";
 import { changeMyPassword } from "@/lib/actions/settings";
 import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
 
@@ -30,34 +29,30 @@ export function ChangePasswordForm() {
   }
 
   return (
-    <form ref={formRef} action={handleSubmit} className="flex flex-col gap-4 max-w-sm">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="currentPassword">Contraseña actual</Label>
-        <Input id="currentPassword" name="currentPassword" type="password" required />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="newPassword">Nueva contraseña</Label>
-        <Input
-          id="newPassword"
-          name="newPassword"
-          type="password"
-          required
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-        />
-        <PasswordRequirements password={newPassword} />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="confirmPassword">Confirmar nueva contraseña</Label>
-        <Input id="confirmPassword" name="confirmPassword" type="password" required />
-      </div>
+    <SCard title="Contraseña de tu cuenta" description="Cambia la contraseña de tu propia cuenta">
+      <form ref={formRef} action={handleSubmit} className="max-w-sm">
+        <Field label="Contraseña actual" htmlFor="currentPassword">
+          <FieldInput id="currentPassword" name="currentPassword" type="password" required />
+        </Field>
+        <Field label="Nueva contraseña" htmlFor="newPassword">
+          <FieldInput id="newPassword" name="newPassword" type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+        </Field>
+        <div className="mt-2">
+          <PasswordRequirements password={newPassword} />
+        </div>
+        <Field label="Confirmar nueva contraseña" htmlFor="confirmPassword">
+          <FieldInput id="confirmPassword" name="confirmPassword" type="password" required />
+        </Field>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {success && <p className="text-sm text-success">Contraseña actualizada.</p>}
+        {error && <p className="mt-2 text-[13px] text-destructive">{error}</p>}
+        {success && <p className="mt-2 text-[13px] text-success">Contraseña actualizada.</p>}
 
-      <Button type="submit" disabled={isPending}>
-        {isPending ? "Guardando..." : "Cambiar contraseña"}
-      </Button>
-    </form>
+        <div className="mt-3">
+          <Button type="submit" disabled={isPending}>
+            {isPending ? "Guardando..." : "Cambiar contraseña"}
+          </Button>
+        </div>
+      </form>
+    </SCard>
   );
 }

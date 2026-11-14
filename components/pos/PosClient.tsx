@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { PlusIcon, UsersIcon } from "lucide-react";
+import { PlusIcon, SearchIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { PaymentStatus } from "@prisma/client";
 import type { ListedProduct } from "@/lib/product-image";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Chip } from "@/components/ui/chip";
 import { searchCustomers } from "@/lib/actions/customers";
 import { CustomerForm, type CustomerInfo } from "@/components/pos/CustomerForm";
 import { ProductPicker } from "@/components/pos/ProductPicker";
 import { Cart, type CartLine } from "@/components/pos/Cart";
-import { PayScreen } from "@/components/pos/PayScreen";
+import { PayScreen, type DocumentKind, type PayConfirm } from "@/components/pos/PayScreen";
 import { ReceiptView } from "@/components/pos/ReceiptView";
 import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { useDefaultPaymentRow } from "@/components/payments/useDefaultPaymentRow";
@@ -172,7 +172,9 @@ const [step, setStep] = useState<Step>("cart");
     defaultPaymentSplitRows(0, rate, exchangeRateEnabled)
   );
   const [note, setNote] = useState("");
-  const [documentKind, setDocumentKind] = useState<"delivery" | "ticket">("delivery");
+  const [documentKind, setDocumentKind] = useState<DocumentKind>("delivery");
+  // Vuelto entregado en efectivo (lo muestra «Venta registrada»).
+  const [change, setChange] = useState<string | null>(null);
   const [channel, setChannel] = useState<SaleChannel>("MOSTRADOR");
   const [discountPercent, setDiscountPercent] = useState("0");
   const [error, setError] = useState<string | null>(null);
@@ -265,7 +267,7 @@ const [step, setStep] = useState<Step>("cart");
   // syncs. Shared with components/pos/PosOfflineClient.tsx (see
   // lib/offline/pending-receipt.ts) so both compute the exact same real IVA
   // breakdown from the cached rates, not a placeholder.
-  function buildReceiptPreview(customer: CustomerInfo): SaleWithItems {
+  function buildReceiptPreview(customer: CustomerInfo, status: PaymentStatus, rows: PaymentSplitRow[]): SaleWithItems {
     return buildPendingReceipt({
       lines: lines.map((l) => {
         const product = productById.get(l.productId);
@@ -279,8 +281,8 @@ const [step, setStep] = useState<Step>("cart");
         };
       }),
       customer,
-      paymentStatus: exonerated ? "PAID" : paymentStatus,
-      paymentRows: exonerated ? [] : paymentRows,
+      paymentStatus: exonerated ? "PAID" : status,
+      paymentRows: exonerated ? [] : rows,
       discountPercent: discountValue,
       note,
       sellerName,
@@ -293,8 +295,11 @@ const [step, setStep] = useState<Step>("cart");
     });
   }
 
-  function checkout(extraNote?: string) {
+  function checkout({ paymentStatus: status, rows, extraNote, change: changeText }: PayConfirm) {
     if (!customer) return;
+    setPaymentStatus(status);
+    setPaymentRows(rows);
+    setChange(changeText);
     const finalNote = [extraNote, note.trim()].filter(Boolean).join(" · ");
     setError(null);
     // One key per checkout, sent on the online attempt AND kept in the
@@ -308,11 +313,11 @@ const [step, setStep] = useState<Step>("cart");
         quantity: l.quantity,
         priceTier: l.priceTierOverride ?? undefined,
       })),
-      paymentStatus: exonerated ? "PAID" : paymentStatus,
+      paymentStatus: exonerated ? "PAID" : status,
       channel,
       payments:
-        !exonerated && paymentStatus === "PAID"
-          ? paymentRows.map((r) => ({
+        !exonerated && status === "PAID"
+          ? rows.map((r) => ({
               paymentMethod: r.paymentMethod,
               amount: r.amount,
               paidInForeignCurrency: r.paidInForeignCurrency,
@@ -342,7 +347,7 @@ const [step, setStep] = useState<Step>("cart");
         sellerName,
         note: finalNote || null,
       });
-      setCompletedSale(buildReceiptPreview(customerInfo));
+      setCompletedSale(buildReceiptPreview(customerInfo, status, rows));
       setPendingSync(true);
       setStep("receipt");
     }
@@ -381,7 +386,7 @@ const [step, setStep] = useState<Step>("cart");
         // is the only thing on screen.
         router.replace("/pos");
       } catch {
-        setCompletedSale(buildReceiptPreview(customer));
+        setCompletedSale(buildReceiptPreview(customer, status, rows));
         setPendingSync(false);
         setStep("receipt");
       }
@@ -397,66 +402,165 @@ const [step, setStep] = useState<Step>("cart");
     setDiscountPercent("0");
     setCompletedSale(null);
     setPendingSync(false);
+    setChange(null);
+    setDocumentKind("delivery");
     setStep("cart");
   }
 
-  if (step === "receipt" && completedSale) {
-    return (
-      <ReceiptView
-        sale={completedSale}
-        rate={rate}
-        currencyCode={currencyCode}
-        exchangeRateEnabled={exchangeRateEnabled}
-        referenceCurrency={referenceCurrency}
-        printPaperSize={documentKind === "ticket" ? "THERMAL_80" : printPaperSize}
-        company={company}
-        onNewSale={newSale}
-        pendingSync={pendingSync}
-      />
-    );
+  const isGeneral = customer?.phone === "0000-0000000";
+  const itemCount = lines.reduce((n, l) => n + l.quantity, 0);
+
+  // Atajos de la preview en la venta: «C» cobra y «E» deja la venta en espera.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (step !== "cart" || dialog || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      if (!containerRef.current || containerRef.current.offsetParent === null) return;
+      if (lines.length === 0) return;
+      if (e.key === "c" || e.key === "C") {
+        e.preventDefault();
+        requestCheckout();
+      } else if ((e.key === "e" || e.key === "E") && onHold) {
+        e.preventDefault();
+        onHold();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  function openDirectory(fromPayStep = false) {
+    setFromPay(fromPayStep);
+    setDirQuery("");
+    setDirResults([]);
+    setDialog("directory");
   }
 
-  if (step === "pay" && customer) {
-    const isGeneral = customer.phone === "0000-0000000";
-    return (
-      <div className="flex h-full flex-col gap-3">
-        {accountTabs}
-        <div className="min-h-0 flex-1">
-          <PayScreen
-            customerName={`${customer.firstName} ${customer.lastName}`}
-            rawTotal={rawTotal}
-            total={total}
-            discountPercent={discountPercent}
-            onDiscountPercentChange={setDiscountPercent}
-            paymentStatus={paymentStatus}
-            onPaymentStatusChange={setPaymentStatus}
-            paymentRows={paymentRows}
-            onPaymentRowsChange={setPaymentRows}
-            note={note}
-            onNoteChange={setNote}
-            paymentAccounts={paymentAccounts}
-            rate={rate}
-            currencyCode={currencyCode}
-            exchangeRateEnabled={exchangeRateEnabled}
-            referenceCurrency={referenceCurrency}
-            igtfRatePercent={igtfRatePercent}
-            isGeneralCustomer={isGeneral}
-            topMethod={topMethod}
-            isPending={isPending}
-            error={error}
-            onBack={() => setStep("cart")}
-            documentKind={documentKind}
-            onDocumentKindChange={setDocumentKind}
-            onConfirm={checkout}
-          />
-        </div>
+  // Color del canal elegido, como en la preview.
+  const channelTone: Record<SaleChannel, string | undefined> = {
+    MOSTRADOR: undefined,
+    DELIVERY: "border-success bg-success/14 text-success",
+    PICKUP: "border-(--m-inv) bg-warning/18 text-warning",
+    ONLINE: "border-(--m-mkt) bg-(--m-mkt)/12 text-(--m-mkt)",
+  };
+
+  let body: React.ReactNode;
+  if (step === "receipt" && completedSale) {
+    body = (
+      <div className="min-h-0 flex-1 md:overflow-y-auto">
+        <ReceiptView
+          sale={completedSale}
+          rate={rate}
+          currencyCode={currencyCode}
+          exchangeRateEnabled={exchangeRateEnabled}
+          referenceCurrency={referenceCurrency}
+          printPaperSize={printPaperSize}
+          company={company}
+          onNewSale={newSale}
+          pendingSync={pendingSync}
+          documentKind={documentKind}
+          change={change}
+        />
       </div>
     );
-  }
-
-  return (
-    <div ref={containerRef} className="flex flex-col gap-3 h-full">
-      <div className={`grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_360px] md:gap-6 md:flex-1 md:min-h-0 ${lines.length ? "pb-[calc(var(--tabbar-h)+5rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>
+  } else if (step === "pay" && customer) {
+    body = (
+      <div className="min-h-0 flex-1 md:overflow-y-auto">
+        <PayScreen
+          customerName={`${customer.firstName} ${customer.lastName}`}
+          customerPhone={customer.phone}
+          rawTotal={rawTotal}
+          total={total}
+          discountPercent={discountPercent}
+          onDiscountPercentChange={setDiscountPercent}
+          paymentAccounts={paymentAccounts}
+          rate={rate}
+          currencyCode={currencyCode}
+          exchangeRateEnabled={exchangeRateEnabled}
+          referenceCurrency={referenceCurrency}
+          igtfRatePercent={igtfRatePercent}
+          isGeneralCustomer={isGeneral}
+          topMethod={topMethod}
+          isPending={isPending}
+          error={error}
+          onBack={() => setStep("cart")}
+          onPickCustomer={() => openDirectory(true)}
+          documentKind={documentKind}
+          onDocumentKindChange={setDocumentKind}
+          onConfirm={checkout}
+        />
+      </div>
+    );
+  } else {
+    const saleHeader = (
+      <>
+        <div className="flex items-start justify-between gap-2.5">
+          <div>
+            <b className="text-xl font-bold tracking-[-0.02em]">Venta actual</b>
+            <div className="text-[13px] text-muted-foreground">
+              {itemCount} {itemCount === 1 ? "producto" : "productos"} · {SALE_CHANNEL_LABELS[channel]}
+            </div>
+          </div>
+          <Button type="button" variant="outline" onClick={() => resetCart()}>
+            Vaciar
+          </Button>
+        </div>
+        <div role="radiogroup" aria-label="Canal de venta" className="my-2 flex flex-wrap gap-2">
+          {(Object.keys(SALE_CHANNEL_LABELS) as SaleChannel[]).map((ch) => (
+            <Chip
+              key={ch}
+              role="radio"
+              aria-checked={channel === ch}
+              active={channel === ch}
+              onClick={() => setChannel(ch)}
+              className={channel === ch ? channelTone[ch] : undefined}
+            >
+              {SALE_CHANNEL_LABELS[ch]}
+            </Chip>
+          ))}
+        </div>
+        <div className="mb-2">{accountTabs}</div>
+        <div className="mt-1 mb-1.5 grid grid-cols-[1.2fr_1fr] gap-2">
+          <Button
+            type="button"
+            className="min-h-[46px] justify-center"
+            onClick={() => {
+              setFromPay(false);
+              setDialog("register");
+            }}
+          >
+            <PlusIcon strokeWidth={2.6} /> Registrar cliente
+          </Button>
+          <Button type="button" variant="outline" className="min-h-[46px] justify-center" onClick={() => openDirectory(false)}>
+            <UsersIcon strokeWidth={2.2} /> Directorio
+          </Button>
+        </div>
+        {customer && (
+          <div className="flex w-full items-center gap-3 rounded-2xl bg-muted px-3 py-2.5">
+            <span className="grid size-11 flex-none place-items-center rounded-[14px] bg-primary/12 text-primary">
+              <UserIcon className="size-[22px]" />
+            </span>
+            <span className="min-w-0 flex-1 text-left">
+              <small className="text-[0.8333em] text-muted-foreground">CLIENTE DE ESTA VENTA</small>
+              <b className="block truncate font-bold">
+                {customer.firstName} {customer.lastName}
+              </b>
+              <small className="block text-[0.8333em] text-muted-foreground">
+                {isGeneral ? "Genérico · registra o elige uno para tu CRM" : customer.phone}
+              </small>
+            </span>
+          </div>
+        )}
+      </>
+    );
+    body = (
+      <div
+        className={`grid grid-cols-1 items-start gap-4 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_360px] ${
+          lines.length ? "pb-[calc(var(--tabbar-h)+5rem+env(safe-area-inset-bottom))] md:pb-0" : ""
+        }`}
+      >
         <ProductPicker
           products={products}
           rate={rate}
@@ -465,55 +569,11 @@ const [step, setStep] = useState<Step>("cart");
           referenceCurrency={referenceCurrency}
           categories={categories}
           onAdd={addProduct}
+          quantities={Object.fromEntries(lines.map((l) => [l.productId, l.quantity]))}
         />
-        <div className="flex min-h-0 flex-col gap-3 rounded-[22px] bg-card p-5 shadow-(--shadow-card) md:overflow-y-auto">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold tracking-tight">Venta actual</h2>
-              <p className="text-[13px] text-muted-foreground">
-                {lines.reduce((n, l) => n + l.quantity, 0)} {lines.reduce((n, l) => n + l.quantity, 0) === 1 ? "producto" : "productos"} · {SALE_CHANNEL_LABELS[channel]}
-              </p>
-            </div>
-            <Button type="button" size="sm" variant="outline" disabled={lines.length === 0} onClick={() => { resetCart(); }}>
-              Vaciar
-            </Button>
-          </div>
-          <div role="radiogroup" aria-label="Canal de venta" className="flex flex-wrap gap-2">
-            {(Object.keys(SALE_CHANNEL_LABELS) as SaleChannel[]).map((ch) => (
-              <button
-                key={ch}
-                type="button"
-                role="radio"
-                aria-checked={channel === ch}
-                onClick={() => setChannel(ch)}
-                className={`min-h-[38px] rounded-xl border-2 px-3.5 text-[13px] font-bold transition-colors ${
-                  channel === ch ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted text-foreground hover:bg-muted/70"
-                }`}
-              >
-                {SALE_CHANNEL_LABELS[ch]}
-              </button>
-            ))}
-          </div>
-          {accountTabs}
-          {customer && (
-            <div className="min-w-0 rounded-2xl bg-muted px-3.5 py-2.5 text-sm">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cliente de esta venta</p>
-              <p className="truncate font-semibold">
-                {customer.firstName} {customer.lastName}
-                {customer.phone && customer.phone !== "0000-0000000" && <span className="font-normal text-muted-foreground"> · {customer.phone}</span>}
-              </p>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            <Button type="button" size="lg" className="min-h-[46px]" onClick={() => { setFromPay(false); setDialog("register"); }}>
-              <PlusIcon /> Registrar cliente
-            </Button>
-            <Button type="button" size="lg" variant="outline" className="min-h-[46px]" onClick={() => { setDirQuery(""); setDirResults([]); setDialog("directory"); }}>
-              <UsersIcon /> Directorio
-            </Button>
-          </div>
         <Cart
           bare
+          top={saleHeader}
           lines={lines.map((l) => {
             const current = productById.get(l.productId);
             return {
@@ -548,23 +608,34 @@ const [step, setStep] = useState<Step>("cart");
           isPending={isPending}
           error={error}
         />
-        </div>
       </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="flex h-full flex-col gap-3">
+      {body}
 
       <Dialog open={dialog === "register"} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Registrar cliente</DialogTitle>
-            <DialogDescription>Se guarda en tu CRM y se usa en esta venta.</DialogDescription>
+            <DialogDescription>Se guarda en tu CRM y se usa en esta venta</DialogDescription>
           </DialogHeader>
-          <CustomerForm bare initial={customer ?? undefined} onContinue={continueFromCustomer} title="Datos del cliente" subtitle="Nombre, apellido, dirección y teléfono son obligatorios." submitLabel="Guardar y usar en la venta" />
-          {fromPay && (
-            <div className="flex flex-col gap-2 border-t pt-3">
-              <p className="text-xs text-muted-foreground">¿Venta sin datos? Elige «Cliente general» en el Directorio.</p>
-              <Button type="button" variant="outline" onClick={() => { setDirQuery(""); setDirResults([]); setDialog("directory"); }}>
-                Abrir Directorio
+          <CustomerForm
+            bare
+            initial={customer && !isGeneral ? customer : undefined}
+            onContinue={continueFromCustomer}
+            onCancel={() => setDialog(null)}
+            submitLabel="Guardar y usar en la venta"
+          />
+          {fromPay && !requireCustomer && (
+            <>
+              <p className="mt-2.5 text-xs text-muted-foreground">¿Venta sin datos? Elige «Cliente general» en el Directorio.</p>
+              <Button type="button" variant="outline" className="w-full" onClick={() => openDirectory(true)}>
+                <UsersIcon strokeWidth={2.2} /> Abrir Directorio
               </Button>
-            </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
@@ -573,40 +644,68 @@ const [step, setStep] = useState<Step>("cart");
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Directorio de clientes</DialogTitle>
-            <DialogDescription>{requireCustomer ? "Busca o registra al cliente: esta empresa exige nombre y teléfono en cada venta." : "Busca un cliente o usa «Cliente general» para una venta sin datos."}</DialogDescription>
+            <DialogDescription>
+              {requireCustomer
+                ? "Busca o registra al cliente: esta empresa exige nombre y teléfono en cada venta."
+                : "Toca uno para usarlo en la venta"}
+            </DialogDescription>
           </DialogHeader>
-          <Input autoFocus value={dirQuery} onChange={(e) => runDirectorySearch(e.target.value)} placeholder="Buscar por nombre o apellido" />
-          <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
-            {!requireCustomer && (
-              <li>
-                <button type="button" onClick={useGeneralCustomer} className="flex w-full flex-col rounded-xl bg-muted p-3 text-left hover:bg-muted/70">
-                  <span className="font-semibold">Cliente general</span>
-                  <span className="text-xs text-muted-foreground">Venta sin datos</span>
-                </button>
-              </li>
-            )}
-            {dirResults.map((c) => (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => continueFromCustomer({ firstName: c.firstName, lastName: c.lastName, phone: c.phone, address: c.address ?? "", rif: c.rif ?? "" })}
-                  className="flex w-full flex-col rounded-xl p-3 text-left hover:bg-muted"
+          <div className="relative my-2.5">
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <input
+              autoFocus
+              type="search"
+              aria-label="Buscar cliente"
+              value={dirQuery}
+              onChange={(e) => runDirectorySearch(e.target.value)}
+              placeholder="Buscar por nombre o teléfono"
+              className="min-h-[50px] w-full rounded-full border-[1.5px] border-border bg-card pr-[18px] pl-[46px] outline-none focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/30"
+            />
+          </div>
+          <div className="grid max-h-72 gap-2 overflow-y-auto">
+            {dirResults.map((c, i) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() =>
+                  continueFromCustomer({ firstName: c.firstName, lastName: c.lastName, phone: c.phone, address: c.address ?? "", rif: c.rif ?? "" })
+                }
+                className="flex items-center gap-3 rounded-2xl bg-muted p-3 text-left transition-colors hover:bg-muted/70"
+              >
+                <span
+                  className="grid size-11 flex-none place-items-center rounded-full text-base font-bold text-foreground"
+                  style={{ background: `color-mix(in oklab, var(--chart-${(i % 5) + 1}) 22%, var(--card))` }}
+                  aria-hidden
                 >
-                  <span className="font-semibold">{c.firstName} {c.lastName}</span>
-                  <span className="text-xs text-muted-foreground">{c.phone}</span>
-                </button>
-              </li>
+                  {c.firstName.charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate font-bold">
+                    {c.firstName} {c.lastName}
+                  </b>
+                  <small className="text-xs text-muted-foreground">{c.phone}</small>
+                </span>
+              </button>
             ))}
-          </ul>
-          <Button type="button" variant="outline" onClick={() => { setFromPay(false); setDialog("register"); }}>
-            + Registrar cliente nuevo
-          </Button>
+            {dirQuery.trim().length >= 2 && dirResults.length === 0 && (
+              <p className="py-[18px] text-center text-muted-foreground">No hay clientes con ese nombre.</p>
+            )}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" onClick={() => setDialog("register")}>
+              <PlusIcon strokeWidth={2.6} /> Registrar cliente
+            </Button>
+            {!requireCustomer && (
+              <Button type="button" variant="outline" onClick={useGeneralCustomer}>
+                Cliente general
+              </Button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-
 
 // Varias cuentas abiertas a la vez (como en la preview): cada una es una venta
 // independiente con su propio carrito, cliente y pagos. Las inactivas siguen

@@ -3,11 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Segmented } from "@/components/ui/segmented";
+import { ListRow, Note } from "@/components/shared/SectionCard";
+import { Switch } from "@/components/settings/SettingsUi";
 import { updateReferenceCurrencySettings } from "@/lib/actions/settings";
 import type { ReferenceCurrency } from "@prisma/client";
 
+// Moneda base (Dólares / Euros) e interruptor de la tasa de cambio. Cada cambio se guarda al tocarlo.
 export function ReferenceCurrencyForm({
   currentEnabled,
   currentReferenceCurrency,
@@ -20,91 +22,53 @@ export function ReferenceCurrencyForm({
   const [referenceCurrency, setReferenceCurrency] = useState<ReferenceCurrency>(currentReferenceCurrency);
   const [isPending, startTransition] = useTransition();
 
-  const dirty = enabled !== currentEnabled || referenceCurrency !== currentReferenceCurrency;
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function save(nextEnabled: boolean, nextRef: ReferenceCurrency) {
+    const prev = { enabled, referenceCurrency };
+    setEnabled(nextEnabled);
+    setReferenceCurrency(nextRef);
     startTransition(async () => {
       const formData = new FormData();
-      formData.set("exchangeRateEnabled", String(enabled));
-      formData.set("referenceCurrency", referenceCurrency);
+      formData.set("exchangeRateEnabled", String(nextEnabled));
+      formData.set("referenceCurrency", nextRef);
       const result = await updateReferenceCurrencySettings(formData);
       if (result.success) {
         toast.success("Preferencias de moneda guardadas.");
         router.refresh();
       } else {
+        setEnabled(prev.enabled);
+        setReferenceCurrency(prev.referenceCurrency);
         toast.error(result.error);
       }
     });
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-sm">
-      <div className="flex flex-col gap-1.5">
-        <Label>¿Activar tasa de cambio para tus productos?</Label>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={enabled ? "default" : "outline"}
-            className="flex-1"
-            onClick={() => setEnabled(true)}
-          >
-            Activada
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={!enabled ? "default" : "outline"}
-            className="flex-1"
-            onClick={() => setEnabled(false)}
-          >
-            Desactivada
-          </Button>
+    <div className={isPending ? "pointer-events-none opacity-70" : undefined}>
+      <Segmented<ReferenceCurrency>
+        label="Moneda base"
+        value={referenceCurrency}
+        onChange={(v) => save(enabled, v)}
+        options={[
+          { value: "USD", label: "Dólares ($)" },
+          { value: "EUR", label: "Euros (€)" },
+        ]}
+      />
+      {referenceCurrency === "EUR" && (
+        <Note className="text-warning">
+          Con referencia en EUR, los pagos en dólares (Zelle, Binance, PayPal o divisas) se cuentan 1 a 1 como euros, sin tasa EUR/USD. Si cobras en dólares, usa USD como referencia.
+        </Note>
+      )}
+      <ListRow className="mt-3">
+        <div>
+          <b>Tasa de cambio</b>
+          <small>
+            {enabled
+              ? "Tus precios se muestran en tu moneda local, convertidos con la tasa, junto al precio de referencia."
+              : "Tus precios se muestran en una sola moneda (la base), sin conversión ni tasa de cambio."}
+          </small>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {enabled
-            ? "Tus precios se muestran en tu moneda local, convertidos con la tasa de cambio, junto al precio de referencia."
-            : "Tus precios se mostrarán en una sola moneda (la de referencia, abajo) — sin conversión ni tasa de cambio."}
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label>Moneda de referencia</Label>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={referenceCurrency === "EUR" ? "default" : "outline"}
-            className="flex-1"
-            onClick={() => setReferenceCurrency("EUR")}
-          >
-            EUR (Euro)
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={referenceCurrency === "USD" ? "default" : "outline"}
-            className="flex-1"
-            onClick={() => setReferenceCurrency("USD")}
-          >
-            USD (Dólar)
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Todos tus productos se guardan y calculan internamente en esta moneda de referencia.
-        </p>
-        {referenceCurrency === "EUR" && (
-          <p className="text-xs text-warning">
-            Con referencia en EUR, los pagos en dólares (Zelle, Binance, PayPal o divisas) se cuentan
-            1 a 1 como euros, sin tasa EUR/USD. Si cobras en dólares, usa USD como referencia.
-          </p>
-        )}
-      </div>
-
-      <Button type="submit" disabled={isPending || !dirty} className="self-start">
-        {isPending ? "Guardando..." : "Guardar"}
-      </Button>
-    </form>
+        <Switch on={enabled} onChange={(v) => save(v, referenceCurrency)} label="Tasa de cambio" />
+      </ListRow>
+    </div>
   );
 }

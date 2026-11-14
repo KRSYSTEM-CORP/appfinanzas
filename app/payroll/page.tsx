@@ -1,3 +1,4 @@
+import { AdminShell } from "@/components/accounting/AdminShell";
 import { PayrollPanel } from "@/components/payroll/PayrollPanel";
 import { listPayroll } from "@/lib/actions/payroll";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
@@ -16,14 +17,7 @@ export default async function PayrollPage() {
   ]);
   const company = { name: companyName, logoDataUrl, ...fiscalData };
   return (
-    <div className="flex flex-col gap-4 px-4 py-5">
-      <div>
-        <h1 className="kr-h1">Nómina</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Empleados, pagos por quincena con método, referencia y comprobante, e historial. Cada pago se anota como
-          gasto de Nómina en Finanzas.
-        </p>
-      </div>
+    <AdminShell group="conta" sub="nomina">
       <PayrollPanel
         employees={employees}
         payments={payments}
@@ -34,6 +28,6 @@ export default async function PayrollPage() {
         sellers={sellers}
         monthsElapsed={new Date().getMonth() + 1}
       />
-    </div>
+    </AdminShell>
   );
 }

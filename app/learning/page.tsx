@@ -1,4 +1,7 @@
 import { getSession } from "@/lib/session";
+import { GraduationCapIcon } from "lucide-react";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { IconTile } from "@/components/ui/icon-tile";
 import { LearningPanel } from "@/components/learning/LearningPanel";
 import { getLearningStats, isLearningAdmin, isLearningStorageReady, listLearningVideos } from "@/lib/actions/learning";
 import { MAX_LEARNING_UPLOAD_BYTES, MAX_LEARNING_VIDEOS } from "@/lib/learning";
@@ -22,18 +25,20 @@ export default async function LearningPage() {
   ]);
   return (
     <div className="flex flex-col gap-4 px-4 py-5">
-      <div>
-        <p className="kr-eyebrow">Academia KR POS</p>
-        <h1 className="kr-h1">Learning</h1>
-        <span className="mt-2 inline-block rounded-full bg-primary/12 px-3 py-1 text-xs font-semibold text-primary">{videos.length ? Math.round((videos.filter((v) => v.watched).length / videos.length) * 100) : 0} % completado</span>
-      </div>
-      <div className="flex items-center gap-3 rounded-[20px] bg-card p-4 shadow-(--shadow-card)">
-        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary" aria-hidden>
-          <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z" /><path d="M6 12v5c3 2 9 2 12 0v-5" /></svg>
-        </span>
-        <div>
-          <p className="text-sm font-bold">Contenido creado por el equipo de KR System</p>
-          <p className="text-sm text-muted-foreground">Aprende a tu ritmo. Tu progreso se guarda por usuario.</p>
+      <PageHeader eyebrow="Academia KR POS" title="Learning">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/12 px-2.5 py-[3px] text-xs font-semibold text-primary">
+            <GraduationCapIcon className="size-3.5" aria-hidden /> {videos.length ? Math.round((videos.filter((v) => v.watched).length / videos.length) * 100) : 0} % completado
+          </span>
+        </div>
+      </PageHeader>
+      <div role="note" className="flex flex-wrap items-center gap-3 rounded-[19px] bg-card px-4 py-3.5 shadow-(--shadow-card)">
+        <IconTile>
+          <GraduationCapIcon className="size-[22px]" aria-hidden />
+        </IconTile>
+        <div className="min-w-[200px] flex-1">
+          <b>Contenido creado por el equipo de KR System</b>
+          <p className="text-[13px] text-muted-foreground">Aprende a tu ritmo. Tu progreso se guarda por usuario y puedes practicar cada módulo en tu propio sistema.</p>
         </div>
       </div>
       <LearningPanel

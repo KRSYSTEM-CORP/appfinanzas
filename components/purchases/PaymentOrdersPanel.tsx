@@ -2,166 +2,191 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { BanknoteIcon, FileTextIcon, TrendingDownIcon } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Segmented } from "@/components/ui/segmented";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { formatCurrencyCents } from "@/lib/currencies";
-import { registerPurchasePayment, type CostComparisonRow, type PaymentOrderRow } from "@/lib/actions/purchases";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Field, FIELD_CONTROL } from "@/components/shared/Field";
+import { SheetActions } from "@/components/shared/ConfirmSheet";
+import { Kpi, KpiGrid } from "@/components/shared/Kpi";
+import { RowMenu } from "@/components/shared/RowMenu";
+import { SectionCard } from "@/components/shared/SectionCard";
+import { registerPurchasePayment, type PaymentOrderRow } from "@/lib/actions/purchases";
+import { money } from "@/lib/money-display";
 
 const METHODS: [string, string][] = [
-  ["TRANSFER", "Transferencia"], ["CASH", "Efectivo"], ["POS", "Punto de venta"], ["CARD", "Pago móvil / tarjeta"],
+  ["TRANSFER", "Transferencia"], ["CASH", "Efectivo"], ["POS", "Punto de venta"], ["CARD", "Pago Móvil"],
   ["ZELLE", "Zelle"], ["BINANCE", "Binance"], ["PAYPAL", "PayPal"], ["OTHER", "Otro"],
 ];
+const SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-function ageBucket(days: number) {
-  return days <= 30 ? "0-30 días" : days <= 60 ? "31-60 días" : "Más de 60 días";
-}
-
-export function PaymentOrdersPanel({
-  orders,
-  comparison,
-  currency,
-}: {
-  orders: PaymentOrderRow[];
-  comparison: CostComparisonRow[];
-  currency: string;
-}) {
-  const [tab, setTab] = useState<"orders" | "compare">("orders");
+// Compras → Órdenes de pago (preview): cuentas por pagar con casillas para agrupar facturas en una
+// orden de pago y pagarla de una vez; cada factura admite abonos parciales desde ⋯.
+export function PaymentOrdersPanel({ orders, currency }: { orders: PaymentOrderRow[]; currency: string }) {
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const [paying, setPaying] = useState<PaymentOrderRow | null>(null);
-  const m = (c: number) => formatCurrencyCents(currency, c);
-
+  const [orderOpen, setOrderOpen] = useState(false);
+  const m = (c: number, d: 0 | 2 = 2) => money(currency, c, d);
   const total = orders.reduce((n, o) => n + o.remainingCents, 0);
-  const buckets = { "0-30 días": 0, "31-60 días": 0, "Más de 60 días": 0 } as Record<string, number>;
-  for (const o of orders) buckets[ageBucket(o.ageDays)] += o.remainingCents;
+  const suppliers = new Set(orders.map((o) => o.supplierName)).size;
+  const chosen = orders.filter((o) => sel.has(o.id));
+  const chosenTotal = chosen.reduce((n, o) => n + o.remainingCents, 0);
+  const late = orders.filter((o) => o.ageDays > 60);
 
-  const bySupplier = new Map<string, PaymentOrderRow[]>();
-  for (const o of orders) bySupplier.set(o.supplierName, [...(bySupplier.get(o.supplierName) ?? []), o]);
+  function toggle(id: string) {
+    setSel((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Segmented
-        label="Vista"
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: "orders", label: "Órdenes de pago" },
-          { value: "compare", label: "Comparativa de costos" },
-        ]}
-      />
-
-      {tab === "orders" && (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Kpi label="Por pagar" value={m(total)} />
-            {Object.entries(buckets).map(([k, v]) => (
-              <Kpi key={k} label={k} value={m(v)} warn={k === "Más de 60 días" && v > 0} />
-            ))}
-          </div>
-          {orders.length === 0 ? (
-            <p className="rounded-[19px] bg-card p-4 text-sm text-muted-foreground shadow-(--shadow-card)">
-              No debes nada a tus proveedores. Las compras a crédito aparecen aquí hasta que las pagues.
-            </p>
-          ) : (
-            [...bySupplier.entries()].map(([supplier, list]) => (
-              <section key={supplier} className="flex flex-col gap-2 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
-                <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="font-bold">{supplier}</h2>
-                  <span className="font-bold tabular-nums">{m(list.reduce((n, o) => n + o.remainingCents, 0))}</span>
+    <>
+      <KpiGrid>
+        <Kpi tone="warn" icon={<TrendingDownIcon />} label="Por pagar" value={m(total, 0)} hint={`${suppliers} proveedores`} />
+        <Kpi tone="info" icon={<BanknoteIcon />} label="Seleccionado" value={m(chosenTotal, 0)} hint={`${chosen.length} facturas marcadas`} />
+        <Kpi tone={late.length ? "bad" : "ok"} icon={<FileTextIcon />} label="Más de 60 días" value={m(late.reduce((n, o) => n + o.remainingCents, 0), 0)} hint={`${late.length} facturas con atraso`} />
+      </KpiGrid>
+      <SectionCard title="Cuentas por pagar" subtitle="Compras a crédito con saldo, de la más antigua a la más reciente · marca facturas para agrupar en una orden de pago">
+        {orders.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">No debes nada a tus proveedores. Las compras a crédito aparecen aquí hasta que las pagues.</p>
+        ) : (
+          <>
+            {orders.map((o) => {
+              const d = new Date(o.createdAt);
+              return (
+                <div key={o.id} className="flex items-center justify-between gap-2.5 border-b py-2.5">
+                  <label className="flex min-w-0 cursor-pointer items-center gap-3">
+                    <input type="checkbox" checked={sel.has(o.id)} onChange={() => toggle(o.id)} className="size-[22px] flex-none rounded-md accent-(--primary)" />
+                    <span className="min-w-0">
+                      <b className="block">{o.supplierName}</b>
+                      <small className="block text-xs text-muted-foreground">
+                        Compra Nº {o.controlNumber ?? "—"} · {d.getDate()} {SHORT[d.getMonth()]} · {o.paidCents > 0 ? `Parcial · abonado ${m(o.paidCents)}` : "A crédito"}
+                        {o.ageDays > 60 && <span className="font-bold text-destructive"> · hace {o.ageDays} días</span>}
+                      </small>
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <b className="tabular-nums">{m(o.remainingCents)}</b>
+                    <RowMenu items={[{ label: "Registrar abono", onSelect: () => setPaying(o) }]} />
+                  </div>
                 </div>
-                <ul className="flex flex-col divide-y">
-                  {list.map((o) => (
-                    <li key={o.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-                      <span className="min-w-0 flex-1">
-                        <span className="font-semibold">Compra Nº {o.controlNumber ?? "—"}</span>
-                        <span className={`ml-2 text-xs ${o.ageDays > 60 ? "font-bold text-destructive" : "text-muted-foreground"}`}>hace {o.ageDays} días</span>
-                        {o.paidCents > 0 && (
-                          <span className="block text-xs text-muted-foreground">
-                            Abonado {m(o.paidCents)} de {m(o.owedCents)}
-                          </span>
-                        )}
-                      </span>
-                      <span className="tabular-nums font-bold">{m(o.remainingCents)}</span>
-                      <Button size="sm" onClick={() => setPaying(o)}>
-                        Pagar
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))
-          )}
-        </>
-      )}
-
-      {tab === "compare" && (
-        <>
-          <p className="text-sm text-muted-foreground">
-            Lo último que pagaste a cada proveedor por el mismo producto. Solo aparecen productos que has comprado a dos o más proveedores.
-          </p>
-          {comparison.length === 0 ? (
-            <p className="rounded-[19px] bg-card p-4 text-sm text-muted-foreground shadow-(--shadow-card)">
-              Aún no hay productos comprados a más de un proveedor.
-            </p>
-          ) : (
-            comparison.map((r) => (
-              <section key={r.productName} className="flex flex-col gap-2 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
-                <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="font-bold">{r.productName}</h2>
-                  {r.savingPct > 0 && <span className="rounded-full bg-success/14 px-2.5 py-0.5 text-xs font-bold text-success">Ahorras hasta {r.savingPct} %</span>}
-                </div>
-                <ul className="flex flex-col gap-1.5 text-sm">
-                  {r.offers.map((o, i) => (
-                    <li key={o.supplier} className="flex items-center gap-3">
-                      <span className="min-w-0 flex-1 truncate">
-                        {o.supplier}
-                        {i === 0 && <span className="ml-2 rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-bold text-primary">Más barato</span>}
-                      </span>
-                      <span className="text-xs text-muted-foreground">{new Date(o.date).toLocaleDateString("es-VE")}</span>
-                      <span className="w-24 text-right font-bold tabular-nums">{m(o.lastCostCents)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))
-          )}
-        </>
-      )}
-
+              );
+            })}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3">
+              <b>Seleccionado: {m(chosenTotal)}</b>
+              <Button disabled={chosen.length === 0} onClick={() => setOrderOpen(true)}>
+                <BanknoteIcon aria-hidden /> Crear orden de pago
+              </Button>
+            </div>
+          </>
+        )}
+      </SectionCard>
       {paying && <PayDialog order={paying} currency={currency} onClose={() => setPaying(null)} />}
-    </div>
+      {orderOpen && (
+        <OrderSheet
+          orders={chosen}
+          currency={currency}
+          onClose={() => setOrderOpen(false)}
+          onPaid={() => {
+            setOrderOpen(false);
+            setSel(new Set());
+          }}
+        />
+      )}
+    </>
   );
 }
 
-function Kpi({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+// Orden de pago: agrupa las facturas marcadas y las paga todas con un mismo método y referencia.
+function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrderRow[]; currency: string; onClose: () => void; onPaid: () => void }) {
+  const router = useRouter();
+  const [method, setMethod] = useState("TRANSFER");
+  const [ref, setRef] = useState("");
+  const [pending, start] = useTransition();
+  const total = orders.reduce((n, o) => n + o.remainingCents, 0);
+  function pay() {
+    start(async () => {
+      let ok = 0;
+      for (const o of orders) {
+        const r = await registerPurchasePayment(o.id, method, o.remainingCents, ref);
+        if (r.success) ok++;
+        else toast.error(`${o.supplierName}: ${r.error}`);
+      }
+      if (ok) toast.success(`Orden pagada · ${ok} factura(s) por ${money(currency, total)}`);
+      router.refresh();
+      onPaid();
+    });
+  }
   return (
-    <div className="rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`text-lg font-bold tabular-nums ${warn ? "text-destructive" : ""}`}>{value}</p>
-    </div>
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Orden de pago</DialogTitle>
+          <DialogDescription>
+            {orders.length} facturas de {new Set(orders.map((o) => o.supplierName)).size} proveedores
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-2">
+          {orders.map((o) => (
+            <div key={o.id} className="flex items-center justify-between gap-2.5 border-b py-2.5">
+              <div className="min-w-0">
+                <b>{o.supplierName}</b>
+                <small className="block text-xs text-muted-foreground">Compra Nº {o.controlNumber ?? "—"}</small>
+              </div>
+              <b className="tabular-nums">{money(currency, o.remainingCents)}</b>
+            </div>
+          ))}
+          <div className="flex items-center justify-between gap-2.5 py-2.5">
+            <b>Total de la orden</b>
+            <b className="tabular-nums">{money(currency, total)}</b>
+          </div>
+        </div>
+        <Field label="Método de pago">
+          <select className={FIELD_CONTROL} value={method} onChange={(e) => setMethod(e.target.value)}>
+            {METHODS.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Referencia (opcional)">
+          <input className={FIELD_CONTROL} value={ref} onChange={(e) => setRef(e.target.value)} />
+        </Field>
+        <SheetActions>
+          <Button disabled={pending} onClick={pay}>
+            Marcar pagada
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+        </SheetActions>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 // «Fraccionar pago»: se puede abonar una parte; cuando se cubre todo, la compra queda pagada.
-function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow; currency: string; onClose: () => void }) {
+export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow; currency: string; onClose: () => void }) {
   const router = useRouter();
   const [method, setMethod] = useState("TRANSFER");
   const [amount, setAmount] = useState((order.remainingCents / 100).toFixed(2));
   const [ref, setRef] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const cents = Math.round((parseFloat(amount.replace(",", ".")) || 0) * 100);
   const left = order.remainingCents - cents;
 
   function save() {
-    setError(null);
     start(async () => {
       const r = await registerPurchasePayment(order.id, method, cents, ref);
       if (r.success) {
+        toast.success("Pago registrado");
         onClose();
         router.refresh();
-      } else setError(r.error);
+      } else toast.error(r.error);
     });
   }
 
@@ -169,49 +194,37 @@ function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow; curre
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Pagar a {order.supplierName}</DialogTitle>
+          <DialogTitle>Registrar pago a {order.supplierName}</DialogTitle>
           <DialogDescription>
-            Compra Nº {order.controlNumber ?? "—"} · saldo {formatCurrencyCents(currency, order.remainingCents)}. Puedes pagar una parte y el resto después.
+            Compra Nº {order.controlNumber ?? "—"} · saldo {money(currency, order.remainingCents)}. Puedes pagar una parte y el resto después.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="po-method">Método</Label>
-            <select id="po-method" value={method} onChange={(e) => setMethod(e.target.value)} className="h-10 rounded-xl border bg-background px-2 text-sm">
-              {METHODS.map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="po-amount">Monto a pagar</Label>
-            <Input id="po-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="po-ref">Referencia (opcional)</Label>
-            <Input id="po-ref" value={ref} onChange={(e) => setRef(e.target.value)} />
-          </div>
-          {cents > 0 && cents <= order.remainingCents && (
-            <p className="text-sm text-muted-foreground">
-              {left === 0 ? "Con este pago la compra queda pagada." : `Quedará un saldo de ${formatCurrencyCents(currency, left)}.`}
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
+        <Field label="Método">
+          <select className={FIELD_CONTROL} value={method} onChange={(e) => setMethod(e.target.value)}>
+            {METHODS.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Monto a pagar">
+          <input className={FIELD_CONTROL} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </Field>
+        <Field label="Referencia (opcional)">
+          <input className={FIELD_CONTROL} value={ref} onChange={(e) => setRef(e.target.value)} />
+        </Field>
+        {cents > 0 && cents <= order.remainingCents && (
+          <p className="mt-2 text-sm text-muted-foreground">{left === 0 ? "Con este pago la compra queda pagada." : `Quedará un saldo de ${money(currency, left)}.`}</p>
+        )}
+        <SheetActions>
           <Button disabled={pending || cents <= 0 || cents > order.remainingCents} onClick={save}>
             Registrar pago
           </Button>
-        </DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+        </SheetActions>
       </DialogContent>
     </Dialog>
   );

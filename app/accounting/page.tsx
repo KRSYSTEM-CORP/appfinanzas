@@ -1,84 +1,54 @@
 import { requireAccountingPlan, requirePermission } from "@/lib/session";
-import { AccountingHub } from "@/components/accounting/AccountingHub";
+import { AdminShell } from "@/components/accounting/AdminShell";
+import { BalanceSummary } from "@/components/accounting/BalanceSummary";
+import { BreakevenByCategory } from "@/components/accounting/BreakevenByCategory";
+import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
+import { PeriodBar } from "@/components/shared/PeriodBar";
+import { revenueTotals } from "@/lib/actions/reports";
+import { costOfGoodsSold, expensesTotal, categoryMargins, productMargins } from "@/lib/actions/finance";
+import { commissionsTotal } from "@/lib/actions/seller-reports";
+import { getExchangeRateInfo } from "@/lib/actions/settings";
+import { monthProjection } from "@/lib/admin-balance";
+import { selectionLabel } from "@/lib/period-label";
+import { parseDateRangeSelection, todayDateString } from "@/lib/report-types";
 
-const sections = [
-  {
-    href: "/finance",
-    title: "Finanzas",
-    description: "Ingresos, gastos, ganancia neta y desglose por moneda.",
-  },
-  {
-    href: "/customers/receivables",
-    title: "Cuentas por cobrar",
-    description: "Ventas a crédito con saldo pendiente y abonos por registrar.",
-  },
-  {
-    href: "/suppliers",
-    title: "Proveedores",
-    description: "Directorio de proveedores y sus datos de contacto.",
-  },
-  {
-    href: "/purchases",
-    title: "Compras",
-    description: "Órdenes de compra, cuentas por pagar y estado de cada una.",
-  },
-  {
-    href: "/purchases/orders",
-    title: "Órdenes de pago",
-    description: "Lo que debes a cada proveedor, con antigüedad, abonos y comparativa de costos.",
-  },
-  {
-    href: "/payroll",
-    title: "Nómina",
-    description: "Empleados, pago por quincena con comprobante e historial de pagos.",
-  },
-  {
-    href: "/accounting/consumption",
-    title: "Consumo interno",
-    description: "Retiros de inventario por socios o personal.",
-  },
-  {
-    href: "/accounting/accounts",
-    title: "Saldos de cuentas",
-    description: "Saldo por cuenta en $ y Bs, y el método de pago que lo alimenta.",
-  },
-  {
-    href: "/settings",
-    title: "Cuentas y perfiles",
-    description: "Datos para cobrar, perfiles y PIN del equipo.",
-  },
-  {
-    href: "/documents",
-    title: "Documentos",
-    description: "Notas de entrega, tickets y comprobantes emitidos.",
-  },
-  {
-    href: "/billing",
-    title: "Suscripción",
-    description: "Plan, vencimiento y pagos de tu suscripción mensual.",
-  },
-  {
-    href: "/accounting/statements",
-    title: "Estados financieros",
-    description: "Movimientos, estado de resultados, situación financiera, análisis de costo y resumen de IVA.",
-  },
-  {
-    href: "/tax-book",
-    title: "Libro de Contabilidad",
-    description: "Libro de compras y ventas para la declaración de IVA.",
-  },
-];
+export const dynamic = "force-dynamic";
 
-export default async function AccountingPage() {
+const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+// Administración → Balance → Resumen.
+export default async function AccountingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string; year?: string; months?: string; from?: string; to?: string }>;
+}) {
   await requirePermission("admin");
   await requireAccountingPlan();
+  const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
+  const today = todayDateString();
+  const [totals, cogsCents, expensesCents, commissionsCents, categories, products, { referenceCurrency, rate, exchangeRateEnabled }] = await Promise.all([
+    revenueTotals(range),
+    costOfGoodsSold(range),
+    expensesTotal(range),
+    commissionsTotal(range),
+    categoryMargins(range),
+    productMargins(range),
+    getExchangeRateInfo(),
+  ]);
+  const b = { salesCents: totals.totalEurCents, cogsCents, expensesCents, commissionsCents };
+  const label = selectionLabel(range, today);
+  const [y, mo, d] = today.split("-").map(Number);
+  const days = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const projection =
+    range.kind === "preset" && range.preset === "month" ? { cents: monthProjection(b.salesCents, d, days), day: d, days, monthName: MONTHS[mo - 1] } : null;
+
   return (
-    <div className="flex flex-col gap-4 px-4 py-5">
-      <div>
-        <p className="kr-eyebrow">Contabilidad renovada</p>
-        <h1 className="kr-h1">Administración</h1>
-      </div>
-      <AccountingHub sections={sections} />
-    </div>
+    <AdminShell group="balance" sub="resumen">
+      <PeriodBar label={label}>
+        <DateRangeSwitcher selection={range} />
+      </PeriodBar>
+      <BalanceSummary b={b} currency={referenceCurrency} rate={exchangeRateEnabled ? rate : null} periodLabel={label} projection={projection} />
+      <BreakevenByCategory categories={categories} products={products} expensesCents={expensesCents} salesCents={b.salesCents} currency={referenceCurrency} />
+    </AdminShell>
   );
 }

@@ -1,115 +1,105 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HBars, StatsCard } from "@/components/finance/StatsUi";
+import s from "@/components/finance/stats.module.css";
 import { formatCurrencyCents } from "@/lib/currencies";
-import { PAYMENT_METHOD_LABELS } from "@/lib/format";
-import type { PaymentMethod, ReferenceCurrency } from "@prisma/client";
-import type { PaymentMixRow, PurchasedProductRow, RotationRow } from "@/lib/actions/reports";
+import { inventoryDays, rotationStatus } from "@/lib/stats-view";
+import type { PurchasedProductRow, RotationRow } from "@/lib/actions/reports";
 
-function Empty({ children }: { children: string }) {
-  return <p className="py-6 text-center text-sm text-muted-foreground">{children}</p>;
-}
+const und = (v: number) => `${v.toLocaleString("es-VE")} und.`;
 
-// Distribución de ventas, productos más comprados y rotación del periodo.
+// Más vendidos · Menos vendidos · Lo que más compramos · Mayor rotación, en dos
+// filas de dos como la preview.
 export function StatsInsights({
-  mix,
+  top,
+  bottom,
   purchased,
   rotation,
-  referenceCurrency,
+  days,
+  periodLabel,
+  currency,
 }: {
-  mix: PaymentMixRow[];
+  top: { productName: string; quantity: number; revenueCents: number }[];
+  bottom: { productName: string; quantity: number }[];
   purchased: PurchasedProductRow[];
   rotation: RotationRow[];
-  referenceCurrency: ReferenceCurrency;
+  days: number;
+  periodLabel: string;
+  currency: string;
 }) {
-  const money = (c: number) => formatCurrencyCents(referenceCurrency, c);
-  const total = mix.reduce((a, r) => a + r.totalCents, 0);
+  const money = (c: number) => formatCurrencyCents(currency, c);
+  const top5 = [...top].sort((a, b) => b.quantity - a.quantity).slice(0, 5);
+  const low5 = bottom.slice(0, 5);
+  const buy5 = purchased.slice(0, 5);
+  const unitMax = Math.max(1, ...top5.map((x) => x.quantity), ...low5.map((x) => x.quantity));
+  const rot5 = rotation.slice(0, 5).map((r) => ({ ...r, days: inventoryDays(r.stock, r.sold, days) }));
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <Card>
-        <CardHeader>
-          <CardTitle>Distribución de ventas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {mix.length === 0 ? (
-            <Empty>Sin cobros en este período.</Empty>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {mix.map((r) => {
-                const pct = total > 0 ? Math.round((r.totalCents / total) * 100) : 0;
-                return (
-                  <li key={r.method} className="flex flex-col gap-1">
-                    <div className="flex items-baseline justify-between gap-2 text-sm">
-                      <span className="truncate">{PAYMENT_METHOD_LABELS[r.method as PaymentMethod] ?? r.method}</span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground">
-                        {money(r.totalCents)} · {pct} %
-                      </span>
-                    </div>
-                    <div
-                      className="h-1.5 overflow-hidden rounded-full bg-muted"
-                      role="progressbar"
-                      aria-label={`${pct} % de las ventas`}
-                      aria-valuenow={pct}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                    >
-                      <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Productos más comprados</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {purchased.length === 0 ? (
-            <Empty>Sin compras en este período.</Empty>
-          ) : (
-            <ol className="flex flex-col divide-y text-sm">
-              {purchased.map((p) => (
-                <li key={p.name} className="flex items-baseline justify-between gap-2 py-1.5">
-                  <span className="truncate">{p.name}</span>
-                  <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {p.quantity} u. · {money(p.totalCents)}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Rotación de inventario</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {rotation.length === 0 ? (
-            <Empty>Sin ventas de productos con control de stock.</Empty>
+    <>
+      <div className={`${s.grid} ${s.g2}`}>
+        <StatsCard title="Más vendidos" sub={`Unidades vendidas · ${periodLabel}`}>
+          {top5.length === 0 ? (
+            <p className={s.empty}>Sin ventas de productos en este período.</p>
           ) : (
             <>
-              <ol className="flex flex-col divide-y text-sm">
-                {rotation.map((r) => (
-                  <li key={r.name} className="flex items-baseline justify-between gap-2 py-1.5">
-                    <span className="truncate">{r.name}</span>
-                    <span className="shrink-0 tabular-nums text-muted-foreground">
-                      {r.sold} vendidas · stock {r.stock} · <b className="text-foreground">{r.turns}×</b>
-                    </span>
-                  </li>
-                ))}
-              </ol>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Rotación = unidades vendidas ÷ stock actual. Más alto, más rápido se agota.
+              <HBars max={unitMax} rows={top5.map((x) => ({ label: x.productName, value: x.quantity, display: und(x.quantity), color: "var(--chart-1)" }))} />
+              <p className={s.note}>
+                Líder: <b>{top5[0].productName}</b> con {money(top5[0].revenueCents)} en ventas.
               </p>
             </>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </StatsCard>
+        <StatsCard title="Menos vendidos" sub="Los que menos se mueven · candidatos a promoción">
+          {low5.length === 0 ? (
+            <p className={s.empty}>Sin productos activos para mostrar.</p>
+          ) : (
+            <>
+              <HBars max={unitMax} rows={low5.map((x) => ({ label: x.productName, value: x.quantity, display: und(x.quantity), color: "var(--chart-4)" }))} />
+              <p className={s.note}>
+                {low5[0].productName} vendió {low5[0].quantity} {low5[0].quantity === 1 ? "unidad" : "unidades"}: prueba un descuento o combo.
+              </p>
+            </>
+          )}
+        </StatsCard>
+      </div>
+      <div className={`${s.grid} ${s.g2}`}>
+        <StatsCard title="Lo que más compramos" sub={`Unidades pedidas a proveedores · ${periodLabel}`}>
+          {buy5.length === 0 ? (
+            <p className={s.empty}>Sin compras en este período.</p>
+          ) : (
+            <>
+              <HBars rows={buy5.map((x) => ({ label: x.name, value: x.quantity, display: und(x.quantity), color: "var(--chart-2)", title: `${x.name}: ${und(x.quantity)} · ${money(x.totalCents)}` }))} />
+              <p className={s.note}>
+                Más pedido: <b>{buy5[0].name}</b> ({money(buy5[0].totalCents)} en compras).
+              </p>
+            </>
+          )}
+        </StatsCard>
+        <StatsCard title="Mayor rotación" sub="Veces que se renueva el stock · días de inventario">
+          {rot5.length === 0 ? (
+            <p className={s.empty}>Sin ventas de productos con control de stock.</p>
+          ) : (
+            <>
+              {rot5.map((x, i) => {
+                const st = rotationStatus(x.days);
+                return (
+                  <div key={x.name} className={`${s.li} ${s.a} ${s.fadeUp}`} style={{ ["--i" as string]: i }}>
+                    <div>
+                      <b>{x.name}</b>
+                      <small>{x.days >= 999 ? "Sin ventas" : `${x.days} ${x.days === 1 ? "día" : "días"} de inventario`}</small>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span className={s.pill} data-tone={st.tone}>
+                        {st.label}
+                      </span>
+                      <b className={s.mono}>{x.turns.toLocaleString("es-VE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}×</b>
+                    </div>
+                  </div>
+                );
+              })}
+              <p className={s.note}>Rotación = unidades vendidas ÷ stock actual. Alta rotación con poco stock: pide más a tus proveedores.</p>
+            </>
+          )}
+        </StatsCard>
+      </div>
+    </>
   );
 }

@@ -2,8 +2,11 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import type { PrintPaperSize } from "@prisma/client";
+import { FileTextIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PrintPaperSizeForm } from "@/components/settings/PrintPaperSizeForm";
+import { FieldTextarea, Field, ListRow, SCard, SubTitle, TWO_COLS } from "@/components/settings/team-print-kit";
 import { downloadWorkbook } from "@/lib/spreadsheet";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { listPendingSales } from "@/lib/offline/sync";
@@ -15,9 +18,9 @@ import {
 } from "@/lib/actions/data-export";
 
 const PRINTERS = [
-  { id: "t80", label: "Ticket 80 mm", note: "Principal", page: "80mm auto", width: "72mm" },
-  { id: "t58", label: "Ticket 58 mm", note: "Reserva", page: "58mm auto", width: "50mm" },
-  { id: "carta", label: "Hoja carta", note: "Documentos", page: "letter", width: "180mm" },
+  { id: "t80", label: "Ticket 80 mm", desc: "Impresora térmica del mostrador", note: "Principal", page: "80mm auto", width: "72mm" },
+  { id: "t58", label: "Ticket 58 mm", desc: "Impresora portátil", note: "Reserva", page: "58mm auto", width: "50mm" },
+  { id: "carta", label: "Hoja carta", desc: "Impresora de oficina / PDF", note: "Facturas y presupuestos", page: "letter", width: "180mm" },
 ];
 
 // Abre el diálogo de impresión con una página de prueba en el formato elegido.
@@ -39,10 +42,10 @@ function printTest(p: (typeof PRINTERS)[number]) {
   w.print();
 }
 
-export function DataPanel({ initialEmails }: { initialEmails: string[] }) {
+export function DataPanel({ initialEmails, currentPaperSize, canManage }: { initialEmails: string[]; currentPaperSize: PrintPaperSize; canManage: boolean }) {
   const online = useOnlineStatus();
   const [pending, setPending] = useState<number | null>(null);
-  const [emails, setEmails] = useState(initialEmails.join(", "));
+  const [emails, setEmails] = useState(initialEmails.join("\n"));
   const [busy, start] = useTransition();
 
   useEffect(() => {
@@ -84,66 +87,63 @@ export function DataPanel({ initialEmails }: { initialEmails: string[] }) {
   }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-5">
-      <section className="flex flex-col gap-2 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
-        <h3 className="font-bold">Impresoras</h3>
-        <ul className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-3.5">
+      <div className={TWO_COLS}>
+        <SCard title="Impresoras y formato" description="Ticket térmico, hoja carta, PDF y WhatsApp">
           {PRINTERS.map((p) => (
-            <li key={p.id} className="flex items-center gap-3 text-sm">
-              <span className="min-w-0 flex-1">
-                <span className="font-semibold">{p.label}</span> <span className="text-muted-foreground">· {p.note}</span>
-              </span>
-              <Button size="sm" variant="outline" onClick={() => printTest(p)}>
+            <ListRow key={p.id} title={p.label} sub={`${p.desc} · ${p.note}`}>
+              <Button type="button" variant="outline" onClick={() => printTest(p)}>
                 Imprimir prueba
               </Button>
-            </li>
+            </ListRow>
           ))}
-        </ul>
-      </section>
+          <p className="mt-2 text-[13px] text-muted-foreground">Todo ticket se puede imprimir, descargar en PDF o enviar por WhatsApp.</p>
+          <PrintPaperSizeForm currentPaperSize={currentPaperSize} />
+        </SCard>
 
-      <section className="flex flex-col gap-2 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
-        <h3 className="font-bold">Exportaciones a Excel</h3>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled={busy} onClick={() => exportSheet("cobros")}>
-            Respaldo de cobros
-          </Button>
-          <Button variant="outline" disabled={busy} onClick={() => exportSheet("ventas")}>
-            Historial de ventas
-          </Button>
-        </div>
-      </section>
+        {canManage && (
+          <SCard title="Datos y exportaciones" description="Respaldo completo de tus cobros">
+            <p className="mb-2.5 text-muted-foreground">Excel con todos tus cobros desde el primer día: fecha, hora, método, referencia y monto en Bs o divisa.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" disabled={busy} onClick={() => exportSheet("ventas")}>
+                <FileTextIcon /> Historial de ventas (Excel)
+              </Button>
+              <Button type="button" variant="outline" disabled={busy} onClick={() => exportSheet("cobros")}>
+                <FileTextIcon /> Respaldo de cobros (Excel)
+              </Button>
+            </div>
+            <SubTitle className="mt-4">Reporte diario por correo</SubTitle>
+            <Field label="Correos, uno por línea (máx. 5)" htmlFor="m-c">
+              <FieldTextarea
+                id="m-c"
+                aria-label="Correos del reporte diario"
+                rows={Math.max(1, Math.min(5, emails.split("\n").length))}
+                value={emails}
+                onChange={(e) => setEmails(e.target.value)}
+                placeholder="dueno@correo.com"
+              />
+            </Field>
+            <p className="mt-2 text-[13px] text-muted-foreground">Se envía cada noche con las ventas del día, junto con la actualización de la tasa.</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button type="button" disabled={busy} onClick={save}>
+                Guardar
+              </Button>
+              <Button type="button" variant="outline" disabled={busy} onClick={test}>
+                Enviar prueba
+              </Button>
+            </div>
+          </SCard>
+        )}
+      </div>
 
-      <section className="flex flex-col gap-2 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
-        <h3 className="font-bold">Reporte diario por correo</h3>
-        <p className="text-sm text-muted-foreground">
-          Hasta 5 correos separados por coma. Se envía cada noche con las ventas del día, junto con la actualización de la tasa.
-        </p>
-        <Input
-          aria-label="Correos del reporte diario"
-          value={emails}
-          onChange={(e) => setEmails(e.target.value)}
-          placeholder="dueno@correo.com, contador@correo.com"
-        />
-        <div className="flex gap-2">
-          <Button disabled={busy} onClick={save}>
-            Guardar
-          </Button>
-          <Button variant="outline" disabled={busy} onClick={test}>
-            Enviar prueba
-          </Button>
-        </div>
-      </section>
-
-      <section className="flex items-center gap-3 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
-        <span className={`size-3 rounded-full ${online ? "bg-emerald-500" : "bg-amber-500"}`} aria-hidden />
-        <div className="text-sm">
-          <p className="font-bold">Modo sin internet</p>
-          <p className="text-muted-foreground">
-            {online ? "Conectado." : "Sin conexión: las ventas se guardan en este equipo."}{" "}
-            {pending === null ? "" : pending === 0 ? "No hay ventas pendientes por sincronizar." : `${pending} ${pending === 1 ? "venta pendiente" : "ventas pendientes"} por sincronizar.`}
-          </p>
-        </div>
-      </section>
+      <SCard title="Modo sin internet" description="Las ventas se guardan en este equipo durante un corte y se sincronizan al volver la conexión">
+        <ListRow
+          title={online ? "Conectado a internet" : "Sin conexión"}
+          sub={pending === null ? undefined : pending === 0 ? "No hay ventas pendientes por sincronizar." : `${pending} ${pending === 1 ? "venta pendiente" : "ventas pendientes"} por sincronizar.`}
+        >
+          <span className={`size-3 rounded-full ${online ? "bg-[var(--ok-solid)]" : "bg-[var(--warn-solid)]"}`} aria-hidden />
+        </ListRow>
+      </SCard>
     </div>
   );
 }

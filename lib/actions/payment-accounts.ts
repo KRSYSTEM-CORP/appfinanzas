@@ -75,6 +75,18 @@ export async function setPaymentAccountActive(id: string, active: boolean): Prom
   return { success: true };
 }
 
+// Interruptor de un método en Ajustes → Pagos y Moneda: muestra u oculta en el POS todas las
+// cuentas de cobro de ese tipo.
+export async function setPaymentAccountsActiveByKind(kind: PaymentAccountKind, active: boolean): Promise<ActionResult> {
+  const { companyId } = await requireManager();
+  const parsed = AccountSchema.shape.kind.safeParse(kind);
+  if (!parsed.success) return { success: false, error: "Método inválido" };
+  await withTenant(companyId, (tx) => tx.paymentAccount.updateMany({ where: { companyId, kind: parsed.data }, data: { active } }));
+  revalidatePath("/settings");
+  revalidatePath("/pos");
+  return { success: true };
+}
+
 export async function deletePaymentAccount(id: string): Promise<ActionResult> {
   const { companyId } = await requireManager();
   await withTenant(companyId, (tx) => tx.paymentAccount.deleteMany({ where: { id, companyId } }));

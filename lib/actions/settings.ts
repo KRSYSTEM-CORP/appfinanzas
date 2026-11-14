@@ -6,7 +6,10 @@ import { withTenant } from "@/lib/tenant-db";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { fetchBcvRate } from "@/lib/bcv-rate";
+import { fetchBcvOfficial } from "@/lib/bcv-official";
 import { isRateStale } from "@/lib/bcv-parse";
+import { classifyBcvRates, type BcvOfficialInfo } from "@/lib/bcv-next-rate";
+import { normalizeWhatsapp } from "@/lib/business-country";
 import {
   BrandingSchema,
   ChangePasswordSchema,
@@ -291,6 +294,66 @@ export async function fetchAndUpdateBcvRate(): Promise<ActionResult> {
   return { success: true };
 }
 
+// Lo que publica hoy la página oficial del BCV para la moneda de referencia de la empresa:
+// la fecha valor de la tasa activa y, si ya hay una publicada para un día posterior, la
+// «próxima tasa». Se consulta desde el cliente al abrir Ajustes para no frenar la página.
+export async function getBcvOfficialInfo(): Promise<BcvOfficialInfo | null> {
+  const { companyId } = await requireManager();
+  const company = await withTenant(companyId, (tx) =>
+    tx.company.findUnique({
+      where: { id: companyId },
+      select: { localCurrencyCode: true, referenceCurrency: true, exchangeRate: true },
+    })
+  );
+  if (company?.localCurrencyCode !== "VES") return null;
+  try {
+    const official = await fetchBcvOfficial();
+    const current = company.exchangeRate != null ? Number(company.exchangeRate) : null;
+    return classifyBcvRates(official, company.referenceCurrency, current);
+  } catch {
+    return null;
+  }
+}
+
+// «Adelantar la próxima tasa»: aplica ya la tasa que el BCV publicó para el día siguiente.
+// Vuelve a leer el BCV en el servidor; nunca confía en un valor enviado por el navegador.
+export async function applyBcvNextRate(): Promise<ActionResult> {
+  const { companyId } = await requireManager();
+  const company = await withTenant(companyId, (tx) =>
+    tx.company.findUnique({
+      where: { id: companyId },
+      select: { localCurrencyCode: true, referenceCurrency: true, exchangeRate: true },
+    })
+  );
+  if (company?.localCurrencyCode !== "VES") {
+    return { success: false, error: "La tasa del BCV solo aplica para bolívares (VES)." };
+  }
+  let info: BcvOfficialInfo;
+  try {
+    const official = await fetchBcvOfficial();
+    const current = company.exchangeRate != null ? Number(company.exchangeRate) : null;
+    info = classifyBcvRates(official, company.referenceCurrency, current);
+  } catch {
+    return { success: false, error: "No se pudo consultar la tasa del BCV. Intenta de nuevo." };
+  }
+  if (!info.next) return { success: false, error: "El BCV aún no publica una próxima tasa." };
+  const rate = info.next.rate;
+
+  await withTenant(companyId, (tx) =>
+    tx.company.update({
+      where: { id: companyId },
+      data: { exchangeRate: rate, exchangeRateUpdatedAt: new Date() },
+    })
+  );
+
+  await invalidateCache(`exchangeRateInfo:${companyId}`);
+  revalidatePath("/settings");
+  revalidatePath("/pos");
+  revalidatePath("/inventory");
+  revalidatePath("/reports");
+  return { success: true };
+}
+
 export type BrandingInfo = {
   logoDataUrl: string | null;
   brandColor: string | null;
@@ -402,6 +465,7 @@ export async function updateFiscalData(formData: FormData): Promise<ActionResult
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
+  const country = clean(formData.get("businessCountry"), 60);
   await withTenant(companyId, (tx) =>
     tx.company.update({
       where: { id: companyId },
@@ -410,8 +474,8 @@ export async function updateFiscalData(formData: FormData): Promise<ActionResult
         fiscalRif: parsed.data.fiscalRif ?? null,
         fiscalAddress: parsed.data.fiscalAddress ?? null,
         fiscalPhone: parsed.data.fiscalPhone ?? null,
-        businessCountry: clean(formData.get("businessCountry"), 60),
-        businessWhatsapp: clean(formData.get("businessWhatsapp"), 30)?.replace(/[^\d+]/g, "") || null,
+        businessCountry: country,
+        businessWhatsapp: normalizeWhatsapp(clean(formData.get("businessWhatsapp"), 30) ?? "", country) || null,
         businessInstagram: clean(formData.get("businessInstagram"), 40)?.replace(/^@/, "") || null,
       },
     })

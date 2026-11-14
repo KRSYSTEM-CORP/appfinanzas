@@ -8,6 +8,8 @@ import { notifyLive, posChannel } from "@/lib/realtime";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { PRODUCT_LIST_LIMIT, type ListedProduct } from "@/lib/product-image";
 import { ProductSchema, ProductUpdateRowSchema } from "@/lib/validations";
+import { parseImageUrlCell } from "@/lib/bulk-image";
+import { fetchImageAsDataUrl } from "@/lib/bulk-image-server";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type TaxCategory } from "@prisma/client";
 import { recordStockMovement } from "@/lib/stock-movements";
@@ -436,7 +438,25 @@ export type BulkImportRow = {
   wholesaleMinQty?: unknown;
   bulkPrice?: unknown;
   bulkMinQty?: unknown;
+  imageUrl?: unknown;
 };
+
+// Resuelve la columna "Imagen" (URL) de cada fila a un data URL, fuera de la
+// transacción para no retenerla durante las descargas. Devuelve por fila la
+// imagen (undefined = sin cambio) o el error.
+async function resolveRowImages(rows: { imageUrl?: unknown }[]): Promise<({ dataUrl?: string; error?: string })[]> {
+  const cache = new Map<string, { ok: true; dataUrl: string } | { ok: false; error: string }>();
+  const out: ({ dataUrl?: string; error?: string })[] = [];
+  for (const row of rows) {
+    const cell = parseImageUrlCell(row.imageUrl);
+    if (cell.kind === "blank") { out.push({}); continue; }
+    if (cell.kind === "error") { out.push({ error: cell.error }); continue; }
+    let r = cache.get(cell.url);
+    if (!r) { r = await fetchImageAsDataUrl(cell.url); cache.set(cell.url, r); }
+    out.push(r.ok ? { dataUrl: r.dataUrl } : { error: r.error });
+  }
+  return out;
+}
 
 export type BulkImportResult = {
   created: number;
@@ -462,6 +482,7 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
   let created = 0;
   let updated = 0;
   const failed: { row: number; error: string }[] = [];
+  const images = await resolveRowImages(rows);
 
   await withTenant(companyId, async (tx) => {
     for (let i = 0; i < rows.length; i++) {
@@ -471,7 +492,13 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
         continue;
       }
 
-      const { price, cost, stock, trackStock, wholesalePrice, bulkPrice, ...rest } = parsed.data;
+      if (images[i].error) {
+        failed.push({ row: i + 1, error: images[i].error! });
+        continue;
+      }
+      const { price, cost, stock, trackStock, wholesalePrice, bulkPrice, image: _ignored, ...rest } = parsed.data;
+      void _ignored;
+      const imageField = images[i].dataUrl ? { imageDataUrl: images[i].dataUrl } : {};
       const resolvedStock = trackStock ? (stock ?? 0) : 0;
       const isActive = trackStock ? resolvedStock > 0 : true;
       const priceFields = {
@@ -501,7 +528,7 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
         if (existing) {
           await tx.product.update({
             where: { id: existing.id },
-            data: { ...rest, ...priceFields },
+            data: { ...rest, ...priceFields, ...imageField },
           });
           if (resolvedStock !== existing.stock) await recordStockMovement(tx, {
             companyId, branchId, productId: existing.id, productName: existing.name, actorId, actorName,
@@ -516,7 +543,7 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
             continue;
           }
           const createdProduct = await tx.product.create({
-            data: { ...rest, ...priceFields, companyId, branchId },
+            data: { ...rest, ...priceFields, ...imageField, companyId, branchId },
           });
           if (resolvedStock > 0) await recordStockMovement(tx, {
             companyId, branchId, productId: createdProduct.id, productName: createdProduct.name, actorId, actorName,
@@ -554,6 +581,7 @@ export type BulkUpdateRow = {
   wholesaleMinQty?: unknown;
   bulkPrice?: unknown;
   bulkMinQty?: unknown;
+  imageUrl?: unknown;
 };
 
 export type BulkUpdateResult = {
@@ -582,12 +610,17 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
   let updated = 0;
   const notFound: { row: number; label: string }[] = [];
   const failed: { row: number; error: string }[] = [];
+  const images = await resolveRowImages(rows);
 
   await withTenant(companyId, async (tx) => {
     for (let i = 0; i < rows.length; i++) {
       const parsed = ProductUpdateRowSchema.safeParse(rows[i]);
       if (!parsed.success) {
         failed.push({ row: i + 1, error: parsed.error.issues[0]?.message ?? "Datos inválidos" });
+        continue;
+      }
+      if (images[i].error) {
+        failed.push({ row: i + 1, error: images[i].error! });
         continue;
       }
 
@@ -641,6 +674,7 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
       if (wholesaleMinQty !== undefined) data.wholesaleMinQty = wholesaleMinQty;
       if (bulkPrice !== undefined) data.bulkPriceCents = bulkPrice;
       if (bulkMinQty !== undefined) data.bulkMinQty = bulkMinQty;
+      if (images[i].dataUrl) data.imageDataUrl = images[i].dataUrl;
 
       try {
         await tx.product.update({ where: { id: existing.id }, data });

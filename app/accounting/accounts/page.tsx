@@ -1,18 +1,40 @@
 import { requireAccountingPlan, requirePermission } from "@/lib/session";
-import { getAccountBalances } from "@/lib/actions/payment-accounts";
-import { AccountBalancesPanel } from "@/components/accounting/AccountBalancesPanel";
+import { getAccountBalances, listPaymentAccounts } from "@/lib/actions/payment-accounts";
+import { getExchangeRateInfo } from "@/lib/actions/settings";
+import { AdminShell } from "@/components/accounting/AdminShell";
+import { BankAccountsView, type BankAccount } from "@/components/accounting/BankAccountsView";
 
+export const dynamic = "force-dynamic";
+
+// Administración → Cuentas Bancarias.
 export default async function AccountsPage() {
   await requirePermission("admin");
   await requireAccountingPlan();
-  const rows = await getAccountBalances();
+  const [balances, accounts, { rate, exchangeRateEnabled, referenceCurrency }] = await Promise.all([getAccountBalances(), listPaymentAccounts(), getExchangeRateInfo()]);
+  const byId = new Map(balances.map((b) => [b.id, b]));
+  const rows: BankAccount[] = accounts.flatMap((a) => {
+    const b = byId.get(a.id);
+    return b
+      ? [
+          {
+            id: a.id,
+            kind: a.kind,
+            bankKey: a.bankKey,
+            bankName: a.bankName,
+            holder: a.holder,
+            accountNumber: a.accountNumber,
+            docId: a.docId,
+            currency: b.currency,
+            linkedMethod: b.linkedMethod,
+            openingCents: b.openingCents,
+            balanceCents: b.balanceCents,
+          },
+        ]
+      : [];
+  });
   return (
-    <div className="flex flex-col gap-4 px-4 py-5">
-      <div>
-        <p className="kr-eyebrow">Administración</p>
-        <h1 className="kr-h1">Cuentas Bancarias</h1>
-      </div>
-      <AccountBalancesPanel rows={rows} />
-    </div>
+    <AdminShell group="bancos" sub="cuentas">
+      <BankAccountsView accounts={rows} rate={exchangeRateEnabled ? rate : null} referenceCurrency={referenceCurrency} />
+    </AdminShell>
   );
 }

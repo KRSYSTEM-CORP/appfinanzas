@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { accountClipboardText, bankLogoSrc, defaultBankKey } from "@/lib/payment-accounts";
 import { existsSync } from "node:fs";
-import { BANKS, SERVICES } from "@/lib/payment-accounts";
+import { BANKS, SERVICES, activeMethodCount, settingsMethods } from "@/lib/payment-accounts";
+
+describe("métodos de pago de Ajustes", () => {
+  it("sin cuentas solo cuentan los métodos que no necesitan datos", () => {
+    expect(activeMethodCount([], true)).toBe(3);
+  });
+  it("suma los métodos con una cuenta visible y no cuenta las ocultas", () => {
+    expect(activeMethodCount([{ kind: "ZELLE", active: true }, { kind: "BINANCE", active: false }], true)).toBe(4);
+  });
+  it("sin tasa de cambio el efectivo es uno solo", () => {
+    const m = settingsMethods(false);
+    expect(m.find((x) => x.id === "ebs")).toBeUndefined();
+    expect(m.find((x) => x.id === "ed")?.label).toBe("Efectivo");
+  });
+});
 
 describe("cuentas de cobro", () => {
   it("devuelve el logo solo para claves conocidas", () => {

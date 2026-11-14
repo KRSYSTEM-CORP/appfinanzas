@@ -4,159 +4,122 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SectionCard, ListRow, Note } from "@/components/shared/SectionCard";
+import { Field, FieldPair, FIELD_CONTROL } from "@/components/shared/Field";
+import { SheetActions } from "@/components/shared/ConfirmSheet";
+import { Switch } from "@/components/settings/SettingsUi";
 import { updateIvaSettings, type IvaSettingsInfo } from "@/lib/actions/settings";
 
-export function IvaSettingsForm({ initial }: { initial: IvaSettingsInfo }) {
+type Values = {
+  ivaGeneralRatePercent: string;
+  ivaReducedRatePercent: string;
+  isIvaWithholdingAgent: boolean;
+  ivaWithholdingPercent: string;
+  isIgtfAgent: boolean;
+  igtfRatePercent: string;
+};
+
+function toValues(i: IvaSettingsInfo): Values {
+  return {
+    ivaGeneralRatePercent: String(i.ivaGeneralRatePercent),
+    ivaReducedRatePercent: String(i.ivaReducedRatePercent),
+    isIvaWithholdingAgent: i.isIvaWithholdingAgent,
+    ivaWithholdingPercent: String(i.ivaWithholdingPercent),
+    isIgtfAgent: i.isIgtfAgent,
+    igtfRatePercent: String(i.igtfRatePercent),
+  };
+}
+
+// Ajustes → Pagos y Moneda → «Impuestos y cargos»: IGTF, IVA y retención de IVA. Los interruptores
+// se guardan al tocarlos; «Editar» abre la hoja con las alícuotas. (El cargo por servicio aún no
+// existe en el sistema.)
+export function IvaSettingsForm({ initial, rif }: { initial: IvaSettingsInfo; rif: string | null }) {
   const router = useRouter();
-  const [ivaGeneralRatePercent, setIvaGeneralRatePercent] = useState(String(initial.ivaGeneralRatePercent));
-  const [ivaReducedRatePercent, setIvaReducedRatePercent] = useState(String(initial.ivaReducedRatePercent));
-  const [isIvaWithholdingAgent, setIsIvaWithholdingAgent] = useState(initial.isIvaWithholdingAgent);
-  const [ivaWithholdingPercent, setIvaWithholdingPercent] = useState(String(initial.ivaWithholdingPercent));
-  const [isIgtfAgent, setIsIgtfAgent] = useState(initial.isIgtfAgent);
-  const [igtfRatePercent, setIgtfRatePercent] = useState(String(initial.igtfRatePercent));
+  const [values, setValues] = useState<Values>(() => toValues(initial));
+  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function save(next: Values, done?: () => void, message = "Configuración de impuestos guardada.") {
+    const prev = values;
+    setValues(next);
     startTransition(async () => {
       const formData = new FormData();
-      formData.set("ivaGeneralRatePercent", ivaGeneralRatePercent);
-      formData.set("ivaReducedRatePercent", ivaReducedRatePercent);
-      formData.set("isIvaWithholdingAgent", String(isIvaWithholdingAgent));
-      formData.set("ivaWithholdingPercent", ivaWithholdingPercent);
-      formData.set("isIgtfAgent", String(isIgtfAgent));
-      formData.set("igtfRatePercent", igtfRatePercent);
+      for (const [k, v] of Object.entries(next)) formData.set(k, String(v));
       const result = await updateIvaSettings(formData);
       if (result.success) {
-        toast.success("Configuración de IVA guardada.");
+        toast.success(message);
+        done?.();
         router.refresh();
       } else {
+        setValues(prev);
         toast.error(result.error);
       }
     });
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-md">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="ivaGeneralRatePercent">Tasa general de IVA (%)</Label>
-          <Input
-            id="ivaGeneralRatePercent"
-            type="number"
-            min={0}
-            max={100}
-            step={1}
-            value={ivaGeneralRatePercent}
-            onChange={(e) => setIvaGeneralRatePercent(e.target.value)}
-          />
+    <SectionCard title="Impuestos y cargos" subtitle="Reglas aplicadas al calcular la cuenta">
+      <ListRow>
+        <div>
+          <b>IGTF ({values.igtfRatePercent} %)</b>
+          <small>Se cobra sobre los pagos en divisas. Desactívalo si tu empresa no cobra IGTF</small>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="ivaReducedRatePercent">Tasa reducida de IVA (%)</Label>
-          <Input
-            id="ivaReducedRatePercent"
-            type="number"
-            min={0}
-            max={100}
-            step={1}
-            value={ivaReducedRatePercent}
-            onChange={(e) => setIvaReducedRatePercent(e.target.value)}
-          />
+        <Switch on={values.isIgtfAgent} disabled={isPending} onChange={(v) => save({ ...values, isIgtfAgent: v })} label="IGTF" />
+      </ListRow>
+      <ListRow>
+        <div>
+          <b>IVA ({values.ivaGeneralRatePercent} %)</b>
+          <small>Incluido en tus precios; se desglosa en los documentos fiscales{rif ? ` con el RIF ${rif}` : ""}</small>
         </div>
-      </div>
-      <p className="text-xs text-muted-foreground -mt-2">
-        Se usan para descomponer el precio (que ya incluye IVA) en base imponible + IVA en el Libro
-        de Ventas y la Factura, según el tratamiento de IVA de cada producto.
-      </p>
+        <Button variant="outline" onClick={() => setOpen(true)}>
+          Editar
+        </Button>
+      </ListRow>
+      <ListRow>
+        <div>
+          <b>Retención de IVA ({values.ivaWithholdingPercent} %)</b>
+          <small>Si el SENIAT te designó contribuyente especial, retienes parte del IVA a tus proveedores</small>
+        </div>
+        <Switch on={values.isIvaWithholdingAgent} disabled={isPending} onChange={(v) => save({ ...values, isIvaWithholdingAgent: v })} label="Retención de IVA" />
+      </ListRow>
+      {open && <RatesSheet values={values} pending={isPending} onClose={() => setOpen(false)} onSave={(v) => save(v, () => setOpen(false))} />}
+    </SectionCard>
+  );
+}
 
-      <div className="flex flex-col gap-1.5">
-        <Label>¿Eres agente de retención de IVA?</Label>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant={!isIvaWithholdingAgent ? "default" : "outline"}
-            onClick={() => setIsIvaWithholdingAgent(false)}
-            className="flex-1"
-          >
-            No
+function RatesSheet({ values, pending, onClose, onSave }: { values: Values; pending: boolean; onClose: () => void; onSave: (v: Values) => void }) {
+  const [draft, setDraft] = useState(values);
+  const set = (k: keyof Values) => (e: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, [k]: e.target.value });
+  const num = (v: string, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void) => (
+    <input type="number" min={0} max={100} step={1} inputMode="numeric" value={v} onChange={onChange} className={FIELD_CONTROL} />
+  );
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Impuestos y cargos</DialogTitle>
+          <DialogDescription>Alícuotas que usa el sistema al calcular la cuenta</DialogDescription>
+        </DialogHeader>
+        <FieldPair>
+          <Field label="Tasa general de IVA (%)">{num(draft.ivaGeneralRatePercent, set("ivaGeneralRatePercent"))}</Field>
+          <Field label="Tasa reducida de IVA (%)">{num(draft.ivaReducedRatePercent, set("ivaReducedRatePercent"))}</Field>
+        </FieldPair>
+        <Note>Se usan para separar el precio (que ya incluye IVA) en base imponible e IVA en el Libro de Ventas y la factura, según el tratamiento de cada producto.</Note>
+        <FieldPair>
+          <Field label="Retención de IVA (%)">{num(draft.ivaWithholdingPercent, set("ivaWithholdingPercent"))}</Field>
+          <Field label="Alícuota de IGTF (%)">{num(draft.igtfRatePercent, set("igtfRatePercent"))}</Field>
+        </FieldPair>
+        <Note>El IGTF aparece desglosado en la factura y en el Libro de Ventas. Confírmalo con tu contador antes de activarlo.</Note>
+        <SheetActions>
+          <Button disabled={pending} onClick={() => onSave(draft)}>
+            Guardar
           </Button>
-          <Button
-            type="button"
-            variant={isIvaWithholdingAgent ? "default" : "outline"}
-            onClick={() => setIsIvaWithholdingAgent(true)}
-            className="flex-1"
-          >
-            Sí (contribuyente especial)
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
           </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Si el SENIAT te designó contribuyente especial, debes retener un porcentaje del IVA a tus
-          proveedores. Actívalo solo si aplica a tu empresa.
-        </p>
-      </div>
-
-      {isIvaWithholdingAgent && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="ivaWithholdingPercent">Porcentaje de retención (%)</Label>
-          <Input
-            id="ivaWithholdingPercent"
-            type="number"
-            min={0}
-            max={100}
-            step={1}
-            value={ivaWithholdingPercent}
-            onChange={(e) => setIvaWithholdingPercent(e.target.value)}
-          />
-        </div>
-      )}
-
-      <div className="flex flex-col gap-1.5">
-        <Label>¿Eres agente de percepción de IGTF?</Label>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant={!isIgtfAgent ? "default" : "outline"}
-            onClick={() => setIsIgtfAgent(false)}
-            className="flex-1"
-          >
-            No
-          </Button>
-          <Button
-            type="button"
-            variant={isIgtfAgent ? "default" : "outline"}
-            onClick={() => setIsIgtfAgent(true)}
-            className="flex-1"
-          >
-            Sí
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Si lo activas, a cada pago en divisas (Zelle, Binance, PayPal o efectivo en divisas) se le
-          calcula el IGTF, que se cobra aparte del total y aparece desglosado en la factura y en el
-          Libro de Ventas. Confírmalo con tu contador antes de activarlo.
-        </p>
-      </div>
-
-      {isIgtfAgent && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="igtfRatePercent">Alícuota de IGTF (%)</Label>
-          <Input
-            id="igtfRatePercent"
-            type="number"
-            min={0}
-            max={100}
-            step={1}
-            value={igtfRatePercent}
-            onChange={(e) => setIgtfRatePercent(e.target.value)}
-          />
-        </div>
-      )}
-
-      <Button type="submit" disabled={isPending}>
-        {isPending ? "Guardando..." : "Guardar configuración de impuestos"}
-      </Button>
-    </form>
+        </SheetActions>
+      </DialogContent>
+    </Dialog>
   );
 }

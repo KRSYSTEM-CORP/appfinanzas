@@ -40,12 +40,12 @@ export function PaymentAccountsList({
         return (
           <li
             key={a.id}
-            className={`flex flex-wrap items-center gap-3 rounded-lg border bg-card p-2.5 ${a.active ? "" : "opacity-60"}`}
+            className={`flex flex-wrap items-center gap-3 rounded-[14px] border bg-card p-2.5 ${a.active ? "" : "opacity-60"}`}
           >
-            <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-md border bg-white">
+            <span className="inline-flex h-[46px] w-[68px] shrink-0 items-center justify-center overflow-hidden rounded-[14px] bg-white px-2 py-1.5 shadow-[inset_0_0_0_1px_rgba(20,22,31,.1)]">
               {logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logo} alt={a.bankName ?? ACCOUNT_KIND_LABELS[a.kind]} className="size-9 object-contain" />
+                <img src={logo} alt={a.bankName ?? ACCOUNT_KIND_LABELS[a.kind]} className="size-full object-contain" />
               ) : (
                 <span className="text-xs font-semibold text-muted-foreground">{ACCOUNT_KIND_LABELS[a.kind].slice(0, 2)}</span>
               )}

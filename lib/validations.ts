@@ -348,7 +348,7 @@ export const QuoteSchema = z.object({
   useLocalCurrency: z.boolean().default(true),
   // Vigencia del presupuesto en días (7, 15 o 30).
   validDays: z.union([z.literal(7), z.literal(15), z.literal(30)]).default(15),
-}).merge(CustomerSchema);
+}).merge(CustomerSchema.extend({ customerAddress: z.string().trim().default("") }));
 
 export type QuoteInput = z.infer<typeof QuoteSchema>;
 

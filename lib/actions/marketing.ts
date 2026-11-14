@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSectionAccess, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { FREQUENT_VISITS, INACTIVE_DAYS, segmentOf, type SegmentId } from "@/lib/marketing";
+import { FREQUENT_VISITS, INACTIVE_DAYS, NEW_CUSTOMER_DAYS, normalizePromoCode, promoCode, PROMO_LISTS, segmentOf, type SegmentId } from "@/lib/marketing";
 import type { ActionResult } from "@/lib/types";
 
 export type CustomerInsight = {
@@ -17,6 +17,10 @@ export type CustomerInsight = {
   lastVisit: string | null;
   nextContactDate: string | null;
   birthDate: string | null;
+  notes: string | null;
+  email: string | null;
+  isNew: boolean;
+  birthdayThisMonth: boolean;
   segment: SegmentId;
 };
 
@@ -38,12 +42,10 @@ export async function getMarketingInsights(): Promise<MarketingInsights> {
         _count: true,
         _sum: { totalCents: true },
         _max: { createdAt: true },
+        _min: { createdAt: true },
       }),
     ]);
     const stats = new Map(grouped.map((g) => [g.customerId as string, g]));
-    const totalSpent = grouped.reduce((s, g) => s + (g._sum.totalCents ?? 0), 0);
-    const buyers = grouped.length;
-    const avg = buyers ? totalSpent / buyers : 0;
     const now = new Date();
     const segmentCounts: Record<SegmentId, number> = { campeones: 0, leales: 0, riesgo: 0, dormidos: 0 };
     let frequent = 0;
@@ -54,15 +56,14 @@ export async function getMarketingInsights(): Promise<MarketingInsights> {
       const visits = st?._count ?? 0;
       const spent = st?._sum.totalCents ?? 0;
       const last = st?._max.createdAt ?? null;
-      const segment = segmentOf(visits, spent, avg, last, now);
+      const first = st?._min.createdAt ?? null;
+      const segment = segmentOf(visits, spent);
+      const birthdayThisMonth = c.birthDate != null && c.birthDate.getUTCMonth() === now.getUTCMonth();
+      const isNew = now.getTime() - (first ?? c.createdAt).getTime() <= NEW_CUSTOMER_DAYS * 86_400_000;
       segmentCounts[segment]++;
       if (visits >= FREQUENT_VISITS) frequent++;
       if (last && now.getTime() - last.getTime() > INACTIVE_DAYS * 86_400_000) inactive++;
-      if (c.birthDate) {
-        const d = new Date(Date.UTC(now.getUTCFullYear(), c.birthDate.getUTCMonth(), c.birthDate.getUTCDate()));
-        const diff = Math.round((d.getTime() - Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())) / 86_400_000);
-        if (diff >= 0 && diff <= 30) birthdays++;
-      }
+      if (birthdayThisMonth) birthdays++;
       return {
         id: c.id,
         firstName: c.firstName,
@@ -73,6 +74,10 @@ export async function getMarketingInsights(): Promise<MarketingInsights> {
         lastVisit: last?.toISOString() ?? null,
         nextContactDate: c.nextContactDate?.toISOString() ?? null,
         birthDate: c.birthDate?.toISOString() ?? null,
+        notes: c.notes,
+        email: c.email,
+        isNew,
+        birthdayThisMonth,
         segment,
       };
     });
@@ -138,34 +143,30 @@ export async function listPromotions(): Promise<PromotionRow[]> {
 }
 
 const NewPromotion = z.object({
-  name: z.string().trim().min(2, "Escribe un nombre").max(60),
-  discountPercent: z.number().int().min(1, "El descuento mínimo es 1 %").max(90, "El descuento máximo es 90 %"),
-  days: z.number().int().min(1).max(90),
   segment: z.enum(["todos", "campeones", "leales", "riesgo", "dormidos", "cumpleaneros"]),
+  discountPercent: z.number().int().min(1, "El descuento mínimo es 1 %").max(60, "El descuento máximo es 60 %"),
+  days: z.union([z.literal(7), z.literal(15), z.literal(30)]),
+  code: z.string().optional(),
 });
 
-function makeCode(name: string): string {
-  const base = name.normalize("NFD").replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, 5) || "PROMO";
-  return `${base}${Math.floor(10 + Math.random() * 90)}`;
-}
-
+// Crear promoción (lista de clientes, descuento y vigencia; el código se sugiere y se puede editar).
 export async function createPromotion(input: unknown): Promise<ActionResult> {
   const { companyId } = await requireSectionAccess("customers");
   const parsed = NewPromotion.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Datos no válidos" };
   const d = parsed.data;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      await withTenant(companyId, (tx) =>
-        tx.promotion.create({ data: { companyId, name: d.name, code: makeCode(d.name), discountPercent: d.discountPercent, segment: d.segment, validUntil: new Date(Date.now() + d.days * 86_400_000) } })
-      );
-      revalidatePath("/customers/promotions");
-      return { success: true };
-    } catch {
-      // código repetido: se genera otro
-    }
+  const code = normalizePromoCode(d.code ?? "") || promoCode(d.segment, d.discountPercent);
+  if (code.length < 3) return { success: false, error: "Escribe un código de al menos 3 letras o números" };
+  const name = PROMO_LISTS.find((l) => l.id === d.segment)?.label ?? "Promoción";
+  try {
+    await withTenant(companyId, (tx) =>
+      tx.promotion.create({ data: { companyId, name, code, discountPercent: d.discountPercent, segment: d.segment, validUntil: new Date(Date.now() + d.days * 86_400_000) } })
+    );
+  } catch {
+    return { success: false, error: `Ya existe una promoción con el código ${code}` };
   }
-  return { success: false, error: "No se pudo generar un código único" };
+  revalidatePath("/customers/promotions");
+  return { success: true };
 }
 
 export async function registerRedemption(promotionId: string, note?: string): Promise<ActionResult> {

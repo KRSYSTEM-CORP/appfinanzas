@@ -1,6 +1,6 @@
 "use server";
 
-import { PLANS, type PlanId } from "@/lib/plans";
+import { PLANS, parsePlanRequest, type PlanId } from "@/lib/plans";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -393,9 +393,23 @@ export async function approvePaymentReport(reportId: string): Promise<ActionResu
       return { ok: true as const };
     }
 
-    const months = company.monthlyFeeUsdCents
-      ? monthsCoveredWithBonus(totalUsdCents, company.monthlyFeeUsdCents)
-      : 1;
+    // Si la empresa pidió cambiar de plan al reportar el pago (nota «Plan solicitado: X.»),
+    // el plan y la tarifa se actualizan al aprobar y los meses se calculan con la tarifa nueva.
+    // La nota la escribe la empresa: el cambio solo se aplica si lo pagado cubre al menos un mes
+    // del plan pedido (el primer mes de Emprende vale lo que indique su precio de bienvenida).
+    const requestedPlan = parsePlanRequest(report.note);
+    const requestedMin = requestedPlan
+      ? Math.min(PLANS[requestedPlan].priceUsdCents, PLANS[requestedPlan].firstMonthUsdCents ?? PLANS[requestedPlan].priceUsdCents)
+      : 0;
+    let feeUsdCents = company.monthlyFeeUsdCents;
+    if (requestedPlan && totalUsdCents >= requestedMin) {
+      feeUsdCents = PLANS[requestedPlan].priceUsdCents;
+      await tx.company.update({
+        where: { id: report.companyId },
+        data: { plan: requestedPlan, monthlyFeeUsdCents: feeUsdCents, planChosen: true },
+      });
+    }
+    const months = feeUsdCents ? monthsCoveredWithBonus(totalUsdCents, feeUsdCents) : 1;
     const periodEnd = extendDueDateByMonths(company.nextPaymentDueDate, months || 1);
 
     await tx.payment.create({

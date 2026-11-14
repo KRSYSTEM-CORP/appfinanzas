@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { productImageUrl, type ListedProduct } from "@/lib/product-image";
 import { SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Price } from "@/components/money/Price";
+import { Chip } from "@/components/ui/chip";
+import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import { BarcodeScannerDialog, type ScanFeedback } from "@/components/scanner/BarcodeScannerDialog";
 import { findProductByCode, normalizeCode } from "@/lib/barcode";
 import { useBarcodeWedge } from "@/lib/use-barcode-wedge";
@@ -22,6 +23,7 @@ export function ProductPicker({
   categories,
   onAdd,
   allowOutOfStock = false,
+  quantities,
 }: {
   products: ListedProduct[];
   rate: number | null;
@@ -32,6 +34,8 @@ export function ProductPicker({
   onAdd: (product: ListedProduct) => void;
   // Presupuestos quote items regardless of stock; the POS must not sell them.
   allowOutOfStock?: boolean;
+  // Unidades de cada producto en la venta actual (insignia y borde de marca).
+  quantities?: Record<string, number>;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL_CATEGORIES);
@@ -113,7 +117,7 @@ export function ProductPicker({
     <div className="flex flex-col gap-3 h-full">
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 size-[18px] text-muted-foreground" />
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
             ref={searchRef}
             type="search"
@@ -127,7 +131,7 @@ export function ProductPicker({
                 handleSearchEnter();
               }
             }}
-            className="h-12 rounded-full border-transparent bg-card pl-10 shadow-(--shadow-card)"
+            className="min-h-[50px] rounded-full border-[1.5px] border-border bg-card pr-[18px] pl-[46px] text-sm"
           />
         </div>
         <BarcodeScannerDialog onDetected={handleScan} continuous />
@@ -145,31 +149,28 @@ export function ProductPicker({
       {categories.length > 0 && (
         <div className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible md:pb-0">
           {[ALL_CATEGORIES, ...categories].map((c) => (
-            <button
-              key={c}
-              type="button"
-              aria-pressed={category === c}
-              onClick={() => setCategory(c)}
-              className={`min-h-[38px] min-w-max rounded-xl border-2 px-3.5 text-[13px] font-bold transition-colors ${
-                category === c ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted text-foreground hover:bg-muted/70"
-              }`}
-            >
+            <Chip key={c} active={category === c} onClick={() => setCategory(c)} className="min-w-max">
               {c === ALL_CATEGORIES ? "Todos" : c}
-              {c === ALL_CATEGORIES && <sup className="ml-1 text-[10px] font-semibold">{products.length}</sup>}
-            </button>
+              {c === ALL_CATEGORIES && <small className="text-[0.8333em]">{products.length}</small>}
+            </Chip>
           ))}
         </div>
       )}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto pr-1">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,158px),1fr))] gap-2.5 overflow-y-auto pr-1">
         {filtered.map((p) => {
           const outOfStock = !allowOutOfStock && p.trackStock && p.stock <= 0;
+          const q = quantities?.[p.id] ?? 0;
+          const tint = `var(--chart-${(p.name.charCodeAt(0) % 5) + 1})`;
           return (
             <button
               key={p.id}
               type="button"
               disabled={outOfStock}
               onClick={() => onAdd(p)}
-            className="relative flex min-h-11 flex-col items-start gap-1.5 rounded-2xl bg-card p-3 text-left shadow-(--shadow-card) transition-all duration-150 ease-out-smooth hover:shadow-(--shadow-float) active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+              aria-label={`Agregar ${p.name}`}
+              className={`relative flex flex-col items-start gap-1.5 rounded-[19px] border-2 bg-card p-3 text-left shadow-(--shadow-card) transition-[transform,border-color] duration-150 hover:-translate-y-0.5 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:active:scale-100 ${
+                q ? "border-primary" : "border-transparent"
+              }`}
             >
               {p.hasImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -178,39 +179,44 @@ export function ProductPicker({
                   alt=""
                   loading="lazy"
                   decoding="async"
-                  className="h-16 w-full rounded-lg object-cover"
+                  className="size-11 flex-none rounded-[14px] object-cover"
                 />
               ) : (
-                <div
-                  className="grid size-10 place-items-center rounded-xl text-base font-bold"
-                  style={{
-                    background: `color-mix(in oklab, var(--chart-${(p.name.charCodeAt(0) % 5) + 1}) 18%, transparent)`,
-                    color: `var(--chart-${(p.name.charCodeAt(0) % 5) + 1})`,
-                  }}
+                <span
+                  className="grid size-11 flex-none place-items-center rounded-[14px] text-[17px] font-extrabold text-foreground"
+                  style={{ background: `color-mix(in oklab, ${tint} 22%, var(--card))` }}
                   aria-hidden
                 >
                   {p.name.slice(0, 1).toUpperCase()}
-                </div>
+                </span>
               )}
-              <span className="line-clamp-2 min-h-8 text-[13px] leading-tight font-semibold">{p.name}</span>
-              <Price
-                eurCents={p.priceCents}
-                rate={rate}
-                currencyCode={currencyCode}
-                exchangeRateEnabled={exchangeRateEnabled}
-                referenceCurrency={referenceCurrency}
-              />
+              {q > 0 && (
+                <span className="absolute top-2.5 right-2.5 grid h-[26px] min-w-[26px] place-items-center rounded-full bg-primary px-[7px] text-[13px] font-extrabold text-primary-foreground">
+                  {q}
+                </span>
+              )}
+              <b className="line-clamp-2 block min-h-9 text-sm leading-[1.25] font-bold">{p.name}</b>
+              <span className="flex flex-col">
+                <span className="text-[17px] font-extrabold tabular-nums">{formatCurrencyCents(referenceCurrency, p.priceCents)}</span>
+                {exchangeRateEnabled && rate != null && (
+                  <small className="text-xs text-muted-foreground tabular-nums">
+                    {formatLocalCurrency(eurCentsToLocal(p.priceCents, rate), currencyCode)}
+                  </small>
+                )}
+              </span>
               {p.trackStock && !outOfStock && (
                 <span
-                  className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-xs font-bold ${
                     isLowStock(p) ? "bg-warning/18 text-warning" : "bg-success/14 text-success"
                   }`}
                 >
-                  <span className="mr-1.5 inline-block size-1.5 rounded-full bg-current align-middle" aria-hidden />{p.stock} und.
+                  <span className="inline-block size-1.5 rounded-full bg-current" aria-hidden />
+                  {p.stock} und.
                 </span>
               )}
               {outOfStock && (
-                <span className="mt-0.5 inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/12 px-2.5 py-[3px] text-xs font-bold text-destructive">
+                  <span className="inline-block size-1.5 rounded-full bg-current" aria-hidden />
                   Agotado
                 </span>
               )}
@@ -219,7 +225,7 @@ export function ProductPicker({
         })}
         {filtered.length === 0 && (
           <p className="col-span-full text-center text-muted-foreground py-8 text-sm">
-            No hay productos que coincidan.
+            No hay productos con ese filtro.
           </p>
         )}
       </div>

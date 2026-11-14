@@ -80,7 +80,7 @@ export type BillingInfo = {
   isExempt: boolean;
   monthlyFeeUsdCents: number | null;
   plan: PlanId;
-  // Lo que toca pagar hoy (el primer mes de Emprende vale $10 si aún no hay un pago aprobado).
+  // Lo que toca pagar hoy (el primer mes de Emprende vale $9,99 si aún no hay un pago aprobado).
   amountDueUsdCents: number | null;
   // monthlyFeeUsdCents converted to Bolívares at KR System's own platform
   // rate (see getPlatformExchangeRateInfo above) — null only if that rate

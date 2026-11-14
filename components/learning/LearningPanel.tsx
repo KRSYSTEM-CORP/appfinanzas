@@ -3,8 +3,10 @@
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDownIcon, ArrowUpIcon, CheckIcon, EyeIcon, EyeOffIcon, ExternalLinkIcon, FileTextIcon, StarIcon, UsersIcon, XIcon } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { ArrowDownIcon, ArrowUpIcon, AwardIcon, BoxIcon, CheckIcon, LockIcon, SparklesIcon, EyeIcon, EyeOffIcon, ExternalLinkIcon, FileTextIcon, StarIcon, UsersIcon, XIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
+import { IconTile } from "@/components/ui/icon-tile";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +21,11 @@ import {
   type LearningVideoRow,
 } from "@/lib/actions/learning";
 import { LEARNING_AUDIENCES, videoEmbed } from "@/lib/learning";
+
+const pillSt = "inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-xs font-bold whitespace-nowrap";
+const btnBase = "inline-flex min-h-10 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition-transform active:scale-[0.97] disabled:opacity-50";
+const btnPrimary = `${btnBase} bg-primary text-primary-foreground`;
+const btnSoft = `${btnBase} bg-muted text-primary`;
 
 export function LearningPanel({
   videos: allVideos,
@@ -126,216 +133,38 @@ export function LearningPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {videos.length === 0 ? (
-        <p className="rounded-[20px] border border-dashed p-5 text-sm text-muted-foreground">
-          Todavía no hay videos. Pronto agregaremos guías paso a paso.
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-          <section className="flex min-w-0 flex-col gap-4">
-            {(() => {
-              const v = current;
-              const embed = v.url ? videoEmbed(v.url) : null;
-              return (
-                <>
-                  <div className="overflow-hidden rounded-[22px] bg-black shadow-(--shadow-float)">
-                    {v.playUrl ? (
-                      <video
-                        key={v.id}
-                        src={v.playUrl}
-                        controls
-                        preload="metadata"
-                        playsInline
-                        className="aspect-video w-full bg-black"
-                        onEnded={() => !v.watched && toggleWatched(v)}
-                      />
-                    ) : embed ? (
-                      <div className="aspect-video">
-                        <iframe
-                          key={v.id}
-                          src={embed.embedUrl}
-                          title={v.title}
-                          loading="lazy"
-                          className="size-full"
-                          allow="accelerometer; encrypted-media; picture-in-picture; fullscreen"
-                          allowFullScreen
-                          referrerPolicy="strict-origin-when-cross-origin"
-                        />
-                      </div>
-                    ) : (
-                      <div className="grid aspect-video place-items-center p-6 text-center text-sm text-white/80">
-                        {v.url ? (
-                          <a href={v.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 underline underline-offset-2">
-                            Ver el video <ExternalLinkIcon className="size-3.5" />
-                          </a>
-                        ) : (
-                          "Este video no está disponible por ahora."
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Módulo {currentIndex + 1} de {videos.length}
-                    </p>
-                    <h2 className="mt-1 text-xl font-bold tracking-tight">{v.title}</h2>
-                    {v.description && <p className="mt-1 text-sm text-muted-foreground">{v.description}</p>}
-                    {v.learns.length > 0 && (
-                      <div className="mt-4">
-                        <p className="kr-eyebrow mb-2">Lo que aprendes</p>
-                        <ul className="flex flex-col gap-1.5">
-                          {v.learns.map((l) => (
-                            <li key={l} className="flex items-start gap-2 text-sm">
-                              <CheckIcon className="mt-0.5 size-4 shrink-0 text-success" aria-hidden /> {l}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      <Button size="sm" variant={v.watched ? "outline" : "default"} disabled={isPending} onClick={() => toggleWatched(v)}>
-                        {v.watched ? "Marcar como no visto" : "Marcar como visto"}
-                      </Button>
-                      <Link href="/pos" className={buttonVariants({ size: "sm", variant: "outline" })}>
-                        Practicar en mi sistema
-                      </Link>
-                      <Link href="/assistant" className={buttonVariants({ size: "sm", variant: "outline" })}>
-                        Preguntar al Asistente IA
-                      </Link>
-                      {isAdmin && (
-                        <Button size="sm" variant="ghost" disabled={isPending} onClick={() => remove(v)}>
-                          Quitar
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
-          </section>
-
-          <aside className="flex min-w-0 flex-col gap-4 rounded-[20px] bg-card p-5 shadow-(--shadow-card)" aria-live="polite">
-            <div className="flex items-center gap-4">
-              <div
-                className="grid size-16 shrink-0 place-items-center rounded-full"
-                style={{ background: `conic-gradient(var(--primary) ${pct * 3.6}deg, var(--muted) 0)` }}
-                role="progressbar"
-                aria-valuenow={watchedCount}
-                aria-valuemin={0}
-                aria-valuemax={videos.length}
-              >
-                <span className="grid size-12 place-items-center rounded-full bg-card text-sm font-bold tabular-nums">{pct} %</span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                <b className="text-foreground">{watchedCount}</b> de {videos.length} videos completados
-              </p>
-            </div>
-            {allDone && (
-              <p className="flex items-center gap-2 rounded-xl bg-success/14 px-3 py-2 text-sm font-bold text-success">
-                <span aria-hidden>🏅</span> Experto KR POS: completaste todos los videos
-              </p>
-            )}
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tu ruta</p>
-            <div className="flex flex-wrap gap-2">
-              {LEARNING_AUDIENCES.map((a) => (
-                <button
-                  key={a}
-                  type="button"
-                  aria-pressed={route === a}
-                  onClick={() => setRoute(a)}
-                  className={`min-h-[38px] rounded-xl border-2 px-3.5 text-[13px] font-bold transition-colors ${
-                    route === a ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted text-foreground hover:bg-muted/70"
-                  }`}
-                >
-                  {a}
-                </button>
-              ))}
-            </div>
-            <ol className="flex flex-col gap-2">
-              {videos.map((v, i) => (
-                <li key={v.id}>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentId(v.id)}
-                    aria-current={v.id === current.id}
-                    className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors ${
-                      v.id === current.id ? "bg-primary/10 ring-2 ring-primary" : "bg-muted hover:bg-muted/70"
-                    }`}
-                  >
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-card text-sm font-bold">
-                      {v.watched ? <CheckIcon className="size-4 text-success" aria-label="Visto" /> : i + 1}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Módulo {i + 1}</span>
-                      <span className="block truncate text-sm font-semibold">{v.title}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </aside>
+      {isAdmin && (
+        <div role="note" className="flex flex-wrap items-center gap-3 rounded-[19px] bg-card px-4 py-3.5 shadow-(--shadow-card)">
+          <IconTile>
+            <LockIcon className="size-[22px]" aria-hidden />
+          </IconTile>
+          <div className="min-w-[200px] flex-1">
+            <b>Modo administrador de la plataforma</b>
+            <p className="text-[13px] text-muted-foreground">Solo este usuario administrador sube y edita los videos. Las demás cuentas solo los ven y completan.</p>
+          </div>
         </div>
       )}
-
       {isAdmin && stats && (
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,180px),1fr))" }}>
           {[
             { label: "Módulos", value: String(stats.modules), sub: `${stats.published} publicados · ${stats.modules - stats.published} ocultos`, Icon: FileTextIcon, chip: "bg-primary/12 text-primary" },
             { label: "Empresas que aprenden", value: String(stats.companies), sub: "con al menos un video visto", Icon: UsersIcon, chip: "bg-success/14 text-success" },
             { label: "Finalización promedio", value: `${stats.avgCompletionPct} %`, sub: "de quienes ya empezaron", Icon: StarIcon, chip: "bg-warning/18 text-warning" },
           ].map((k) => (
-            <div key={k.label} className="relative min-h-32 rounded-[19px] bg-card p-[17px] shadow-(--shadow-card)">
-              <p className="pr-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{k.label}</p>
-              <span className={`absolute right-4 top-4 grid size-[34px] place-items-center rounded-full ${k.chip}`} aria-hidden>
+            <div key={k.label} className="relative flex min-h-32 flex-col gap-1.5 rounded-[19px] bg-card p-[17px] shadow-(--shadow-card)">
+              <p className="pr-11 text-xs font-semibold uppercase text-muted-foreground">{k.label}</p>
+              <span className={`absolute right-3.5 top-3.5 grid size-[34px] place-items-center rounded-full ${k.chip}`} aria-hidden>
                 <k.Icon className="size-[18px]" />
               </span>
-              <p className="mt-1.5 text-[34px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums">{k.value}</p>
-              <p className="mt-1.5 text-[13px] text-muted-foreground">{k.sub}</p>
+              <p className="text-[30px] font-bold leading-[1.1] tracking-[-0.03em] tabular-nums">{k.value}</p>
+              <p className="text-[13px] text-muted-foreground">{k.sub}</p>
             </div>
           ))}
         </div>
       )}
 
-      {isAdmin && allVideos.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Biblioteca</CardTitle>
-            <p className="text-sm text-muted-foreground">Ordena, oculta o elimina</p>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col divide-y">
-              {allVideos.map((v, i) => (
-                <li key={v.id} className="flex items-center justify-between gap-3 py-3 text-sm">
-                  <div className="min-w-0">
-                    <p className="truncate font-bold">
-                      {i + 1}. {v.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {v.audience} · {v.published ? "Publicado" : "Oculto"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending || i === 0} aria-label="Subir" onClick={() => startTransition(async () => { await moveLearningVideo(v.id, "up"); router.refresh(); })}>
-                      <ArrowUpIcon />
-                    </Button>
-                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending || i === allVideos.length - 1} aria-label="Bajar" onClick={() => startTransition(async () => { await moveLearningVideo(v.id, "down"); router.refresh(); })}>
-                      <ArrowDownIcon />
-                    </Button>
-                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending} aria-label={v.published ? "Ocultar" : "Publicar"} onClick={() => startTransition(async () => { await setLearningPublished(v.id, !v.published); router.refresh(); })}>
-                      {v.published ? <EyeIcon /> : <EyeOffIcon />}
-                    </Button>
-                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending} aria-label="Quitar" onClick={() => remove(v)}>
-                      <XIcon />
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
       {isAdmin && (
+        <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>
@@ -416,7 +245,191 @@ export function LearningPanel({
             </form>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Biblioteca</CardTitle>
+            <p className="text-sm text-muted-foreground">Ordena, oculta o elimina</p>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col divide-y">
+              {allVideos.map((v, i) => (
+                <li key={v.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-bold">
+                      {i + 1}. {v.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {v.audience} · {v.published ? "Publicado" : "Oculto"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending || i === 0} aria-label="Subir" onClick={() => startTransition(async () => { await moveLearningVideo(v.id, "up"); router.refresh(); })}>
+                      <ArrowUpIcon />
+                    </Button>
+                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending || i === allVideos.length - 1} aria-label="Bajar" onClick={() => startTransition(async () => { await moveLearningVideo(v.id, "down"); router.refresh(); })}>
+                      <ArrowDownIcon />
+                    </Button>
+                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending} aria-label={v.published ? "Ocultar" : "Publicar"} onClick={() => startTransition(async () => { await setLearningPublished(v.id, !v.published); router.refresh(); })}>
+                      {v.published ? <EyeIcon /> : <EyeOffIcon />}
+                    </Button>
+                    <Button type="button" size="icon-sm" variant="ghost" disabled={isPending} aria-label="Quitar" onClick={() => remove(v)}>
+                      <XIcon />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+        </div>
       )}
+      {videos.length === 0 ? (
+        <p className="rounded-[20px] border border-dashed p-5 text-sm text-muted-foreground">
+          Todavía no hay videos. Pronto agregaremos guías paso a paso.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
+          <section className="flex min-w-0 flex-col gap-3.5">
+            {(() => {
+              const v = current;
+              const embed = v.url ? videoEmbed(v.url) : null;
+              return (
+                <>
+                  <div className="relative overflow-hidden rounded-[22px] bg-[#0b0d17] shadow-(--shadow-float)">
+                    {v.playUrl ? (
+                      <video
+                        key={v.id}
+                        src={v.playUrl}
+                        controls
+                        preload="metadata"
+                        playsInline
+                        className="aspect-video w-full bg-black"
+                        onEnded={() => !v.watched && toggleWatched(v)}
+                      />
+                    ) : embed ? (
+                      <div className="aspect-video">
+                        <iframe
+                          key={v.id}
+                          src={embed.embedUrl}
+                          title={v.title}
+                          loading="lazy"
+                          className="size-full"
+                          allow="accelerometer; encrypted-media; picture-in-picture; fullscreen"
+                          allowFullScreen
+                          referrerPolicy="strict-origin-when-cross-origin"
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid aspect-video place-items-center p-6 text-center text-sm text-white/80">
+                        {v.url ? (
+                          <a href={v.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 underline underline-offset-2">
+                            Ver el video <ExternalLinkIcon className="size-3.5" />
+                          </a>
+                        ) : (
+                          "Este video no está disponible por ahora."
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <section className="relative rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Módulo {currentIndex + 1}{v.watched ? " · Completado" : ""}
+                    </p>
+                    <h2 className="mb-1 mt-0.5 text-2xl font-bold tracking-[-0.03em]">{v.title}</h2>
+                    {v.description && <p className="mb-3 text-muted-foreground">{v.description}</p>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {v.watched && <span className={`${pillSt} bg-success/14 text-success`}><i className="size-[7px] rounded-full bg-current" />Completado</span>}
+                      <button type="button" disabled={isPending} onClick={() => toggleWatched(v)} className={v.watched ? btnSoft : btnPrimary}>
+                        <CheckIcon className="size-4" aria-hidden /> {v.watched ? "Marcar como no visto" : "Marcar como visto"}
+                      </button>
+                      <Link href="/pos" className={btnSoft}>
+                        <BoxIcon className="size-4" aria-hidden /> Practicar en mi sistema
+                      </Link>
+                      <Link href="/assistant" className={btnSoft}>
+                        <SparklesIcon className="size-4" aria-hidden /> Preguntar al Asistente IA
+                      </Link>
+                      {isAdmin && (
+                        <button type="button" disabled={isPending} onClick={() => remove(v)} className={btnSoft}>
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                    {v.learns.length > 0 && (
+                      <>
+                        <h3 className="mb-1 mt-4 text-[13px] font-normal uppercase tracking-[0.08em] text-muted-foreground">Lo que aprendes</h3>
+                        <ul className="flex flex-col gap-1.5">
+                          {v.learns.map((l) => (
+                            <li key={l} className="flex gap-2">
+                              <CheckIcon className="mt-[3px] size-4 shrink-0 text-success" strokeWidth={3} aria-hidden /> {l}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </section>
+                </>
+              );
+            })()}
+          </section>
+
+          <aside className="min-w-0" aria-live="polite">
+            <section className="relative rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
+              <div className="flex flex-wrap items-center gap-3.5">
+                <svg className="size-14" viewBox="0 0 52 52" aria-hidden="true">
+                  <circle cx="26" cy="26" r="22" fill="none" stroke="var(--border)" strokeWidth="6" />
+                  <circle cx="26" cy="26" r="22" fill="none" stroke="var(--success)" strokeWidth="6" strokeLinecap="round" strokeDasharray={`${(pct / 100) * 2 * Math.PI * 22} ${2 * Math.PI * 22}`} transform="rotate(-90 26 26)" />
+                </svg>
+                <div>
+                  <b className="text-[26px] tabular-nums">{pct} %</b>
+                  <div className="text-[13px] text-muted-foreground">{watchedCount} de {videos.length} videos completados</div>
+                </div>
+                {allDone && (
+                  <span className={`${pillSt} bg-success/14 text-success`}>
+                    <AwardIcon className="size-3.5" aria-hidden />Experto KR POS
+                  </span>
+                )}
+              </div>
+              <div className="mt-3.5 grid w-full gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(1, videos.length)},1fr)` }} role="img" aria-label={`${watchedCount} de ${videos.length} videos completados`}>
+                {videos.map((v) => (
+                  <i key={v.id} className={`h-2 rounded-full transition-colors duration-200 ${v.watched ? "bg-success" : "bg-border"}`} />
+                ))}
+              </div>
+              <h3 className="mb-1 mt-3 text-[13px] font-normal uppercase tracking-[0.08em] text-muted-foreground">Tu ruta</h3>
+              <div className="mb-2.5 flex flex-wrap items-center gap-2">
+                {LEARNING_AUDIENCES.map((a) => (
+                  <Chip key={a} active={route === a} onClick={() => setRoute(a)}>
+                    {a}
+                  </Chip>
+                ))}
+              </div>
+              <ol className="flex max-h-[560px] flex-col gap-2 overflow-auto">
+                {videos.map((v, i) => (
+                  <li key={v.id}>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentId(v.id)}
+                      aria-current={v.id === current.id}
+                      className={`flex w-full items-center gap-3 rounded-2xl border-2 px-3 py-2.5 text-left transition duration-150 active:scale-[0.98] ${
+                        v.id === current.id ? "border-primary bg-primary/12" : "border-transparent bg-muted"
+                      }`}
+                    >
+                      <span className="grid size-[34px] shrink-0 place-items-center rounded-full bg-card font-extrabold">
+                        {v.watched ? <CheckIcon className="size-[18px] text-success" strokeWidth={3} aria-label="Visto" /> : i + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 text-left">
+                        <small className="block text-xs uppercase text-muted-foreground">Módulo {i + 1}</small>
+                        <b className="block">{v.title}</b>
+                      </span>
+                      {v.watched && <span className={`${pillSt} bg-success/14 text-success`}><i className="size-[7px] rounded-full bg-current" />Visto</span>}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </aside>
+        </div>
+      )}
+
     </div>
   );
 }

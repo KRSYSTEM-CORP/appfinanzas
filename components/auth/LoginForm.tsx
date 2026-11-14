@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { MailIcon } from "lucide-react";
+import { ChevronRightIcon, MailIcon } from "lucide-react";
 import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -201,20 +201,34 @@ export function LoginForm({
             </div>
           )}
 
-          <p className="text-sm text-muted-foreground text-center">Elige tu sucursal</p>
+          <div className="text-center">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Sede</p>
+            <h2 className="mt-1 text-[22px] font-extrabold tracking-tight">Elige tu sucursal</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Cada sede tiene su inventario, su caja y su color.</p>
+          </div>
 
-          <div className="flex flex-col gap-2">
-            {branchChoices.map((branch) => (
-              <Button
+          <div className="flex flex-col gap-2.5">
+            {branchChoices.map((branch, i) => (
+              <button
                 key={branch.id}
                 type="button"
-                variant="outline"
-                size="lg"
                 disabled={isPending}
                 onClick={() => handleBranchPick(branch.id)}
+                className="group flex min-h-[64px] items-center gap-3 rounded-full border-2 border-transparent bg-card py-2 pl-2.5 pr-4 text-left shadow-(--shadow-card) transition-[transform,border-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-primary focus-visible:border-primary focus-visible:outline-none active:scale-[0.98] disabled:opacity-60"
               >
-                {branch.name}
-              </Button>
+                <span
+                  className="grid size-11 shrink-0 place-items-center rounded-full text-base font-extrabold text-white"
+                  style={{ background: `var(--sede-${(i % 4) + 1})` }}
+                  aria-hidden
+                >
+                  {branch.name.trim().slice(0, 1).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-bold">{branch.name}</span>
+                  <span className="block text-xs text-muted-foreground">Entrar a esta sede</span>
+                </span>
+                <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
+              </button>
             ))}
           </div>
 
