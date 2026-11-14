@@ -15,7 +15,7 @@ import {
   assertPaymentsWithinRemaining,
 } from "@/lib/payment-currency";
 import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
-import { decomposeTax, rateForCategory } from "@/lib/tax";
+import { decomposeTax, effectiveIvaRates, rateForCategory } from "@/lib/tax";
 import { computeItemDiscountCents } from "@/lib/discount";
 import { resolveTierPrice, tierPriceCents } from "@/lib/pricing";
 import type { ActionResult } from "@/lib/types";
@@ -103,6 +103,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           localCurrencyCode: true,
           exchangeRateEnabled: true,
           referenceCurrency: true,
+          ivaEnabled: true,
           ivaGeneralRatePercent: true,
           ivaReducedRatePercent: true,
           isIgtfAgent: true,
@@ -133,8 +134,11 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         : (company?.exchangeRate ?? null);
       const rate = exchangeRate != null ? Number(exchangeRate) : null;
       const referenceCurrency = company?.referenceCurrency ?? "EUR";
-      const ivaGeneralRatePercent = company?.ivaGeneralRatePercent ?? 16;
-      const ivaReducedRatePercent = company?.ivaReducedRatePercent ?? 8;
+      const { general: ivaGeneralRatePercent, reduced: ivaReducedRatePercent } = effectiveIvaRates(
+        company?.ivaEnabled ?? true,
+        company?.ivaGeneralRatePercent ?? 16,
+        company?.ivaReducedRatePercent ?? 8
+      );
 
       const products = await tx.product.findMany({
         where: { id: { in: items.map((i) => i.productId) }, companyId, branchId },
@@ -504,8 +508,8 @@ export async function issueDebitNote(saleId: string, reason: string, amount: num
       if (sale.voided) throw new Error("La venta está anulada");
       if (!sale.branchId) throw new Error("La venta no tiene sucursal");
 
-      const company = await tx.company.findUnique({ where: { id: companyId }, select: { ivaGeneralRatePercent: true } });
-      const { baseCents, taxCents } = decomposeTax(totalCents, "GENERAL", company?.ivaGeneralRatePercent ?? 16);
+      const company = await tx.company.findUnique({ where: { id: companyId }, select: { ivaGeneralRatePercent: true, ivaEnabled: true } });
+      const { baseCents, taxCents } = decomposeTax(totalCents, "GENERAL", company?.ivaEnabled === false ? 0 : (company?.ivaGeneralRatePercent ?? 16));
       const controlNumber = await nextDocumentNumber(tx, sale.branchId, "debitNote");
       await tx.debitNote.create({
         data: {

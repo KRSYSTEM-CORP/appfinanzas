@@ -12,6 +12,7 @@ import { Switch } from "@/components/settings/SettingsUi";
 import { updateIvaSettings, type IvaSettingsInfo } from "@/lib/actions/settings";
 
 type Values = {
+  ivaEnabled: boolean;
   ivaGeneralRatePercent: string;
   ivaReducedRatePercent: string;
   isIvaWithholdingAgent: boolean;
@@ -22,6 +23,7 @@ type Values = {
 
 function toValues(i: IvaSettingsInfo): Values {
   return {
+    ivaEnabled: i.ivaEnabled,
     ivaGeneralRatePercent: String(i.ivaGeneralRatePercent),
     ivaReducedRatePercent: String(i.ivaReducedRatePercent),
     isIvaWithholdingAgent: i.isIvaWithholdingAgent,
@@ -69,6 +71,15 @@ export function IvaSettingsForm({ initial, rif }: { initial: IvaSettingsInfo; ri
       </ListRow>
       <ListRow>
         <div>
+          <b>Usar IVA</b>
+          <small>{values.ivaEnabled ? "La venta y la compra desglosan base imponible e IVA" : "Sin IVA: no se calcula ni se muestra; el total es igual al subtotal"}</small>
+        </div>
+        <Switch on={values.ivaEnabled} disabled={isPending} onChange={(v) => save({ ...values, ivaEnabled: v })} label="Usar IVA" />
+      </ListRow>
+      {values.ivaEnabled && (
+      <>
+      <ListRow>
+        <div>
           <b>IVA ({values.ivaGeneralRatePercent} %)</b>
           <small>Incluido en tus precios; se desglosa en los documentos fiscales{rif ? ` con el RIF ${rif}` : ""}</small>
         </div>
@@ -83,6 +94,8 @@ export function IvaSettingsForm({ initial, rif }: { initial: IvaSettingsInfo; ri
         </div>
         <Switch on={values.isIvaWithholdingAgent} disabled={isPending} onChange={(v) => save({ ...values, isIvaWithholdingAgent: v })} label="Retención de IVA" />
       </ListRow>
+      </>
+      )}
       {open && <RatesSheet values={values} pending={isPending} onClose={() => setOpen(false)} onSave={(v) => save(v, () => setOpen(false))} />}
     </SectionCard>
   );

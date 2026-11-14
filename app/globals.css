@@ -9,6 +9,7 @@
   --breakpoint-md: 60rem;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-pill-dark: var(--pill-dark);
   --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
@@ -80,6 +81,7 @@
   --m-learn: #0f7a8a; --m-set: #6e6e73;
   --background: #f5f7fb;
   --foreground: #1d1d1f;
+  --pill-dark: #1d1d1f;
   --card: #ffffff;
   --card-foreground: #1d1d1f;
   --popover: #ffffff;
@@ -130,6 +132,7 @@
 .dark {
   --background: #0d0f18;
   --foreground: #f2f3f8;
+  --pill-dark: #05060b;
   --card: #171a26;
   --card-foreground: #f2f3f8;
   --popover: #171a26;
@@ -608,3 +611,39 @@
 @keyframes kr-mic { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--destructive) 45%, transparent); } 50% { box-shadow: 0 0 0 10px transparent; } }
 .kr-mic { animation: kr-mic 1.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .kr-orb, .kr-typing, .kr-mic { animation: none; } }
+
+/* Sedes bloqueadas: candado que se superpone sobre la tarjeta (preview 06). */
+.sede-lock-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+  pointer-events: none;
+  transition: opacity 0.25s var(--ease-out, ease), backdrop-filter 0.25s;
+}
+.sede-lock-veil > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--pill-dark);
+  color: #fff;
+  animation: sede-lock-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.sede-locked:hover .sede-lock-veil,
+.sede-locked:focus-within .sede-lock-veil {
+  opacity: 0;
+}
+@keyframes sede-lock-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sede-lock-veil, .sede-lock-veil > span { animation: none; transition: none; }
+}

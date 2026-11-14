@@ -4,6 +4,7 @@ import { PosClient } from "@/components/pos/PosClient";
 import { OfflineSyncBanner } from "@/components/pos/OfflineSyncBanner";
 import { listActiveProducts, listCategories } from "@/lib/actions/products";
 import { getQuoteForConversion } from "@/lib/actions/quotes";
+import { effectiveIvaRates } from "@/lib/tax";
 import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from "@/lib/actions/settings";
 import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { requireSession } from "@/lib/session";
@@ -26,7 +27,7 @@ export default async function PosPage({
     categories,
     { logoDataUrl },
     fiscalData,
-    { ivaGeneralRatePercent, ivaReducedRatePercent, isIgtfAgent, igtfRatePercent },
+    { ivaEnabled, ivaGeneralRatePercent: rawIvaGeneral, ivaReducedRatePercent: rawIvaReduced, isIgtfAgent, igtfRatePercent },
     paymentAccounts,
     todaySummary,
     requireCustomer,
@@ -42,6 +43,7 @@ export default async function PosPage({
     getDailyClosingSummary(todayDateString()).catch(() => null),
     getRequireCustomerOnSale().catch(() => false),
   ]);
+  const { general: ivaGeneralRatePercent, reduced: ivaReducedRatePercent } = effectiveIvaRates(ivaEnabled, rawIvaGeneral, rawIvaReduced);
   const company = { name: companyName, logoDataUrl, ...fiscalData };
 
   const quoteConversion = fromQuote ? await getQuoteForConversion(fromQuote) : null;
