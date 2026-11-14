@@ -152,10 +152,12 @@ export function ParetoChart({ top, bottom, currency }: { top: Top[]; bottom: Bot
             {isMas ? (
               <>
                 Los primeros <b>{n} {n === 1 ? "producto genera" : "productos generan"}</b> el 80 % de la venta (clase A). Cuídalos de agotarse.
+                {" "}Líder: <b>{rows[0].name}</b> con {money(rows[0].value)} en ventas.
               </>
             ) : (
               <>
                 Estos {rows.length} productos aportan poco: en el orden de menor venta, el 80 % se alcanza recién con {n}. Revisa precio o exhibición.
+                {" "}{rows[0].name} vendió {rows[0].value.toLocaleString("es-VE")} {rows[0].value === 1 ? "unidad" : "unidades"}: prueba un descuento o combo.
               </>
             )}
           </p>
