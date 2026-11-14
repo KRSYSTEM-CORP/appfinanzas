@@ -568,6 +568,9 @@
   }
 }
 
+@keyframes kr-donut-in {
+  from { opacity: 0; }
+}
 @keyframes kr-sede-zoom {
   0% { opacity: 0; transform: scale(1.06); }
   18% { opacity: 1; transform: scale(1); }

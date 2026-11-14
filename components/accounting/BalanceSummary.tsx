@@ -1,8 +1,8 @@
 import { BanknoteIcon, ShoppingCartIcon, StarIcon, TrendingDownIcon } from "lucide-react";
 import { Kpi, KpiGrid } from "@/components/shared/Kpi";
 import { Note, SectionCard, TwoCol } from "@/components/shared/SectionCard";
-import { Pill } from "@/components/shared/Pills";
-import { breakevenMeter, breakevenPoint, netProfit, waterfall, type BalanceInput } from "@/lib/admin-balance";
+import { ExpenseComposition } from "@/components/accounting/ExpenseComposition";
+import { netProfit, waterfall, type BalanceInput } from "@/lib/admin-balance";
 import { bsOf, money, pct } from "@/lib/money-display";
 import { cn } from "@/lib/utils";
 
@@ -12,21 +12,19 @@ export function BalanceSummary({
   currency,
   rate,
   periodLabel,
-  projection,
+  expenses,
 }: {
   b: BalanceInput;
   currency: string;
   rate: number | null;
   periodLabel: string;
-  // Solo en el mes en curso: proyección de cierre y la fórmula (vendido ÷ día × días).
-  projection: { cents: number; day: number; days: number; monthName: string } | null;
+  // Gastos registrados del periodo, para la composición por categoría.
+  expenses: { category: string | null; amountCents: number }[];
 }) {
   const m = (c: number, d: 0 | 2 = 0) => money(currency, c, d);
   const net = netProfit(b);
   const gain = net >= 0;
   const bs = bsOf(net, rate);
-  const eq = breakevenPoint(b);
-  const meter = breakevenMeter(b.salesCents, eq, projection?.cents ?? null);
   const bars = waterfall(b);
   const fx: [string, number][] = [
     ["Ventas", b.salesCents],
@@ -102,40 +100,7 @@ export function BalanceSummary({
           )}
         </SectionCard>
 
-        <SectionCard title="Punto de equilibrio" subtitle="Lo que necesitas vender para cubrir costos y gastos">
-          {eq == null ? (
-            <p className="text-[13px] text-muted-foreground">Aún no hay margen con el que calcularlo: registra ventas con costo en este periodo.</p>
-          ) : (
-            <>
-              <EqMeter fill={meter.fill} projection={meter.projection} marker={meter.marker} markerLabel={`Equilibrio ${m(eq)}`} />
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                <Pill tone="ok">Vendido {m(b.salesCents)}</Pill>
-                {projection && <Pill tone="val">Proyección {m(projection.cents)}</Pill>}
-              </div>
-              <p className="mt-2 text-sm">
-                {b.salesCents >= eq ? (
-                  <>
-                    Ya superaste el punto de equilibrio de <b>{m(eq)}</b>: vas <b className="text-success">{m(b.salesCents - eq)}</b> por encima.
-                  </>
-                ) : (
-                  <>
-                    Te faltan <b className="text-destructive">{m(eq - b.salesCents)}</b> para llegar al punto de equilibrio de <b>{m(eq)}</b>.
-                  </>
-                )}
-                {projection && (
-                  <>
-                    {" "}
-                    Si mantienes este ritmo cerrarás {projection.monthName} en <b>{m(projection.cents)}</b>{" "}
-                    <span className="text-muted-foreground">
-                      ({new Intl.NumberFormat("es-VE", { maximumFractionDigits: 0 }).format(b.salesCents / 100)} ÷ {projection.day} × {projection.days})
-                    </span>
-                    .
-                  </>
-                )}
-              </p>
-            </>
-          )}
-        </SectionCard>
+        <ExpenseComposition rows={expenses} currency={currency} periodLabel={periodLabel} />
       </TwoCol>
     </>
   );
@@ -147,32 +112,5 @@ function Fx({ label, value, className }: { label: string; value: string; classNa
       <small className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground">{label}</small>
       <b className="text-base tabular-nums">{value}</b>
     </span>
-  );
-}
-
-// Medidor de equilibrio (.eq): pista de 30px, relleno verde, proyección punteada y marca negra con etiqueta.
-export function EqMeter({
-  fill,
-  projection,
-  marker,
-  markerLabel,
-  compact,
-}: {
-  fill: number;
-  projection?: number | null;
-  marker: number | null;
-  markerLabel: string;
-  compact?: boolean;
-}) {
-  return (
-    <div role="img" aria-label={markerLabel} className={cn("relative h-[30px] rounded-full bg-track", compact ? "mb-2 mt-1.5" : "mb-2 mt-[34px]")}>
-      <div className="absolute inset-y-0 left-0 rounded-full bg-ok-solid" style={{ width: `${Math.min(100, fill)}%` }} />
-      {projection != null && <div className="absolute inset-y-1.5 left-0 rounded-full border-2 border-dashed border-primary opacity-70" style={{ width: `${Math.min(100, projection)}%` }} />}
-      {marker != null && (
-        <div className="absolute -inset-y-2 w-[3px] rounded-[2px] bg-foreground" style={{ left: `${Math.min(100, marker)}%` }}>
-          <em className="absolute bottom-full left-1/2 mb-0.5 -translate-x-1/2 whitespace-nowrap text-xs font-bold not-italic">{markerLabel}</em>
-        </div>
-      )}
-    </div>
   );
 }
