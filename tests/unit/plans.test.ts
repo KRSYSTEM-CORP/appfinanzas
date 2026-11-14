@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { PLANS, amountDueUsdCents, getPlan, productLimitMessage } from "@/lib/plans";
 
 describe("planes", () => {
-  it("Emprende cobra $10 el primer mes y $12,99 después", () => {
-    expect(amountDueUsdCents("EMPRENDE", false)).toBe(1000);
+  it("Emprende cobra $9,99 el primer mes y $12,99 después", () => {
+    expect(amountDueUsdCents("EMPRENDE", false)).toBe(999);
     expect(amountDueUsdCents("EMPRENDE", true)).toBe(1299);
   });
   it("Pyme y Corporativo no tienen promoción", () => {

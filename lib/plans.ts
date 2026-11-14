@@ -20,7 +20,7 @@ export type PlanDef = {
 
 export const PLANS: Record<PlanId, PlanDef> = {
   EMPRENDE: {
-    id: "EMPRENDE", label: "Emprende", priceUsdCents: 1299, firstMonthUsdCents: 1000,
+    id: "EMPRENDE", label: "Emprende", priceUsdCents: 1299, firstMonthUsdCents: 999,
     maxUsers: 1, maxProducts: 100, aiCredits: 0, accounting: false,
     tagline: "Todo el sistema para empezar",
     features: [
@@ -60,7 +60,7 @@ export function getPlan(id: string | null | undefined): PlanDef {
   return PLANS[(id as PlanId) in PLANS ? (id as PlanId) : "CORPORATIVO"];
 }
 
-// Lo que se cobra ahora: el primer mes de Emprende vale $10 solo si la empresa
+// Lo que se cobra ahora: el primer mes de Emprende vale $9,99 solo si la empresa
 // aún no tiene ningún pago aprobado; desde el segundo mes, $12,99.
 export function amountDueUsdCents(plan: PlanId, hasApprovedPayment: boolean): number {
   const p = PLANS[plan];

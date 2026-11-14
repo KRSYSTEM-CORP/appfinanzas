@@ -356,7 +356,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
             <span className="kp-sico"><StarIcon aria-hidden /></span>
             <div style={{ flex: 1 }}>
               <b>Tu bienvenida tiene beneficios</b>
-              <div className="kp-muted">15 días gratis · el primer mes de Emprende cuesta $10 · desde el segundo, precio habitual.</div>
+              <div className="kp-muted">15 días gratis · el primer mes de Emprende cuesta $9,99 · desde el 2.º mes pagas $12,99 al mes.</div>
             </div>
           </div>
         )}
@@ -374,8 +374,8 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
                     {p.firstMonthUsdCents != null && firstMonth ? (
                       <>
                         <s>{usd(p.priceUsdCents, 2)}</s> {usd(p.firstMonthUsdCents, 2)}
-                        <span className="kp-pill ok">Solo el 1.er mes</span>
-                        <small>Desde el 2.º mes: {usd(p.priceUsdCents, 2)} / mes</small>
+                        <span className="kp-pill ok">Solo el primer mes</span>
+                        <small>Luego pagas {usd(p.priceUsdCents, 2)} al mes</small>
                       </>
                     ) : (
                       usd(p.priceUsdCents, 2)

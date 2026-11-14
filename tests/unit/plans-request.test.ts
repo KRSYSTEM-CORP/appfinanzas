@@ -7,9 +7,9 @@ describe("plan request", () => {
     expect(parsePlanRequest("Pagué por Binance")).toBeNull();
     expect(parsePlanRequest(null)).toBeNull();
   });
-  it("first month of Emprende is $10 only without approved payment", () => {
+  it("first month of Emprende is $9,99 only without approved payment", () => {
     const base = { selected: "EMPRENDE" as const, current: "EMPRENDE" as const, monthlyFeeUsdCents: 1299 };
-    expect(planAmountDueUsdCents({ ...base, hasApprovedPayment: false })).toBe(1000);
+    expect(planAmountDueUsdCents({ ...base, hasApprovedPayment: false })).toBe(999);
     expect(planAmountDueUsdCents({ ...base, hasApprovedPayment: true })).toBe(1299);
     expect(planAmountDueUsdCents({ selected: "PYME", current: "EMPRENDE", monthlyFeeUsdCents: 1299, hasApprovedPayment: false })).toBe(2399);
   });
