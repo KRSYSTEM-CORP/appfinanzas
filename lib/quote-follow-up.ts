@@ -27,12 +27,41 @@ export function expiryLabel(days: number | null): string | null {
 }
 
 // Sugerencia de siguiente paso de un presupuesto abierto.
-export function nextStepSuggestion(q: { status: string; sentAt: Date | string | null; viewedAt: Date | string | null; validUntil: Date | string | null }): string | null {
+export function nextStepSuggestion(q: { status: string; sentAt: Date | string | null; viewedAt: Date | string | null; validUntil: Date | string | null }, now: Date = new Date()): string | null {
   if (q.status !== "PENDING") return null;
-  const d = daysToExpire(q.validUntil);
-  if (d != null && d < 0) return "Venció: ofrécele renovarlo o márcalo como perdido.";
-  if (d != null && d <= 2) return "Está por vencer: llama hoy y cierra la venta.";
-  if (!q.sentAt) return "Aún no lo envías: mándalo por WhatsApp.";
-  if (!q.viewedAt) return "Aún no lo abre: reenvía por WhatsApp o llama.";
-  return "Ya lo vio: pregunta si tiene dudas y propón cerrar.";
+  const d = daysToExpire(q.validUntil, now);
+  if (d != null && d < 0) return "Venció: ofrece renovarlo con 5 % para cerrarlo.";
+  if (!q.viewedAt) return "Aún no lo abre: reenvía por WhatsApp con un mensaje corto.";
+  if (d != null && d <= 4) return "Está por vencer: llama hoy y confirma.";
+  return "Lo abrió: escríbele para resolver dudas.";
+}
+
+export type QuotePillTone = "ok" | "warn" | "bad";
+
+// Píldora de vigencia de la tarjeta: Vigente · N d / Vence en N d / Vencido hace N d.
+export function expiryPill(days: number | null): { label: string; tone: QuotePillTone } | null {
+  if (days == null) return null;
+  if (days < 0) return { label: `Vencido hace ${-days} d`, tone: "bad" };
+  if (days <= 4) return { label: `Vence en ${days} d`, tone: "warn" };
+  return { label: `Vigente · ${days} d`, tone: "ok" };
+}
+
+// Probabilidad de cierre (5 a 95) según los días que lleva, si ya se envió o abrió y cuántos
+// seguimientos se registraron. Estimación calculada con datos reales del presupuesto.
+export function closeProbability(
+  q: { status: string; createdAt: Date | string; sentAt: Date | string | null; viewedAt: Date | string | null; validUntil: Date | string | null },
+  followUps = 0,
+  now: Date = new Date()
+): number {
+  if (q.status === "CONVERTED") return 100;
+  if (q.status === "LOST") return 0;
+  let p = 40;
+  if (q.sentAt) p += 10;
+  if (q.viewedAt) p += 20;
+  p += Math.min(3, followUps) * 5;
+  const age = Math.max(0, Math.floor((now.getTime() - new Date(q.createdAt).getTime()) / 86_400_000));
+  p -= Math.min(20, age * 2);
+  const d = daysToExpire(q.validUntil, now);
+  if (d != null && d < 0) p = Math.min(p, 25);
+  return Math.max(5, Math.min(95, Math.round(p)));
 }
