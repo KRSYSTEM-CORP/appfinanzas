@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BanknoteIcon, BarChart3Icon, CheckIcon, MicIcon, PackageIcon, SendIcon, SparklesIcon, ZapIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { applyProposal, askAssistant, clearAssistantHistory, undoProposal, type AssistantStatus, type HistoryEntry } from "@/lib/actions/assistant";
+import { applyProposal, askAssistant, undoProposal, type AssistantStatus, type HistoryEntry } from "@/lib/actions/assistant";
 import type { Proposal } from "@/lib/assistant";
 
 type Msg =
@@ -104,13 +104,6 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
         )
       );
       if (r.success) router.refresh();
-    });
-  }
-
-  function clearHistory() {
-    startTransition(async () => {
-      await clearAssistantHistory();
-      setMsgs([]);
     });
   }
 
@@ -274,11 +267,6 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
             Consultar y crear propuestas es <b>gratis</b> · solo se cobra al confirmar: {applyCost} créditos
           </span>
           <span className="ml-auto tabular-nums">Consultas hoy: {asked} de {status.askCap}</span>
-          {msgs.length > 0 && (
-            <button type="button" className="font-semibold text-primary" onClick={clearHistory} disabled={isPending}>
-              Borrar historial
-            </button>
-          )}
         </div>
         <div className="flex gap-2">
           <input

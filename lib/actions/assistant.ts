@@ -194,12 +194,6 @@ export async function listAssistantHistory(): Promise<HistoryEntry[]> {
   });
 }
 
-export async function clearAssistantHistory(): Promise<ActionResult> {
-  const { companyId, userId } = await requireManager();
-  await withTenant(companyId, (tx) => tx.assistantEntry.deleteMany({ where: { companyId, userId } }));
-  return { success: true };
-}
-
 // Aplica una propuesta ya confirmada por el usuario. Se vuelve a validar aquí:
 // nada de lo que venga del navegador o del modelo se ejecuta sin comprobarlo.
 export async function applyProposal(input: unknown, entryId?: string | null): Promise<ActionResult & { summary?: string }> {
