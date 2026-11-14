@@ -44,6 +44,7 @@
    (rediseno/tokens.css: --ok-solid, --warn-solid, --bad-solid, --track, --c6, --c7, .wa).
    Los usan Administración y Marketing. */
 :root {
+  --m-plat: #6e6e73;
   --ok-solid: #34c759; --warn-solid: #ff9f0a; --bad-solid: #ff3b30;
   --track: rgba(120, 120, 128, 0.16);
   --chart-6: #e0a800; --chart-7: #1e63d6;

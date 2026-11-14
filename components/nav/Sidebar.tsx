@@ -36,6 +36,8 @@ const MODULES: NavItem[] = [
   { key: "set", href: "/settings", label: "Ajustes", icon: "gear", group: "Red y plataforma" },
 ];
 const GROUPS = ["Operación", "Control", "Red y plataforma"] as const;
+// Panel del superadministrador de KR System (/admin): solo lo ve quien tenga ese permiso.
+const PLATFORM: NavItem = { key: "plat", href: "/admin", label: "Plataforma", icon: "shield", group: "Red y plataforma" };
 
 // Administración agrupa Compras, Proveedores, Libro IVA y Nómina: sigue resaltada en todas.
 const ACCOUNTING_SUBPATHS = ["/accounting", "/suppliers", "/purchases", "/tax-book", "/payroll", "/documents", "/billing", "/employees"];
@@ -87,7 +89,7 @@ export function Sidebar({
 
   const allowed = (item: NavItem) => canManage || allowedSections.length === 0 || allowedSections.includes(item.section as string);
   // Sin `section` = solo gerente. Learning lo ve todo el equipo.
-  const visible = MODULES.filter((i) => (i.key === "learn" ? true : i.section ? allowed(i) : canManage));
+  const visible = [...MODULES.filter((i) => (i.key === "learn" ? true : i.section ? allowed(i) : canManage)), ...(isSuperAdmin ? [PLATFORM] : [])];
 
   const tabCandidates = ["inicio", "inv", "pos", "pre"];
   const tabs = tabCandidates.map((k) => visible.find((i) => i.key === k)).filter((i): i is NavItem => Boolean(i));
@@ -102,7 +104,6 @@ export function Sidebar({
           { href: "/payroll", label: "Nómina", group: "Administración" },
         ]
       : []),
-    ...(isSuperAdmin ? [{ href: "/admin", label: "Plataforma", group: "Plataforma" }] : []),
     ...featureLinks.filter((l) => canManage || !l.managerOnly).map((l) => ({ href: l.href, label: l.label, group: "Más" })),
   ];
 
