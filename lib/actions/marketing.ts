@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSectionAccess, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { FREQUENT_VISITS, INACTIVE_DAYS, NEW_CUSTOMER_DAYS, normalizePromoCode, promoCode, PROMO_LISTS, segmentOf, type SegmentId } from "@/lib/marketing";
+import { FREQUENT_VISITS, INACTIVE_DAYS, NEW_CUSTOMER_DAYS, normalizePromoCode, promoCode, promoSegmentLabel, segmentOf, type SegmentId } from "@/lib/marketing";
+import { resolveCoupon } from "@/lib/coupon-server";
 import type { ActionResult } from "@/lib/types";
 
 export type CustomerInsight = {
@@ -130,43 +131,106 @@ export type PromotionRow = {
   code: string;
   discountPercent: number;
   segment: string;
+  rangeFrom: string | null;
+  rangeTo: string | null;
+  customerIds: string[];
   validUntil: string;
   redemptions: number;
+  // Quién canjeó (nombre y apellido guardados en la nota del canje), los más recientes primero.
+  redeemers: string[];
 };
 
 export async function listPromotions(): Promise<PromotionRow[]> {
   const { companyId } = await requireSectionAccess("customers");
   const rows = await withTenant(companyId, (tx) =>
-    tx.promotion.findMany({ where: { companyId }, orderBy: { createdAt: "desc" }, include: { _count: { select: { redemptions: true } } } })
+    tx.promotion.findMany({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+      include: { _count: { select: { redemptions: true } }, redemptions: { orderBy: { createdAt: "desc" }, take: 5, select: { note: true } } },
+    })
   );
-  return rows.map((p) => ({ id: p.id, name: p.name, code: p.code, discountPercent: p.discountPercent, segment: p.segment, validUntil: p.validUntil.toISOString(), redemptions: p._count.redemptions }));
+  return rows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    code: p.code,
+    discountPercent: p.discountPercent,
+    segment: p.segment,
+    rangeFrom: p.rangeFrom,
+    rangeTo: p.rangeTo,
+    customerIds: p.customerIds,
+    validUntil: p.validUntil.toISOString(),
+    redemptions: p._count.redemptions,
+    redeemers: p.redemptions.map((r) => r.note ?? "").filter(Boolean),
+  }));
 }
 
-const NewPromotion = z.object({
-  segment: z.enum(["todos", "campeones", "leales", "riesgo", "dormidos", "cumpleaneros"]),
-  discountPercent: z.number().int().min(1, "El descuento mínimo es 1 %").max(60, "El descuento máximo es 60 %"),
-  days: z.union([z.literal(7), z.literal(15), z.literal(30)]),
-  code: z.string().optional(),
-});
+const YMD = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida");
+const NewPromotion = z
+  .object({
+    segment: z.enum(["todos", "campeones", "leales", "riesgo", "dormidos", "cumpleaneros", "clientes"]),
+    discountPercent: z.number().int().min(1, "El descuento mínimo es 1 %").max(60, "El descuento máximo es 60 %"),
+    days: z.union([z.literal(7), z.literal(15), z.literal(30)]),
+    code: z.string().optional(),
+    rangeFrom: YMD.optional(),
+    rangeTo: YMD.optional(),
+    customerIds: z.array(z.string()).max(2000).optional(),
+  })
+  .superRefine((d, ctx) => {
+    if (d.segment === "cumpleaneros") {
+      if (!d.rangeFrom || !d.rangeTo) ctx.addIssue({ code: "custom", message: "Elige el periodo de cumpleaños (desde y hasta)" });
+      else if (d.rangeTo < d.rangeFrom) ctx.addIssue({ code: "custom", message: "La fecha «hasta» no puede ser anterior a «desde»" });
+    }
+    if (d.segment === "clientes" && (d.customerIds ?? []).length === 0) ctx.addIssue({ code: "custom", message: "Elige al menos un cliente" });
+  });
 
-// Crear promoción (lista de clientes, descuento y vigencia; el código se sugiere y se puede editar).
+// Crear promoción (a quién va, descuento y vigencia; el código se sugiere y se puede editar).
 export async function createPromotion(input: unknown): Promise<ActionResult> {
   const { companyId } = await requireSectionAccess("customers");
   const parsed = NewPromotion.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Datos no válidos" };
   const d = parsed.data;
-  const code = normalizePromoCode(d.code ?? "") || promoCode(d.segment, d.discountPercent);
+  const code = normalizePromoCode(d.code ?? "") || promoCode(d.segment === "clientes" ? "todos" : d.segment, d.discountPercent);
   if (code.length < 3) return { success: false, error: "Escribe un código de al menos 3 letras o números" };
-  const name = PROMO_LISTS.find((l) => l.id === d.segment)?.label ?? "Promoción";
+  const name = promoSegmentLabel(d.segment);
   try {
-    await withTenant(companyId, (tx) =>
-      tx.promotion.create({ data: { companyId, name, code, discountPercent: d.discountPercent, segment: d.segment, validUntil: new Date(Date.now() + d.days * 86_400_000) } })
-    );
-  } catch {
+    await withTenant(companyId, async (tx) => {
+      let customerIds: string[] = [];
+      if (d.segment === "clientes") {
+        const found = await tx.customer.findMany({ where: { companyId, id: { in: d.customerIds ?? [] } }, select: { id: true } });
+        customerIds = found.map((c) => c.id);
+        if (customerIds.length === 0) throw new Error("NOCLIENTS");
+      }
+      await tx.promotion.create({
+        data: {
+          companyId,
+          name,
+          code,
+          discountPercent: d.discountPercent,
+          segment: d.segment,
+          rangeFrom: d.segment === "cumpleaneros" ? d.rangeFrom : null,
+          rangeTo: d.segment === "cumpleaneros" ? d.rangeTo : null,
+          customerIds,
+          validUntil: new Date(Date.now() + d.days * 86_400_000),
+        },
+      });
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message === "NOCLIENTS") return { success: false, error: "Elige al menos un cliente" };
     return { success: false, error: `Ya existe una promoción con el código ${code}` };
   }
   revalidatePath("/customers/promotions");
   return { success: true };
+}
+
+export type CouponResult = { success: true; code: string; discountPercent: number } | { success: false; error: string };
+
+// «Canjear» en la pantalla de cobro del POS: valida el cupón para el cliente de la venta. El descuento se
+// aplica en pantalla; completeSale vuelve a validar y registra el canje.
+export async function validateCoupon(rawCode: string, customerPhone: string | null): Promise<CouponResult> {
+  const { companyId } = await requireSession();
+  const r = await withTenant(companyId, (tx) => resolveCoupon(tx, companyId, rawCode, customerPhone));
+  if (!r.check.ok) return { success: false, error: r.check.error };
+  return { success: true, code: r.code, discountPercent: r.check.discountPercent };
 }
 
 export async function registerRedemption(promotionId: string, note?: string): Promise<ActionResult> {

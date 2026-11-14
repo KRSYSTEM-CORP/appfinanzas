@@ -6,19 +6,15 @@ import type { PurchasedProductRow, RotationRow } from "@/lib/actions/reports";
 
 const und = (v: number) => `${v.toLocaleString("es-VE")} und.`;
 
-// Más vendidos · Menos vendidos · Lo que más compramos · Mayor rotación, en dos
-// filas de dos como la preview.
+// Lo que más compramos · Mayor rotación. Más/Menos vendidos viven en «Rendimiento
+// de productos» (ParetoChart).
 export function StatsInsights({
-  top,
-  bottom,
   purchased,
   rotation,
   days,
   periodLabel,
   currency,
 }: {
-  top: { productName: string; quantity: number; revenueCents: number }[];
-  bottom: { productName: string; quantity: number }[];
   purchased: PurchasedProductRow[];
   rotation: RotationRow[];
   days: number;
@@ -26,40 +22,11 @@ export function StatsInsights({
   currency: string;
 }) {
   const money = (c: number) => formatCurrencyCents(currency, c);
-  const top5 = [...top].sort((a, b) => b.quantity - a.quantity).slice(0, 5);
-  const low5 = bottom.slice(0, 5);
   const buy5 = purchased.slice(0, 5);
-  const unitMax = Math.max(1, ...top5.map((x) => x.quantity), ...low5.map((x) => x.quantity));
   const rot5 = rotation.slice(0, 5).map((r) => ({ ...r, days: inventoryDays(r.stock, r.sold, days) }));
 
   return (
     <>
-      <div className={`${s.grid} ${s.g2}`}>
-        <StatsCard title="Más vendidos" sub={`Unidades vendidas · ${periodLabel}`}>
-          {top5.length === 0 ? (
-            <p className={s.empty}>Sin ventas de productos en este período.</p>
-          ) : (
-            <>
-              <HBars max={unitMax} rows={top5.map((x) => ({ label: x.productName, value: x.quantity, display: und(x.quantity), color: "var(--chart-1)" }))} />
-              <p className={s.note}>
-                Líder: <b>{top5[0].productName}</b> con {money(top5[0].revenueCents)} en ventas.
-              </p>
-            </>
-          )}
-        </StatsCard>
-        <StatsCard title="Menos vendidos" sub="Los que menos se mueven · candidatos a promoción">
-          {low5.length === 0 ? (
-            <p className={s.empty}>Sin productos activos para mostrar.</p>
-          ) : (
-            <>
-              <HBars max={unitMax} rows={low5.map((x) => ({ label: x.productName, value: x.quantity, display: und(x.quantity), color: "var(--chart-4)" }))} />
-              <p className={s.note}>
-                {low5[0].productName} vendió {low5[0].quantity} {low5[0].quantity === 1 ? "unidad" : "unidades"}: prueba un descuento o combo.
-              </p>
-            </>
-          )}
-        </StatsCard>
-      </div>
       <div className={`${s.grid} ${s.g2}`}>
         <StatsCard title="Lo que más compramos" sub={`Unidades pedidas a proveedores · ${periodLabel}`}>
           {buy5.length === 0 ? (

@@ -190,6 +190,8 @@ model Company {
   // (e.g. the general rate has moved between 12%/15%/16% historically) —
   // see TaxCategory/lib/tax.ts. Defaults match the rate in effect when this
   // feature was added.
+  // Interruptor «Usar IVA»: apagado = no se calcula ni se desglosa IVA (alícuotas efectivas 0).
+  ivaEnabled            Boolean           @default(true)
   ivaGeneralRatePercent Int               @default(16)
   ivaReducedRatePercent Int               @default(8)
   // "Contribuyente especial" status — SENIAT designates certain companies as
@@ -1498,6 +1500,11 @@ model Promotion {
   discountPercent Int
   segment         String
   validUntil      DateTime
+  // Segmentación: segment = todos | campeones | leales | riesgo | dormidos | cumpleaneros | clientes.
+  // cumpleaneros usa rangeFrom/rangeTo (AAAA-MM-DD; solo cuentan día y mes); clientes usa customerIds.
+  rangeFrom       String?
+  rangeTo         String?
+  customerIds     String[] @default([])
   createdAt       DateTime @default(now())
   redemptions     PromotionRedemption[]
 
@@ -1511,9 +1518,12 @@ model PromotionRedemption {
   promotionId String
   promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
   customerId  String?
+  saleId      String?
   note        String?
   createdAt   DateTime  @default(now())
 
+  // Un cliente no puede canjear el mismo cupón dos veces (los canjes manuales sin cliente no cuentan).
+  @@unique([promotionId, customerId])
   @@index([promotionId])
   @@index([companyId])
 }

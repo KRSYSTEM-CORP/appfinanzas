@@ -309,6 +309,9 @@ export const SaleSchema = z
     // correctly computed on the discounted base, not just subtracted from an
     // already-taxed total.
     discountPercent: z.coerce.number().min(0, "El descuento no puede ser negativo").max(100, "Máximo 100%").default(0),
+    // Cupón canjeado en la pantalla de cobro: el servidor lo vuelve a validar y su porcentaje debe
+    // coincidir con discountPercent (ver completeSale).
+    promoCode: z.preprocess(blankToUndefined, z.string().trim().max(40).optional()),
     // Free-text, optional — printed on the Nota de Entrega/Factura PDF and
     // print view when present (see itemDescription's sibling, renderNote,
     // in lib/delivery-note.ts).
@@ -667,6 +670,7 @@ export const BrandingSchema = z.object({
 });
 
 export const IvaSettingsSchema = z.object({
+  ivaEnabled: z.enum(["true", "false"]).transform((v) => v === "true"),
   ivaGeneralRatePercent: z.coerce.number().int().min(0).max(100),
   ivaReducedRatePercent: z.coerce.number().int().min(0).max(100),
   isIvaWithholdingAgent: z.enum(["true", "false"]).transform((v) => v === "true"),

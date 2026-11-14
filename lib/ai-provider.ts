@@ -26,7 +26,9 @@ export async function askModel(system: string, user: string, maxTokens = 700): P
         headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
         body: JSON.stringify({
           model: process.env.AI_MODEL || DEFAULT_MODEL,
-          max_tokens: maxTokens,
+          // Gemini 2.5 gasta tokens «pensando»: con un tope bajo la respuesta llegaba vacía.
+          max_tokens: Math.max(maxTokens, 2048),
+          reasoning_effort: "none",
           messages: [
             { role: "system", content: system },
             { role: "user", content: user },
@@ -34,9 +36,13 @@ export async function askModel(system: string, user: string, maxTokens = 700): P
         }),
         signal: AbortSignal.timeout(25_000),
       });
-      if (!res.ok) return { ok: false };
+      if (!res.ok) {
+        console.error("[asistente] proveedor respondió", res.status, (await res.text().catch(() => "")).slice(0, 300));
+        return { ok: false };
+      }
       const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
       const text = json.choices?.[0]?.message?.content ?? "";
+      if (!text) console.error("[asistente] respuesta vacía del proveedor");
       return text ? { ok: true, text } : { ok: false };
     }
     if (process.env.ANTHROPIC_API_KEY) {
@@ -60,7 +66,8 @@ export async function askModel(system: string, user: string, maxTokens = 700): P
       const text = json.content?.find((c) => c.type === "text")?.text ?? "";
       return text ? { ok: true, text } : { ok: false };
     }
-  } catch {
+  } catch (e) {
+    console.error("[asistente] error llamando al proveedor", e instanceof Error ? e.message : e);
     return { ok: false };
   }
   return { ok: false };

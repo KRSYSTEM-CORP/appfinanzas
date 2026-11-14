@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma, type PaymentStatus } from "@prisma/client";
 import { hasPermission, requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { resolveCoupon } from "@/lib/coupon-server";
 import { notifyLive, posChannel } from "@/lib/realtime";
 import { SaleSchema, RegisterPaymentSchema } from "@/lib/validations";
 import {
@@ -15,7 +16,7 @@ import {
   assertPaymentsWithinRemaining,
 } from "@/lib/payment-currency";
 import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
-import { decomposeTax, rateForCategory } from "@/lib/tax";
+import { decomposeTax, effectiveIvaRates, rateForCategory } from "@/lib/tax";
 import { computeItemDiscountCents } from "@/lib/discount";
 import { resolveTierPrice, tierPriceCents } from "@/lib/pricing";
 import type { ActionResult } from "@/lib/types";
@@ -68,7 +69,8 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     paymentStatus,
     channel,
     payments,
-    discountPercent,
+    discountPercent: requestedDiscountPercent,
+    promoCode,
     customerFirstName,
     customerLastName,
     customerPhone,
@@ -103,6 +105,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           localCurrencyCode: true,
           exchangeRateEnabled: true,
           referenceCurrency: true,
+          ivaEnabled: true,
           ivaGeneralRatePercent: true,
           ivaReducedRatePercent: true,
           isIgtfAgent: true,
@@ -112,6 +115,17 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       });
       if (company?.requireCustomerOnSale && customerPhone === "0000-0000000") {
         throw new Error("Esta empresa exige nombre y teléfono del cliente en cada venta. Registra o elige un cliente.");
+      }
+      // Cupón: se revalida aquí (existe, vigente, el cliente califica y no lo canjeó antes) y manda su porcentaje.
+      let discountPercent = requestedDiscountPercent;
+      let coupon: Awaited<ReturnType<typeof resolveCoupon>> | null = null;
+      if (promoCode) {
+        coupon = await resolveCoupon(tx, companyId, promoCode, customerPhone);
+        if (!coupon.check.ok) throw new Error(coupon.check.error);
+        if (coupon.check.discountPercent !== requestedDiscountPercent) {
+          throw new Error("El descuento no coincide con el cupón. Vuelve a canjearlo.");
+        }
+        discountPercent = coupon.check.discountPercent;
       }
       const exchangeRateEnabled = company?.exchangeRateEnabled ?? true;
       if (exchangeRateEnabled && company?.exchangeRate == null) {
@@ -133,8 +147,11 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         : (company?.exchangeRate ?? null);
       const rate = exchangeRate != null ? Number(exchangeRate) : null;
       const referenceCurrency = company?.referenceCurrency ?? "EUR";
-      const ivaGeneralRatePercent = company?.ivaGeneralRatePercent ?? 16;
-      const ivaReducedRatePercent = company?.ivaReducedRatePercent ?? 8;
+      const { general: ivaGeneralRatePercent, reduced: ivaReducedRatePercent } = effectiveIvaRates(
+        company?.ivaEnabled ?? true,
+        company?.ivaGeneralRatePercent ?? 16,
+        company?.ivaReducedRatePercent ?? 8
+      );
 
       const products = await tx.product.findMany({
         where: { id: { in: items.map((i) => i.productId) }, companyId, branchId },
@@ -279,6 +296,19 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         },
       });
 
+      if (coupon && coupon.promotionId) {
+        // Registra el canje con el cliente y la venta; el índice único (cupón, cliente) impide canjearlo dos veces.
+        await tx.promotionRedemption.create({
+          data: {
+            companyId,
+            promotionId: coupon.promotionId,
+            customerId: customer.id,
+            saleId: sale.id,
+            note: `${customerFirstName} ${customerLastName}`.trim(),
+          },
+        });
+      }
+
       // Sum quantities per product first (a cart could list the same product
       // on more than one line) so each product gets exactly one parallel
       // update computed off its total decrement, rather than two updates
@@ -357,7 +387,9 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     const message = isUniqueViolation
       ? quoteId
         ? "Este presupuesto ya fue facturado"
-        : "No se pudo asignar el número de la venta. Inténtalo de nuevo."
+        : promoCode
+          ? "Este cliente ya canjeó este cupón, o no se pudo asignar el número de la venta. Quita el cupón e inténtalo de nuevo."
+          : "No se pudo asignar el número de la venta. Inténtalo de nuevo."
       : err instanceof Error
         ? err.message
         : "No se pudo completar la venta";
@@ -504,8 +536,8 @@ export async function issueDebitNote(saleId: string, reason: string, amount: num
       if (sale.voided) throw new Error("La venta está anulada");
       if (!sale.branchId) throw new Error("La venta no tiene sucursal");
 
-      const company = await tx.company.findUnique({ where: { id: companyId }, select: { ivaGeneralRatePercent: true } });
-      const { baseCents, taxCents } = decomposeTax(totalCents, "GENERAL", company?.ivaGeneralRatePercent ?? 16);
+      const company = await tx.company.findUnique({ where: { id: companyId }, select: { ivaGeneralRatePercent: true, ivaEnabled: true } });
+      const { baseCents, taxCents } = decomposeTax(totalCents, "GENERAL", company?.ivaEnabled === false ? 0 : (company?.ivaGeneralRatePercent ?? 16));
       const controlNumber = await nextDocumentNumber(tx, sale.branchId, "debitNote");
       await tx.debitNote.create({
         data: {

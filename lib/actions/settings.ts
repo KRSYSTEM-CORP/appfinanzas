@@ -154,6 +154,7 @@ export async function updateReferenceCurrencySettings(formData: FormData): Promi
 }
 
 export type IvaSettingsInfo = {
+  ivaEnabled: boolean;
   ivaGeneralRatePercent: number;
   ivaReducedRatePercent: number;
   isIvaWithholdingAgent: boolean;
@@ -168,6 +169,7 @@ export async function getIvaSettings(): Promise<IvaSettingsInfo> {
     tx.company.findUnique({
       where: { id: companyId },
       select: {
+        ivaEnabled: true,
         ivaGeneralRatePercent: true,
         ivaReducedRatePercent: true,
         isIvaWithholdingAgent: true,
@@ -178,6 +180,7 @@ export async function getIvaSettings(): Promise<IvaSettingsInfo> {
     })
   );
   return {
+    ivaEnabled: company?.ivaEnabled ?? true,
     ivaGeneralRatePercent: company?.ivaGeneralRatePercent ?? 16,
     ivaReducedRatePercent: company?.ivaReducedRatePercent ?? 8,
     isIvaWithholdingAgent: company?.isIvaWithholdingAgent ?? false,
@@ -190,6 +193,7 @@ export async function getIvaSettings(): Promise<IvaSettingsInfo> {
 export async function updateIvaSettings(formData: FormData): Promise<ActionResult> {
   const { companyId } = await requireManager();
   const parsed = IvaSettingsSchema.safeParse({
+    ivaEnabled: formData.get("ivaEnabled") ?? "true",
     ivaGeneralRatePercent: formData.get("ivaGeneralRatePercent"),
     ivaReducedRatePercent: formData.get("ivaReducedRatePercent"),
     isIvaWithholdingAgent: formData.get("isIvaWithholdingAgent"),
@@ -205,6 +209,9 @@ export async function updateIvaSettings(formData: FormData): Promise<ActionResul
   await withTenant(companyId, (tx) => tx.company.update({ where: { id: companyId }, data: parsed.data }));
 
   revalidatePath("/settings");
+  revalidatePath("/pos");
+  revalidatePath("/purchases");
+  revalidatePath("/reports");
   return { success: true };
 }
 

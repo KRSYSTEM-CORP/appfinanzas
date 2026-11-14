@@ -46,3 +46,14 @@ export const TAX_CATEGORY_EXPORT_LABELS: Record<TaxCategory, string> = {
   REDUCED: "Reducido",
   EXEMPT: "Exento",
 };
+
+// Interruptor «Usar IVA» (Company.ivaEnabled). Con IVA apagado las alícuotas
+// efectivas son 0, así que decomposeTax devuelve base = total e IVA = 0 y el
+// total de la venta/compra no cambia (los precios ya incluyen IVA).
+export function effectiveIvaRates(
+  ivaEnabled: boolean,
+  generalRatePercent: number,
+  reducedRatePercent: number
+): { general: number; reduced: number } {
+  return ivaEnabled ? { general: generalRatePercent, reduced: reducedRatePercent } : { general: 0, reduced: 0 };
+}

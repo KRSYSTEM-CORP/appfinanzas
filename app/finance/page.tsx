@@ -333,7 +333,7 @@ export default async function FinancePage({
         </StatsCard>
       </div>
 
-      <StatsInsights top={top} bottom={bottom} purchased={purchased} rotation={rotation} days={days} periodLabel={label} currency={cur} />
+      <StatsInsights purchased={purchased} rotation={rotation} days={days} periodLabel={label} currency={cur} />
 
       <StatsCard title="Reposición sugerida" sub="Para cubrir 20 días de ventas, según tu ritmo actual">
         {restock.length === 0 ? (

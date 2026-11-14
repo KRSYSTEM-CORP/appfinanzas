@@ -192,11 +192,12 @@ export function BranchCards({
           const here = s.id === currentBranchId;
           const p = s.goalCents != null && s.goalCents > 0 ? s.salesMonthCents / s.goalCents : null;
           const ringColor = p == null ? "" : p >= 0.9 ? "var(--success)" : p >= 0.6 ? "var(--primary)" : "var(--warning)";
-          const pill = "inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-xs font-bold whitespace-nowrap";
+          const pill = "inline-flex items-center gap-1.5 rounded-full bg-pill-dark px-2.5 py-[3px] text-xs font-bold text-white whitespace-nowrap";
+          const locked = s.isActive && !here;
           const dot = <span className="size-[7px] rounded-full bg-current" aria-hidden />;
           return (
             <li key={s.id} id={`sede-${s.id}`} className="scroll-mt-4">
-              <article className={`relative flex h-full min-w-0 flex-col gap-0.5 rounded-[19px] border-2 bg-card p-4 shadow-(--shadow-card) transition duration-150 hover:-translate-y-0.5 hover:shadow-(--shadow-float) ${here ? "border-primary" : "border-transparent"}`}>
+              <article className={`relative flex ${locked ? "sede-locked [background:repeating-linear-gradient(135deg,var(--card)_0_14px,color-mix(in_srgb,var(--muted)_70%,var(--card))_14px_28px)]" : ""} h-full min-w-0 flex-col gap-0.5 rounded-[19px] border-2 ${locked ? "" : "bg-card"} p-4 shadow-(--shadow-card) transition duration-150 hover:-translate-y-0.5 hover:shadow-(--shadow-float) ${here ? "border-primary" : "border-transparent"}`}>
                 <div className="flex items-center gap-3">
                   <IconTile>
                     <StoreIcon className="size-[22px]" aria-hidden />
@@ -210,12 +211,12 @@ export function BranchCards({
                   </div>
                 </div>
                 <div className="mb-1 mt-2.5 flex flex-wrap items-center gap-2">
-                  {here && <span className={`${pill} bg-primary/12 font-semibold text-primary`}>Operando aquí</span>}
-                  {!s.isActive && <span className={`${pill} bg-muted font-semibold text-muted-foreground`}>Inactiva</span>}
+                  {here && <span className={`${pill}`}>Operando aquí</span>}
+                  {!s.isActive && <span className={`${pill}`}>Inactiva</span>}
                   {s.lowStock > 0 ? (
-                    <span className={`${pill} bg-warning/18 text-warning`}>{dot}{s.lowStock} {s.lowStock === 1 ? "alerta" : "alertas"} de stock</span>
+                    <span className={`${pill}`}>{dot}{s.lowStock} {s.lowStock === 1 ? "alerta" : "alertas"} de stock</span>
                   ) : (
-                    s.isActive && <span className={`${pill} bg-success/14 text-success`}>{dot}Stock al día</span>
+                    s.isActive && <span className={`${pill}`}>{dot}Stock al día</span>
                   )}
                 </div>
                 <div className="mt-1.5">
@@ -246,6 +247,11 @@ export function BranchCards({
                     </div>
                   )}
                 </div>
+                {locked && (
+                  <div className="sede-lock-veil" aria-hidden>
+                    <span><LockIcon className="size-4" /> Bloqueada · requiere clave</span>
+                  </div>
+                )}
                 {s.isActive && (
                   <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
                     <GoalEditor branchId={s.id} goalCents={s.goalCents} currency={currency} />

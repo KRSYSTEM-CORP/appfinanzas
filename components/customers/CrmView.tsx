@@ -230,15 +230,12 @@ export function CrmView({
           <p className="p-5 text-center text-muted-foreground">Ningún cliente cumple este filtro.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
+            <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b text-left text-xs font-bold text-muted-foreground [&>th]:px-3.5 [&>th]:py-[11px]">
                   <th>Cliente</th>
                   <th className="text-right">Visitas</th>
-                  <th className="text-right">Gastado</th>
                   <th>Última visita</th>
-                  <th>Próximo contacto</th>
-                  <th>Grupo</th>
                   <th />
                 </tr>
               </thead>
@@ -249,17 +246,16 @@ export function CrmView({
                       <b>
                         {c.firstName} {c.lastName}
                       </b>
-                      <small className="block text-xs text-muted-foreground">{c.phone}</small>
                     </td>
                     <td className="text-right tabular-nums">{c.visits}</td>
-                    <td className="text-right tabular-nums">{money(currency, c.spentCents, 0)}</td>
                     <td>{lastVisit(c.lastVisitDays)}</td>
-                    <td>{c.nextContactDate ? shortDate(`${c.nextContactDate}T12:00:00Z`) : "—"}</td>
-                    <td>
-                      <Pill>{SEGMENTS.find((s) => s.id === c.segment)!.label}</Pill>
-                    </td>
                     <td className="text-right">
                       <RowMenu
+                        info={[
+                          { label: "Total gastado", value: money(currency, c.spentCents, 0) },
+                          { label: "Próximo contacto", value: c.nextContactDate ? shortDate(`${c.nextContactDate}T12:00:00Z`) : "—" },
+                          { label: "Grupo", value: SEGMENTS.find((s) => s.id === c.segment)!.label },
+                        ]}
                         items={[
                           ...(canManage ? [{ label: "Editar ficha", href: `/customers/${c.id}` }, { label: "Notas y próximo contacto", onSelect: () => setNoteFor(c) }] : []),
                           { label: "Enviar WhatsApp", href: whatsappLink(c.phone, greet(c)), external: true },
@@ -273,9 +269,7 @@ export function CrmView({
               <tfoot>
                 <tr className="border-t font-bold [&>td]:px-3.5 [&>td]:py-[11px]">
                   <td>{rows.length} clientes</td>
-                  <td />
-                  <td className="text-right tabular-nums">{money(currency, rows.reduce((n, c) => n + c.spentCents, 0), 0)}</td>
-                  <td colSpan={4} />
+                  <td colSpan={3} />
                 </tr>
               </tfoot>
             </table>
