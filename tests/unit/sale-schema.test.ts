@@ -61,11 +61,14 @@ const CONTACT = {
   reporterPhone: "0412-555-0000",
   proofImageDataUrl: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
 };
-describe("PaymentReportSchema (pago único)", () => {
-  it("exige el monto exacto del pago único", () => {
-    expect(PaymentReportSchema.safeParse({ ...CONTACT, lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 239.99, reference: "R" }] }).success).toBe(false);
-    expect(PaymentReportSchema.safeParse({ ...CONTACT, lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 240, reference: "R" }] }).success).toBe(true);
+describe("PaymentReportSchema", () => {
+  it("acepta un pago de suscripción con método y referencia", () => {
     expect(PaymentReportSchema.safeParse({ ...CONTACT, lines: [{ paymentMethod: "BINANCE", amount: 25, reference: "R" }] }).success).toBe(true);
+  });
+  it("ya no existe el pago único: el campo lifetime se ignora", () => {
+    const r = PaymentReportSchema.safeParse({ ...CONTACT, lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 25, reference: "R" }] });
+    expect(r.success).toBe(true);
+    expect(r.success && "lifetime" in r.data).toBe(false);
   });
 });
 

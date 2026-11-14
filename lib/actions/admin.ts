@@ -9,7 +9,6 @@ import { logPlatformAudit } from "@/lib/platform-audit";
 import {
   PLATFORM_SETTINGS_ID,
   TRIAL_DAYS,
-  LIFETIME_PRICE_USD_CENTS,
   monthsCoveredWithBonus,
   extendDueDateByMonths,
 } from "@/lib/billing";
@@ -403,29 +402,6 @@ export async function approvePaymentReport(reportId: string): Promise<ActionResu
     }
 
     const totalUsdCents = report.lines.reduce((sum, line) => sum + line.amountUsdCents, 0);
-
-    // Lifetime plan: approving it exempts the company from every future
-    // monthly fee, instead of extending the due date.
-    if (report.isLifetime) {
-      if (totalUsdCents < LIFETIME_PRICE_USD_CENTS) {
-        return { ok: false as const, error: "El monto reportado es menor que el pago único" };
-      }
-      await tx.payment.create({
-        data: {
-          companyId: report.companyId,
-          amountUsdCents: totalUsdCents,
-          periodEnd: company.nextPaymentDueDate ?? new Date(),
-          note: report.note ? `Pago único de por vida. Nota: ${report.note}` : "Pago único de por vida",
-          verifiedById: session.userId,
-        },
-      });
-      await tx.company.update({ where: { id: report.companyId }, data: { isExempt: true } });
-      await tx.paymentReport.update({
-        where: { id: reportId },
-        data: { status: "APPROVED", reviewedById: session.userId, reviewedAt: new Date() },
-      });
-      return { ok: true as const, companyId: report.companyId, totalUsdCents };
-    }
 
     // Si la empresa pidió cambiar de plan al reportar el pago (nota «Plan solicitado: X.»),
     // el plan y la tarifa se actualizan al aprobar y los meses se calculan con la tarifa nueva.

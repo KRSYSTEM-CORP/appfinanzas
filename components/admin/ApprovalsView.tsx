@@ -24,7 +24,6 @@ export type PendingReportRow = {
   reporterName: string | null;
   reporterPhone: string | null;
   reporterEmail: string | null;
-  isLifetime: boolean;
   createdAt: Date;
   company: { name: string };
   lines: { paymentMethod: PaymentMethod; amountUsdCents: number; reference: string | null }[];
@@ -78,7 +77,6 @@ export function ApprovalsView({ companies, reports, credits }: { companies: Pend
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {plan && <Pill tone="val">Plan solicitado: {PLANS[plan].label}</Pill>}
-                  {r.isLifetime && <Pill tone="warn">Pago único de por vida</Pill>}
                   {r.lines.map((l, i) => (
                     <Pill key={i}>{PAYMENT_METHOD_LABELS[l.paymentMethod]} · {formatUSD(l.amountUsdCents)}{l.reference ? ` · ref. ${l.reference}` : ""}</Pill>
                   ))}

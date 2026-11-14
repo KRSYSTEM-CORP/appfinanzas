@@ -196,7 +196,6 @@ export async function submitPaymentReport(input: unknown): Promise<ActionResult>
         reporterPhone: parsed.data.reporterPhone,
         reporterEmail: parsed.data.reporterEmail,
         proofImageDataUrl: parsed.data.proofImageDataUrl,
-        isLifetime: parsed.data.lifetime,
         lines: {
           create: parsed.data.lines.map((line) => ({
             paymentMethod: line.paymentMethod,

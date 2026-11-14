@@ -112,15 +112,15 @@ export function PaymentMethodsView({
             const plan = parsePlanRequest(r.note);
             return (
               <ListRow key={r.id}>
-                <div>
-                  <b className="truncate">{r.company.name}</b>
+                <div className="min-w-0 [overflow-wrap:anywhere]">
+                  <b className="block">{r.company.name}</b>
                   <small>
                     {formatDate(r.createdAt)} · {r.lines.map((l) => PAYMENT_METHOD_LABELS[l.paymentMethod]).join(", ")}
                     {plan ? ` · ${PLANS[plan].label}` : ""}
                     {r.lines.some((l) => l.reference) ? ` · ref. ${r.lines.map((l) => l.reference).filter(Boolean).join(", ")}` : ""}
                   </small>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-none flex-wrap items-center justify-end gap-x-2 gap-y-1">
                   <b className="tabular-nums">{formatUSD(total)}</b>
                   <StatusPill tone={STATUS[r.status].tone}>{STATUS[r.status].label}</StatusPill>
                 </div>

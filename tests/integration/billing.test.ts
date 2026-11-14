@@ -29,21 +29,18 @@ afterAll(async () => {
   await owner.company.update({ where: { id: ctx.companyId }, data: { isExempt: wasExempt } });
 });
 
-describe("pago único de por vida", () => {
-  it("rechaza reportar menos del precio", async () => {
-    const r = await submitPaymentReport({ ...CONTACT, lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 100, reference: "X1" }] });
-    expect(r.success).toBe(false);
-  });
-
-  it("al aprobarlo, la empresa queda exonerada de las mensualidades", async () => {
-    const r = await submitPaymentReport({ ...CONTACT, lifetime: true, lines: [{ paymentMethod: "BINANCE", amount: 240, reference: "LIFE-TEST" }] });
+describe("pago de suscripción", () => {
+  it("al aprobarlo extiende el vencimiento y no exonera a la empresa", async () => {
+    const before = await owner.company.findUniqueOrThrow({ where: { id: ctx.companyId } });
+    const r = await submitPaymentReport({ ...CONTACT, lines: [{ paymentMethod: "BINANCE", amount: 30, reference: "SUB-TEST" }] });
     expect(r.success).toBe(true);
     const report = await owner.paymentReport.findFirstOrThrow({
-      where: { companyId: ctx.companyId, isLifetime: true, status: "PENDING" },
+      where: { companyId: ctx.companyId, status: "PENDING" },
       orderBy: { createdAt: "desc" },
     });
     expect((await approvePaymentReport(report.id)).success).toBe(true);
     const company = await owner.company.findUniqueOrThrow({ where: { id: ctx.companyId } });
-    expect(company.isExempt).toBe(true);
+    expect(company.isExempt).toBe(false);
+    expect(company.nextPaymentDueDate?.getTime() ?? 0).toBeGreaterThanOrEqual(before.nextPaymentDueDate?.getTime() ?? 0);
   });
 });

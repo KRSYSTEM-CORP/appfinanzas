@@ -221,7 +221,6 @@ export async function reportPlanPayment(input: {
     reporterPhone: input.phone,
     reporterEmail: input.email,
     proofImageDataUrl: input.proofImageDataUrl,
-    lifetime: false,
     note: planRequestNote(selected),
   });
 
