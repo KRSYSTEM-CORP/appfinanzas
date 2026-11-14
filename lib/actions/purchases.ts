@@ -6,7 +6,7 @@ import type { Prisma, TaxCategory } from "@prisma/client";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { BulkPurchaseRowSchema, PurchaseSchema } from "@/lib/validations";
-import { decomposeTax, rateForCategory } from "@/lib/tax";
+import { decomposeTax, effectiveIvaRates, rateForCategory } from "@/lib/tax";
 import { resolveSalePayments, assertPaymentsMatchTotal, toEurCents } from "@/lib/payment-currency";
 import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
 import type { ActionResult } from "@/lib/types";
@@ -59,6 +59,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
       const company = await tx.company.findUnique({
         where: { id: companyId },
         select: {
+          ivaEnabled: true,
           ivaGeneralRatePercent: true,
           ivaReducedRatePercent: true,
           isIvaWithholdingAgent: true,
@@ -69,8 +70,11 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
           referenceCurrency: true,
         },
       });
-      const ivaGeneralRatePercent = company?.ivaGeneralRatePercent ?? 16;
-      const ivaReducedRatePercent = company?.ivaReducedRatePercent ?? 8;
+      const { general: ivaGeneralRatePercent, reduced: ivaReducedRatePercent } = effectiveIvaRates(
+        company?.ivaEnabled ?? true,
+        company?.ivaGeneralRatePercent ?? 16,
+        company?.ivaReducedRatePercent ?? 8
+      );
       const exchangeRateEnabled = company?.exchangeRateEnabled ?? true;
       if (paymentStatus === "PAID" && exchangeRateEnabled && company?.exchangeRate == null) {
         throw new Error("Configura la tasa de cambio antes de registrar una compra pagada.");
@@ -413,14 +417,18 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
     const company = await tx.company.findUnique({
       where: { id: companyId },
       select: {
+        ivaEnabled: true,
         ivaGeneralRatePercent: true,
         ivaReducedRatePercent: true,
         isIvaWithholdingAgent: true,
         ivaWithholdingPercent: true,
       },
     });
-    const ivaGeneralRatePercent = company?.ivaGeneralRatePercent ?? 16;
-    const ivaReducedRatePercent = company?.ivaReducedRatePercent ?? 8;
+    const { general: ivaGeneralRatePercent, reduced: ivaReducedRatePercent } = effectiveIvaRates(
+      company?.ivaEnabled ?? true,
+      company?.ivaGeneralRatePercent ?? 16,
+      company?.ivaReducedRatePercent ?? 8
+    );
 
     for (const entries of groups.values()) {
       try {

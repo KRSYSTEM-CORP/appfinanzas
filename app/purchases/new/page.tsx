@@ -1,5 +1,6 @@
 import { AdminShell } from "@/components/accounting/AdminShell";
 import { requireAccountingPlan } from "@/lib/session";
+import { effectiveIvaRates } from "@/lib/tax";
 import { PurchaseForm } from "@/components/purchases/PurchaseForm";
 import { listSuppliers } from "@/lib/actions/suppliers";
 import { listActiveProducts, listCategories } from "@/lib/actions/products";
@@ -29,7 +30,11 @@ export default async function NewPurchasePage() {
         currencyCode={localCurrencyCode}
         exchangeRateEnabled={exchangeRateEnabled}
         referenceCurrency={referenceCurrency}
-        ivaSettings={ivaSettings}
+        ivaSettings={{
+          ...ivaSettings,
+          ivaGeneralRatePercent: effectiveIvaRates(ivaSettings.ivaEnabled, ivaSettings.ivaGeneralRatePercent, ivaSettings.ivaReducedRatePercent).general,
+          ivaReducedRatePercent: effectiveIvaRates(ivaSettings.ivaEnabled, ivaSettings.ivaGeneralRatePercent, ivaSettings.ivaReducedRatePercent).reduced,
+        }}
       />
     </AdminShell>
   );

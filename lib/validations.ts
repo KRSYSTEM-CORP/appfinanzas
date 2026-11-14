@@ -667,6 +667,7 @@ export const BrandingSchema = z.object({
 });
 
 export const IvaSettingsSchema = z.object({
+  ivaEnabled: z.enum(["true", "false"]).transform((v) => v === "true"),
   ivaGeneralRatePercent: z.coerce.number().int().min(0).max(100),
   ivaReducedRatePercent: z.coerce.number().int().min(0).max(100),
   isIvaWithholdingAgent: z.enum(["true", "false"]).transform((v) => v === "true"),

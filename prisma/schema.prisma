@@ -190,6 +190,8 @@ model Company {
   // (e.g. the general rate has moved between 12%/15%/16% historically) —
   // see TaxCategory/lib/tax.ts. Defaults match the rate in effect when this
   // feature was added.
+  // Interruptor «Usar IVA»: apagado = no se calcula ni se desglosa IVA (alícuotas efectivas 0).
+  ivaEnabled            Boolean           @default(true)
   ivaGeneralRatePercent Int               @default(16)
   ivaReducedRatePercent Int               @default(8)
   // "Contribuyente especial" status — SENIAT designates certain companies as
