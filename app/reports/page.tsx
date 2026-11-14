@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { BanknoteIcon, FileTextIcon, TrendingDownIcon, WalletIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CajaChicaCard } from "@/components/reports/CajaChicaCard";
 import { CashClosingPanel } from "@/components/reports/CashClosingPanel";
 import { PendingClosingsList } from "@/components/reports/PendingClosingsList";
 import { SalesTable } from "@/components/reports/SalesTable";
@@ -17,7 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; year?: string; months?: string; status?: string; channel?: string }>;
+  searchParams: Promise<{ range?: string; year?: string; months?: string; status?: string; channel?: string; vista?: string }>;
 }) {
   const session = await requireSectionAccess("reports");
   const params = await searchParams;
@@ -41,7 +43,7 @@ export default async function ReportsPage({
     getFiscalData(),
     getDailyClosingSummary(todayStr),
     listPendingClosings(range),
-    listRecentClosings(5),
+    listRecentClosings(60),
   ]);
   const salesShown = channelFilter ? recentSales.filter((x) => x.channel === channelFilter) : recentSales;
   const company = { name: session.companyName, logoDataUrl, ...fiscalData };
@@ -49,6 +51,64 @@ export default async function ReportsPage({
   // server (KRPOS-SEC-002/004); hide those controls for sellers too.
   const canManage = session.role === "GERENTE" || session.isSuperAdmin;
   const localCurrencyName = getCurrency(localCurrencyCode).name.split(" (")[0];
+
+  const backLink = (
+    <Link href="/reports" className="inline-flex w-fit items-center rounded-full bg-muted px-3.5 py-2 text-[13px] font-semibold">
+      ← Volver a Caja Chica
+    </Link>
+  );
+  if (params.vista === "historial") {
+    return (
+      <div className="flex flex-col gap-5 px-4 py-5">
+        <header className="flex flex-col gap-3">
+          <div>
+            <p className="kr-eyebrow">Cierres de caja</p>
+            <h1 className="kr-h1">Historial de cierres</h1>
+          </div>
+          {backLink}
+        </header>
+        <Card>
+          <CardContent>
+            {recentClosings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aún no hay cierres.</p>
+            ) : (
+              <ul className="flex flex-col divide-y">
+                {recentClosings.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                    <span className="font-bold tabular-nums">{c.date.split("-").reverse().join("/")}</span>
+                    <span className="text-muted-foreground">{c.salesCount} ventas</span>
+                    <span className="rounded-full bg-success/14 px-2.5 py-0.5 text-xs font-semibold text-success">Cerrado</span>
+                    <span className="font-extrabold tabular-nums">{formatCurrencyCents(referenceCurrency, c.totalCents)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  if (params.vista === "movimientos" && todaySummary) {
+    return (
+      <div className="flex flex-col gap-5 px-4 py-5">
+        <header className="flex flex-col gap-3">
+          <div>
+            <p className="kr-eyebrow">Entradas y salidas del turno</p>
+            <h1 className="kr-h1">Movimientos de Caja Chica</h1>
+          </div>
+          {backLink}
+        </header>
+        <CajaChicaCard
+          summary={todaySummary}
+          canEdit={canManage && !todaySummary.closed}
+          rate={rate}
+          currencyCode={localCurrencyCode}
+          exchangeRateEnabled={exchangeRateEnabled}
+          referenceCurrency={referenceCurrency}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 px-4 py-5">
@@ -71,33 +131,46 @@ export default async function ReportsPage({
 
       {todaySummary && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-bold">Estado de la caja</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {todaySummary.closed ? "Caja cerrada" : todaySummary.openingCents != null ? "Caja abierta · turno activo" : "Caja sin abrir · sin turno activo"}
-            </p>
+          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg font-bold">Estado de la caja</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {!todaySummary.closed && todaySummary.openingCents != null ? "Caja abierta · turno activo" : "Caja cerrada · sin turno activo"}
+              </p>
+            </div>
+            <CashClosingPanel
+              summary={todaySummary}
+              rate={rate}
+              currencyCode={localCurrencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+              company={company}
+              branchName={session.branchName}
+              printPaperSize={printPaperSize}
+              canClose={canManage}
+            />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="grid gap-3 sm:grid-cols-2">
-              <a href="#historial" className="flex items-center gap-3 rounded-2xl bg-muted p-3.5">
+              <Link href="/reports?vista=historial" className="flex items-center gap-3 rounded-2xl bg-muted p-3.5">
                 <span className="grid size-10 place-items-center rounded-xl bg-primary/12 text-primary"><FileTextIcon className="size-5" /></span>
                 <span>
                   <span className="block font-bold">Historial de cierres</span>
-                  <span className="text-xs text-muted-foreground">{recentClosings.length} {recentClosings.length === 1 ? "cierre reciente" : "cierres recientes"}</span>
+                  <span className="text-xs text-muted-foreground">{recentClosings.length} {recentClosings.length === 1 ? "cierre" : "cierres"}</span>
                 </span>
-              </a>
-              <a href="#movimientos" className="flex items-center gap-3 rounded-2xl bg-muted p-3.5">
+              </Link>
+              <Link href="/reports?vista=movimientos" className="flex items-center gap-3 rounded-2xl bg-muted p-3.5">
                 <span className="grid size-10 place-items-center rounded-xl bg-primary/12 text-primary"><BanknoteIcon className="size-5" /></span>
                 <span>
                   <span className="block font-bold">Movimientos de Caja Chica</span>
                   <span className="text-xs text-muted-foreground">Entradas y salidas · −{formatCurrencyCents(referenceCurrency, todaySummary.outflowsCents)}</span>
                 </span>
-              </a>
+              </Link>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {[
                 { label: "Ventas del día", value: formatCurrencyCents(referenceCurrency, todaySummary.totalCents), sub: `${todaySummary.paidCount} ventas pagadas`, Icon: BanknoteIcon, tone: "bg-success/14 text-success" },
-                { label: "Efectivo esperado", value: formatCurrencyCents(referenceCurrency, todaySummary.expectedCashCents), sub: "Apertura + efectivo − salidas", Icon: WalletIcon, tone: "bg-primary/12 text-primary" },
+                { label: "Efectivo esperado", value: formatCurrencyCents(referenceCurrency, todaySummary.expectedCashCents), sub: rate != null && exchangeRateEnabled ? `Bs ${Math.round((todaySummary.expectedCashCents / 100) * rate).toLocaleString("es-VE")}` : "Apertura + efectivo − salidas", Icon: WalletIcon, tone: "bg-primary/12 text-primary" },
                 { label: "Salidas", value: formatCurrencyCents(referenceCurrency, todaySummary.outflowsCents), sub: `${todaySummary.outflows.length} movimientos`, Icon: TrendingDownIcon, tone: "bg-destructive/12 text-destructive" },
               ].map((k) => (
                 <div key={k.label} className="relative min-h-32 rounded-[19px] bg-card p-[17px] shadow-(--shadow-card)">
@@ -108,18 +181,6 @@ export default async function ReportsPage({
                 </div>
               ))}
             </div>
-            <CashClosingPanel
-              initialSummary={todaySummary}
-              todayStr={todayStr}
-              rate={rate}
-              currencyCode={localCurrencyCode}
-              exchangeRateEnabled={exchangeRateEnabled}
-              referenceCurrency={referenceCurrency}
-              company={company}
-              branchName={session.branchName}
-              printPaperSize={printPaperSize}
-              canClose={canManage}
-            />
           </CardContent>
         </Card>
       )}
@@ -143,51 +204,6 @@ export default async function ReportsPage({
           />
         </CardContent>
       </Card>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card id="historial">
-          <CardHeader>
-            <CardTitle>Historial de cierres</CardTitle>
-            <p className="text-sm text-muted-foreground">Últimos cierres de caja</p>
-          </CardHeader>
-          <CardContent>
-            {recentClosings.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aún no hay cierres.</p>
-            ) : (
-              <ul className="flex flex-col divide-y">
-                {recentClosings.map((c) => (
-                  <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span className="font-medium tabular-nums">{c.date.split("-").reverse().join("/")}</span>
-                    <span className="text-muted-foreground">{c.salesCount} ventas</span>
-                    <span className="rounded-full bg-success/14 px-2.5 py-0.5 text-xs font-semibold text-success">Cerrado</span>
-                    <span className="font-semibold tabular-nums">{formatCurrencyCents(referenceCurrency, c.totalCents)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-        <Card id="movimientos">
-          <CardHeader>
-            <CardTitle>Movimientos de Caja Chica</CardTitle>
-            <p className="text-sm text-muted-foreground">Salidas del turno de hoy</p>
-          </CardHeader>
-          <CardContent>
-            {!todaySummary || todaySummary.outflows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No hay salidas registradas hoy.</p>
-            ) : (
-              <ul className="flex flex-col divide-y">
-                {todaySummary.outflows.map((o) => (
-                  <li key={o.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span className="min-w-0 truncate font-medium">{o.concept}</span>
-                    <span className="font-semibold tabular-nums text-destructive">−{formatCurrencyCents(referenceCurrency, o.amountCents)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">

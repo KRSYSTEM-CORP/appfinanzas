@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { ProductTable } from "@/components/inventory/ProductTable";
 import { PriceListButton } from "@/components/inventory/PriceListButton";
-import { InternalUseButton } from "@/components/inventory/InternalUseButton";
+import { productImageUrl } from "@/lib/product-image";
 import { getInventoryOverview, listAllProducts, listCategories } from "@/lib/actions/products";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
 import { hasPermission, requireSectionAccess } from "@/lib/session";
@@ -33,7 +33,7 @@ export default async function InventoryPage() {
   ]);
   const priceListProducts = products
     .filter((p) => p.isActive)
-    .map((p) => ({ name: p.name, category: p.category, priceCents: p.priceCents }));
+    .map((p) => ({ name: p.name, category: p.category, priceCents: p.priceCents, imageUrl: productImageUrl(p) }));
   const priceListCompany = { name: session.companyName, logoDataUrl, ...fiscalData };
   const canManage = session.role === "GERENTE" || session.isSuperAdmin;
   const plan = getPlan(session.plan);
@@ -82,11 +82,6 @@ export default async function InventoryPage() {
               <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/inventory/transfers" />}>
                 Traspasos
               </Button>
-              <InternalUseButton
-                products={products
-                  .filter((p) => p.trackStock && p.stock > 0)
-                  .map((p) => ({ id: p.id, name: p.name, stock: p.stock }))}
-              />
             </>
           )}
           <PriceListButton
@@ -111,6 +106,7 @@ export default async function InventoryPage() {
                   company={priceListCompany}
                   referenceCurrency={referenceCurrency}
                   className="w-full justify-start"
+                  flat
                 />
                 <Button
                   nativeButton={false}
