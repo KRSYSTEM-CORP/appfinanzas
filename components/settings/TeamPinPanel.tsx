@@ -7,7 +7,8 @@ import { PlusIcon, ShieldCheckIcon, UploadIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ManageUserSheet, NewRoleSheet, RoleLockRows } from "@/components/settings/RolesPanel";
-import { Field, FieldInput, FieldSelect, ListRow, PermGrid, SCard, StatusPill, SubTitle, TWO_COLS, displayName, initialsOf } from "@/components/settings/team-print-kit";
+import { Field, FieldInput, FieldSelect, ListRow, PermGrid, SCard, SubTitle, TWO_COLS, displayName, initialsOf } from "@/components/settings/team-print-kit";
+import { Switch } from "@/components/settings/SettingsUi";
 import { PERMISSIONS } from "@/lib/permissions";
 import { lockSession, setUserPin } from "@/lib/actions/pin";
 import { logout } from "@/lib/actions/auth";
@@ -164,11 +165,11 @@ export function TeamPinPanel({
 
         <SCard title="Seguridad y autorizaciones" description="Protege anular ventas, notas de crédito y el acceso al panel">
           <ListRow title="Clave de pantalla" sub="El sistema se bloquea por inactividad y pide el PIN">
-            <StatusPill>Activo</StatusPill>
+            <Switch on readOnly label="Clave de pantalla" />
           </ListRow>
           <RoleLockRows roles={roles} />
           <ListRow title="Claves de administrador por sede" sub="Cada sede se abre solo con su clave">
-            {keysActive ? <StatusPill>Activo</StatusPill> : <StatusPill tone="warn">Sin claves</StatusPill>}
+            <Switch on={keysActive} readOnly label="Claves de administrador por sede" />
           </ListRow>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" onClick={() => setMyPinOpen(true)}>

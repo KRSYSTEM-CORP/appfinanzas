@@ -60,7 +60,7 @@ export function ChoosePlan({ trialDays, companyName }: { trialDays: number; comp
                 )}
                 <ul className="mt-1 flex flex-col gap-1.5 text-sm">
                   {[
-                    `${p.maxUsers} usuarios`,
+                    `${p.maxUsers} ${p.maxUsers === 1 ? "usuario" : "usuarios"}`,
                     p.maxProducts == null ? "Productos ilimitados" : `Hasta ${p.maxProducts} productos`,
                     p.aiCredits > 0 ? `${p.aiCredits} créditos de IA al mes` : "Asistente IA con créditos aparte",
                     p.accounting ? "Contabilidad incluida" : "Sin contabilidad",

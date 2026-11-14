@@ -7,7 +7,6 @@ import { BanknoteIcon, CreditCardIcon, LandmarkIcon, SmartphoneIcon } from "luci
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SectionCard, ListRow } from "@/components/shared/SectionCard";
-import { StatusPill } from "@/components/shared/Pills";
 import { Field, FieldPair, FIELD_CONTROL } from "@/components/shared/Field";
 import { SheetActions } from "@/components/shared/ConfirmSheet";
 import { Switch } from "@/components/settings/SettingsUi";
@@ -100,7 +99,7 @@ export function PaymentMethodsCard({
                 Editar
               </Button>
               {m.kind === null ? (
-                <StatusPill tone="ok">Activo</StatusPill>
+                <Switch on readOnly label={`${m.label}: siempre disponible`} />
               ) : (
                 <Switch on={active} disabled={isPending || mine.length === 0} onChange={(v) => toggle(m.kind!, v)} label={`${m.label}: mostrar en el punto de venta`} />
               )}

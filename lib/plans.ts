@@ -21,13 +21,13 @@ export type PlanDef = {
 export const PLANS: Record<PlanId, PlanDef> = {
   EMPRENDE: {
     id: "EMPRENDE", label: "Emprende", priceUsdCents: 1299, firstMonthUsdCents: 1000,
-    maxUsers: 3, maxProducts: 200, aiCredits: 0, accounting: false,
+    maxUsers: 1, maxProducts: 100, aiCredits: 0, accounting: false,
     tagline: "Todo el sistema para empezar",
     features: [
       "Todos los módulos excepto Contabilidad",
       "Sucursales, Learning y Asistente IA (consultar es gratis)",
-      "3 usuarios: el dueño o gerente y 2 vendedores",
-      "Hasta 200 productos en el inventario",
+      "1 usuario: el dueño o gerente",
+      "Hasta 100 productos en el inventario",
     ],
   },
   PYME: {
@@ -109,5 +109,5 @@ export function parsePlanRequest(note: string | null | undefined): PlanId | null
 }
 
 export function userLimitMessage(plan: PlanDef): string {
-  return `Tu plan ${plan.label} permite hasta ${plan.maxUsers} usuarios. Sube de plan para agregar más.`;
+  return `Tu plan ${plan.label} permite hasta ${plan.maxUsers} ${plan.maxUsers === 1 ? "usuario" : "usuarios"}. Sube de plan para agregar más.`;
 }

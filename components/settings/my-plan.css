@@ -166,11 +166,12 @@
 .kp-supb > span { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; max-width: 100%; width: 100%; }
 .kp-supb small { overflow-wrap: anywhere; font-size: 12px; color: var(--muted-foreground); }
 .kp-supb:active { transform: scale(0.98); }
-.kp-supb svg { width: 30px; height: 30px; flex: none; padding: 9px; box-sizing: content-box; border-radius: 999px; background: var(--card); }
+.kp-supi { display: grid; place-items: center; width: 52px; height: 52px; flex: none; border-radius: 999px; background: var(--card); font-style: normal; overflow: visible; }
+.kp-supi svg { width: 26px; height: 26px; display: block; flex: none; }
 .kp-supb b { display: block; }
 .kp-supb.wa { background: color-mix(in srgb, #25d366 18%, var(--card)); }
-.kp-supb.wa svg { color: #1faa59; }
-.kp-supb.ml svg { color: var(--primary); }
+.kp-supb.wa .kp-supi { color: #1faa59; }
+.kp-supb.ml .kp-supi { color: var(--primary); }
 
 @media (max-width: 480px) {
   .kp-hb { grid-template-columns: 96px 1fr auto; }
@@ -179,3 +180,17 @@
 @media (prefers-reduced-motion: reduce) {
   .kp * { transition: none !important; }
 }
+
+/* tarjetas de plan: fondo morado degradado llamativo */
+.kp-plan2 { color: #fff; border-color: transparent; overflow: visible; }
+.kp-plan2:nth-child(1) { background: linear-gradient(145deg, #8b5cf6 0%, #6d28d9 100%); }
+.kp-plan2:nth-child(2) { background: linear-gradient(145deg, #a855f7 0%, #7c3aed 55%, #4c1d95 100%); }
+.kp-plan2:nth-child(3) { background: linear-gradient(145deg, #7c3aed 0%, #4c1d95 55%, #2e1065 100%); }
+.kp-plan2.rec { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #7c3aed, 0 14px 34px rgba(124, 58, 237, 0.45); }
+.kp-plan2 .kp-muted, .kp-plan2 .kp-pr span, .kp-plan2 .kp-pr small { color: rgba(255, 255, 255, 0.82); }
+.kp-plan2 li svg { color: #c4f5d3; }
+.kp-plan2 .kp-pill.ok { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.kp-plan2 .kp-st.ok { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.kp-plan2 .kp-ribbon { background: #fff; color: #6d28d9; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
+.kp-plan2 .kp-btn { background: rgba(255, 255, 255, 0.2); color: #fff; justify-content: center; }
+.kp-plan2 .kp-btn.primary { background: #fff; color: #6d28d9; }

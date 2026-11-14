@@ -12,7 +12,7 @@ const usd = (cents: number) => `$${(cents / 100).toFixed(2).replace(".", ",")}`;
 function plansSection(): string {
   const lines = Object.values(PLANS).map((p) => {
     const first = p.firstMonthUsdCents ? ` (primer mes ${usd(p.firstMonthUsdCents)} para empresas nuevas)` : "";
-    return `- ${p.label}: ${usd(p.priceUsdCents)} al mes${first}. Hasta ${p.maxUsers} usuarios, ${
+    return `- ${p.label}: ${usd(p.priceUsdCents)} al mes${first}. Hasta ${p.maxUsers} ${p.maxUsers === 1 ? "usuario" : "usuarios"}, ${
       p.maxProducts == null ? "productos ilimitados" : `${p.maxProducts} productos`
     }, ${p.aiCredits} créditos de IA al mes, ${p.accounting ? "incluye Contabilidad" : "sin Contabilidad"}.`;
   });

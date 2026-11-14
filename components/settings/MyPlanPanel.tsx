@@ -118,11 +118,11 @@ function Support() {
       </header>
       <div className="kp-sup">
         <a className="kp-supb wa" href={`https://wa.me/${WHATSAPP_PHONE}`} target="_blank" rel="noopener noreferrer">
-          <WhatsappIcon />
+          <i className="kp-supi"><WhatsappIcon className="size-6" /></i>
           <span><b>WhatsApp</b><small>+1 (904) 579-6156</small></span>
         </a>
         <a className="kp-supb ml" href="mailto:contacto@krsystem-corp.com">
-          <MailIcon aria-hidden />
+          <i className="kp-supi"><MailIcon className="size-6" aria-hidden /></i>
           <span><b>Correo</b><small>contacto@krsystem-corp.com</small></span>
         </a>
       </div>
@@ -318,7 +318,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
               <div className="kp-li"><span>Asistente IA</span><b>Consulta gratis · recarga créditos para aplicar</b></div>
             )}
             <p className="kp-note">
-              Con {current.maxUsers} usuarios y {current.maxProducts == null ? "productos ilimitados" : `${nf(current.maxProducts, 0)} productos máximo`}. Si llegas al límite, te avisamos para cambiar de plan.
+              Con {current.maxUsers} {current.maxUsers === 1 ? "usuario" : "usuarios"} y {current.maxProducts == null ? "productos ilimitados" : `${nf(current.maxProducts, 0)} productos máximo`}. Si llegas al límite, te avisamos para cambiar de plan.
             </p>
           </section>
           <section className="kp-card">
@@ -384,7 +384,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
                   <span>/ mes</span>
                 </div>
                 <div className="kp-muted" style={{ fontSize: 13 }}>
-                  {p.maxUsers} usuarios · {p.maxProducts == null ? "productos ilimitados" : `${nf(p.maxProducts, 0)} productos`}
+                  {p.maxUsers} {p.maxUsers === 1 ? "usuario" : "usuarios"} · {p.maxProducts == null ? "productos ilimitados" : `${nf(p.maxProducts, 0)} productos`}
                   {p.aiCredits ? ` · ${p.aiCredits} créditos IA` : ""}
                 </div>
                 <ul>

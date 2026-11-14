@@ -18,7 +18,7 @@ describe("planes", () => {
   it("Corporativo tiene productos ilimitados", () => {
     expect(PLANS.CORPORATIVO.maxProducts).toBeNull();
     expect(productLimitMessage(PLANS.CORPORATIVO)).toBeNull();
-    expect(PLANS.EMPRENDE.maxProducts).toBe(200);
+    expect(PLANS.EMPRENDE.maxProducts).toBe(100);
     expect(PLANS.PYME.maxProducts).toBe(500);
   });
   it("un plan desconocido cae en Corporativo (sin recortar a nadie)", () => {

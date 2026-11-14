@@ -17,7 +17,8 @@ describe("plan request", () => {
     expect(planAmountDueUsdCents({ selected: "PYME", current: "PYME", monthlyFeeUsdCents: 1500, hasApprovedPayment: true })).toBe(1500);
   });
   it("recommends by usage", () => {
-    expect(recommendPlan(2, 100).id).toBe("EMPRENDE");
+    expect(recommendPlan(1, 100).id).toBe("EMPRENDE");
+    expect(recommendPlan(2, 100).id).toBe("PYME");
     expect(recommendPlan(4, 100).id).toBe("PYME");
     expect(recommendPlan(3, 300).id).toBe("PYME");
     expect(recommendPlan(8, 900).id).toBe("CORPORATIVO");
