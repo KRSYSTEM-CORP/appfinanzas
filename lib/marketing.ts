@@ -64,3 +64,71 @@ export function whatsappLink(phone: string, message: string): string {
 export function promotionMessage(p: { code: string; discountPercent: number; validUntil: Date | string; firstName?: string }, businessName: string): string {
   return `Hola ${p.firstName?.trim() || "cliente"}, te saluda ${businessName}. Tenemos un detalle para ti: usa el código ${p.code} y recibe ${p.discountPercent} % de descuento en tu próxima compra. Válido hasta el ${shortDate(p.validUntil)}. ¡Te esperamos!`;
 }
+
+// ───────── Segmentación de promociones y canje de cupón ─────────
+
+export const PROMO_SEGMENT_IDS = ["todos", "campeones", "leales", "riesgo", "dormidos", "cumpleaneros", "clientes"] as const;
+export type PromoSegmentId = (typeof PROMO_SEGMENT_IDS)[number];
+
+export function promoSegmentLabel(segment: string): string {
+  if (segment === "clientes") return "Clientes elegidos";
+  return PROMO_LISTS.find((l) => l.id === segment)?.label ?? segment;
+}
+
+// Día y mes (sin año) de una fecha ISO o AAAA-MM-DD, en UTC.
+function monthDay(d: Date | string): number {
+  const x = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(`${d}T12:00:00Z`) : new Date(d);
+  return (x.getUTCMonth() + 1) * 100 + x.getUTCDate();
+}
+
+// ¿El cumpleaños cae dentro del periodo (desde/hasta, ambos incluidos)? Solo cuentan día y mes; el año se ignora.
+// Un periodo que cruza fin de año (dic → ene) también funciona.
+export function birthdayInRange(birthDate: Date | string | null | undefined, from: string | null | undefined, to: string | null | undefined): boolean {
+  if (!birthDate || !from || !to) return false;
+  const b = monthDay(birthDate);
+  const f = monthDay(from);
+  const t = monthDay(to);
+  // Un periodo de un año o más cubre todos los cumpleaños.
+  if (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) >= 364 * 86_400_000) return true;
+  return f <= t ? b >= f && b <= t : b >= f || b <= t;
+}
+
+export type PromoTarget = { segment: string; rangeFrom?: string | null; rangeTo?: string | null; customerIds?: string[] | null };
+export type TargetCustomer = { id: string | null; segment: SegmentId; birthDate: Date | string | null };
+
+// ¿Este cliente forma parte del público de la promoción?
+export function customerInPromo(promo: PromoTarget, c: TargetCustomer): boolean {
+  switch (promo.segment) {
+    case "todos":
+      return true;
+    case "cumpleaneros":
+      return birthdayInRange(c.birthDate, promo.rangeFrom, promo.rangeTo);
+    case "clientes":
+      return c.id != null && (promo.customerIds ?? []).includes(c.id);
+    default:
+      return promo.segment === c.segment;
+  }
+}
+
+export type CouponCheck = { ok: true; discountPercent: number } | { ok: false; error: string };
+export const COUPON_INVALID = "Cupón no válido";
+
+// Validación del cupón en el POS (y otra vez en el servidor al cobrar). Todo rechazo trae un mensaje claro para el cajero.
+export function checkCoupon(
+  promo: (PromoTarget & { discountPercent: number; validUntil: Date | string }) | null,
+  customer: TargetCustomer | null,
+  alreadyRedeemed: boolean,
+  now: Date = new Date()
+): CouponCheck {
+  if (!promo) return { ok: false, error: COUPON_INVALID };
+  if (new Date(promo.validUntil).getTime() < now.getTime()) return { ok: false, error: "Cupón vencido" };
+  if (!customer) return { ok: false, error: "Selecciona un cliente (nombre y apellido) para canjear el cupón" };
+  if (!customerInPromo(promo, customer)) return { ok: false, error: "Este cupón no está disponible para este cliente" };
+  if (alreadyRedeemed) return { ok: false, error: "Este cliente ya canjeó este cupón" };
+  return { ok: true, discountPercent: promo.discountPercent };
+}
+
+// Descuento (céntimos) de un cupón porcentual sobre un subtotal bruto; mismo redondeo que el servidor por línea.
+export function couponDiscountCents(rawCents: number, percent: number): number {
+  return Math.round((rawCents * Math.max(0, Math.min(100, percent))) / 100);
+}

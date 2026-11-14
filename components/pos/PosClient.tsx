@@ -176,7 +176,15 @@ const [step, setStep] = useState<Step>("cart");
   // Vuelto entregado en efectivo (lo muestra «Venta registrada»).
   const [change, setChange] = useState<string | null>(null);
   const [channel, setChannel] = useState<SaleChannel>("MOSTRADOR");
-  const [discountPercent, setDiscountPercent] = useState("0");
+  const [discountPercent, setDiscountPercentRaw] = useState("0");
+  // Cupón canjeado en la pantalla de cobro (código y teléfono del cliente para el que se validó).
+  const [coupon, setCoupon] = useState<{ code: string; phone: string } | null>(null);
+  // Cambiar el descuento a mano quita el cupón (el servidor exige que el porcentaje coincida con el del cupón).
+  const setDiscountPercent = (v: string) => {
+    setCoupon(null);
+    setDiscountPercentRaw(v);
+  };
+  const activeCoupon = coupon && customer?.phone === coupon.phone ? coupon : null;
   const [error, setError] = useState<string | null>(null);
   // Either a real, server-confirmed sale, or a locally-built stand-in for one
   // queued while offline (see queueOfflineSale below) — both render fine in
@@ -300,7 +308,7 @@ const [step, setStep] = useState<Step>("cart");
     setPaymentStatus(status);
     setPaymentRows(rows);
     setChange(changeText);
-    const finalNote = [extraNote, note.trim()].filter(Boolean).join(" · ");
+    const finalNote = [extraNote, activeCoupon ? `Cupón ${activeCoupon.code} (${discountValue} %)` : "", note.trim()].filter(Boolean).join(" · ");
     setError(null);
     // One key per checkout, sent on the online attempt AND kept in the
     // offline queue: if the server saved the sale but the response never
@@ -325,6 +333,7 @@ const [step, setStep] = useState<Step>("cart");
             }))
           : [],
       discountPercent: discountValue,
+      promoCode: activeCoupon?.code,
       customerFirstName: customer.firstName,
       customerLastName: customer.lastName,
       customerPhone: customer.phone,
@@ -400,6 +409,7 @@ const [step, setStep] = useState<Step>("cart");
     setPaymentRows(defaultPaymentSplitRows(0, rate, exchangeRateEnabled));
     setNote("");
     setDiscountPercent("0");
+    setCoupon(null);
     setCompletedSale(null);
     setPendingSync(false);
     setChange(null);
@@ -475,6 +485,12 @@ const [step, setStep] = useState<Step>("cart");
           total={total}
           discountPercent={discountPercent}
           onDiscountPercentChange={setDiscountPercent}
+          couponCode={activeCoupon?.code ?? null}
+          onCouponApplied={(code, percent) => {
+            setCoupon({ code, phone: customer.phone });
+            setDiscountPercentRaw(String(percent));
+          }}
+          onCouponRemoved={() => setDiscountPercent("0")}
           paymentAccounts={paymentAccounts}
           rate={rate}
           currencyCode={currencyCode}

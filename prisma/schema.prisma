@@ -1500,6 +1500,11 @@ model Promotion {
   discountPercent Int
   segment         String
   validUntil      DateTime
+  // Segmentación: segment = todos | campeones | leales | riesgo | dormidos | cumpleaneros | clientes.
+  // cumpleaneros usa rangeFrom/rangeTo (AAAA-MM-DD; solo cuentan día y mes); clientes usa customerIds.
+  rangeFrom       String?
+  rangeTo         String?
+  customerIds     String[] @default([])
   createdAt       DateTime @default(now())
   redemptions     PromotionRedemption[]
 
@@ -1513,9 +1518,12 @@ model PromotionRedemption {
   promotionId String
   promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
   customerId  String?
+  saleId      String?
   note        String?
   createdAt   DateTime  @default(now())
 
+  // Un cliente no puede canjear el mismo cupón dos veces (los canjes manuales sin cliente no cuentan).
+  @@unique([promotionId, customerId])
   @@index([promotionId])
   @@index([companyId])
 }

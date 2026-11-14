@@ -26,6 +26,7 @@ export type PendingSaleInput = {
     reference: string;
   }[];
   discountPercent: number;
+  promoCode?: string;
   customerFirstName: string;
   customerLastName: string;
   customerPhone: string;
