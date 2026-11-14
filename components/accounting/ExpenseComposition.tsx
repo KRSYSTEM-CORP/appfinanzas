@@ -18,7 +18,7 @@ export function ExpenseComposition({
   periodLabel: string;
 }) {
   const { slices, total } = expenseComposition(rows);
-  let offset = 0;
+  const offsets = slices.map((_, i) => slices.slice(0, i).reduce((n, x) => n + x.share * 100, 0));
   return (
     <SectionCard title="Composición de gastos" subtitle={`En qué se va el dinero · ${periodLabel}`}>
       {total <= 0 ? (
@@ -35,7 +35,7 @@ export function ExpenseComposition({
               <circle cx="21" cy="21" r={R} fill="none" stroke="var(--border)" strokeWidth="6" />
               {slices.map((s, i) => {
                 const len = Math.max(s.share * 100 - 0.6, 0.01);
-                const el = (
+                return (
                   <circle
                     key={s.label}
                     cx="21"
@@ -45,15 +45,13 @@ export function ExpenseComposition({
                     stroke={COLORS[i % COLORS.length]}
                     strokeWidth="6"
                     strokeDasharray={`${len} ${100 - len}`}
-                    strokeDashoffset={-offset}
+                    strokeDashoffset={-offsets[i]}
                     className="motion-safe:animate-[kr-donut-in_700ms_ease-out_backwards]"
                     style={{ animationDelay: `${i * 90}ms` }}
                   >
                     <title>{`${s.label}: ${money(currency, s.cents, 0)} (${pct(s.cents, total)})`}</title>
                   </circle>
                 );
-                offset += s.share * 100;
-                return el;
               })}
             </svg>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">

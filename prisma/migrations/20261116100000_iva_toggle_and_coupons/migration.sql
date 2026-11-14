@@ -1,3 +1,5 @@
+-- Aditiva: interruptor para que la empresa decida si usa IVA. Por defecto activado.
+ALTER TABLE "Company" ADD COLUMN "ivaEnabled" BOOLEAN NOT NULL DEFAULT true;
 -- Segmentación de promociones y canje de cupón en el POS (aditiva; las tablas ya tienen RLS y GRANT).
 ALTER TABLE "Promotion" ADD COLUMN "rangeFrom" TEXT;
 ALTER TABLE "Promotion" ADD COLUMN "rangeTo" TEXT;
