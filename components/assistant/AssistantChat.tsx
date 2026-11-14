@@ -2,9 +2,8 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BanknoteIcon, BarChart3Icon, MicIcon, PackageIcon, SendIcon, SparklesIcon, SquareIcon } from "lucide-react";
+import { BanknoteIcon, BarChart3Icon, CheckIcon, MicIcon, PackageIcon, SendIcon, SparklesIcon, ZapIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { applyProposal, askAssistant, clearAssistantHistory, undoProposal, type AssistantStatus, type HistoryEntry } from "@/lib/actions/assistant";
 import type { Proposal } from "@/lib/assistant";
 
@@ -149,68 +148,65 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl bg-card p-3 text-sm shadow-(--shadow-card)">
-        <span>
-          Créditos: <b className="tabular-nums">{creditsLeft}</b>
-        </span>
-        <span className="text-muted-foreground">
-          Consultas hoy: {asked} de {status.askCap}
-        </span>
-        {msgs.length > 0 && (
-          <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={clearHistory} disabled={isPending}>
-            Borrar historial
-          </Button>
-        )}
-      </div>
-
-      <div className="flex min-h-64 flex-col gap-2 rounded-[22px] bg-card p-4 shadow-(--shadow-card)" aria-live="polite">
+    <section className="flex min-h-[480px] flex-col overflow-hidden rounded-[19px] bg-card shadow-(--shadow-card)">
+      <div className="flex min-h-[360px] max-h-[62vh] flex-1 flex-col gap-3 overflow-y-auto px-4 py-[18px]" aria-live="polite">
         {msgs.length === 0 ? (
-          <div className="flex flex-col items-center gap-5 py-4">
-            <span className="grid size-16 place-items-center rounded-full bg-[conic-gradient(from_200deg,#433ddd,#0f9d9a,#ff9f0a,#433ddd)] text-white shadow-[0_0_30px_rgba(67,61,221,.35)]" aria-hidden>
-              <SparklesIcon className="size-7" />
-            </span>
-            <div className="text-center">
-              <h2 className="text-2xl font-extrabold tracking-tight">¿Qué hacemos hoy por tu negocio?</h2>
-              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+          <>
+            <div className="px-1.5 pb-1 pt-2.5 text-center">
+              <span className="kr-orb inline-grid size-14 place-items-center rounded-full text-white" aria-hidden>
+                <SparklesIcon className="size-[26px]" />
+              </span>
+              <h2 className="mb-1 mt-3 text-[clamp(1.4rem,4vw,1.9rem)] font-bold tracking-[-0.03em]">¿Qué hacemos hoy por tu negocio?</h2>
+              <p className="mx-auto max-w-[46ch] text-muted-foreground">
                 Primero te muestro los cambios y su costo en créditos, gratis. Tú decides si continuar.
               </p>
             </div>
-            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="mt-2.5 grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,250px),1fr))" }}>
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s.title}
                   type="button"
                   disabled={isPending}
                   onClick={() => send(s.prompt)}
-                  className="flex flex-col items-start gap-1.5 rounded-[19px] bg-muted p-4 text-left transition-colors hover:bg-muted/70 disabled:opacity-60"
+                  className="flex flex-col gap-1 rounded-[18px] border-2 border-transparent bg-muted p-3.5 text-left transition duration-150 hover:border-primary active:scale-[0.98] disabled:opacity-60"
                 >
-                  <span className="grid size-9 place-items-center rounded-xl bg-primary/12 text-primary">
+                  <span className="mb-1 grid size-[34px] place-items-center rounded-xl bg-primary/12 text-primary">
                     <s.Icon className="size-[18px]" />
                   </span>
-                  <span className="font-bold">{s.title}</span>
-                  <span className="text-[13px] text-muted-foreground">{s.desc}</span>
+                  <b className="text-[15px]">{s.title}</b>
+                  <small className="text-[12.5px] leading-[1.35] text-muted-foreground">{s.desc}</small>
                 </button>
               ))}
             </div>
-          </div>
+          </>
         ) : (
           msgs.map((m, i) =>
             m.role === "user" ? (
-              <div key={i} className="self-end rounded-2xl bg-primary px-3 py-2 text-sm text-primary-foreground">
+              <div key={i} className="max-w-[min(100%,560px)] self-end rounded-[20px] rounded-br-[6px] bg-primary px-3.5 py-3 font-semibold text-primary-foreground">
                 {m.text}
               </div>
             ) : (
-              <div key={i} className="flex max-w-[92%] flex-col gap-2 self-start rounded-2xl bg-muted px-3 py-2 text-sm">
-                <p className="whitespace-pre-wrap">{m.text}</p>
+              <div key={i} className="flex w-full max-w-[min(100%,560px)] flex-col self-start rounded-[20px] rounded-bl-[6px] bg-muted px-3.5 py-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                  <SparklesIcon className="size-3.5" aria-hidden /> Asistente IA
+                </div>
+                <p className="mb-2 mt-1 whitespace-pre-wrap">{m.text}</p>
                 {m.proposal && m.state !== "dropped" && (
-                  <div className="flex flex-col gap-2 rounded-lg border bg-background p-2.5">
-                    <p className="font-medium">{describe(m.proposal)}</p>
+                  <div className={`rounded-2xl border-2 bg-card px-3.5 py-3 shadow-(--shadow-card) ${m.state === "applied" ? "border-success" : "border-transparent"}`}>
+                    <div className="mb-1 flex flex-col">
+                      <b>{describe(m.proposal)}</b>
+                    </div>
                     {m.state === "undone" ? (
-                      <p className="text-muted-foreground">{m.note}</p>
+                      <p className="mt-2.5 text-muted-foreground">{m.note}</p>
                     ) : m.state === "applied" ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-success">{m.note}</p>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                        <span className="grid size-7 place-items-center rounded-full bg-success text-success-foreground" aria-hidden>
+                          <CheckIcon className="size-4" />
+                        </span>
+                        <div>
+                          <b>Listo</b>
+                          <div className="text-muted-foreground">{m.note}</div>
+                        </div>
                         {m.canUndo && m.entryId && (
                           <Button size="sm" variant="outline" disabled={isPending} onClick={() => undo(i, m.entryId as string)}>
                             Deshacer · gratis 24 h
@@ -219,23 +215,34 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
                       </div>
                     ) : (
                       <>
-                        <p className="text-xs text-muted-foreground">
-                          Ver la propuesta es gratis. Solo se cobra si confirmas: {applyCost} créditos.
+                        <div className="mt-2.5 flex items-center justify-between gap-2.5 rounded-xl bg-warning/18 px-3 py-2.5 font-bold text-warning">
+                          <span className="inline-flex items-center gap-1.5">
+                            <ZapIcon className="size-4" aria-hidden /> Costo para aplicar
+                          </span>
+                          <b>{applyCost} {applyCost === 1 ? "crédito" : "créditos"}</b>
+                        </div>
+                        <p className="mb-2.5 mt-1 text-xs text-muted-foreground">
+                          Ver la propuesta es gratis. Solo se cobra si confirmas: {applyCost} créditos por uso.
                         </p>
-                        {m.note && <p className="text-xs text-destructive">{m.note}</p>}
-                        <div className="flex gap-2">
-                          <Button size="sm" disabled={isPending || creditsLeft < applyCost} onClick={() => apply(i, m.proposal as Proposal, m.entryId)}>
-                            Aplicar · {applyCost} créditos
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
+                        {m.note && <p className="mb-2 text-xs text-destructive">{m.note}</p>}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={isPending || creditsLeft < applyCost}
+                            onClick={() => apply(i, m.proposal as Proposal, m.entryId)}
+                            className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-transform active:scale-[0.97] disabled:opacity-50"
+                          >
+                            <CheckIcon className="size-4" aria-hidden /> Aplicar · {applyCost} créditos
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setMsgs((all) => all.map((x, j) => (j === i && x.role === "assistant" ? { ...x, state: "dropped" } : x)))}
+                            className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-muted px-3.5 text-[13px] font-semibold text-primary transition-transform active:scale-[0.97]"
                           >
                             Descartar
-                          </Button>
+                          </button>
                         </div>
-                        {creditsLeft < applyCost && <p className="text-xs text-destructive">No tienes créditos suficientes.</p>}
+                        {creditsLeft < applyCost && <p className="mt-2 text-xs text-destructive">No tienes créditos suficientes.</p>}
                       </>
                     )}
                   </div>
@@ -244,24 +251,65 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
             )
           )
         )}
-        {isPending && <p className="self-start text-sm text-muted-foreground">Pensando…</p>}
+        {isPending && (
+          <div className="w-full max-w-[min(100%,560px)] self-start rounded-[20px] rounded-bl-[6px] bg-muted px-3.5 py-3" role="status" aria-label="Pensando">
+            <span className="inline-flex gap-1 px-0.5 py-1.5">
+              <i className="kr-typing size-2 rounded-full bg-muted-foreground" />
+              <i className="kr-typing size-2 rounded-full bg-muted-foreground [animation-delay:.15s]" />
+              <i className="kr-typing size-2 rounded-full bg-muted-foreground [animation-delay:.3s]" />
+            </span>
+          </div>
+        )}
       </div>
 
       <form
-        className="flex items-center gap-2"
+        className="border-t bg-card px-3 pb-3 pt-2.5"
         onSubmit={(e) => {
           e.preventDefault();
           send(text);
         }}
       >
-        <Input aria-label="Pregunta al asistente" value={text} onChange={(e) => setText(e.target.value)} placeholder="Escribe o dicta tu pregunta…" maxLength={600} />
-        <Button type="button" variant={listening ? "destructive" : "outline"} size="icon" onClick={toggleMic} aria-label={listening ? "Detener dictado" : "Dictar por voz"}>
-          {listening ? <SquareIcon className="size-4" /> : <MicIcon className="size-4" />}
-        </Button>
-        <Button type="submit" size="icon" disabled={isPending || text.trim().length < 2} aria-label="Enviar">
-          <SendIcon className="size-4" />
-        </Button>
+        <div className="mx-1 mb-2 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+          <span>
+            Consultar y crear propuestas es <b>gratis</b> · solo se cobra al confirmar: {applyCost} créditos
+          </span>
+          <span className="ml-auto tabular-nums">Consultas hoy: {asked} de {status.askCap}</span>
+          {msgs.length > 0 && (
+            <button type="button" className="font-semibold text-primary" onClick={clearHistory} disabled={isPending}>
+              Borrar historial
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input
+            aria-label="Tu solicitud"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={listening ? "Escuchando… habla ahora" : "Escribe o dicta lo que necesitas…"}
+            maxLength={600}
+            autoComplete="off"
+            className="min-h-12 min-w-0 flex-1 rounded-full border-[1.5px] bg-background px-[18px] outline-none focus-visible:border-ring"
+          />
+          <button
+            type="button"
+            onClick={toggleMic}
+            aria-pressed={listening}
+            aria-label={listening ? "Detener dictado" : "Dictar por voz"}
+            title="Dictar por voz"
+            className={`grid size-12 shrink-0 place-items-center rounded-full border-[1.5px] transition active:scale-[0.94] ${listening ? "kr-mic border-transparent bg-destructive text-white" : "bg-background text-primary"}`}
+          >
+            <MicIcon className="size-5" />
+          </button>
+          <button
+            type="submit"
+            disabled={isPending || text.trim().length < 2}
+            aria-label="Enviar"
+            className="grid size-12 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition active:scale-[0.94] disabled:opacity-50"
+          >
+            <SendIcon className="size-5" />
+          </button>
+        </div>
       </form>
-    </div>
+    </section>
   );
 }

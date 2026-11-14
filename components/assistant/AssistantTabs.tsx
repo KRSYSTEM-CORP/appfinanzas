@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Segmented } from "@/components/ui/segmented";
 import type { HistoryEntry } from "@/lib/actions/assistant";
 
@@ -17,6 +17,11 @@ export function AssistantTabs({
   history: HistoryEntry[];
 }) {
   const [tab, setTab] = useState<Tab>("chat");
+  useEffect(() => {
+    const go = (e: Event) => setTab((e as CustomEvent<Tab>).detail);
+    window.addEventListener("assistant-tab", go);
+    return () => window.removeEventListener("assistant-tab", go);
+  }, []);
   return (
     <div className="flex flex-col gap-4">
       <Segmented
