@@ -1,21 +1,25 @@
 import { requireAccountingPlan } from "@/lib/session";
 import { BookOpenIcon, PackageIcon, PercentIcon, ReceiptTextIcon } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { StatCard } from "@/components/reports/StatCard";
 import { PurchasesBookList, SalesBookList } from "@/components/finance/TaxBookLists";
 import { TaxBookExportButton } from "@/components/finance/TaxBookExportButton";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
-import { formatCurrencyCents } from "@/lib/currencies";
+import { AdminShell } from "@/components/accounting/AdminShell";
+import { Kpi, KpiGrid } from "@/components/shared/Kpi";
+import { Note, SectionCard } from "@/components/shared/SectionCard";
+import { PeriodBar } from "@/components/shared/PeriodBar";
+import { money } from "@/lib/money-display";
+import { selectionLabel } from "@/lib/period-label";
 import { getSalesTaxBook, getPurchasesTaxBook, getCreditNotesTaxBook, getDebitNotesTaxBook } from "@/lib/actions/tax-book";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
-import { parseDateRangeSelection } from "@/lib/report-types";
+import { parseDateRangeSelection, todayDateString } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
 
 export default async function TaxBookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; year?: string; months?: string }>;
+  searchParams: Promise<{ range?: string; year?: string; months?: string; from?: string; to?: string; libro?: string }>;
 }) {
   await requireAccountingPlan();
   const params = await searchParams;
@@ -55,18 +59,29 @@ export default async function TaxBookPage({
     { base: 0, tax: 0, retained: 0, total: 0 }
   );
 
+  const libro = params.libro === "compras" ? "compras" : "ventas";
+  const m = (c: number) => money(referenceCurrency, c);
+  const label = selectionLabel(range, todayDateString());
+  const fiscalSales = sales.filter((x) => x.taxCents > 0).length;
+
   return (
-    <div className="flex flex-col gap-6 px-4 py-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="kr-h1">Libro de Contabilidad</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Formato de referencia para tu declaración de IVA ante el SENIAT — verifica los montos
-            con tu contador antes de declarar.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <DateRangeSwitcher selection={range} />
+    <AdminShell group="conta" sub={libro === "ventas" ? "lventas" : "lcompras"}>
+      {libro === "ventas" ? (
+        <KpiGrid>
+          <Kpi tone="info" icon={<ReceiptTextIcon />} label="Ventas del libro" value={m(salesTotals.total)} hint={`${sales.length} documentos vigentes`} />
+          <Kpi tone="ok" icon={<BookOpenIcon />} label="Base imponible" value={m(salesTotals.base)} hint="Sin IVA" />
+          <Kpi tone="warn" icon={<PercentIcon />} label="IVA 16 % (débito)" value={m(salesTotals.tax)} hint={`Solo documentos fiscales · ${fiscalSales}`} />
+        </KpiGrid>
+      ) : (
+        <KpiGrid>
+          <Kpi tone="info" icon={<PackageIcon />} label="Compras del libro" value={m(purchasesTotals.total)} hint={`${purchases.length} facturas`} />
+          <Kpi tone="ok" icon={<BookOpenIcon />} label="Base imponible" value={m(purchasesTotals.base)} hint="Sin IVA" />
+          <Kpi tone="warn" icon={<PercentIcon />} label="IVA 16 % (crédito)" value={m(purchasesTotals.tax)} hint={`IVA retenido ${m(purchasesTotals.retained)}`} />
+        </KpiGrid>
+      )}
+      <PeriodBar
+        label={label}
+        end={
           <TaxBookExportButton
             sales={sales}
             purchases={purchases}
@@ -80,55 +95,31 @@ export default async function TaxBookPage({
                   : `meses-${range.year}-${range.months.join("-")}`
             }
           />
-        </div>
-      </div>
-
-      <div className="rounded-lg border bg-card shadow-xs stat-grid divide-y md:divide-y-0 md:divide-x grid grid-cols-1 md:grid-cols-4 [&>*]:p-4">
-        <StatCard
-          label="Ventas: base imponible"
-          accent="primary"
-          icon={ReceiptTextIcon}
-          value={formatCurrencyCents(referenceCurrency, salesTotals.base)}
-        />
-        <StatCard
-          label="Ventas: IVA"
-          accent="violet"
-          icon={PercentIcon}
-          value={formatCurrencyCents(referenceCurrency, salesTotals.tax)}
-        />
-        <StatCard
-          label="Compras: base imponible"
-          accent="success"
-          icon={PackageIcon}
-          value={formatCurrencyCents(referenceCurrency, purchasesTotals.base)}
-        />
-        <StatCard
-          label="Compras: IVA"
-          accent="warning"
-          icon={PercentIcon}
-          value={formatCurrencyCents(referenceCurrency, purchasesTotals.tax)}
-        />
-      </div>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold">Libro de Ventas</h2>
-        <SalesBookList
-          sales={sales}
-          referenceCurrency={referenceCurrency}
-          totals={salesTotals}
-          empty={<EmptyState icon={BookOpenIcon} title="Sin ventas en este período." className="py-10" />}
-        />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold">Libro de Compras</h2>
-        <PurchasesBookList
-          purchases={purchases}
-          referenceCurrency={referenceCurrency}
-          totals={purchasesTotals}
-          empty={<EmptyState icon={BookOpenIcon} title="Sin compras en este período." className="py-10" />}
-        />
-      </section>
-    </div>
+        }
+      >
+        <DateRangeSwitcher selection={range} extraParams={{ libro }} />
+      </PeriodBar>
+      {libro === "ventas" ? (
+        <SectionCard title="Libro de ventas" subtitle={`${label} · formato de referencia para tu declaración de IVA ante el SENIAT`}>
+          <SalesBookList
+            sales={sales}
+            referenceCurrency={referenceCurrency}
+            totals={salesTotals}
+            empty={<EmptyState icon={BookOpenIcon} title="Sin ventas en este período." className="py-10" />}
+          />
+          <Note>Las notas de entrega no son documentos fiscales: no generan IVA. Una factura se corrige con nota de crédito, no se anula.</Note>
+        </SectionCard>
+      ) : (
+        <SectionCard title="Libro de compras" subtitle={`${label} · solo compras con factura fiscal`}>
+          <PurchasesBookList
+            purchases={purchases}
+            referenceCurrency={referenceCurrency}
+            totals={purchasesTotals}
+            empty={<EmptyState icon={BookOpenIcon} title="Sin compras en este período." className="py-10" />}
+          />
+          <Note>Verifica los montos con tu contador antes de declarar.</Note>
+        </SectionCard>
+      )}
+    </AdminShell>
   );
 }

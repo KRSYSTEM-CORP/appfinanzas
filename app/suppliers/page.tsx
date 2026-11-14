@@ -1,25 +1,22 @@
 import { requireAccountingPlan } from "@/lib/session";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { SupplierTable } from "@/components/suppliers/SupplierTable";
+import { AdminShell } from "@/components/accounting/AdminShell";
+import { CostComparisonCard, SupplierCards } from "@/components/suppliers/SupplierCards";
 import { listSuppliers } from "@/lib/actions/suppliers";
+import { supplierStats } from "@/lib/actions/supplier-stats";
+import { costComparison } from "@/lib/actions/purchases";
+import { getExchangeRateInfo } from "@/lib/actions/settings";
+import { toSupplierCards } from "@/lib/supplier-cards";
 
 export const dynamic = "force-dynamic";
 
+// Administración → Compras → Proveedores.
 export default async function SuppliersPage() {
   await requireAccountingPlan();
-  const suppliers = await listSuppliers();
-
+  const [suppliers, stats, comparison, { referenceCurrency }] = await Promise.all([listSuppliers(), supplierStats(), costComparison(), getExchangeRateInfo()]);
   return (
-    <div className="flex flex-col gap-4 px-4 py-5">
-      <div className="flex items-center justify-between">
-        <h1 className="kr-h1">Proveedores</h1>
-        <Button nativeButton={false} render={<Link href="/suppliers/new" />}>
-          Nuevo proveedor
-        </Button>
-      </div>
-
-      <SupplierTable suppliers={suppliers} />
-    </div>
+    <AdminShell group="compras" sub="prov">
+      <SupplierCards suppliers={toSupplierCards(suppliers, stats)} currency={referenceCurrency} />
+      <CostComparisonCard rows={comparison} currency={referenceCurrency} />
+    </AdminShell>
   );
 }

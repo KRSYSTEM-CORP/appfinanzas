@@ -1,3 +1,4 @@
+import { AdminShell } from "@/components/accounting/AdminShell";
 import { notFound } from "next/navigation";
 import { SupplierForm } from "@/components/suppliers/SupplierForm";
 import { getSupplier, updateSupplier } from "@/lib/actions/suppliers";
@@ -14,9 +15,9 @@ export default async function EditSupplierPage({
   const updateWithId = updateSupplier.bind(null, id);
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-5">
-      <h1 className="kr-h1">Editar proveedor</h1>
+    <AdminShell group="compras" sub="prov">
+      <h2 className="text-xl font-bold tracking-[-0.02em]">Editar proveedor</h2>
       <SupplierForm supplier={supplier} action={updateWithId} />
-    </div>
+    </AdminShell>
   );
 }

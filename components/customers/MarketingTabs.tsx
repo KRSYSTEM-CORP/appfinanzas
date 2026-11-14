@@ -1,27 +1,23 @@
-import Link from "next/link";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { SubTabs } from "@/components/shared/GroupTabs";
+import { Pill } from "@/components/shared/Pills";
 
 const TABS = [
-  { href: "/customers", label: "Clientes" },
-  { href: "/customers/promotions", label: "Promociones" },
-  { href: "/customers/receivables", label: "Cuentas por cobrar" },
+  { id: "/customers", href: "/customers", label: "Clientes" },
+  { id: "/customers/promotions", href: "/customers/promotions", label: "Promociones" },
+  { id: "/customers/receivables", href: "/customers/receivables", label: "Cuentas por cobrar" },
 ] as const;
 
-// Sub-pestañas de Marketing: todo lo de clientes vive aquí.
-export function MarketingTabs({ active }: { active: (typeof TABS)[number]["href"] }) {
+// Cabecera de Marketing (preview 05 · #mkt) con la pill CRM y las sub-pestañas: todo lo de clientes vive aquí.
+export function MarketingTabs({ active }: { active: (typeof TABS)[number]["id"] }) {
   return (
-    <nav aria-label="Marketing" className="flex flex-wrap gap-2">
-      {TABS.map((t) => (
-        <Link
-          key={t.href}
-          href={t.href}
-          aria-current={t.href === active ? "page" : undefined}
-          className={`inline-flex min-h-[38px] items-center rounded-[12px] border-2 px-3.5 text-[13px] font-bold ${
-            t.href === active ? "border-primary bg-primary/12 text-primary" : "border-transparent bg-muted"
-          }`}
-        >
-          {t.label}
-        </Link>
-      ))}
-    </nav>
+    <>
+      <PageHeader eyebrow="Clientes, promociones y cumpleaños" title="Marketing">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Pill tone="val">CRM</Pill>
+        </div>
+      </PageHeader>
+      <SubTabs label="Marketing" items={[...TABS]} active={active} />
+    </>
   );
 }

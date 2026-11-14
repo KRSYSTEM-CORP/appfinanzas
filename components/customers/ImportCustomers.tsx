@@ -3,14 +3,13 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { DownloadIcon, UploadIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { importCustomers } from "@/lib/actions/marketing";
 import { downloadWorkbook, readFirstSheet } from "@/lib/spreadsheet";
 
 const HEADERS = ["Nombre", "Apellido", "Teléfono", "Dirección", "Cédula/RIF", "Correo"];
 
-// Importar Excel + Plantilla de clientes.
+// «Importar Excel» + «Plantilla» de clientes.
 export function ImportCustomers() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -44,14 +43,18 @@ export function ImportCustomers() {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <>
       <input ref={fileRef} type="file" accept=".xlsx" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
       <Button type="button" variant="outline" disabled={busy || pending} onClick={() => fileRef.current?.click()}>
-        <UploadIcon /> Importar Excel
+        Importar Excel
       </Button>
-      <Button type="button" variant="outline" onClick={() => downloadWorkbook([{ name: "Clientes", rows: [HEADERS, ["María", "Pérez", "0412-5550101", "Valencia", "V-12345678", "maria@correo.com"]] }], "plantilla-clientes.xlsx")}>
-        <DownloadIcon /> Plantilla
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => downloadWorkbook([{ name: "Clientes", rows: [HEADERS, ["María", "Pérez", "0412-5550101", "Valencia", "V-12345678", "maria@correo.com"]] }], "plantilla-clientes.xlsx")}
+      >
+        Plantilla
       </Button>
-    </div>
+    </>
   );
 }

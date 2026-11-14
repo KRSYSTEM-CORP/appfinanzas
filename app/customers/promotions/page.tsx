@@ -1,21 +1,29 @@
 import { MarketingTabs } from "@/components/customers/MarketingTabs";
 import { PromotionsPanel } from "@/components/customers/PromotionsPanel";
-import { listPromotions } from "@/lib/actions/marketing";
+import { getMarketingInsights, listPromotions } from "@/lib/actions/marketing";
 import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
+// Marketing → Promociones.
 export default async function PromotionsPage() {
   const session = await requireSectionAccess("customers");
-  const promotions = await listPromotions();
+  const [promotions, insights] = await Promise.all([listPromotions(), getMarketingInsights()]);
   return (
-    <div className="flex flex-col gap-4 px-4 py-5">
-      <div>
-        <p className="kr-eyebrow">Clientes y seguimiento</p>
-        <h1 className="kr-h1">Marketing</h1>
-      </div>
+    <div className="flex flex-col gap-[18px] px-4 py-5">
       <MarketingTabs active="/customers/promotions" />
-      <PromotionsPanel promotions={promotions} businessName={session.companyName} />
+      <PromotionsPanel
+        promotions={promotions}
+        businessName={session.companyName}
+        customers={insights.customers.map((c) => ({
+          id: c.id,
+          firstName: c.firstName,
+          lastName: c.lastName,
+          phone: c.phone,
+          segment: c.segment,
+          birthdayThisMonth: c.birthdayThisMonth,
+        }))}
+      />
     </div>
   );
 }

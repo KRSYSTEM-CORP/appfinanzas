@@ -3,8 +3,9 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { setRequireCustomerOnSale } from "@/lib/actions/marketing";
+import { cn } from "@/lib/utils";
 
-// Interruptor «Exigir nombre y teléfono en cada venta».
+// Interruptor «Exigir nombre y teléfono en cada venta» (.sw de la preview: 44×26, verde al activarse).
 export function RequireCustomerToggle({ initial, canChange }: { initial: boolean; canChange: boolean }) {
   const [on, setOn] = useState(initial);
   const [pending, start] = useTransition();
@@ -22,22 +23,19 @@ export function RequireCustomerToggle({ initial, canChange }: { initial: boolean
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold">Exigir nombre y teléfono en cada venta</p>
-        <p className="text-xs text-muted-foreground">Así construyes tu lista de clientes sin esfuerzo. Con esto activo no se puede vender como «Cliente general».</p>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-label="Exigir nombre y teléfono en cada venta"
-        disabled={!canChange || pending}
-        onClick={toggle}
-        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${on ? "bg-primary" : "bg-muted"}`}
-      >
-        <span className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-[left] ${on ? "left-[22px]" : "left-0.5"}`} />
-      </button>
-    </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={!canChange || pending}
+      onClick={toggle}
+      title={canChange ? undefined : "Solo el gerente puede cambiar esta regla"}
+      className="inline-flex items-center gap-2.5 py-1 text-left text-[13px] font-semibold disabled:opacity-60"
+    >
+      <i className={cn("relative h-[26px] w-11 flex-none rounded-full transition-colors duration-150", on ? "bg-ok-solid" : "bg-track")}>
+        <span className={cn("absolute left-[3px] top-[3px] size-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,.3)] transition-transform duration-150", on && "translate-x-[18px]")} />
+      </i>
+      Exigir nombre y teléfono en cada venta
+    </button>
   );
 }

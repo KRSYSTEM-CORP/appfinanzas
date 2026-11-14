@@ -1,3 +1,4 @@
+import { MarketingTabs } from "@/components/customers/MarketingTabs";
 import { notFound } from "next/navigation";
 import { CustomerRecordForm } from "@/components/customers/CustomerRecordForm";
 import { getCustomer, updateCustomer } from "@/lib/actions/customers";
@@ -16,8 +17,9 @@ export default async function EditCustomerPage({
   const updateWithId = updateCustomer.bind(null, id);
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-5">
-      <h1 className="kr-h1">Editar cliente</h1>
+    <div className="flex flex-col gap-[18px] px-4 py-5">
+      <MarketingTabs active="/customers" />
+      <h2 className="text-xl font-bold tracking-[-0.02em]">Editar ficha</h2>
       <CustomerRecordForm customer={customer} action={updateWithId} />
     </div>
   );

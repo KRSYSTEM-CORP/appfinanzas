@@ -124,7 +124,7 @@ export async function getStatements(range: DateRangeSelection, islrPercent: numb
   };
 }
 
-export type MovementRow = { date: string; kind: "Ingreso" | "Egreso"; label: string; auto: boolean; amountCents: number };
+export type MovementRow = { date: string; kind: "Ingreso" | "Egreso"; label: string; category: string; auto: boolean; amountCents: number };
 
 // Movimientos: ingresos (ventas por día) y egresos (gastos y compras) del período.
 export async function listMovements(range: DateRangeSelection): Promise<MovementRow[]> {
@@ -137,7 +137,7 @@ export async function listMovements(range: DateRangeSelection): Promise<Movement
         where: { companyId, ...(branchId ? { branchId } : {}), voided: false, OR: or("createdAt") },
         select: { createdAt: true, totalCents: true },
       }),
-      tx.expense.findMany({ where: { companyId, OR: or("spentAt") }, select: { spentAt: true, description: true, amountCents: true } }),
+      tx.expense.findMany({ where: { companyId, OR: or("spentAt") }, select: { spentAt: true, description: true, category: true, amountCents: true } }),
       tx.purchase.findMany({
         where: { companyId, ...(branchId ? { branchId } : {}), voided: false, OR: or("createdAt") },
         select: { createdAt: true, totalCents: true, manualSupplierName: true, supplier: { select: { name: true } } },
@@ -149,12 +149,13 @@ export async function listMovements(range: DateRangeSelection): Promise<Movement
       perDay.set(d, (perDay.get(d) ?? 0) + s.totalCents);
     }
     const rows: MovementRow[] = [
-      ...[...perDay.entries()].map(([d, c]) => ({ date: d, kind: "Ingreso" as const, label: "Ventas del día", auto: true, amountCents: c })),
-      ...expenses.map((e) => ({ date: e.spentAt.toISOString().slice(0, 10), kind: "Egreso" as const, label: e.description, auto: true, amountCents: e.amountCents })),
+      ...[...perDay.entries()].map(([d, c]) => ({ date: d, kind: "Ingreso" as const, label: "Ventas del día", category: "Ventas", auto: true, amountCents: c })),
+      ...expenses.map((e) => ({ date: e.spentAt.toISOString().slice(0, 10), kind: "Egreso" as const, label: e.description, category: e.category ?? "Otros", auto: true, amountCents: e.amountCents })),
       ...purchases.map((p) => ({
         date: p.createdAt.toISOString().slice(0, 10),
         kind: "Egreso" as const,
-        label: `Compra · ${p.supplier?.name ?? p.manualSupplierName ?? "Proveedor"}`,
+        label: `Compra a ${p.supplier?.name ?? p.manualSupplierName ?? "Proveedor"}`,
+        category: "Compras",
         auto: true,
         amountCents: p.totalCents,
       })),
