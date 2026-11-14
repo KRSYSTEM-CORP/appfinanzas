@@ -3,14 +3,10 @@ import {
   AlertTriangleIcon,
   ArrowRightIcon,
   BoxesIcon,
-  ClipboardListIcon,
   FileTextIcon,
-  HandCoinsIcon,
-  PackageIcon,
-  ShoppingCartIcon,
-  WalletIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { NavIcon } from "@/components/nav/nav-icons";
 import { Button } from "@/components/ui/button";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
@@ -44,14 +40,17 @@ function periodLabel(range: DateRangeSelection): string {
   return `${name[0].toUpperCase()}${name.slice(1)} · día ${d} de ${new Date(y, m, 0).getDate()}`;
 }
 
-function Shortcut({ href, icon: Icon, title, sub, tone }: { href: string; icon: React.ComponentType<{ className?: string }>; title: string; sub: string; tone: string }) {
+function Shortcut({ href, icon, title, sub, module }: { href: string; icon: string; title: string; sub: string; module: string }) {
   return (
     <Link
       href={href}
       className="group flex flex-col items-start gap-1 rounded-[19px] border-2 border-transparent bg-card p-3.5 text-left shadow-(--shadow-card) transition-[transform,border-color] duration-150 hover:-translate-y-0.5 hover:border-primary active:scale-[0.97]"
     >
-      <span data-tone={tone} className="mb-2 grid size-11 place-items-center rounded-2xl bg-primary/12 text-primary">
-        <Icon className="size-5" />
+      <span
+        className="mb-2 grid size-11 shrink-0 place-items-center rounded-[14px]"
+        style={{ color: `var(--m-${module})`, background: `color-mix(in srgb, var(--m-${module}) 16%, transparent)` }}
+      >
+        <NavIcon name={icon} className="size-[22px]" />
       </span>
       <span>
         <span className="block text-[15px] font-bold">{title}</span>
@@ -176,11 +175,11 @@ export default async function BusinessHome({
       </section>
 
       <section aria-label="Accesos rápidos" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <Shortcut href="/pos" icon={ShoppingCartIcon} title="Vender" sub="POS" tone="#0f9d9a" />
-        <Shortcut href="/quotes" icon={ClipboardListIcon} title="Presupuesto" sub="Nuevo" tone="#7a3ff2" />
-        <Shortcut href="/customers/receivables" icon={HandCoinsIcon} title="Cuentas por cobrar" sub={`${money(receivables.totalEurCents)} por cobrar`} tone="#d6407f" />
-        <Shortcut href="/reports" icon={WalletIcon} title="Caja Chica" sub={tasks.pendingClosingCount > 0 ? `${tasks.pendingClosingCount} por cerrar` : "Al día"} tone="#1f8a3c" />
-        <Shortcut href="/inventory" icon={PackageIcon} title="Inventario" sub={tasks.lowStock.count > 0 ? `${tasks.lowStock.count} ${tasks.lowStock.count === 1 ? "alerta" : "alertas"}` : "Sin alertas"} tone="#ff9f0a" />
+        <Shortcut href="/pos" icon="pos" module="pos" title="Vender" sub="POS" />
+        <Shortcut href="/quotes" icon="book" module="pre" title="Presupuesto" sub="Nuevo" />
+        <Shortcut href="/customers/receivables" icon="mkt" module="mkt" title="Cuentas por cobrar" sub={`${money(receivables.totalEurCents)} por cobrar`} />
+        <Shortcut href="/reports" icon="caja" module="caja" title="Caja Chica" sub={tasks.pendingClosingCount > 0 ? `${tasks.pendingClosingCount} por cerrar` : "Al día"} />
+        <Shortcut href="/inventory" icon="box" module="inv" title="Inventario" sub={tasks.lowStock.count > 0 ? `${tasks.lowStock.count} ${tasks.lowStock.count === 1 ? "alerta" : "alertas"}` : "Sin alertas"} />
       </section>
 
       <Card>

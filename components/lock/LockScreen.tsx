@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { DeleteIcon, LockIcon, LogOutIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/actions/auth";
 import { createFirstManagerPin, unlockWithPin, type LockProfile } from "@/lib/actions/pin";
 
@@ -11,17 +9,36 @@ const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 const MAX_LEN = 4;
 const MIN_LEN = 4;
 
-function Avatar({ p, size }: { p: LockProfile; size: "md" | "lg" }) {
-  const cls = size === "lg" ? "size-20 text-2xl" : "size-16 text-xl";
-  return p.photoDataUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={p.photoDataUrl} alt="" className={`${cls} rounded-full object-cover ring-2 ring-white/60`} />
-  ) : (
-    <span className={`${cls} grid place-items-center rounded-full bg-primary/15 font-semibold text-primary ring-2 ring-white/60`}>
-      {p.name.slice(0, 1).toUpperCase()}
-    </span>
-  );
+// Avatares de la preview (silueta con fondo de color) cuando la persona no tiene foto.
+const AVC = [["#ffd9c2", "#7a3ff2"], ["#cfe3ff", "#0f9d9a"], ["#ffd1e3", "#433ddd"], ["#d7f3dc", "#c2410c"], ["#ffe3c2", "#d6407f"], ["#e3dcff", "#14532d"]];
+const SKIN = ["#f1c9a5", "#d9a273", "#8d5a3b", "#f6d7bd"];
+const HAIR = ["#2b1d17", "#6b3f1d", "#111", "#8a3b12"];
+function avatarSrc(i: number): string {
+  const k = ((i % 6) + 6) % 6;
+  const c = AVC[k];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" fill="${c[0]}"/><circle cx="48" cy="40" r="18" fill="${SKIN[k % 4]}"/><path d="M28 38c0-14 9-22 20-22s20 8 20 22c-4-7-10-10-20-10s-16 3-20 10Z" fill="${HAIR[(k + 1) % 4]}"/><path d="M14 96c2-20 16-30 34-30s32 10 34 30Z" fill="${c[1]}"/></svg>`;
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 }
+
+function Photo({ p, index }: { p: LockProfile; index: number }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img className="photo" src={p.photoDataUrl ?? avatarSrc(index)} alt="" />;
+}
+
+function useClock() {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    const t0 = setTimeout(() => setNow(new Date()), 0);
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => {
+      clearTimeout(t0);
+      clearInterval(t);
+    };
+  }, []);
+  return now;
+}
+
+const LETTERS: Record<string, string> = { "2": "ABC", "3": "DEF", "4": "GHI", "5": "JKL", "6": "MNO", "7": "PQRS", "8": "TUV", "9": "WXYZ" };
 
 // Pantalla de bloqueo: se elige el perfil y se escribe el PIN (4 números).
 export function LockScreen({ companyName, profiles }: { companyName: string; profiles: LockProfile[] }) {
@@ -32,6 +49,7 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
   const [firstPin, setFirstPin] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const now = useClock();
 
   const submit = useCallback(
     (value: string) => {
@@ -92,152 +110,121 @@ export function LockScreen({ companyName, profiles }: { companyName: string; pro
     return () => window.removeEventListener("keydown", onKey);
   }, [selected, pin, press, submit]);
 
+  const roleLabel = (p: LockProfile) => (p.role === "GERENTE" ? "Gerente" : "Vendedor");
+  const selIndex = selected ? profiles.findIndex((p) => p.id === selected.id) : 0;
+  const clock = now ? `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}` : "00:00";
+  const date = now ? now.toLocaleDateString("es-VE", { weekday: "long", day: "numeric", month: "long" }) : "";
+  const goBack = () => {
+    setSelected(null);
+    setPin("");
+    setFirstPin(null);
+    setError(null);
+  };
+
   return (
-    <main className="relative grid min-h-[100dvh] place-items-center overflow-hidden bg-gradient-to-br from-primary/25 via-background to-primary/10 p-4">
-      <div className="absolute -left-24 -top-24 size-72 rounded-full bg-primary/25 blur-3xl" aria-hidden />
-      <div className="absolute -bottom-24 -right-24 size-80 rounded-full bg-primary/20 blur-3xl" aria-hidden />
-
-      <section
-        aria-labelledby="lock-title"
-        className="relative flex w-full max-w-sm flex-col items-center gap-5 rounded-3xl border border-white/40 bg-background/70 p-6 shadow-2xl backdrop-blur-xl"
-      >
-        <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary">
-          <LockIcon className="size-5" aria-hidden />
-        </span>
-        <div className="text-center">
-          <h1 id="lock-title" className="text-lg font-semibold">
-            {companyName}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {!selected
-              ? "Elige tu perfil para continuar"
-              : selected.access === "create"
-                ? firstPin === null
-                  ? `Hola, ${selected.name.split(" ")[0]}. Crea tu PIN (4 números).`
-                  : "Escribe tu PIN otra vez para confirmarlo."
-                : selected.access === "ask-manager"
-                  ? `Hola, ${selected.name.split(" ")[0]}.`
-                  : `Hola, ${selected.name.split(" ")[0]}. Escribe tu PIN.`}
-          </p>
-        </div>
-
+    <main className="kr-ios">
+      <i className="iw w1" aria-hidden />
+      <i className="iw w2" aria-hidden />
+      <i className="iw w3" aria-hidden />
+      <section className="iosc" aria-labelledby="lock-title" key={selected ? "pin" : "users"}>
         {!selected ? (
-          profiles.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground">
-              No hay perfiles activos en esta empresa. Cierra la sesión y entra con otra cuenta.
-            </p>
-          ) : (
-            <ul className="flex flex-wrap justify-center gap-4">
-              {profiles.map((p) => (
-                <li key={p.id}>
+          <>
+            <svg className="ilock" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <rect x="5" y="11" width="14" height="10" rx="3" />
+              <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+            </svg>
+            <div className="ioscl" aria-label={`Hora ${clock}`}>{clock}</div>
+            <div className="iosd">{date}</div>
+            <h1 id="lock-title" className="ihint">Pantalla bloqueada · toca tu usuario</h1>
+            {profiles.length === 0 ? (
+              <p className="ihint">No hay perfiles activos en {companyName}. Cierra la sesión y entra con otra cuenta.</p>
+            ) : (
+              <div className="iusers">
+                {profiles.map((p, i) => (
                   <button
+                    key={p.id}
                     type="button"
+                    className="iu glass"
                     onClick={() => {
                       setSelected(p);
                       setPin("");
                       setFirstPin(null);
                       setError(null);
                     }}
-                    className="flex w-24 flex-col items-center gap-1.5 rounded-2xl p-2 transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-primary active:scale-95"
                   >
-                    <Avatar p={p} size="md" />
-                    <span className="w-full truncate text-center text-sm font-medium">{p.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {p.role === "GERENTE" ? "Gerente" : "Vendedor"}
-                      {p.access !== "pin" && " · sin PIN"}
+                    <span className="ia"><Photo p={p} index={i} /></span>
+                    <span>
+                      <b>{p.name}</b>
+                      <small>
+                        {roleLabel(p)}
+                        {p.access !== "pin" && " · sin PIN"}
+                      </small>
                     </span>
                   </button>
-                </li>
-              ))}
-            </ul>
-          )
-        ) : (
-          selected.access === "ask-manager" ? (
-            <>
-              <Avatar p={selected} size="lg" />
-              <p className="text-center text-sm text-muted-foreground">
-                {selected.managerPinReady
-                  ? "Todavía no tienes tu código personal (PIN). Pídele a tu gerente que te lo asigne en Ajustes."
-                  : "Todavía no hay un gerente con PIN. Primero el gerente debe crear el suyo; después podrá asignarte el tuyo."}
-              </p>
-              <Button variant="outline" onClick={() => { setSelected(null); setError(null); }}>
-                Elegir otro perfil
-              </Button>
-            </>
-          ) : (
-          <>
-            <Avatar p={selected} size="lg" />
-            <div className="flex h-4 items-center gap-3" role="status" aria-label={`${pin.length} dígitos escritos`}>
-              {Array.from({ length: MAX_LEN }).map((_, i) => (
-                <span
-                  key={i}
-                  className={`size-3 rounded-full border border-primary/60 transition-colors ${i < pin.length ? "bg-primary" : ""}`}
-                />
-              ))}
-            </div>
-            <p role="alert" className="min-h-5 text-center text-sm text-destructive">
-              {error}
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              {KEYS.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  disabled={isPending}
-                  onClick={() => press(k)}
-                  className="size-16 rounded-full bg-background/80 text-2xl font-medium shadow-sm ring-1 ring-border transition-transform active:scale-90 disabled:opacity-50"
-                >
-                  {k}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setSelected(null);
-                  setPin("");
-                  setFirstPin(null);
-                  setError(null);
-                }}
-                className="size-16 rounded-full text-sm text-muted-foreground"
-              >
-                Cambiar
-              </button>
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => press("0")}
-                className="size-16 rounded-full bg-background/80 text-2xl font-medium shadow-sm ring-1 ring-border transition-transform active:scale-90 disabled:opacity-50"
-              >
-                0
-              </button>
-              <button
-                type="button"
-                aria-label="Borrar"
-                disabled={isPending}
-                onClick={() => setPin((p) => p.slice(0, -1))}
-                className="grid size-16 place-items-center rounded-full text-muted-foreground"
-              >
-                <DeleteIcon className="size-6" />
-              </button>
-            </div>
-            <Button className="w-full" disabled={isPending || pin.length < MIN_LEN} onClick={() => submit(pin)}>
-              {isPending
-                ? "Verificando…"
-                : selected.access === "create"
-                  ? firstPin === null
-                    ? "Continuar"
-                    : "Guardar mi PIN y entrar"
-                  : "Entrar"}
-            </Button>
+                ))}
+              </div>
+            )}
           </>
-          )
+        ) : (
+          <>
+            <span className="ipav"><Photo p={selected} index={selIndex} /></span>
+            <h1 id="lock-title" style={{ margin: "6px 0 0", fontSize: 24, letterSpacing: "-.03em" }}>{selected.name}</h1>
+            {selected.access === "ask-manager" ? (
+              <>
+                <p className="ihint" style={{ margin: 0 }}>
+                  {selected.managerPinReady
+                    ? "Todavía no tienes tu código personal (PIN). Pídele a tu gerente que te lo asigne en Ajustes."
+                    : "Todavía no hay un gerente con PIN. Primero el gerente debe crear el suyo; después podrá asignarte el tuyo."}
+                </p>
+                <div className="ilinks"><button type="button" onClick={goBack}>Cambiar de usuario</button></div>
+              </>
+            ) : (
+              <>
+                <p className="ihint" style={{ margin: 0 }}>
+                  {selected.access === "create"
+                    ? firstPin === null
+                      ? `${roleLabel(selected)} · crea tu PIN (4 números)`
+                      : "Escribe tu PIN otra vez para confirmarlo"
+                    : `${roleLabel(selected)} · escribe tu PIN`}
+                </p>
+                <div className={`idots${error ? " shake" : ""}`} role="status" aria-label={`${pin.length} dígitos escritos`}>
+                  {Array.from({ length: MAX_LEN }).map((_, i) => (
+                    <i key={i} className={i < pin.length ? "on" : ""} />
+                  ))}
+                </div>
+                <p className="ihint" role="alert" style={{ minHeight: 20, margin: 0 }}>{error ?? " "}</p>
+                <div className="ipad">
+                  {KEYS.map((k) => (
+                    <button key={k} type="button" className="gkey glass" disabled={isPending} aria-label={k} onClick={() => press(k)}>
+                      {k}
+                      <small>{LETTERS[k] ?? ""}</small>
+                    </button>
+                  ))}
+                  <span className="gkey sp" aria-hidden />
+                  <button type="button" className="gkey glass" disabled={isPending} aria-label="0" onClick={() => press("0")}>
+                    0<small></small>
+                  </button>
+                  <button type="button" className="gkey ghost" disabled={isPending} aria-label="Borrar" onClick={() => setPin((p) => p.slice(0, -1))}>
+                    Borrar
+                  </button>
+                </div>
+                {selected.access === "create" && (
+                  <div className="ilinks">
+                    <button type="button" disabled={isPending || pin.length < MIN_LEN} onClick={() => submit(pin)}>
+                      {firstPin === null ? "Continuar" : "Guardar mi PIN y entrar"}
+                    </button>
+                  </div>
+                )}
+                <div className="ilinks"><button type="button" onClick={goBack}>Cambiar de usuario</button></div>
+              </>
+            )}
+          </>
         )}
-
-        <form action={logout}>
-          <Button type="submit" variant="ghost" size="sm" className="text-muted-foreground">
-            <LogOutIcon className="size-4" aria-hidden /> Cerrar sesión
-          </Button>
-        </form>
+        {!selected && (
+          <form action={logout} className="ilinks">
+            <button type="submit">Cerrar sesión</button>
+          </form>
+        )}
       </section>
     </main>
   );
