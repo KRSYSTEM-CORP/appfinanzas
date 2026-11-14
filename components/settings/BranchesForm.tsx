@@ -80,7 +80,7 @@ export function BranchesForm({ branches }: { branches: Branch[] }) {
         items={branches}
         label="Sucursales"
         empty={
-          <div className="flex flex-col items-center gap-3 rounded-lg border bg-card py-14 text-center shadow-xs">
+          <div className="flex flex-col items-center gap-3 rounded-[14px] bg-muted py-14 text-center">
             <div className="flex items-center justify-center size-11 rounded-full bg-muted text-muted-foreground">
               <StoreIcon className="size-5" />
             </div>
@@ -99,7 +99,7 @@ export function BranchesForm({ branches }: { branches: Branch[] }) {
         )}
         renderRow={(b) => (
           <>
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-muted">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-primary/12 text-primary">
               <StoreIcon className="size-4 text-muted-foreground/60" />
             </span>
             <span className="min-w-0 flex-1">

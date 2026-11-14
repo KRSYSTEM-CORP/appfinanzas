@@ -595,3 +595,16 @@
   --color-wa-bubble: var(--wa-bubble);
   --color-wa-ink: var(--wa-ink);
 }
+
+/* Asistente IA: orbe, puntos de escritura y micrófono activo (copiados de la preview) */
+@keyframes kr-orb { to { filter: hue-rotate(360deg); } }
+.kr-orb {
+  background: conic-gradient(from 200deg, var(--primary), var(--chart-2), var(--chart-4), var(--primary));
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--primary) 45%, transparent);
+  animation: kr-orb 6s linear infinite;
+}
+@keyframes kr-typing { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-4px); } }
+.kr-typing { animation: kr-typing 1s infinite; }
+@keyframes kr-mic { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--destructive) 45%, transparent); } 50% { box-shadow: 0 0 0 10px transparent; } }
+.kr-mic { animation: kr-mic 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .kr-orb, .kr-typing, .kr-mic { animation: none; } }
