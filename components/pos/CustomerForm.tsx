@@ -28,6 +28,7 @@ export function CustomerForm({
   subtitle = "Un dato rápido y pasas directo al catálogo.",
   submitLabel = "Continuar al catálogo",
   bare = false,
+  onCancel,
 }: {
   initial?: CustomerInfo;
   onContinue: (customer: CustomerInfo) => void;
@@ -36,6 +37,7 @@ export function CustomerForm({
   submitLabel?: string;
   // Sin tarjeta propia: para mostrarlo dentro de un diálogo.
   bare?: boolean;
+  onCancel?: () => void;
 }) {
   const [firstName, setFirstName] = useState(initial?.firstName ?? "");
   const [lastName, setLastName] = useState(initial?.lastName ?? "");
@@ -102,32 +104,37 @@ export function CustomerForm({
     onContinue(info);
   }
 
+  const fieldInput =
+    "h-11 rounded-[12px] border-border bg-background px-3 text-[13px] font-semibold placeholder:text-muted-foreground";
+  const fieldLabel = "text-[13px] font-semibold";
+
   return (
     <form
       onSubmit={handleSubmit}
       className={
         bare
-          ? "flex w-full flex-col gap-4"
-          : "mx-auto my-3 flex w-full max-w-2xl flex-col gap-4 rounded-2xl border bg-card p-4 shadow-[0_8px_28px_color-mix(in_oklab,var(--foreground)_5%,transparent)] min-[400px]:my-4 min-[400px]:gap-5 min-[400px]:p-5 sm:my-6 sm:p-7"
+          ? "flex w-full flex-col gap-2.5"
+          : "mx-auto my-3 flex w-full max-w-2xl flex-col gap-2.5 rounded-[19px] bg-card p-4 shadow-(--shadow-card) min-[400px]:my-4 min-[400px]:p-5 sm:my-6 sm:p-7"
       }
     >
-      <div className="flex items-start gap-3">
-        <div className="flex items-center justify-center size-9 shrink-0 rounded-lg bg-primary/10 text-primary">
-          <UserIcon className="size-4.5" />
+      {!bare && (
+        <div className="flex items-start gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-primary/12 text-primary">
+            <UserIcon className="size-[22px]" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold leading-tight tracking-tight">{title}</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-lg font-semibold leading-tight tracking-tight">{title}</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {subtitle}
-          </p>
-        </div>
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 min-[400px]:gap-4">
-        <div className="flex flex-col gap-1.5 relative">
-          <Label htmlFor="firstName">Nombre</Label>
+      <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2">
+        <div className="relative flex flex-col gap-1">
+          <Label htmlFor="firstName" className={fieldLabel}>Nombre *</Label>
           <Input
             id="firstName"
+            className={fieldInput}
             value={firstName}
             onChange={(e) => {
               const value = e.target.value;
@@ -138,18 +145,18 @@ export function CustomerForm({
             onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             required
             autoFocus
-            autoComplete="off"
+            autoComplete="given-name"
           />
           {showSuggestions && visibleSuggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 z-10 rounded-md border bg-popover shadow-md overflow-hidden">
+            <div className="absolute top-full right-0 left-0 z-10 mt-1 overflow-hidden rounded-[14px] bg-popover shadow-(--shadow-float)">
               {visibleSuggestions.map((c) => (
                 <button
                   type="button"
                   key={c.id}
                   onMouseDown={() => pickSuggestion(c)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                  className="w-full px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
                 >
-                  <span className="font-medium">
+                  <span className="font-semibold">
                     {c.firstName} {c.lastName}
                   </span>
                   <span className="block text-xs text-muted-foreground">{c.phone}</span>
@@ -158,59 +165,48 @@ export function CustomerForm({
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="lastName">Apellido</Label>
-          <Input
-            id="lastName"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            required
-          />
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="lastName" className={fieldLabel}>Apellido *</Label>
+          <Input id="lastName" className={fieldInput} value={lastName} onChange={(e) => setLastName(e.target.value)} required autoComplete="family-name" />
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="phone">Número de teléfono</Label>
-        <Input
-          id="phone"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          required
-          autoComplete="off"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="address">Dirección</Label>
-        <Input
-          id="address"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          required
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="rif">Cédula/RIF (opcional)</Label>
-        <Input id="rif" value={rif} onChange={(e) => setRif(e.target.value)} autoComplete="off" />
-        <p className="text-xs text-muted-foreground">Ej. V-12345678 o J-12345678-9</p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="birthDate">Fecha de nacimiento</Label>
-          <Input id="birthDate" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+      <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="rif" className={fieldLabel}>Cédula (opcional)</Label>
+          <Input id="rif" className={fieldInput} inputMode="numeric" placeholder="V-00000000" value={rif} onChange={(e) => setRif(e.target.value)} autoComplete="off" />
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">Correo</Label>
-          <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="phone" className={fieldLabel}>Teléfono *</Label>
+          <Input id="phone" className={fieldInput} type="tel" inputMode="tel" placeholder="0412-000-0000" value={phone} onChange={(e) => setPhone(e.target.value)} required autoComplete="off" />
         </div>
       </div>
 
-      <Button type="submit" size="lg" className="w-full">
-        {submitLabel}
-      </Button>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="address" className={fieldLabel}>Dirección *</Label>
+        <Input id="address" className={fieldInput} value={address} onChange={(e) => setAddress(e.target.value)} required autoComplete="street-address" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="birthDate" className={fieldLabel}>Fecha de nacimiento (opcional)</Label>
+          <Input id="birthDate" className={fieldInput} type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="email" className={fieldLabel}>Correo (opcional)</Label>
+          <Input id="email" className={fieldInput} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        </div>
+      </div>
+      <p className="text-[13px] text-muted-foreground">Nombre, apellido, dirección y teléfono son obligatorios.</p>
+
+      <div className="mt-1 flex flex-wrap gap-2">
+        <Button type="submit">{submitLabel}</Button>
+        {onCancel && (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancelar
+          </Button>
+        )}
+      </div>
     </form>
   );
 }

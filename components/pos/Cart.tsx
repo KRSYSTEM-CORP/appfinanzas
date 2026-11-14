@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { MinusIcon, PauseIcon, PlusIcon, ShoppingCartIcon, XIcon } from "lucide-react";
+import { ChevronRightIcon, MinusIcon, PauseIcon, PlusIcon, ShoppingCartIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -82,6 +82,7 @@ function PriceTierPicker({
 
 export function Cart({
   bare = false,
+  top,
   lines,
   rate,
   currencyCode,
@@ -111,6 +112,9 @@ export function Cart({
 }: {
   // Sin tarjeta, título ni canal propios: los pone PosClient (como en la preview).
   bare?: boolean;
+  // Solo modo `bare`: cabecera de la venta (título, canal, cuentas, cliente)
+  // que va dentro de la misma tarjeta en computadora y de la hoja en teléfono.
+  top?: React.ReactNode;
   lines: CartLine[];
   rate: number | null;
   currencyCode: string;
@@ -223,7 +227,7 @@ export function Cart({
       ref={sheetRef}
       role={open ? "dialog" : undefined}
       aria-label={open ? "Carrito" : undefined}
-      className={`flex flex-col h-full gap-3 ${bare ? "" : "md:rounded-[22px] md:bg-card md:p-5 md:shadow-(--shadow-card) md:overflow-y-auto"} max-md:fixed max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:z-[45] max-md:h-auto max-md:max-h-[88dvh] max-md:overflow-y-auto max-md:rounded-t-2xl max-md:border-t max-md:bg-popover max-md:text-popover-foreground max-md:px-4 max-md:pt-2 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:shadow-2xl max-md:transition-transform max-md:duration-[260ms] max-md:ease-[cubic-bezier(.23,1,.32,1)] motion-reduce:max-md:transition-none ${
+      className={`flex flex-col ${bare && top ? "gap-1.5" : "h-full gap-3"} ${bare ? (top ? "md:sticky md:top-3 md:max-h-full md:overflow-y-auto md:rounded-[22px] md:bg-card md:p-4 md:shadow-(--shadow-card)" : "") : "md:rounded-[22px] md:bg-card md:p-5 md:shadow-(--shadow-card) md:overflow-y-auto"} max-md:fixed max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:z-[45] max-md:h-auto max-md:max-h-[88dvh] max-md:overflow-y-auto max-md:rounded-t-2xl max-md:border-t max-md:bg-popover max-md:text-popover-foreground max-md:px-4 max-md:pt-2 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:shadow-2xl max-md:transition-transform max-md:duration-[260ms] max-md:ease-[cubic-bezier(.23,1,.32,1)] motion-reduce:max-md:transition-none ${
         open ? "max-md:translate-y-0" : "max-md:translate-y-full max-md:invisible"
       }`}
     >
@@ -245,29 +249,23 @@ export function Cart({
         </button>
       </div>
       {!bare && <h2 className="text-xl font-bold tracking-tight">Venta actual</h2>}
+      {bare && top}
 
-      <div className="md:flex-1 md:overflow-y-auto flex flex-col gap-2">
+      <div className={bare ? "my-1.5 flex max-h-[300px] flex-col gap-0.5 overflow-auto" : "md:flex-1 md:overflow-y-auto flex flex-col gap-2"}>
         {lines.length === 0 && (
-          <div className="flex flex-col items-center gap-1 py-8 text-center">
-            <ShoppingCartIcon className="size-8 text-muted-foreground" aria-hidden />
-            <p className="font-bold">Aún no hay productos</p>
-            <p className="text-sm text-muted-foreground">Toca un producto para agregarlo</p>
+          <div className="flex flex-col items-center gap-1 py-[26px] text-center text-muted-foreground">
+            <ShoppingCartIcon className="size-10 opacity-60" strokeWidth={1.6} aria-hidden />
+            <b className="font-bold text-foreground">Aún no hay productos</b>
+            <span>Toca un producto para agregarlo</span>
           </div>
         )}
         {lines.map((line) => (
-          <div
-            key={line.productId}
-            className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-dashed border-border pb-3 last:border-b-0 md:flex-nowrap md:justify-between md:pb-2"
-          >
-            {/* Phones: name + remove on the first row, quantity + subtotal on the
-                second (a single row left the name truncated to a few letters). */}
-            <div className="order-1 min-w-0 flex-[1_1_calc(100%_-_3.5rem)] md:flex-1 md:basis-auto">
-              <p className="text-sm font-medium truncate">{line.name}</p>
-              <p className="tabular-nums text-xs text-muted-foreground">
-                {exchangeRateEnabled && rate != null
-                  ? `${formatLocalCurrency(eurCentsToLocal(line.unitPriceCents, rate), currencyCode)} / ${formatCurrencyCents(referenceCurrency, line.unitPriceCents)} c/u`
-                  : `${formatCurrencyCents(referenceCurrency, line.unitPriceCents)} c/u`}
-              </p>
+          <div key={line.productId} className="flex items-center gap-2.5 border-b border-border py-2.5 last:border-b-0">
+            <div className="min-w-0 flex-1">
+              <b className="block truncate font-bold">{line.name}</b>
+              <small className="block text-[0.8333em] text-muted-foreground tabular-nums">
+                {formatCurrencyCents(referenceCurrency, line.unitPriceCents)} c/u
+              </small>
               {line.product.priceTiersEnabled && (
                 <div className="mt-1">
                   <PriceTierPicker
@@ -279,58 +277,39 @@ export function Cart({
                 </div>
               )}
             </div>
-            <div className="order-3 flex items-center gap-1 md:order-2">
-              <Button
+            <span className="inline-flex items-center gap-2 rounded-full bg-muted p-[3px]">
+              <button
                 type="button"
-                size="icon-sm"
-                variant="outline"
-                className="max-md:size-11"
-                aria-label="Quitar una unidad"
-                onClick={() => onDecrement(line.productId)}
+                aria-label={line.quantity <= 1 ? `Quitar ${line.name} del carrito` : "Quitar uno"}
+                onClick={() => (line.quantity <= 1 ? onRemove(line.productId) : onDecrement(line.productId))}
+                className="grid size-8 place-items-center rounded-full bg-card transition-transform active:scale-90"
               >
-                <MinusIcon />
-              </Button>
+                <MinusIcon className="size-4" strokeWidth={3} />
+              </button>
               <QuantityInput
                 quantity={line.quantity}
                 maxStock={line.maxStock}
                 onCommit={(quantity) => onSetQuantity(line.productId, quantity)}
+                className="w-[22px] min-w-[22px] bg-transparent text-center font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               />
-              <Button
+              <button
                 type="button"
-                size="icon-sm"
-                variant="outline"
-                className="max-md:size-11"
-                aria-label="Agregar una unidad"
+                aria-label="Agregar uno"
                 disabled={line.quantity >= line.maxStock}
                 onClick={() => onIncrement(line.productId)}
+                className="grid size-8 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-90 disabled:opacity-45"
               >
-                <PlusIcon />
-              </Button>
-            </div>
-            <div className="order-4 ml-auto text-right md:order-3 md:ml-0 md:w-28">
-              <Price
-                eurCents={line.unitPriceCents * line.quantity}
-                rate={rate}
-                currencyCode={currencyCode}
-                exchangeRateEnabled={exchangeRateEnabled}
-                referenceCurrency={referenceCurrency}
-              />
-            </div>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              className="order-2 max-md:size-11 md:order-4"
-              aria-label={`Quitar ${line.name} del carrito`}
-              onClick={() => onRemove(line.productId)}
-            >
-              <XIcon />
-            </Button>
+                <PlusIcon className="size-4" strokeWidth={3} />
+              </button>
+            </span>
+            <b className="min-w-16 text-right font-bold tabular-nums">
+              {formatCurrencyCents(referenceCurrency, line.unitPriceCents * line.quantity)}
+            </b>
           </div>
         ))}
       </div>
 
-      <Separator />
+      {!bare && <Separator />}
 
       {!bare && (
       <div className="flex items-center justify-between gap-2">
@@ -361,7 +340,7 @@ export function Cart({
       </div>
       )}
 
-      {discountValue > 0 && (
+      {!bare && discountValue > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>Subtotal</span>
           <Price
@@ -373,7 +352,7 @@ export function Cart({
           />
         </div>
       )}
-      {discountValue > 0 && (
+      {!bare && discountValue > 0 && (
         <div className="flex items-center justify-between text-sm text-destructive">
           <span>Descuento ({discountValue}%)</span>
           <span>
@@ -391,24 +370,30 @@ export function Cart({
       )}
 
       {bare ? (
-        <>
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>Subtotal</span>
-            <span className="tabular-nums">{formatCurrencyCents(referenceCurrency, rawTotal)}</span>
+        <div className="border-t-2 border-border pt-1.5">
+          <div className="flex items-center justify-between gap-2.5 border-b border-border py-2.5">
+            <span className="text-muted-foreground">Subtotal</span>
+            <b className="font-bold tabular-nums">{formatCurrencyCents(referenceCurrency, rawTotal)}</b>
           </div>
-          <div className="flex items-end justify-between gap-3">
+          {discountCents > 0 && (
+            <div className="flex items-center justify-between gap-2.5 border-b border-border py-2.5 text-success">
+              <span>Descuento ({String(discountValue).replace(".", ",")} %)</span>
+              <b className="font-bold tabular-nums">−{formatCurrencyCents(referenceCurrency, discountCents)}</b>
+            </div>
+          )}
+          <div className="flex items-end justify-between gap-2.5 py-2">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total estimado</p>
-              <p className="text-[34px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums">{formatCurrencyCents(referenceCurrency, total)}</p>
+              <small className="text-[0.8333em] text-muted-foreground">Total estimado</small>
+              <b className="block text-[34px] leading-[1.05] font-extrabold tracking-[-0.04em] tabular-nums">{formatCurrencyCents(referenceCurrency, total)}</b>
             </div>
             {exchangeRateEnabled && rate != null && (
               <div className="text-right">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Equivalente</p>
-                <p className="text-sm font-bold tabular-nums">{formatLocalCurrency(eurCentsToLocal(total, rate), currencyCode)}</p>
+                <small className="text-[0.8333em] text-muted-foreground">Equivalente</small>
+                <b className="block font-bold tabular-nums">{formatLocalCurrency(eurCentsToLocal(total, rate), currencyCode)}</b>
               </div>
             )}
           </div>
-        </>
+        </div>
       ) : (
       <div className="flex items-center justify-between">
         <span className="text-lg font-semibold">Total</span>
@@ -532,12 +517,12 @@ export function Cart({
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         {bare ? (
-          <div className="grid grid-cols-2 gap-2">
-            <Button type="button" size="lg" variant="outline" disabled={lines.length === 0} onClick={onHold}>
-              <PauseIcon /> En espera
+          <div className="mt-1 grid grid-cols-[1fr_1.4fr] gap-2">
+            <Button type="button" variant="outline" className="min-h-[54px] justify-center text-[15px] whitespace-normal disabled:opacity-45" disabled={lines.length === 0} onClick={onHold}>
+              <PauseIcon strokeWidth={2.2} /> En espera <kbd className="ml-1 rounded-[6px] bg-muted-foreground/22 px-1.5 py-0.5 text-[11px] font-bold">E</kbd>
             </Button>
-            <Button type="button" size="lg" disabled={lines.length === 0} loading={isPending} onClick={onCheckout}>
-              Cobrar {formatCurrencyCents(referenceCurrency, total)}
+            <Button type="button" className="min-h-[54px] justify-center text-[15px] font-extrabold disabled:opacity-45" disabled={lines.length === 0} loading={isPending} onClick={onCheckout}>
+              Cobrar {formatCurrencyCents(referenceCurrency, total)} <kbd className="ml-1 rounded-[6px] bg-muted-foreground/22 px-1.5 py-0.5 text-[11px] font-bold">C</kbd>
             </Button>
           </div>
         ) : (
@@ -551,7 +536,19 @@ export function Cart({
 
       {/* Phones only: the total and the way into the cart sheet stay in reach
           while browsing the catalog. */}
-      {lines.length > 0 && !open && (
+      {lines.length > 0 && !open && (bare ? (
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="fixed right-3 bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+12px)] left-3 z-30 flex min-h-14 items-center gap-2.5 rounded-[20px] bg-foreground px-[18px] text-[15px] font-bold text-background shadow-(--shadow-float) md:hidden"
+        >
+          <span className="grid h-7 min-w-7 place-items-center rounded-full bg-background/20 text-[13px]">{itemCount}</span>
+          Ver venta actual
+          <span className="flex-1" />
+          <b className="tabular-nums">{formatCurrencyCents(referenceCurrency, total)}</b>
+          <ChevronRightIcon className="size-[18px]" strokeWidth={2.4} />
+        </button>
+      ) : (
         <div className="md:hidden fixed left-0 right-0 bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 border-t glass-bar px-4 py-3">
           <div className="flex min-w-0 flex-col">
             <span className="text-xs text-muted-foreground">
@@ -570,7 +567,7 @@ export function Cart({
             Ver carrito
           </Button>
         </div>
-      )}
+      ))}
     </>
   );
 }

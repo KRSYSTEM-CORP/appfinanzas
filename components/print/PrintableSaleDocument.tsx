@@ -40,16 +40,23 @@ export function PrintableSaleDocument({
   currencyCode?: string;
   exchangeRateEnabled?: boolean;
   referenceCurrency?: ReferenceCurrency;
-  variant: "delivery-note" | "receipt" | "invoice";
+  // "ticket": el Ticket de caja del POS (mismo contenido que la nota de entrega, otro título).
+  variant: "delivery-note" | "receipt" | "invoice" | "ticket";
   paperSize: PrintPaperSize;
 }) {
   const thermal = isThermal(paperSize);
   const showLocal = exchangeRateEnabled && rate != null;
   const payments = resolvePaymentLines(sale, referenceCurrency);
   const title =
-    variant === "delivery-note" ? "NOTA DE ENTREGA" : variant === "invoice" ? "FACTURA" : "RECIBO DE PAGO";
-  const controlLabel =
     variant === "delivery-note"
+      ? "NOTA DE ENTREGA"
+      : variant === "ticket"
+        ? "TICKET DE CAJA"
+        : variant === "invoice"
+          ? "FACTURA"
+          : "RECIBO DE PAGO";
+  const controlLabel =
+    variant === "delivery-note" || variant === "ticket"
       ? controlNumberLabel(sale)
       : variant === "invoice"
         ? invoiceNumberLabel(sale)
