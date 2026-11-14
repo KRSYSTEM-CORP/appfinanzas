@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BanknoteIcon, LockIcon, PackageIcon, ReceiptIcon, ShoppingCartIcon, StarIcon, StoreIcon, TrendingUpIcon, UsersIcon } from "lucide-react";
+import { BanknoteIcon, LockIcon, MapPinIcon, ShoppingCartIcon, StarIcon, StoreIcon, TrendingUpIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { IconTile } from "@/components/ui/icon-tile";
 import { EnterBranchDialog } from "@/components/branches/EnterBranchDialog";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { setBranchGoal, setBranchKey, type BranchSummary } from "@/lib/actions/branches";
@@ -132,136 +132,138 @@ export function BranchCards({
   ];
 
 
-  const alerts: { tone: "warn" | "info"; text: string }[] = [
-    ...active.filter((s) => s.lowStock > 0).map((s) => ({ tone: "warn" as const, text: `${s.name} tiene ${s.lowStock} ${s.lowStock === 1 ? "producto" : "productos"} con stock bajo.` })),
-    ...active.filter((s) => s.salesToday === 0).map((s) => ({ tone: "info" as const, text: `${s.name} aún no registra ventas hoy.` })),
+  const alerts: { tone: "warn" | "info"; text: string; id: string }[] = [
+    ...active.filter((s) => s.lowStock > 0).map((s) => ({ id: s.id, tone: "warn" as const, text: `${s.name} tiene ${s.lowStock} ${s.lowStock === 1 ? "producto" : "productos"} con stock bajo.` })),
+    ...active.filter((s) => s.salesToday === 0).map((s) => ({ id: s.id, tone: "info" as const, text: `${s.name} aún no registra ventas hoy.` })),
   ];
+  const entered = currentBranchId ? 1 : 0;
+  const monthName = new Date().toLocaleDateString("es-VE", { month: "long" });
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3 rounded-[20px] bg-card p-4 shadow-(--shadow-card)">
-        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
-          <LockIcon className="size-5" aria-hidden />
-        </span>
-        <p className="text-sm text-muted-foreground">
-          <b className="text-foreground">Resumen de toda la red.</b> Para entrar a una sede, abrir su caja o ver su ficha necesitas la clave de su administrador.
-        </p>
+      <div role="note" className="flex flex-wrap items-center gap-3 rounded-[19px] bg-card px-4 py-3.5 shadow-(--shadow-card)">
+        <IconTile>
+          <LockIcon className="size-[22px]" aria-hidden />
+        </IconTile>
+        <div className="min-w-[200px] flex-1">
+          <b>Has entrado a {entered} de {summaries.length} {summaries.length === 1 ? "sede" : "sedes"}</b>
+          <p className="text-[13px] text-muted-foreground">
+            Ves el resumen de toda la red. Para entrar a una sede, abrir su caja o ver su ficha necesitas la clave de su administrador.
+          </p>
+        </div>
       </div>
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,180px),1fr))" }}>
         {kpis.map((k) => (
-          <div key={k.label} className="relative min-h-32 rounded-[19px] bg-card p-[17px] shadow-(--shadow-card)">
-            <p className="pr-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{k.label}</p>
-            <span className={`absolute right-4 top-4 grid size-[34px] place-items-center rounded-full ${k.chip}`} aria-hidden>
+          <div key={k.label} className="relative flex min-h-32 flex-col gap-1.5 rounded-[19px] border-2 border-transparent bg-card p-[17px] shadow-(--shadow-card)">
+            <p className="pr-11 text-xs font-semibold uppercase text-muted-foreground">{k.label}</p>
+            <span className={`absolute right-3.5 top-3.5 grid size-[34px] place-items-center rounded-full ${k.chip}`} aria-hidden>
               <k.Icon className="size-[18px]" />
             </span>
-            <p className="mt-1.5 truncate text-[34px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums">{k.value}</p>
-            <p className="mt-1.5 text-[13px] text-muted-foreground">{k.sub}</p>
+            <p className="text-[30px] font-bold leading-[1.1] tracking-[-0.03em] tabular-nums">{k.value}</p>
+            <p className="text-[13px] text-muted-foreground">{k.sub}</p>
           </div>
         ))}
       </div>
       {alerts.length > 0 && (
-        <section className="rounded-[20px] bg-card p-5 shadow-(--shadow-card)">
-          <h2 className="text-base font-bold">Lo que no puede esperar</h2>
-          <p className="mb-2 text-xs text-muted-foreground">Alertas de toda la red</p>
-          <ul className="flex flex-col divide-y">
+        <section className="relative rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
+          <header className="mb-3">
+            <h2 className="text-base font-bold">Lo que no puede esperar</h2>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">Alertas de toda la red</p>
+          </header>
+          <ul>
             {alerts.map((a) => (
-              <li key={a.text} className="flex items-center gap-3 py-3 text-sm">
-                <span className={`size-2 shrink-0 rounded-full ${a.tone === "warn" ? "bg-warning" : "bg-primary"}`} aria-hidden />
-                <span>{a.text}</span>
+              <li key={a.text} className="flex items-center justify-between gap-2.5 border-b py-2.5 last:border-b-0">
+                <div className="flex items-start gap-2.5">
+                  <span className={`inline-flex items-center rounded-full px-1.5 py-[3px] ${a.tone === "warn" ? "bg-warning/18 text-warning" : "text-foreground"}`} aria-hidden>
+                    <span className="size-[7px] rounded-full bg-current" />
+                  </span>
+                  <span>{a.text}</span>
+                </div>
+                <a href={`#sede-${a.id}`} className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-muted px-3.5 text-[13px] font-semibold text-primary transition-transform active:scale-[0.97]">
+                  Ver sede
+                </a>
               </li>
             ))}
           </ul>
         </section>
       )}
-      <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <ul className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,300px),1fr))" }}>
         {summaries.map((s) => {
           const here = s.id === currentBranchId;
+          const p = s.goalCents != null && s.goalCents > 0 ? s.salesMonthCents / s.goalCents : null;
+          const ringColor = p == null ? "" : p >= 0.9 ? "var(--success)" : p >= 0.6 ? "var(--primary)" : "var(--warning)";
+          const pill = "inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-xs font-bold whitespace-nowrap";
+          const dot = <span className="size-[7px] rounded-full bg-current" aria-hidden />;
           return (
-            <li key={s.id}>
-              <Card className={here ? "ring-2 ring-primary" : undefined}>
-                <CardContent className="flex flex-col gap-3 p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                        <StoreIcon className="size-5" aria-hidden />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{s.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {!s.isActive ? "Inactiva" : here ? "Estás aquí" : "Activa"}
-                        </p>
+            <li key={s.id} id={`sede-${s.id}`} className="scroll-mt-4">
+              <article className={`relative flex h-full min-w-0 flex-col gap-0.5 rounded-[19px] border-2 bg-card p-4 shadow-(--shadow-card) transition duration-150 hover:-translate-y-0.5 hover:shadow-(--shadow-float) ${here ? "border-primary" : "border-transparent"}`}>
+                <div className="flex items-center gap-3">
+                  <IconTile>
+                    <StoreIcon className="size-[22px]" aria-hidden />
+                  </IconTile>
+                  <div className="min-w-0 flex-1">
+                    <b className="block truncate text-[17px] tracking-[-0.02em]">{s.name}</b>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <MapPinIcon className="size-[13px] shrink-0" aria-hidden />
+                      {!s.isActive ? "Inactiva" : here ? "Sede donde operas" : "Sede activa"}
+                    </div>
+                  </div>
+                </div>
+                <div className="mb-1 mt-2.5 flex flex-wrap items-center gap-2">
+                  {here && <span className={`${pill} bg-primary/12 font-semibold text-primary`}>Operando aquí</span>}
+                  {!s.isActive && <span className={`${pill} bg-muted font-semibold text-muted-foreground`}>Inactiva</span>}
+                  {s.lowStock > 0 ? (
+                    <span className={`${pill} bg-warning/18 text-warning`}>{dot}{s.lowStock} {s.lowStock === 1 ? "alerta" : "alertas"} de stock</span>
+                  ) : (
+                    s.isActive && <span className={`${pill} bg-success/14 text-success`}>{dot}Stock al día</span>
+                  )}
+                </div>
+                <div className="mt-1.5">
+                  <small className="block text-xs font-semibold text-muted-foreground">Ventas · mes</small>
+                  <b className="block text-[28px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums">{formatCurrencyCents(currency, s.salesMonthCents)}</b>
+                  <small className="block text-xs font-semibold text-muted-foreground">Hoy {formatCurrencyCents(currency, s.salesTodayCents)} · {s.salesToday} {s.salesToday === 1 ? "venta" : "ventas"}</small>
+                </div>
+                <div className="mt-2.5 grid grid-cols-2 items-center gap-2.5">
+                  <div>
+                    <small className="block text-xs font-semibold text-muted-foreground">Ganancia neta est.</small>
+                    <b className={`text-[17px] font-bold tabular-nums ${s.profitMonthCents < 0 ? "text-destructive" : "text-success"}`}>{formatCurrencyCents(currency, s.profitMonthCents)}</b>
+                  </div>
+                  <div>
+                    <small className="block text-xs font-semibold text-muted-foreground">Pedidos</small>
+                    <b className="text-[17px] font-bold tabular-nums">{s.salesMonth}</b>
+                  </div>
+                  {p != null && s.goalCents != null && (
+                    <div className="col-span-full flex items-center gap-3 rounded-[14px] bg-muted px-3 py-2">
+                      <svg className="size-[54px] shrink-0" viewBox="0 0 64 64" role="img" aria-label={`${Math.round(p * 100)} % de la meta`}>
+                        <circle cx="32" cy="32" r="26" fill="none" stroke="var(--border)" strokeWidth="7" />
+                        <circle cx="32" cy="32" r="26" fill="none" stroke={ringColor} strokeWidth="7" strokeLinecap="round" strokeDasharray={`${Math.min(1, p) * 2 * Math.PI * 26} ${2 * Math.PI * 26}`} transform="rotate(-90 32 32)" />
+                        <text x="32" y="36" textAnchor="middle" style={{ fontSize: 13, fontWeight: 800, fill: "var(--foreground)" }}>{Math.round(p * 100)}%</text>
+                      </svg>
+                      <div>
+                        <small className="block text-xs font-semibold text-muted-foreground">Meta de {monthName}</small>
+                        <b className="text-[17px] font-bold tabular-nums">{formatCurrencyCents(currency, s.salesMonthCents)} / {formatCurrencyCents(currency, s.goalCents)}</b>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${!s.isActive ? "bg-muted text-muted-foreground" : here ? "bg-primary/10 text-primary" : "bg-success/14 text-success"}`}>
-                      {!s.isActive ? "Inactiva" : here ? "Operando aquí" : "Activa"}
-                    </span>
-                    {s.lowStock > 0 && (
-                      <span className="rounded-full bg-warning/18 px-2.5 py-0.5 text-xs font-semibold text-warning">
-                        {s.lowStock} {s.lowStock === 1 ? "alerta de stock" : "alertas de stock"}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-end justify-between gap-3">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Ventas · mes</p>
-                      <p className="text-2xl font-bold tabular-nums tracking-tight">{formatCurrencyCents(currency, s.salesMonthCents)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Pedidos</p>
-                      <p className="text-lg font-bold tabular-nums">{s.salesMonth}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 rounded-2xl bg-muted/60 p-3">
-                    <div className="flex items-baseline justify-between text-sm">
-                      <span className="text-muted-foreground">Ganancia est. del mes</span>
-                      <b className={`tabular-nums ${s.profitMonthCents < 0 ? "text-destructive" : "text-success"}`}>{formatCurrencyCents(currency, s.profitMonthCents)}</b>
-                    </div>
-                    {s.goalCents != null && s.goalCents > 0 && (
-                      <>
-                        <div className="flex items-baseline justify-between text-xs text-muted-foreground">
-                          <span>Meta de ventas del mes</span>
-                          <span className="tabular-nums">
-                            {formatCurrencyCents(currency, s.salesMonthCents)} / {formatCurrencyCents(currency, s.goalCents)} · {Math.round((s.salesMonthCents / s.goalCents) * 100)} %
-                          </span>
-                        </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`Meta de ${s.name}`} aria-valuenow={Math.min(100, Math.round((s.salesMonthCents / s.goalCents) * 100))} aria-valuemin={0} aria-valuemax={100}>
-                          <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (s.salesMonthCents / s.goalCents) * 100)}%` }} />
-                        </div>
-                      </>
-                    )}
-                    {s.isActive && <GoalEditor branchId={s.id} goalCents={s.goalCents} currency={currency} />}
-                    {s.isActive && <KeyEditor branchId={s.id} />}
-                  </div>
-                  <dl className="grid grid-cols-3 gap-2 text-center text-xs">
-                    <div className="rounded-xl bg-muted p-2.5">
-                      <dt className="flex items-center justify-center gap-1 text-muted-foreground">
-                        <ReceiptIcon className="size-3" aria-hidden /> Hoy
-                      </dt>
-                      <dd className="mt-0.5 font-semibold tabular-nums">{formatCurrencyCents(currency, s.salesTodayCents)}</dd>
-                      <dd className="text-muted-foreground">{s.salesToday} ventas</dd>
-                    </div>
-                    <div className="rounded-xl bg-muted p-2.5">
-                      <dt className="flex items-center justify-center gap-1 text-muted-foreground">
-                        <PackageIcon className="size-3" aria-hidden /> Productos
-                      </dt>
-                      <dd className="mt-0.5 font-semibold tabular-nums">{s.products}</dd>
-                    </div>
-                    <div className="rounded-xl bg-muted p-2.5">
-                      <dt className="flex items-center justify-center gap-1 text-muted-foreground">
-                        <UsersIcon className="size-3" aria-hidden /> Personal
-                      </dt>
-                      <dd className="mt-0.5 font-semibold tabular-nums">{s.users}</dd>
-                    </div>
-                  </dl>
-                  {s.isActive && !here && (
-                    <Button size="sm" variant="outline" onClick={() => setTarget({ id: s.id, name: s.name })}>
-                      <LockIcon className="size-3.5" aria-hidden /> Entrar con clave
-                    </Button>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+                {s.isActive && (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <GoalEditor branchId={s.id} goalCents={s.goalCents} currency={currency} />
+                    <KeyEditor branchId={s.id} />
+                  </div>
+                )}
+                {s.isActive && !here && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTarget({ id: s.id, name: s.name })}
+                      className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-transform active:scale-[0.97]"
+                    >
+                      <LockIcon className="size-4" aria-hidden /> Entrar con clave
+                    </button>
+                  </div>
+                )}
+              </article>
             </li>
           );
         })}

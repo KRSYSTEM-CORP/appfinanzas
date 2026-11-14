@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowRightLeftIcon, TruckIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import { formatCurrencyCents } from "@/lib/currencies";
 import type { BranchSummary } from "@/lib/actions/branches";
 import type { TransferRow, TransferSuggestion } from "@/lib/actions/transfers";
@@ -15,9 +16,9 @@ const ORDERS = [
   { id: "avg", label: "Venta promedio" },
 ] as const;
 type Order = (typeof ORDERS)[number]["id"];
-const BAR_COLORS = ["bg-primary", "bg-success", "bg-warning", "bg-destructive"];
+const BAR_COLORS = ["var(--sede-1)", "var(--sede-2)", "var(--sede-3)", "var(--sede-4)"];
 
-const card = "flex flex-col gap-3 rounded-[20px] bg-card p-5 shadow-(--shadow-card)";
+const card = "relative flex min-w-0 flex-col gap-3 rounded-[19px] bg-card p-4 shadow-(--shadow-card)";
 
 // Comparativa entre sedes: barras ordenables + tabla con el desglose y el total de la red.
 export function BranchComparison({ summaries, currency }: { summaries: BranchSummary[]; currency: string }) {
@@ -52,65 +53,59 @@ export function BranchComparison({ summaries, currency }: { summaries: BranchSum
         <h2 className="text-base font-bold">Comparativa entre sedes</h2>
         <p className="text-xs text-muted-foreground">Ventas, costo, gastos, comisiones y ganancia neta estimada del mes por sede</p>
       </div>
-      <div role="group" aria-label="Ordenar comparativa" className="flex flex-wrap gap-2">
+      <div role="group" aria-label="Ordenar comparativa" className="mb-2 flex flex-wrap items-center gap-2">
         {ORDERS.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            aria-pressed={order === o.id}
-            onClick={() => setOrder(o.id)}
-            className={`min-h-9 rounded-full px-3.5 text-[13px] font-bold ${order === o.id ? "bg-foreground text-background" : "bg-muted hover:bg-muted/70"}`}
-          >
+          <Chip key={o.id} active={order === o.id} onClick={() => setOrder(o.id)}>
             {o.label}
-          </button>
+          </Chip>
         ))}
       </div>
-      <ul className="flex flex-col gap-2">
+      <div>
         {sorted.map((r, i) => (
-          <li key={r.s.id} className="grid items-center gap-3 text-sm" style={{ gridTemplateColumns: "minmax(0,7rem) 1fr auto" }}>
-            <span className="truncate font-semibold">{i === 0 && value(r) > 0 ? "★ " : ""}{r.s.name}</span>
-            <span className="h-3 overflow-hidden rounded-full bg-muted">
-              <span className={`block h-full rounded-full ${BAR_COLORS[i % 4]}`} style={{ width: `${Math.max(0, (value(r) / max) * 100)}%` }} />
-            </span>
-            <span className="tabular-nums text-xs text-muted-foreground">{fmt(value(r))}</span>
-          </li>
+          <div key={r.s.id} className="grid items-center gap-2.5 py-[7px]" style={{ gridTemplateColumns: "minmax(80px,1.1fr) 3fr auto" }}>
+            <span className="text-[13px] font-semibold [overflow-wrap:anywhere]">{i === 0 && value(r) > 0 ? "★ " : ""}{r.s.name}</span>
+            <div className="h-2 min-w-[60px] overflow-hidden rounded-full bg-muted" role="img" aria-label={r.s.name}>
+              <span className="block h-full rounded-full" style={{ width: `${Math.max(2, (Math.max(0, value(r)) / max) * 100)}%`, background: BAR_COLORS[i % 4] }} />
+            </div>
+            <span className="min-w-[62px] text-right text-[13px] font-bold tabular-nums">{fmt(value(r))}</span>
+          </div>
         ))}
-      </ul>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px] text-sm">
+      </div>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[520px] border-collapse">
           <thead>
-            <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="py-2 pr-2 font-semibold">Sede</th>
-              <th className="px-2 text-right font-semibold">Ventas</th>
-              <th className="px-2 text-right font-semibold">Costo</th>
-              <th className="px-2 text-right font-semibold">Gastos</th>
-              <th className="px-2 text-right font-semibold">Comisiones</th>
-              <th className="px-2 text-right font-semibold">Ganancia neta</th>
-              <th className="pl-2 text-right font-semibold">Margen</th>
+            <tr className="text-left text-xs text-muted-foreground">
+              <th className="border-b px-3.5 py-[11px] font-bold">Sede</th>
+              <th className="whitespace-nowrap border-b px-3.5 py-[11px] text-right font-bold">Ventas</th>
+              <th className="whitespace-nowrap border-b px-3.5 py-[11px] text-right font-bold">Costo</th>
+              <th className="whitespace-nowrap border-b px-3.5 py-[11px] text-right font-bold">Gastos</th>
+              <th className="whitespace-nowrap border-b px-3.5 py-[11px] text-right font-bold">Comisiones</th>
+              <th className="whitespace-nowrap border-b px-3.5 py-[11px] text-right font-bold">Ganancia neta</th>
+              <th className="whitespace-nowrap border-b px-3.5 py-[11px] text-right font-bold">Margen</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody>
             {sorted.map((r) => (
               <tr key={r.s.id}>
-                <td className="py-2 pr-2 font-semibold">{r.s.name}</td>
-                <td className="px-2 text-right tabular-nums">{c(r.s.salesMonthCents)}</td>
-                <td className="px-2 text-right tabular-nums">{c(r.s.cogsMonthCents)}</td>
-                <td className="px-2 text-right tabular-nums">{c(r.s.expensesMonthCents)}</td>
-                <td className="px-2 text-right tabular-nums">{c(r.s.commissionsMonthCents)}</td>
-                <td className={`px-2 text-right font-bold tabular-nums ${r.s.profitMonthCents < 0 ? "text-destructive" : "text-success"}`}>{c(r.s.profitMonthCents)}</td>
-                <td className="pl-2 text-right tabular-nums">{r.margin.toFixed(1)} %</td>
+                <td className="border-b px-3.5 py-[11px] font-bold">{r.s.name}</td>
+                <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(r.s.salesMonthCents)}</td>
+                <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(r.s.cogsMonthCents)}</td>
+                <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(r.s.expensesMonthCents)}</td>
+                <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(r.s.commissionsMonthCents)}</td>
+                <td className={`border-b px-3.5 py-[11px] text-right font-bold tabular-nums ${r.s.profitMonthCents < 0 ? "text-destructive" : "text-success"}`}>{c(r.s.profitMonthCents)}</td>
+                <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{r.margin.toFixed(1)} %</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 font-bold">
-              <td className="py-2 pr-2">Red completa</td>
-              <td className="px-2 text-right tabular-nums">{c(total.sales)}</td>
-              <td className="px-2 text-right tabular-nums">{c(total.cogs)}</td>
-              <td className="px-2 text-right tabular-nums">{c(total.exp)}</td>
-              <td className="px-2 text-right tabular-nums">{c(total.com)}</td>
-              <td className="px-2 text-right tabular-nums">{c(total.profit)}</td>
-              <td className="pl-2 text-right tabular-nums">{total.sales > 0 ? ((total.profit / total.sales) * 100).toFixed(1) : "0.0"} %</td>
+            <tr className="border-t-2 font-extrabold">
+              <td className="px-3.5 py-[11px]">Red completa</td>
+              <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(total.sales)}</td>
+              <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(total.cogs)}</td>
+              <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(total.exp)}</td>
+              <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(total.com)}</td>
+              <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(total.profit)}</td>
+              <td className="px-3.5 py-[11px] text-right tabular-nums">{total.sales > 0 ? ((total.profit / total.sales) * 100).toFixed(1) : "0.0"} %</td>
             </tr>
           </tfoot>
         </table>
@@ -132,7 +127,7 @@ export function BranchTransfersCard({ suggestions, transfers }: { suggestions: T
           <TruckIcon /> Crear traspaso
         </Link>
       </div>
-      <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">KR POS te sugiere</h3>
+      <h3 className="text-[13px] font-bold uppercase tracking-[0.08em] text-muted-foreground">KR POS te sugiere</h3>
       {suggestions.length === 0 ? (
         <p className="text-sm text-muted-foreground">Sin sugerencias: el stock de la red está equilibrado.</p>
       ) : (
@@ -145,7 +140,7 @@ export function BranchTransfersCard({ suggestions, transfers }: { suggestions: T
           ))}
         </ul>
       )}
-      <h3 className="mt-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Últimos traspasos</h3>
+      <h3 className="mt-1 text-[13px] font-bold uppercase tracking-[0.08em] text-muted-foreground">Últimos traspasos</h3>
       {transfers.length === 0 ? (
         <p className="text-sm text-muted-foreground">Todavía no hay traspasos.</p>
       ) : (

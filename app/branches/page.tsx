@@ -4,6 +4,11 @@ import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { BranchCards } from "@/components/branches/BranchCards";
 import { branchOverview } from "@/lib/actions/branches";
 import { requirePermission } from "@/lib/session";
+import Link from "next/link";
+import { PlusIcon } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { PeriodBar } from "@/components/shared/PeriodBar";
 
 export const dynamic = "force-dynamic";
 
@@ -15,16 +20,24 @@ export default async function BranchesPage() {
     listTransfers(5),
     getExchangeRateInfo(),
   ]);
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const monthLabel = now.toLocaleDateString("es-VE", { month: "long" }).replace(/^./, (c) => c.toUpperCase());
   return (
     <div className="flex flex-col gap-4 px-4 py-5">
-      <div>
-        <p className="kr-eyebrow">{session.companyName} · Acceso por sede</p>
-        <h1 className="kr-h1">Sucursales</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Resumen de cada sede. Para entrar a una necesitas tu clave de administrador. Las sucursales se crean y editan en
-          Ajustes.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow={`${session.companyName} · Acceso por sede`}
+        title="Sucursales"
+        actions={
+          <Link href="/settings" className={buttonVariants({ size: "lg" })}>
+            <PlusIcon aria-hidden /> Nueva sucursal
+          </Link>
+        }
+      >
+        <div className="mt-3">
+          <PeriodBar label={`${monthLabel} · día ${now.getDate()} de ${daysInMonth}`} />
+        </div>
+      </PageHeader>
       {summaries.length === 0 ? (
         <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Aún no hay sucursales.</p>
       ) : (
