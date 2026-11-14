@@ -3,43 +3,223 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Chip } from "@/components/ui/chip";
+import { Segmented } from "@/components/ui/segmented";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LOCK_MINUTE_CHOICES, PERMISSIONS } from "@/lib/permissions";
-import { lockSession } from "@/lib/actions/pin";
 import { assignRole, createRole, deleteRole, updateRoleLockMinutes, updateRolePermissions, type RoleRow } from "@/lib/actions/roles";
+import { setUserPin } from "@/lib/actions/pin";
+import type { EmployeeListItem } from "@/lib/actions/employees";
+import { Field, FieldInput, FieldSelect, PermGrid, SubTitle, displayName } from "@/components/settings/team-print-kit";
 
-// Matriz de roles y permisos (Ajustes → Equipo y Seguridad): una fila por permiso, una columna por rol.
-export function RolesMatrix({ roles }: { roles: RoleRow[] }) {
+// Hoja «Gestionar» de una persona (preview: rol + permisos + Guardar / Restablecer clave / Cancelar).
+// Los permisos pertenecen al rol: editarlos aquí los cambia para todas las personas con ese rol.
+export function ManageUserSheet({
+  person,
+  roles,
+  open,
+  onOpenChange,
+  pinLocked,
+}: {
+  person: EmployeeListItem;
+  roles: RoleRow[];
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  pinLocked: boolean;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [baseRole, setBaseRole] = useState<"GERENTE" | "VENDEDOR">("VENDEDOR");
-  const [picked, setPicked] = useState<string[]>(["pos"]);
+  const initialRole = person.roleId ?? roles.find((r) => r.baseRole === person.role && r.isSystem)?.id ?? roles[0]?.id ?? "";
+  const [roleId, setRoleId] = useState(initialRole);
+  const role = roles.find((r) => r.id === roleId);
+  const [edits, setEdits] = useState<Record<string, string[]>>({});
+  const perms = edits[roleId] ?? role?.permissions ?? [];
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pin, setPin] = useState("");
+  const name = displayName(person);
 
-  function toggle(role: RoleRow, permission: string) {
-    const next = role.permissions.includes(permission) ? role.permissions.filter((p) => p !== permission) : [...role.permissions, permission];
+  function save() {
     start(async () => {
-      const r = await updateRolePermissions(role.id, next);
-      if (!r.success) toast.error(r.error);
+      if (roleId && roleId !== person.roleId) {
+        const r = await assignRole(person.id, roleId);
+        if (!r.success) {
+          toast.error(r.error);
+          return;
+        }
+      }
+      if (role && edits[roleId] && role.name !== "Dueño") {
+        const r = await updateRolePermissions(role.id, edits[roleId]);
+        if (!r.success) {
+          toast.error(r.error);
+          return;
+        }
+      }
+      toast.success("Permisos actualizados");
+      onOpenChange(false);
       router.refresh();
     });
   }
 
-  function create() {
+  function savePin(next: string | null) {
     start(async () => {
+      const r = await setUserPin(person.id, next);
+      if (!r.success) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success(next ? `PIN de ${name} guardado.` : `PIN de ${name} quitado.`);
+      setPin("");
+      setPinOpen(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{name}</DialogTitle>
+          <DialogDescription>Elige a qué tiene autorización</DialogDescription>
+        </DialogHeader>
+        <div>
+          <Field label="Rol" htmlFor="ue-r">
+            <FieldSelect id="ue-r" value={roleId} onChange={(e) => setRoleId(e.target.value)}>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </FieldSelect>
+          </Field>
+          <PermGrid
+            items={PERMISSIONS}
+            selected={perms}
+            disabled={role?.name === "Dueño"}
+            onToggle={(id) => setEdits((cur) => ({ ...cur, [roleId]: perms.includes(id) ? perms.filter((p) => p !== id) : [...perms, id] }))}
+          />
+          <p className="mt-2 text-[13px] text-muted-foreground">Los permisos son del rol: se aplican a todas las personas que lo tienen.</p>
+        </div>
+        {pinOpen && (
+          <div>
+            <Field label="Nuevo PIN (4 dígitos)" htmlFor="ue-pin">
+              <FieldInput
+                id="ue-pin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                placeholder="••••"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+              />
+            </Field>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <Button type="button" disabled={pending || pin.length !== 4} onClick={() => savePin(pin)}>
+                Guardar PIN
+              </Button>
+              {person.hasPin && (
+                <Button type="button" variant="outline" disabled={pending} onClick={() => savePin(null)}>
+                  Quitar PIN
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+        {pinLocked && pinOpen && <p className="text-[13px] text-muted-foreground">Disponible cuando un gerente tenga PIN.</p>}
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <Button type="button" disabled={pending} onClick={save}>
+            Guardar
+          </Button>
+          <Button type="button" variant="outline" disabled={pending || pinLocked} onClick={() => setPinOpen((v) => !v)}>
+            Restablecer clave
+          </Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Hoja «Crear un rol nuevo».
+export function NewRoleSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [name, setName] = useState("");
+  const [baseRole, setBaseRole] = useState<"GERENTE" | "VENDEDOR">("VENDEDOR");
+  const [picked, setPicked] = useState<string[]>(["inventory"]);
+
+  function save() {
+    start(async () => {
+      if (!name.trim() || picked.length === 0) {
+        toast.error("Escribe el nombre y elige al menos un permiso");
+        return;
+      }
       const r = await createRole({ name, baseRole, permissions: picked });
       if (!r.success) {
         toast.error(r.error);
         return;
       }
-      setOpen(false);
+      toast.success(`Rol creado: ${name.trim()}`);
       setName("");
-      setPicked(["pos"]);
+      setPicked(["inventory"]);
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Crear un rol nuevo</DialogTitle>
+          <DialogDescription>Dale un nombre y elige a qué tendrá autorización</DialogDescription>
+        </DialogHeader>
+        <div>
+          <Field label="Nombre del rol" htmlFor="rn-n">
+            <FieldInput id="rn-n" placeholder="Ej: Encargado de almacén" value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field label="Entra como">
+            <Segmented
+              label="Entra como"
+              value={baseRole}
+              onChange={setBaseRole}
+              options={[
+                { value: "VENDEDOR", label: "Vendedor" },
+                { value: "GERENTE", label: "Gerente" },
+              ]}
+            />
+          </Field>
+          <PermGrid
+            items={PERMISSIONS}
+            selected={picked}
+            onToggle={(id) => setPicked((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))}
+          />
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <Button type="button" disabled={pending} onClick={save}>
+            Guardar rol
+          </Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// «Minutos de inactividad por rol»: una fila por rol con el segmentado de minutos.
+export function RoleLockRows({ roles }: { roles: RoleRow[] }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function setMinutes(role: RoleRow, minutes: number) {
+    start(async () => {
+      const r = await updateRoleLockMinutes(role.id, minutes);
+      if (!r.success) toast.error(r.error);
       router.refresh();
     });
   }
@@ -53,155 +233,26 @@ export function RolesMatrix({ roles }: { roles: RoleRow[] }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-[19px] bg-card p-4 shadow-(--shadow-card)" aria-label="Roles y permisos">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="font-bold">Roles y permisos</h3>
-          <p className="text-sm text-muted-foreground">Edita lo que puede hacer cada rol. Los permisos se validan también en el servidor.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              start(async () => {
-                const r = await lockSession();
-                if (r.success) router.replace("/lock");
-              })
-            }
-          >
-            Probar bloqueo
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
-            <PlusIcon /> Crear un rol nuevo
-          </Button>
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px] text-sm">
-          <thead>
-            <tr className="text-left text-xs">
-              <th className="py-2 pr-3 font-bold">Permiso</th>
-              {roles.map((r) => (
-                <th key={r.id} className="px-2 text-center font-bold">
-                  <span className="inline-flex items-center gap-1">
-                    {r.name}
-                    {!r.isSystem && (
-                      <button type="button" aria-label={`Eliminar el rol ${r.name}`} onClick={() => remove(r)} className="text-muted-foreground hover:text-destructive">
-                        <Trash2Icon className="size-3.5" />
-                      </button>
-                    )}
-                  </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {PERMISSIONS.map((p) => (
-              <tr key={p.id}>
-                <td className="py-2 pr-3">{p.label}</td>
-                {roles.map((r) => (
-                  <td key={r.id} className="px-2 text-center">
-                    <input
-                      type="checkbox"
-                      aria-label={`${p.label} · ${r.name}`}
-                      checked={r.permissions.includes(p.id)}
-                      disabled={pending || r.name === "Dueño"}
-                      onChange={() => toggle(r, p.id)}
-                      className="size-4 accent-[var(--primary)]"
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-            <tr>
-              <td className="py-2 pr-3 font-semibold">Bloqueo por inactividad (min)</td>
-              {roles.map((r) => (
-                <td key={r.id} className="px-2 text-center">
-                  <select
-                    aria-label={`Minutos de bloqueo · ${r.name}`}
-                    value={r.lockMinutes}
-                    disabled={pending}
-                    onChange={(e) =>
-                      start(async () => {
-                        const res = await updateRoleLockMinutes(r.id, Number(e.target.value));
-                        if (!res.success) toast.error(res.error);
-                        router.refresh();
-                      })
-                    }
-                    className="h-8 rounded-[10px] border bg-background px-1 text-xs"
-                  >
-                    {LOCK_MINUTE_CHOICES.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Crear un rol nuevo</DialogTitle>
-            <DialogDescription>Elige un nombre, si entra como gerente o vendedor y sus permisos.</DialogDescription>
-          </DialogHeader>
-          <Input aria-label="Nombre del rol" placeholder="Nombre del rol" value={name} onChange={(e) => setName(e.target.value)} />
-          <div className="flex gap-2">
-            <Chip active={baseRole === "VENDEDOR"} onClick={() => setBaseRole("VENDEDOR")}>Entra como vendedor</Chip>
-            <Chip active={baseRole === "GERENTE"} onClick={() => setBaseRole("GERENTE")}>Entra como gerente</Chip>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            {PERMISSIONS.map((p) => (
-              <label key={p.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={picked.includes(p.id)}
-                  onChange={() => setPicked((cur) => (cur.includes(p.id) ? cur.filter((x) => x !== p.id) : [...cur, p.id]))}
-                  className="size-4 accent-[var(--primary)]"
-                />
-                {p.label}
-              </label>
-            ))}
-          </div>
-          <Button type="button" size="lg" disabled={pending || name.trim().length < 2} onClick={create}>
-            Crear rol
-          </Button>
-        </DialogContent>
-      </Dialog>
-    </section>
-  );
-}
-
-// Selector del rol de una persona (en la lista de Equipo y PIN).
-export function RoleSelect({ userId, roleId, roles }: { userId: string; roleId: string | null; roles: RoleRow[] }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  return (
-    <select
-      aria-label="Rol"
-      value={roleId ?? ""}
-      disabled={pending}
-      onChange={(e) =>
-        start(async () => {
-          const r = await assignRole(userId, e.target.value || null);
-          if (!r.success) toast.error(r.error);
-          router.refresh();
-        })
-      }
-      className="h-9 rounded-[12px] border-[1.5px] bg-background px-2 text-xs font-semibold"
-    >
-      <option value="">Sin rol (acceso anterior)</option>
+    <>
+      <SubTitle className="mt-3">Minutos de inactividad por rol</SubTitle>
       {roles.map((r) => (
-        <option key={r.id} value={r.id}>
-          {r.name}
-        </option>
+        <div key={r.id} className="flex items-center justify-between gap-2.5 border-b border-border py-2.5 last:border-0">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <b className="font-bold">{r.name}</b>
+            {!r.isSystem && r.users === 0 && (
+              <button type="button" disabled={pending} aria-label={`Eliminar el rol ${r.name}`} onClick={() => remove(r)} className="text-muted-foreground hover:text-destructive">
+                <Trash2Icon className="size-3.5" />
+              </button>
+            )}
+          </div>
+          <Segmented
+            label={`Minutos de bloqueo · ${r.name}`}
+            value={String(r.lockMinutes)}
+            onChange={(v) => setMinutes(r, Number(v))}
+            options={LOCK_MINUTE_CHOICES.map((m) => ({ value: String(m), label: `${m} min` }))}
+          />
+        </div>
       ))}
-    </select>
+    </>
   );
 }

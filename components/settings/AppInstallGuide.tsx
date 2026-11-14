@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Badge } from "@/components/ui/badge";
+import { SCard, StatusPill } from "@/components/settings/team-print-kit";
 import { useInstallApp } from "@/lib/use-install-app";
 
 const noopSubscribe = () => () => {};
@@ -13,7 +13,7 @@ function Code({ children }: { children: React.ReactNode }) {
 function Steps({ title, steps }: { title: string; steps: React.ReactNode[] }) {
   return (
     <div className="rounded-[14px] bg-muted p-4 flex flex-col gap-2">
-      <h3 className="text-sm font-semibold">{title}</h3>
+      <h3 className="text-sm font-bold">{title}</h3>
       <ol className="list-decimal list-inside flex flex-col gap-1.5 text-sm text-muted-foreground">
         {steps.map((step, i) => (
           <li key={i}>{step}</li>
@@ -32,12 +32,9 @@ export function AppInstallGuide() {
   const origin = useSyncExternalStore(noopSubscribe, () => window.location.origin, () => "");
 
   return (
-    <div className="flex flex-col gap-6 max-w-3xl">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold">Instalar KR POS en este equipo</h2>
-          {isInstalled && <Badge variant="success">Instalada</Badge>}
-        </div>
+    <div className="flex min-w-0 flex-col gap-3.5">
+      <SCard title="Instalar KR POS en este equipo" extra={isInstalled ? <StatusPill>Instalada</StatusPill> : undefined}>
+        <div className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
           Se abre en su propia ventana, con su icono en el escritorio o la barra de tareas, y se
           mantiene actualizada sola: siempre usa internet y muestra la última versión de tu sistema.
@@ -50,10 +47,11 @@ export function AppInstallGuide() {
             <strong>Safari en Mac</strong>, Compartir → «Añadir al Dock»; en <strong>Safari en iPhone/iPad</strong>, Compartir → «Añadir a pantalla de inicio» (es siempre manual en iPhone, Apple no permite instalar con un botón).
           </p>
         )}
-      </div>
+        </div>
+      </SCard>
 
-      <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Imprimir el ticket directo, sin diálogo</h2>
+      <SCard title="Imprimir el ticket directo, sin diálogo">
+        <div className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
           Por defecto el navegador muestra su ventana de impresión en cada ticket. Para que salga
           directo en la impresora térmica, deja la impresora como predeterminada del sistema y abre
@@ -90,7 +88,8 @@ export function AppInstallGuide() {
           Sin este modo todo sigue funcionando: solo tendrás que confirmar en el diálogo de
           impresión cada vez. Las notas y presupuestos en Carta o A4 se imprimen como PDF.
         </p>
-      </div>
+        </div>
+      </SCard>
     </div>
   );
 }

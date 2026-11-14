@@ -24,6 +24,8 @@ export type SettingsSection = {
   label: string;
   // Línea corta bajo el título en la vista general (estado actual de la sección).
   hint?: string;
+  // Sin tarjeta ni título propios: el contenido ya trae sus tarjetas (Equipo, Impresión).
+  bare?: boolean;
   content: React.ReactNode;
 };
 
@@ -97,12 +99,18 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
 
       {active ? (
         <div className="flex flex-col gap-3.5">
-          {active.items.map((section) => (
+          {active.items.map((section) =>
+            section.bare ? (
+              <div key={section.id} className="min-w-0">
+                {section.content}
+              </div>
+            ) : (
             <section key={section.id} aria-label={section.label} className="relative min-w-0 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
               <h2 className="mb-3 text-base font-bold">{section.label}</h2>
               {section.content}
             </section>
-          ))}
+            )
+          )}
         </div>
       ) : (
         <>
@@ -115,8 +123,8 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
                 </div>
                 <b className="text-[34px] tracking-[-0.04em] text-primary tabular-nums">{pct} %</b>
               </div>
-              <div className="my-2.5 h-2 min-w-[60px] overflow-hidden rounded-full bg-border" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Avance de la configuración">
-                <div className="h-full rounded-full bg-success transition-[width] duration-300" style={{ width: `${pct}%` }} />
+              <div className="my-2.5 h-2 min-w-[60px] overflow-hidden rounded-full bg-[var(--track)]" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Avance de la configuración">
+                <div className="h-full rounded-full bg-[var(--ok-solid)] transition-[width] duration-300" style={{ width: `${pct}%` }} />
               </div>
               <p className="mb-3 text-muted-foreground">
                 {done} de {steps.length} requisitos listos. Completa uno por uno para que tu negocio funcione a la perfección.
@@ -162,7 +170,7 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
               </div>
             </section>
           )}
-          <ul className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,300px),1fr))" }}>
+          <ul className="grid gap-3.5" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,300px),1fr))" }}>
             {CARD_ORDER.map((id) => groups.find((x) => x.id === id)).filter((g): g is (typeof groups)[number] => !!g).map((g) => {
               const Icon = ICONS[g.icon] ?? CrownIcon;
               const hint = g.items.map((i) => i.hint).filter(Boolean).join(" · ");

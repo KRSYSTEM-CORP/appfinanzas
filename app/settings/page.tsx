@@ -4,7 +4,6 @@ import { CurrencySelectForm } from "@/components/settings/CurrencySelectForm";
 import { ReferenceCurrencyForm } from "@/components/settings/ReferenceCurrencyForm";
 import { BrandingForm } from "@/components/settings/BrandingForm";
 import { FiscalDataForm } from "@/components/settings/FiscalDataForm";
-import { PrintPaperSizeForm } from "@/components/settings/PrintPaperSizeForm";
 import { DataPanel } from "@/components/settings/DataPanel";
 import { getDailyReportEmails } from "@/lib/actions/data-export";
 import { AppInstallGuide } from "@/components/settings/AppInstallGuide";
@@ -85,8 +84,17 @@ export default async function SettingsPage() {
     {
       id: "equipo",
       label: "Equipo y PIN",
-      hint: `${people.filter((p) => p.hasPin).length} de ${people.length} con PIN`,
-      content: <TeamPinPanel people={people} currentUserId={session.userId} roles={roles} />,
+      hint: `${people.length} ${people.length === 1 ? "usuario" : "usuarios"} · bloqueo activo`,
+      bare: true,
+      content: (
+        <TeamPinPanel
+          people={people}
+          currentUserId={session.userId}
+          roles={roles}
+          branches={branches.map((b) => ({ id: b.id, name: b.name, isActive: b.isActive, hasKey: b.hasKey }))}
+          maxUsers={planUsage.plan.maxUsers}
+        />
+      ),
     },
     {
       id: "moneda",
@@ -158,24 +166,14 @@ export default async function SettingsPage() {
     {
       id: "impresion",
       label: "Impresión y Datos",
-      content: (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
-          <p className="text-sm text-muted-foreground">
-            Elige el tamaño de papel que usa tu impresora para las notas de entrega, presupuestos y
-            recibos de pago.
-          </p>
-          <PrintPaperSizeForm currentPaperSize={printPaperSize} />
-          {canManage && (
-            <div className="lg:col-span-2">
-              <DataPanel initialEmails={dailyEmails} />
-            </div>
-          )}
-        </div>
-      ),
+      hint: "Ticket, carta, PDF y reporte diario",
+      bare: true,
+      content: <DataPanel initialEmails={dailyEmails} currentPaperSize={printPaperSize} canManage={canManage} />,
     },
     {
       id: "aplicacion",
       label: "Instalar app",
+      bare: true,
       content: <AppInstallGuide />,
     },
     {
@@ -241,12 +239,8 @@ export default async function SettingsPage() {
     {
       id: "clave",
       label: "Cambio de clave",
-      content: (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
-          <p className="text-sm text-muted-foreground">Cambia la contraseña de tu propia cuenta.</p>
-          <ChangePasswordForm />
-        </div>
-      ),
+      bare: true,
+      content: <ChangePasswordForm />,
     },
   ];
 
