@@ -2,7 +2,7 @@
 
 import "./my-plan.css";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowLeftIcon,
@@ -134,7 +134,9 @@ function Support() {
 // recarga de créditos, elección de plan y pago en 3 pasos (Método · Datos de pago · Comprobante).
 export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
   const router = useRouter();
-  const [view, setView] = useState<View>("home");
+  // /settings?tab=plan&vista=planes abre directo la elección de plan (aviso de renovación).
+  const wantedView = useSearchParams().get("vista");
+  const [view, setView] = useState<View>(wantedView === "planes" ? "plans" : "home");
   const [sel, setSel] = useState<Sel | null>(null);
   const [step, setStep] = useState(1);
   const [method, setMethod] = useState<Method>("CARD");

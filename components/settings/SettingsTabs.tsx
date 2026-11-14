@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { IconTile } from "@/components/ui/icon-tile";
 import {
   BanknoteIcon,
@@ -64,7 +65,12 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 // Ajustes como en la preview v15: pestañas en píldora con ícono, guía paso a paso
 // con progreso y una tarjeta por sección con su estado.
 export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSection[]; steps?: SetupStep[] }) {
-  const [activeId, setActiveId] = useState<string>(OVERVIEW);
+  // Enlace directo: /settings?tab=plan abre esa sección (p. ej. desde el aviso de renovación).
+  const wanted = useSearchParams().get("tab");
+  const [activeId, setActiveId] = useState<string>(() => {
+    const g = GROUPS.find((x) => wanted && x.sections.includes(wanted) && sections.some((s) => s.id === wanted));
+    return g ? g.id : OVERVIEW;
+  });
   const [stepIdx, setStepIdx] = useState(() => {
     const first = steps.findIndex((s) => !s.done);
     return first >= 0 ? first : 0;

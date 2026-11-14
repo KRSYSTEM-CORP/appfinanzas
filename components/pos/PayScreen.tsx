@@ -707,7 +707,7 @@ export function PayScreen({
                 </p>
               )}
             </div>
-            <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+            <div className="mt-2.5 grid grid-cols-2 items-end gap-2.5 [&>label]:mt-0 [&>label]:min-w-0">
               <Field label="Otro descuento">
                 <input
                   className={FIELD_INPUT}
