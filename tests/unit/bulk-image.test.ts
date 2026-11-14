@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { detectImageType, isPrivateAddress, parseImageUrlCell } from "@/lib/bulk-image";
+import { parseImageUrlCell } from "@/lib/bulk-image";
+import { detectImageType, isPrivateAddress } from "@/lib/bulk-image-server";
 
 describe("parseImageUrlCell", () => {
   it("blank cells mean no change", () => {
