@@ -1,3 +1,4 @@
+import { AdminShell } from "@/components/accounting/AdminShell";
 import { requireAccountingPlan } from "@/lib/session";
 import { PurchaseForm } from "@/components/purchases/PurchaseForm";
 import { listSuppliers } from "@/lib/actions/suppliers";
@@ -18,8 +19,8 @@ export default async function NewPurchasePage() {
     ]);
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-5">
-      <h1 className="kr-h1">Nueva compra</h1>
+    <AdminShell group="compras" sub="registro">
+      <h2 className="text-xl font-bold tracking-[-0.02em]">Nueva compra</h2>
       <PurchaseForm
         suppliers={suppliers}
         products={products}
@@ -30,6 +31,6 @@ export default async function NewPurchasePage() {
         referenceCurrency={referenceCurrency}
         ivaSettings={ivaSettings}
       />
-    </div>
+    </AdminShell>
   );
 }

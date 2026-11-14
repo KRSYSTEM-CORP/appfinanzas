@@ -624,3 +624,27 @@
 @keyframes kr-popb{40%{transform:scale(1.14) rotate(-4deg)}}
 @keyframes kr-shk{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
 @media(prefers-reduced-motion:reduce){.kr-ios .iw,.kr-ios .iosc,.kr-ios .ipav,.kr-ios .idots{animation:none!important}}
+
+/* Colores sólidos de estado, pista de barras, series 6-7 y burbuja de WhatsApp de la preview
+   (rediseno/tokens.css: --ok-solid, --warn-solid, --bad-solid, --track, --c6, --c7, .wa).
+   Los usan Administración y Marketing. */
+:root {
+  --ok-solid: #34c759; --warn-solid: #ff9f0a; --bad-solid: #ff3b30;
+  --track: rgba(120, 120, 128, 0.16);
+  --chart-6: #e0a800; --chart-7: #1e63d6;
+  --wa-bubble: #dcf8c6; --wa-ink: #0b2a14;
+}
+.dark {
+  --track: rgba(160, 166, 189, 0.22);
+  --chart-6: #f0b90b; --chart-7: #5b95ff;
+}
+@theme inline {
+  --color-ok-solid: var(--ok-solid);
+  --color-warn-solid: var(--warn-solid);
+  --color-bad-solid: var(--bad-solid);
+  --color-track: var(--track);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-wa-bubble: var(--wa-bubble);
+  --color-wa-ink: var(--wa-ink);
+}

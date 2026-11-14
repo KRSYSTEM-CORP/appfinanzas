@@ -1,11 +1,12 @@
+import { AdminShell } from "@/components/accounting/AdminShell";
 import { SupplierForm } from "@/components/suppliers/SupplierForm";
 import { createSupplier } from "@/lib/actions/suppliers";
 
 export default function NewSupplierPage() {
   return (
-    <div className="flex flex-col gap-4 px-4 py-5">
-      <h1 className="kr-h1">Nuevo proveedor</h1>
+    <AdminShell group="compras" sub="prov">
+      <h2 className="text-xl font-bold tracking-[-0.02em]">Nuevo proveedor</h2>
       <SupplierForm action={createSupplier} />
-    </div>
+    </AdminShell>
   );
 }
