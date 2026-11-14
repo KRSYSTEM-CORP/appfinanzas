@@ -26,14 +26,14 @@ export function RenewalBanner({ days, text }: { days: number; text: string }) {
       <BellRingIcon className={`size-5 shrink-0 ${days <= 1 ? "text-destructive" : "text-warning"}`} aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{text}</p>
-        <Link href="/settings" className="text-primary underline-offset-2 hover:underline">
-          Ir a Mi Plan
+        <Link href="/settings?tab=plan&vista=planes" className="text-primary underline-offset-2 hover:underline after:absolute after:inset-0 after:rounded-[19px] after:content-['']">
+          Renovar mi suscripción
         </Link>
       </div>
       <button
         type="button"
         aria-label="Cerrar aviso"
-        className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+        className="relative z-10 rounded-md p-1 text-muted-foreground hover:bg-muted"
         onClick={() => {
           try {
             sessionStorage.setItem(KEY, String(days));

@@ -27,4 +27,15 @@ describe("aviso de renovación", () => {
     expect(renewalNotice(due("2026-11-11T16:00:00Z"), true, NOW)).toBeNull();
     expect(renewalNotice(null, false, NOW)).toBeNull();
   });
+  it("hay aviso cada día: 5, 4, 3, 2, 1 y el día del vencimiento", () => {
+    const texts = [5, 4, 3, 2, 1, 0].map((d) => renewalNotice(new Date(NOW.getTime() + d * 86_400_000), false, NOW)?.text);
+    expect(texts).toEqual([
+      "Te quedan 5 días para renovar",
+      "Te quedan 4 días para renovar",
+      "Te quedan 3 días para renovar",
+      "Te quedan 2 días para renovar",
+      "Mañana vence tu plan",
+      "Tu plan vence hoy",
+    ]);
+  });
 });
