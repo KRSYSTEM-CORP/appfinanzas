@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   BanknoteIcon,
   CheckIcon,
@@ -15,6 +15,8 @@ import {
   XIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { validateCoupon } from "@/lib/actions/marketing";
+import { normalizePromoCode } from "@/lib/marketing";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { Chip } from "@/components/ui/chip";
@@ -131,6 +133,9 @@ export function PayScreen({
   total,
   discountPercent,
   onDiscountPercentChange,
+  couponCode,
+  onCouponApplied,
+  onCouponRemoved,
   paymentAccounts,
   rate,
   currencyCode,
@@ -153,6 +158,10 @@ export function PayScreen({
   total: number;
   discountPercent: string;
   onDiscountPercentChange: (v: string) => void;
+  // Cupón de descuento canjeado (código) y sus callbacks.
+  couponCode: string | null;
+  onCouponApplied: (code: string, percent: number) => void;
+  onCouponRemoved: () => void;
   paymentAccounts: PaymentAccountRow[];
   rate: number | null;
   currencyCode: string;
@@ -184,6 +193,32 @@ export function PayScreen({
   const [reason, setReason] = useState("");
   const [beforeExo, setBeforeExo] = useState("0");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [couponText, setCouponText] = useState("");
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponPending, startCoupon] = useTransition();
+
+  function redeemCoupon() {
+    setCouponError(null);
+    if (isGeneralCustomer) {
+      setCouponError("Selecciona un cliente (nombre y apellido) para canjear el cupón");
+      return;
+    }
+    if (!navigator.onLine) {
+      setCouponError("Sin conexión: el cupón se valida con el servidor");
+      return;
+    }
+    startCoupon(async () => {
+      const r = await validateCoupon(couponText, customerPhone);
+      if (!r.success) {
+        setCouponError(r.error);
+        return;
+      }
+      setDiscType("%");
+      setDiscText("");
+      setCouponText("");
+      onCouponApplied(r.code, r.discountPercent);
+    });
+  }
 
   const discountValue = Math.min(100, Math.max(0, Number(discountPercent) || 0));
   const exo = discountValue >= 100;
@@ -632,6 +667,45 @@ export function PayScreen({
                   {v ? `${v} %` : "Sin"}
                 </Chip>
               ))}
+            </div>
+            <div className="mt-2.5">
+              <Field label="Cupón de descuento">
+                {couponCode ? (
+                  <div className="flex items-center justify-between gap-2.5 rounded-[12px] bg-muted px-3 py-2.5">
+                    <span>
+                      <b className="font-mono tracking-[0.05em]">{couponCode}</b> aplicado a <b>{customerName}</b>: {discountValue} % de descuento
+                    </span>
+                    <Button type="button" size="sm" variant="outline" onClick={onCouponRemoved}>
+                      Quitar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      className={cn(FIELD_INPUT, "font-bold uppercase tracking-[0.06em]")}
+                      type="text"
+                      maxLength={14}
+                      placeholder="Ej: VUELVE15"
+                      value={couponText}
+                      onChange={(e) => {
+                        setCouponText(normalizePromoCode(e.target.value));
+                        setCouponError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && couponText) redeemCoupon();
+                      }}
+                    />
+                    <Button type="button" variant="outline" disabled={couponPending || couponText.length < 3} onClick={redeemCoupon}>
+                      Canjear
+                    </Button>
+                  </div>
+                )}
+              </Field>
+              {couponError && (
+                <p role="alert" className="mt-1.5 text-[13px] font-semibold text-destructive">
+                  {couponError}
+                </p>
+              )}
             </div>
             <div className="mt-2.5 grid grid-cols-2 gap-2.5">
               <Field label="Otro descuento">

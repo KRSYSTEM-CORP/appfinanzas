@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 export type RowMenuItem = { label: string; onSelect?: () => void; href?: string; external?: boolean; danger?: boolean; disabled?: boolean };
 
 // Menú ⋯ de las filas de la preview: botón circular de 36px sin fondo y lista flotante.
-export function RowMenu({ items, label = "Más acciones" }: { items: RowMenuItem[]; label?: string }) {
+export function RowMenu({ items, label = "Más acciones", info }: { items: RowMenuItem[]; label?: string; info?: { label: string; value: string }[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -39,6 +39,16 @@ export function RowMenu({ items, label = "Más acciones" }: { items: RowMenuItem
       </button>
       {open && (
         <div role="menu" className="absolute right-0 top-full z-40 mt-1 min-w-48 rounded-[14px] bg-popover p-1.5 shadow-(--shadow-float)">
+          {info && info.length > 0 && (
+            <dl className="mb-1 border-b px-3 pb-2 pt-1.5 text-[13px]">
+              {info.map((i) => (
+                <div key={i.label} className="flex justify-between gap-4 py-0.5">
+                  <dt className="text-muted-foreground">{i.label}</dt>
+                  <dd className="font-semibold tabular-nums">{i.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
           {items.map((it) =>
             it.href ? (
               it.external ? (

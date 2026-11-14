@@ -21,7 +21,7 @@ export default async function PromotionsPage() {
           lastName: c.lastName,
           phone: c.phone,
           segment: c.segment,
-          birthdayThisMonth: c.birthdayThisMonth,
+          birthDate: c.birthDate,
         }))}
       />
     </div>
