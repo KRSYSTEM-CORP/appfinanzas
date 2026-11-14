@@ -2,60 +2,75 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field, FIELD_CONTROL } from "@/components/shared/Field";
+import { Note } from "@/components/shared/SectionCard";
 import { updateExchangeRate } from "@/lib/actions/settings";
 import { getCurrency } from "@/lib/currencies";
 import type { ReferenceCurrency } from "@prisma/client";
 
+// «Fijar tasa manualmente»: guarda la tasa escrita a mano. Para bolívares, el aviso dice cuándo
+// se renueva sola con la del BCV.
 export function ExchangeRateForm({
-  currentRate,
   currencyCode,
   referenceCurrency,
 }: {
-  currentRate: number | null;
   currencyCode: string;
   referenceCurrency: ReferenceCurrency;
 }) {
-  const currencyName = getCurrency(currencyCode).name.split(" (")[0];
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const [value, setValue] = useState("");
   const [isPending, startTransition] = useTransition();
+  const isVes = currencyCode === "VES";
+  const unit = isVes ? "Bs" : getCurrency(currencyCode).name.split(" (")[0];
+  const refSymbol = referenceCurrency === "USD" ? "$1" : "€1";
 
-  function handleSubmit(formData: FormData) {
-    setError(null);
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const rate = Number(value.replace(",", "."));
+    if (!(rate > 0)) {
+      toast.error("Escribe una tasa válida");
+      return;
+    }
     startTransition(async () => {
+      const formData = new FormData();
+      formData.set("rate", String(rate));
       const result = await updateExchangeRate(formData);
       if (result.success) {
+        toast.success(`Tasa fija en ${isVes ? "Bs" : currencyCode} ${rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`);
+        setValue("");
         router.refresh();
       } else {
-        setError(result.error);
+        toast.error(result.error);
       }
     });
   }
 
   return (
-    <form action={handleSubmit} className="flex flex-col gap-4 max-w-sm">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="rate">{currencyName} por 1 {referenceCurrency}</Label>
-        <Input
-          id="rate"
-          name="rate"
+    <form onSubmit={submit}>
+      <Field label={`Fijar tasa manualmente (${unit} por ${refSymbol})`}>
+        <input
           type="number"
           min={0}
           step="0.0001"
-          defaultValue={currentRate ?? ""}
-          required
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={isVes ? "Se renueva sola con la del BCV" : "No cambiará hasta que la edites"}
+          className={FIELD_CONTROL}
         />
-        <p className="text-xs text-muted-foreground">Ej. 45.0000</p>
+      </Field>
+      <Note>
+        {isVes
+          ? "Una tasa escrita a mano se usa hasta el próximo cambio de día de tasa (7:00 p. m.), cuando el sistema la renueva con la del BCV."
+          : "Con una tasa manual, el sistema no la cambia hasta que vuelvas a editarla."}
+      </Note>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button type="submit" disabled={isPending || value === ""}>
+          {isPending ? "Guardando..." : "Guardar y activar"}
+        </Button>
       </div>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      <Button type="submit" disabled={isPending}>
-        {isPending ? "Guardando..." : "Actualizar tasa"}
-      </Button>
     </form>
   );
 }

@@ -24,6 +24,8 @@ export type SettingsSection = {
   label: string;
   // Línea corta bajo el título en la vista general (estado actual de la sección).
   hint?: string;
+  // La sección dibuja sus propias tarjetas (con título y subtítulo): no se envuelve en otra.
+  bare?: boolean;
   content: React.ReactNode;
 };
 
@@ -35,7 +37,7 @@ const OVERVIEW = "__overview";
 const GROUPS: { id: string; label: string; icon: string; sections: string[] }[] = [
   { id: "g-plan", label: "Mi Plan", icon: "plan", sections: ["plan"] },
   { id: "g-marca", label: "Marca", icon: "apariencia", sections: ["apariencia"] },
-  { id: "g-negocio", label: "Negocio", icon: "sucursales", sections: ["fiscales", "iva", "sucursales"] },
+  { id: "g-negocio", label: "Negocio", icon: "sucursales", sections: ["fiscales", "sucursales"] },
   { id: "g-pagos", label: "Pagos y Moneda", icon: "moneda", sections: ["moneda", "cobros"] },
   { id: "g-equipo", label: "Equipo y Seguridad", icon: "seguridad", sections: ["equipo", "clave"] },
   { id: "g-imp", label: "Impresión y Datos", icon: "impresion", sections: ["impresion", "aplicacion"] },
@@ -97,12 +99,18 @@ export function SettingsTabs({ sections, steps = [] }: { sections: SettingsSecti
 
       {active ? (
         <div className="flex flex-col gap-3.5">
-          {active.items.map((section) => (
+          {active.items.map((section) =>
+            section.bare ? (
+              <div key={section.id} aria-label={section.label} className="flex min-w-0 flex-col gap-3.5">
+                {section.content}
+              </div>
+            ) : (
             <section key={section.id} aria-label={section.label} className="relative min-w-0 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
               <h2 className="mb-3 text-base font-bold">{section.label}</h2>
               {section.content}
             </section>
-          ))}
+            )
+          )}
         </div>
       ) : (
         <>

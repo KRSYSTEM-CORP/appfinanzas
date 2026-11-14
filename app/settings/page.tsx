@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ExchangeRateForm } from "@/components/settings/ExchangeRateForm";
 import { CurrencySelectForm } from "@/components/settings/CurrencySelectForm";
 import { ReferenceCurrencyForm } from "@/components/settings/ReferenceCurrencyForm";
@@ -9,23 +8,22 @@ import { DataPanel } from "@/components/settings/DataPanel";
 import { getDailyReportEmails } from "@/lib/actions/data-export";
 import { AppInstallGuide } from "@/components/settings/AppInstallGuide";
 import { ChangePasswordForm } from "@/components/settings/ChangePasswordForm";
-import { BcvRateButton } from "@/components/settings/BcvRateButton";
+import { RatePanel } from "@/components/settings/BcvRateButton";
 import { BranchesForm } from "@/components/settings/BranchesForm";
 import { IvaSettingsForm } from "@/components/settings/IvaSettingsForm";
-import { PaymentAccountsForm } from "@/components/settings/PaymentAccountsForm";
+import { PaymentMethodsCard } from "@/components/settings/PaymentAccountsForm";
+import { SectionCard, TwoCol } from "@/components/shared/SectionCard";
+import { activeMethodCount } from "@/lib/payment-accounts";
 import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SettingsTabs, type SetupStep, type SettingsSection } from "@/components/settings/SettingsTabs";
 import { MyPlanPanel } from "@/components/settings/MyPlanPanel";
 import { getPlanUsage } from "@/lib/actions/plan";
-import { Separator } from "@/components/ui/separator";
 import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from "@/lib/actions/settings";
 import { listBranches } from "@/lib/actions/branches";
 import { listEmployees } from "@/lib/actions/employees";
 import { listRoles } from "@/lib/actions/roles";
 import { TeamPinPanel } from "@/components/settings/TeamPinPanel";
-import { formatDate } from "@/lib/format";
-import { formatLocalCurrency } from "@/lib/currencies";
 import { requirePermission } from "@/lib/session";
 import { SHOP_TIME_ZONE, zonedDateParts } from "@/lib/report-types";
 
@@ -71,7 +69,6 @@ export default async function SettingsPage() {
     canManage ? listEmployees() : Promise.resolve([]),
   ]);
   const stale = isStale(updatedAt);
-  const referenceSymbol = referenceCurrency === "USD" ? "$1" : "€1";
 
   const roles = await listRoles();
   const managersWithPin = people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length;
@@ -91,68 +88,51 @@ export default async function SettingsPage() {
     {
       id: "moneda",
       label: "Moneda y tasa de cambio",
-      hint: rate != null ? `Tasa ${rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ${referenceCurrency}` : "Sin tasa configurada",
+      hint: rate != null ? `Tasa BCV ${localCurrencyCode === "VES" ? "Bs" : localCurrencyCode} ${rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Sin tasa configurada",
+      bare: true,
       content: (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="flex flex-col gap-4">
-            <ReferenceCurrencyForm currentEnabled={exchangeRateEnabled} currentReferenceCurrency={referenceCurrency} />
-            {exchangeRateEnabled && (
-              <>
-                <Separator />
-                <CurrencySelectForm currentCurrencyCode={localCurrencyCode} referenceCurrency={referenceCurrency} />
-              </>
-            )}
-          </div>
-
-          {exchangeRateEnabled && (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1 rounded-[14px] bg-muted p-4">
-                <span className="text-sm text-muted-foreground">Tasa actual</span>
-                <span className="text-2xl font-semibold">
-                  {rate != null ? formatLocalCurrency(rate, localCurrencyCode) : "No configurada"}
-                  {rate != null && (
-                    <span className="text-sm text-muted-foreground font-normal"> / {referenceSymbol}</span>
-                  )}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {updatedAt ? `Última actualización: ${formatDate(updatedAt)}` : "Nunca se ha configurado"}
-                </span>
-              </div>
-
-              {stale && (
-                <p className="text-sm text-destructive">
-                  {rate != null
-                    ? "No has actualizado la tasa hoy. Los precios en tu moneda local pueden estar desactualizados."
-                    : "Configura una tasa para poder ver precios en tu moneda local y completar ventas."}
-                </p>
+        <SectionCard
+          title="Moneda base y tasa"
+          subtitle={`Todo se convierte a ${localCurrencyCode === "VES" ? "bolívares" : "tu moneda local"} con la tasa vigente del día`}
+        >
+          <TwoCol className="gap-x-4 gap-y-2">
+            <div>
+              <ReferenceCurrencyForm currentEnabled={exchangeRateEnabled} currentReferenceCurrency={referenceCurrency} />
+              {exchangeRateEnabled && (
+                <>
+                  <CurrencySelectForm currentCurrencyCode={localCurrencyCode} referenceCurrency={referenceCurrency} />
+                  <RatePanel
+                    rate={rate}
+                    updatedAtIso={updatedAt ? updatedAt.toISOString() : null}
+                    localCurrencyCode={localCurrencyCode}
+                    referenceCurrency={referenceCurrency}
+                    stale={stale}
+                  />
+                </>
               )}
-
-              {localCurrencyCode === "VES" && (
-                <p className="text-xs text-muted-foreground -mt-2">
-                  Se actualiza sola todos los días con la tasa oficial del BCV. También puedes
-                  hacerlo tú mismo, o escribirla a mano abajo.
-                </p>
-              )}
-              {localCurrencyCode === "VES" && <BcvRateButton />}
-
-              <ExchangeRateForm currentRate={rate} currencyCode={localCurrencyCode} referenceCurrency={referenceCurrency} />
             </div>
-          )}
-        </div>
+            {exchangeRateEnabled && (
+              <div>
+                <ExchangeRateForm currencyCode={localCurrencyCode} referenceCurrency={referenceCurrency} />
+              </div>
+            )}
+          </TwoCol>
+        </SectionCard>
       ),
     },
     {
       id: "apariencia",
       label: "Apariencia",
+      hint: `${session.companyName}${brandColor ? ` · ${brandColor}` : ""}`,
+      bare: true,
       content: (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
-          <p className="text-sm text-muted-foreground">
-            Sube el logo de tu empresa y elige sus colores. Se aplican en toda la app para ti y
-            para tus empleados, y también en la pantalla de inicio de sesión apenas se identifica
-            tu empresa (por correo o por código).
-          </p>
-          <BrandingForm currentLogo={logoDataUrl} currentColor={brandColor} currentBackground={brandBackground} />
-        </div>
+        <BrandingForm
+          currentLogo={logoDataUrl}
+          currentColor={brandColor}
+          currentBackground={brandBackground}
+          companyName={session.companyName}
+          rif={fiscalData.fiscalRif}
+        />
       ),
     },
     {
@@ -182,44 +162,21 @@ export default async function SettingsPage() {
       id: "fiscales",
       hint: fiscalData.fiscalRif ? `RIF ${fiscalData.fiscalRif}` : "Aún sin datos fiscales",
       label: "Datos fiscales",
-      content: (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
-          <p className="text-sm text-muted-foreground">
-            Se muestran en las notas de entrega, presupuestos y recibos de pago que generes.
-          </p>
-          <FiscalDataForm initial={fiscalData} />
-        </div>
-      ),
+      bare: true,
+      content: <FiscalDataForm initial={fiscalData} />,
     },
     ...(canManage
       ? [
           {
-            id: "iva",
-            label: "IVA",
-            content: (
-              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
-                <p className="text-sm text-muted-foreground">
-                  Configura las tasas de IVA y si tu empresa debe retener IVA a proveedores (ver{" "}
-                  <Link href="/tax-book" className="text-primary underline underline-offset-2">
-                    Libro de Contabilidad
-                  </Link>
-                  ).
-                </p>
-                <IvaSettingsForm initial={ivaSettings} />
-              </div>
-            ),
-          } satisfies SettingsSection,
-          {
             id: "cobros",
-            label: "Datos para cobrar",
+            label: "Métodos de pago",
+            hint: `${activeMethodCount(paymentAccounts, exchangeRateEnabled)} métodos activos`,
+            bare: true,
             content: (
-              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-6 lg:gap-10">
-                <p className="text-sm text-muted-foreground">
-                  Tus pagos móviles, cuentas, Zelle o Binance. Aparecen en el punto de venta, con el logo
-                  del banco, para que se los des al cliente con un toque.
-                </p>
-                <PaymentAccountsForm accounts={paymentAccounts} />
-              </div>
+              <>
+                <PaymentMethodsCard accounts={paymentAccounts} exchangeRateEnabled={exchangeRateEnabled} localCurrencyCode={localCurrencyCode} />
+                <IvaSettingsForm initial={ivaSettings} rif={fiscalData.fiscalRif} />
+              </>
             ),
           } satisfies SettingsSection,
           {
