@@ -67,7 +67,7 @@ export default async function FinancePage({
   await requirePermission("stats");
   await requireAccountingPlan();
   const params = await searchParams;
-  const range = parseDateRangeSelection(params, { kind: "preset", preset: "7d" });
+  const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const expenseSearch = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
 
   const [

@@ -1,3 +1,4 @@
+import { PendingClosingsRow } from "@/components/reports/PendingClosingsRow";
 import Link from "next/link";
 import { BanknoteIcon, FileTextIcon, TrendingDownIcon, WalletIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -185,25 +186,17 @@ export default async function ReportsPage({
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Días pendientes por cerrar</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Días con ventas en el período seleccionado abajo que todavía no tienen cierre de caja.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <PendingClosingsList
-            pendingDays={pendingClosings}
-            hasBranchSelected={session.branchId != null}
-            rate={rate}
-            currencyCode={localCurrencyCode}
-            exchangeRateEnabled={exchangeRateEnabled}
-            referenceCurrency={referenceCurrency}
-            canClose={canManage}
-          />
-        </CardContent>
-      </Card>
+      <PendingClosingsRow count={pendingClosings.length}>
+        <PendingClosingsList
+          pendingDays={pendingClosings}
+          hasBranchSelected={session.branchId != null}
+          rate={rate}
+          currencyCode={localCurrencyCode}
+          exchangeRateEnabled={exchangeRateEnabled}
+          referenceCurrency={referenceCurrency}
+          canClose={canManage}
+        />
+      </PendingClosingsRow>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
