@@ -15,6 +15,7 @@ import { getPlan } from "@/lib/plans";
 import { listBranches } from "@/lib/actions/branches";
 import { deriveBrandVars, deriveDarkAccent } from "@/lib/theme-color";
 import "./globals.css";
+import "./preview-extra.css";
 
 // Tipografía del rediseño v15: Hanken Grotesk (la de la preview).
 const hankenGrotesk = Hanken_Grotesk({
