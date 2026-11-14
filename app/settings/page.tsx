@@ -14,7 +14,8 @@ import { BranchesForm } from "@/components/settings/BranchesForm";
 import { IvaSettingsForm } from "@/components/settings/IvaSettingsForm";
 import { PaymentAccountsForm } from "@/components/settings/PaymentAccountsForm";
 import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
-import { SettingsTabs, type SettingsSection } from "@/components/settings/SettingsTabs";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { SettingsTabs, type SetupStep, type SettingsSection } from "@/components/settings/SettingsTabs";
 import { MyPlanPanel } from "@/components/settings/MyPlanPanel";
 import { getPlanUsage } from "@/lib/actions/plan";
 import { Separator } from "@/components/ui/separator";
@@ -105,7 +106,7 @@ export default async function SettingsPage() {
 
           {exchangeRateEnabled && (
             <div className="flex flex-col gap-4">
-              <div className="rounded-lg border bg-card shadow-xs p-4 flex flex-col gap-1">
+              <div className="flex flex-col gap-1 rounded-[14px] bg-muted p-4">
                 <span className="text-sm text-muted-foreground">Tasa actual</span>
                 <span className="text-2xl font-semibold">
                   {rate != null ? formatLocalCurrency(rate, localCurrencyCode) : "No configurada"}
@@ -249,47 +250,34 @@ export default async function SettingsPage() {
     },
   ];
 
+  const steps: SetupStep[] = [
+    { label: "Datos del negocio y RIF", hint: "Nombre, RIF y WhatsApp que verán tus clientes en documentos y presupuestos.", cta: "Completar datos del negocio y RIF", sectionId: "fiscales", done: Boolean(fiscalData.fiscalRif && fiscalData.fiscalLegalName) },
+    { label: "Moneda base y tasa", hint: "Elige $ o € y activa la tasa BCV automática.", cta: "Completar moneda base y tasa", sectionId: "moneda", done: !exchangeRateEnabled || (rate != null && !stale) },
+    { label: "Métodos de pago", hint: "Carga los datos de Pago Móvil, Zelle, Binance, PayPal y transferencia.", cta: "Completar métodos de pago", sectionId: "cobros", done: paymentAccounts.length > 0 },
+    { label: "Equipo y PIN", hint: "Crea tus usuarios y define el PIN de pantalla.", cta: "Completar equipo y pin", sectionId: "equipo", done: managersWithPin > 0 && people.every((p) => p.hasPin) },
+    { label: "Impresora y ticket", hint: "Elige ticket 58/80 mm o carta y haz una prueba.", cta: "Completar impresora y ticket", sectionId: "impresion", done: printPaperSize !== "LETTER" },
+    { label: "Marca en tus documentos", hint: "Sube tu logo para que tickets, facturas y presupuestos salgan con tu identidad.", cta: "Completar marca en tus documentos", sectionId: "apariencia", done: Boolean(logoDataUrl || brandColor) },
+  ];
+  const readyPct = Math.round((steps.filter((s) => s.done).length / steps.length) * 100);
+
   return (
     <div className="flex flex-col gap-8 px-4 py-5">
-      <div>
-        <p className="kr-eyebrow">Tu negocio y tu cuenta</p>
-        <h1 className="kr-h1">Ajustes</h1>
-      </div>
-      {((session.role === "GERENTE" || session.isSuperAdmin) ||
-        (!session.isExempt && session.nextPaymentDueDate)) && (
-        <div className="flex flex-wrap gap-4">
-          {(session.role === "GERENTE" || session.isSuperAdmin) && (
-            <div className="rounded-lg border p-4 flex items-center justify-between gap-3 w-full sm:w-auto sm:min-w-sm text-sm">
-              <span>Código de empresa y empleados</span>
-              <Link href="/employees" className="text-primary underline underline-offset-2 shrink-0">
-                Administrar
-              </Link>
-            </div>
+      <PageHeader eyebrow={session.companyName} title="Ajustes">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {rate != null && exchangeRateEnabled && (
+            <span className="inline-flex items-center rounded-full bg-primary/12 px-2.5 py-[3px] text-xs font-semibold text-primary">
+              Tasa {localCurrencyCode === "VES" ? "Bs" : localCurrencyCode} {rate.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
           )}
-
-          {!session.isExempt && session.nextPaymentDueDate && (
-            <div className="rounded-lg border p-4 flex items-center justify-between gap-3 w-full sm:w-auto sm:min-w-sm text-sm">
-              <span>
-                Suscripción mensual vence el{" "}
-                <span className="font-medium">{formatDate(session.nextPaymentDueDate)}</span>
-              </span>
-              <Link href="/billing" className="text-primary underline underline-offset-2 shrink-0">
-                Ver detalles
-              </Link>
-            </div>
-          )}
+          <span className={`inline-flex items-center rounded-full px-2.5 py-[3px] text-xs font-semibold ${readyPct === 100 ? "bg-success/14 text-success" : "bg-warning/18 text-warning"}`}>
+            {readyPct} % listo
+          </span>
         </div>
-      )}
+      </PageHeader>
 
       <SettingsTabs
         sections={sections}
-        steps={[
-          { label: "Datos del negocio y RIF", hint: "Nombre, RIF y WhatsApp que verán tus clientes en documentos y presupuestos.", cta: "Completar datos del negocio y RIF", sectionId: "fiscales", done: Boolean(fiscalData.fiscalRif && fiscalData.fiscalLegalName) },
-          { label: "Tasa de cambio del día", hint: "Para mostrar precios en bolívares con la tasa vigente.", cta: "Revisar la tasa de cambio", sectionId: "moneda", done: !exchangeRateEnabled || (rate != null && !stale) },
-          { label: "Marca y apariencia", hint: "Tu logo y tu color en documentos y en el sistema.", cta: "Personalizar la marca", sectionId: "apariencia", done: Boolean(logoDataUrl || brandColor) },
-          { label: "Datos para cobrar", hint: "Cuentas y métodos con los que te pagan tus clientes y tu suscripción.", cta: "Agregar datos para cobrar", sectionId: "cobros", done: paymentAccounts.length > 0 },
-          { label: "Equipo y PIN", hint: "Crea tu PIN de gerente y asigna el código personal de cada persona.", cta: "Abrir Equipo y PIN", sectionId: "equipo", done: managersWithPin > 0 && people.every((p) => p.hasPin) },
-        ]}
+        steps={steps}
       />
     </div>
   );

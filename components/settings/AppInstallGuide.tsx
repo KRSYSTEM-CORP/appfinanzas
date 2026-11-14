@@ -12,7 +12,7 @@ function Code({ children }: { children: React.ReactNode }) {
 
 function Steps({ title, steps }: { title: string; steps: React.ReactNode[] }) {
   return (
-    <div className="rounded-lg border p-4 flex flex-col gap-2">
+    <div className="rounded-[14px] bg-muted p-4 flex flex-col gap-2">
       <h3 className="text-sm font-semibold">{title}</h3>
       <ol className="list-decimal list-inside flex flex-col gap-1.5 text-sm text-muted-foreground">
         {steps.map((step, i) => (
