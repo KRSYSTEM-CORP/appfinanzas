@@ -2,20 +2,23 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BanknoteIcon, BarChart3Icon, CheckIcon, MicIcon, PackageIcon, SendIcon, SparklesIcon, ZapIcon } from "lucide-react";
+import { BanknoteIcon, BarChart3Icon, CheckIcon, FileTextIcon, MicIcon, PackageIcon, SendIcon, SparklesIcon, ZapIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { applyProposal, askAssistant, undoProposal, type AssistantStatus, type HistoryEntry } from "@/lib/actions/assistant";
 import type { Proposal } from "@/lib/assistant";
+import type { ResolvedBlock, SalePreview } from "@/lib/assistant-types";
+import type { DeliveryNoteCompany } from "@/lib/delivery-note";
+import { AssistantBlocks, SalePreviewCard } from "@/components/assistant/AssistantBlocks";
 
 type Msg =
   | { role: "user"; text: string }
-  | { role: "assistant"; text: string; proposal: Proposal | null; state?: "open" | "applied" | "dropped" | "undone"; canUndo?: boolean; note?: string; entryId?: string | null };
+  | { role: "assistant"; text: string; proposal: Proposal | null; state?: "open" | "applied" | "dropped" | "undone"; canUndo?: boolean; note?: string; entryId?: string | null; blocks?: ResolvedBlock[]; salePreview?: SalePreview | null; saleOk?: boolean };
 
 const SUGGESTIONS = [
-  { title: "¿Cuánto vendí hoy?", desc: "Resumen de ventas del día, en palabras simples.", prompt: "¿Cuánto vendí hoy?", Icon: BarChart3Icon },
-  { title: "Productos con stock bajo", desc: "Qué se está acabando y conviene reponer.", prompt: "¿Qué productos tengo con stock bajo?", Icon: PackageIcon },
-  { title: "Los más vendidos", desc: "Tus productos estrella del período.", prompt: "¿Cuáles son mis productos más vendidos?", Icon: SparklesIcon },
-  { title: "Gastos del mes", desc: "Cuánto llevas gastado y en qué.", prompt: "¿Cuánto llevo gastado este mes?", Icon: BanknoteIcon },
+  { title: "¿Cuánto vendí este mes?", desc: "Con gráfica por día y el total del período.", prompt: "Muéstrame una gráfica de mis ventas por día de este mes y cuánto he vendido en total.", Icon: BarChart3Icon },
+  { title: "Productos con stock bajo", desc: "Qué se acaba y conviene reponer, con PDF.", prompt: "¿Qué productos tengo con stock bajo? Muéstramelo en una tabla que pueda descargar en PDF.", Icon: PackageIcon },
+  { title: "Reporte en PDF", desc: "Cuentas por cobrar listas para descargar.", prompt: "Genérame un PDF con mis cuentas por cobrar.", Icon: FileTextIcon },
+  { title: "Gastos del mes", desc: "En qué se va tu dinero, por categoría.", prompt: "¿Cuánto llevo gastado este mes y en qué categorías? Muéstrame una gráfica.", Icon: BanknoteIcon },
 ];
 
 // Reconocimiento de voz del navegador (Chrome, Edge, Safari).
@@ -30,9 +33,9 @@ type SpeechRec = {
 };
 
 function describe(p: Proposal): string {
-  return p.type === "EXPENSE"
-    ? `Registrar gasto: ${p.description} · ${p.amount}${p.category ? ` · ${p.category}` : ""}`
-    : `Ajustar precios de «${p.category}»: ${p.percent > 0 ? "+" : ""}${p.percent} %`;
+  if (p.type === "EXPENSE") return `Registrar gasto: ${p.description} · ${p.amount}${p.category ? ` · ${p.category}` : ""}`;
+  if (p.type === "SALE") return `Registrar una venta de ${p.items.reduce((n, i) => n + i.quantity, 0)} artículo(s)${p.paymentStatus === "CREDIT" ? " a crédito" : ""}`;
+  return `Ajustar precios de «${p.category}»: ${p.percent > 0 ? "+" : ""}${p.percent} %`;
 }
 
 function fromHistory(history: HistoryEntry[]): Msg[] {
@@ -50,7 +53,7 @@ function fromHistory(history: HistoryEntry[]): Msg[] {
   ]);
 }
 
-export function AssistantChat({ status, applyCost, history = [] }: { status: AssistantStatus; applyCost: number; history?: HistoryEntry[] }) {
+export function AssistantChat({ status, applyCost, history = [], company }: { status: AssistantStatus; applyCost: number; history?: HistoryEntry[]; company: DeliveryNoteCompany }) {
   const router = useRouter();
   const [msgs, setMsgs] = useState<Msg[]>(() => fromHistory(history));
   const [text, setText] = useState("");
@@ -67,10 +70,16 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
     setText("");
     startTransition(async () => {
       try {
-        const r = await askAssistant(question);
+        const turns: { q: string; a: string }[] = [];
+        for (let k = 0; k < msgs.length - 1; k++) {
+          const u = msgs[k];
+          const a = msgs[k + 1];
+          if (u.role === "user" && a.role === "assistant") turns.push({ q: u.text, a: a.text });
+        }
+        const r = await askAssistant(question, turns.slice(-3));
         if (r.success) {
           setAsked((n) => n + 1);
-          setMsgs((m) => [...m, { role: "assistant", text: r.reply.answer, proposal: r.reply.proposal, state: "open", entryId: r.entryId }]);
+          setMsgs((m) => [...m, { role: "assistant", text: r.reply.answer, proposal: r.reply.proposal, state: "open", entryId: r.entryId, blocks: r.blocks, salePreview: r.salePreview, saleOk: r.saleOk }]);
         } else {
           setMsgs((m) => [...m, { role: "assistant", text: r.error, proposal: null }]);
         }
@@ -198,11 +207,13 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
                   <SparklesIcon className="size-3.5" aria-hidden /> Asistente IA
                 </div>
                 <p className="mb-2 mt-1 whitespace-pre-wrap">{m.text}</p>
+                {m.blocks && m.blocks.length > 0 && <AssistantBlocks blocks={m.blocks} company={company} />}
                 {m.proposal && m.state !== "dropped" && (
                   <div className={`rounded-2xl border-2 bg-card px-3.5 py-3 shadow-(--shadow-card) ${m.state === "applied" ? "border-success" : "border-transparent"}`}>
                     <div className="mb-1 flex flex-col">
                       <b>{describe(m.proposal)}</b>
                     </div>
+                    {m.proposal.type === "SALE" && m.salePreview && m.state !== "applied" && <SalePreviewCard p={m.salePreview} />}
                     {m.state === "undone" ? (
                       <p className="mt-2.5 text-muted-foreground">{m.note}</p>
                     ) : m.state === "applied" ? (
@@ -235,7 +246,7 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
-                            disabled={isPending || creditsLeft < applyCost}
+                            disabled={isPending || creditsLeft < applyCost || (m.proposal.type === "SALE" && m.saleOk === false)}
                             onClick={() => apply(i, m.proposal as Proposal, m.entryId)}
                             className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-transform active:scale-[0.97] disabled:opacity-50"
                           >
