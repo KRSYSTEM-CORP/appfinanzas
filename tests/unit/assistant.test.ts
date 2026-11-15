@@ -11,8 +11,8 @@ describe("créditos del asistente", () => {
     expect(spendCredits({ plan: "EMPRENDE", usedThisPeriod: 0, extra: 3 }, 5)).toBeNull();
     expect(creditsRemaining({ plan: "EMPRENDE", usedThisPeriod: 0, extra: 0 }).total).toBe(0);
   });
-  it("tiene topes diarios por plan y periodo mensual", () => {
-    expect(dailyAskCap("EMPRENDE")).toBeLessThan(dailyAskCap("CORPORATIVO"));
+  it("tiene un tope diario único y periodo mensual", () => {
+    expect(dailyAskCap("EMPRENDE")).toBe(dailyAskCap("CORPORATIVO"));
     expect(periodKey(new Date(2026, 10, 9))).toBe("2026-11");
   });
 });
@@ -33,7 +33,7 @@ describe("respuesta del modelo", () => {
   });
   it("si no es JSON usa el texto", () => {
     const r = parseAssistantReply("Respuesta simple");
-    expect(r).toEqual({ answer: "Respuesta simple", proposal: null });
+    expect(r).toEqual({ answer: "Respuesta simple", proposal: null, blocks: [] });
   });
 });
 

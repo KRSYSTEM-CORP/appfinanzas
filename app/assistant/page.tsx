@@ -1,6 +1,7 @@
 import { requirePermission } from "@/lib/session";
 import { ZapIcon } from "lucide-react";
 import { AssistantChat } from "@/components/assistant/AssistantChat";
+import { getBranding, getFiscalData } from "@/lib/actions/settings";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { RechargeButton } from "@/components/assistant/RechargeButton";
 import { AssistantTabs } from "@/components/assistant/AssistantTabs";
@@ -14,7 +15,8 @@ export const maxDuration = 60;
 
 export default async function AssistantPage() {
   const session = await requirePermission("assistant");
-  const [status, history, requests] = await Promise.all([getAssistantStatus(), listAssistantHistory(), listMyCreditRequests()]);
+  const [status, history, requests, { logoDataUrl }, fiscalData] = await Promise.all([getAssistantStatus(), listAssistantHistory(), listMyCreditRequests(), getBranding(), getFiscalData()]);
+  const company = { name: session.companyName, logoDataUrl, ...fiscalData };
   return (
     <div className="flex flex-col gap-4 px-4 py-5">
       <PageHeader eyebrow={session.companyName} title="Asistente IA">
@@ -32,7 +34,7 @@ export default async function AssistantPage() {
             <BuyCredits requests={requests} creditsLeft={status.creditsLeft} applyCost={AI_APPLY_COST} />
           </div>
         }
-        chat={<AssistantChat status={status} applyCost={AI_APPLY_COST} history={history} />}
+        chat={<AssistantChat status={status} applyCost={AI_APPLY_COST} history={history} company={company} />}
       />
     </div>
   );

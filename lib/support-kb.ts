@@ -22,7 +22,7 @@ function plansSection(): string {
     ...lines,
     `- Toda empresa nueva tiene ${TRIAL_DAYS} días gratis. La suscripción se paga en bolívares a la tasa dólar BCV del día, en el menú «Suscripción mensual».`,
     "- Para cambiar de plan o pagar, la persona dueña usa «Suscripción mensual»; los pagos los confirma el equipo de KR System.",
-    `- Créditos de IA: preguntar es gratis (con un tope diario según el plan). Aplicar un cambio que proponga el asistente cuesta ${AI_APPLY_COST} créditos y solo si confirmas. Se pueden comprar créditos extra, que no vencen: ${packs}. Se piden desde la pantalla del Asistente y se suman cuando KR System confirma el pago.`,
+    `- Créditos de IA: preguntar es gratis (con un tope de 20 consultas al día, igual para todos los planes). Aplicar un cambio que proponga el asistente cuesta ${AI_APPLY_COST} créditos y solo si confirmas. Se pueden comprar créditos extra, que no vencen: ${packs}. Se piden desde la pantalla del Asistente y se suman cuando KR System confirma el pago.`,
   ].join("\n");
 }
 
@@ -40,7 +40,7 @@ CONTROL
 - Documentos: facturas, notas de entrega y comprobantes generados.
 RED Y PLATAFORMA
 - Sucursales: resumen de cada sede; para entrar a una se pide la clave de administrador. El plan Emprende incluye una sola sucursal; Pyme y Corporativo permiten varias.
-- Asistente IA: responde preguntas sobre los datos del negocio y puede proponer registrar un gasto o ajustar precios de una categoría.
+- Asistente IA: responde con los datos reales del negocio (tablas, gráficos, fotos de productos), genera PDF de reportes con vista previa y puede proponer registrar un gasto, ajustar precios de una categoría o registrar una venta; cada cambio se confirma antes de aplicarse y se puede deshacer 24 horas.
 - Learning: videos cortos de cómo usar el sistema (solo los sube el equipo de KR System).
 - Ajustes: Mi plan, moneda y tasa, apariencia, impresión, datos fiscales, IVA, datos para cobrar, sucursales y cambio de clave. Los perfiles y su PIN se administran desde la búsqueda («Perfiles y PIN»).`;
 
@@ -53,7 +53,7 @@ const PROBLEMS = `PROBLEMAS FRECUENTES
 - «No puedo agregar más productos / usuarios / sucursales»: se llegó al tope del plan (Emprende: 1 sucursal). Solución: subir de plan, o desactivar usuarios que ya no trabajan (eso libera cupo).
 - «No veo Contabilidad»: está solo en Pyme y Corporativo.
 - «Los precios en bolívares no cuadran»: revisar en Ajustes que la tasa esté al día.
-- «El asistente dice que llegué al límite de consultas»: es un tope diario según el plan; se reinicia al día siguiente.
+- «El asistente dice que llegué al límite de consultas»: el tope es de 20 consultas al día; se reinicia al día siguiente.
 - «No tengo créditos para aplicar un cambio»: comprar un paquete desde el Asistente, o esperar al mes siguiente (los del plan se reinician cada mes).
 - «No puedo cambiar precios con “Todas las sucursales”»: elegir primero una sucursal.`;
 
