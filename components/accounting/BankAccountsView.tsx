@@ -25,6 +25,7 @@ export type BankAccount = {
   currency: string; // USD | VES
   linkedMethod: string | null;
   openingCents: number;
+  paidOutCents?: number;
   balanceCents: number;
 };
 
@@ -97,6 +98,11 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
               </span>
               <b className="mt-2 break-words text-[26px] leading-tight tracking-[-0.03em] tabular-nums">{money(a.currency === "VES" ? "VES" : referenceCurrency, a.balanceCents)}</b>
               {a.currency !== "VES" && rate ? <small className="text-xs text-muted-foreground">{money("VES", Math.round(a.balanceCents * rate), 0)}</small> : null}
+              {(a.paidOutCents ?? 0) > 0 && (
+                <small className="text-xs text-muted-foreground">
+                  Pagado desde esta cuenta: −{money(a.currency === "VES" ? "VES" : referenceCurrency, a.paidOutCents ?? 0)}
+                </small>
+              )}
               <small className="mt-1 break-words text-xs text-muted-foreground">
                 {[a.kind === "PAGO_MOVIL" ? `Pago Móvil ${a.accountNumber}` : a.accountNumber, a.docId].filter(Boolean).join(" · ")}
               </small>

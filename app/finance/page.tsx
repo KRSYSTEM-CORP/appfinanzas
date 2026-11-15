@@ -25,7 +25,7 @@ import {
 } from "@/lib/actions/reports";
 import { salesHeatmap } from "@/lib/actions/home";
 import { commissionsTotal, sellersSalesOverview } from "@/lib/actions/seller-reports";
-import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, productMargins, getProfitGoal } from "@/lib/actions/finance";
+import { costOfGoodsSold, expensesTotal, listExpenses, categoryMargins, productMargins, getProfitGoal, netSalesCents, netSalesWithoutCost } from "@/lib/actions/finance";
 import { WeeklyReportToggle } from "@/components/finance/WeeklyReportToggle";
 import { BreakevenBreakdownCard, BreakevenCard } from "@/components/finance/BreakevenCard";
 import { ProductMarginsCard } from "@/components/finance/ProductMarginsCard";
@@ -96,6 +96,8 @@ export default async function FinancePage({
     weekly,
     weeklyOn,
     tickets,
+    netSales,
+    netUncosted,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
   ] = await Promise.all([
     revenueTotals(range),
@@ -123,6 +125,8 @@ export default async function FinancePage({
     weeklyReports(),
     getWeeklyReportEnabled(),
     ticketDistribution(range),
+    netSalesCents(range),
+    netSalesWithoutCost(range),
     getExchangeRateInfo(),
   ]);
 
@@ -173,7 +177,7 @@ export default async function FinancePage({
     findings.push({
       icon: WalletIcon,
       text: `Tienes ${receivables.count} ${receivables.count === 1 ? "venta a crédito" : "ventas a crédito"} por cobrar (${money(receivables.totalEurCents)}).`,
-      href: "/customers/receivables",
+      href: "/accounting/receivables",
       cta: "Ver cuentas por cobrar",
     });
 
@@ -237,31 +241,36 @@ export default async function FinancePage({
       </StatsCard>
 
       <div className={`${s.grid} ${s.g2}`}>
-        <StatsCard title="Cascada de utilidad" sub="Cómo cada dólar vendido llega a ser utilidad">
-          {totals.totalEurCents <= 0 ? (
+        <StatsCard title="Cascada de utilidad" sub="Ventas netas (sin IVA) − costo de la mercancía − gastos − comisiones = utilidad">
+          {netSales <= 0 ? (
             <p className={s.empty}>Sin ventas en este período.</p>
           ) : (
             <WaterfallChart
-              revenueCents={totals.totalEurCents}
+              revenueCents={netSales}
               cogsCents={cogsCents}
               expensesCents={expensesCents}
               commissionsCents={commissionsCents}
               currency={cur}
             />
           )}
+          {netSales > 0 && netUncosted > 0 && (
+            <p className={s.note}>
+              {Math.round((netUncosted / netSales) * 100)} % de lo vendido ({money(netUncosted)}) es de productos sin costo cargado: su costo no se resta y la utilidad real puede ser menor. Carga el costo en Inventario.
+            </p>
+          )}
         </StatsCard>
         <BreakevenCard
-          revenueCents={totals.totalEurCents}
+          revenueCents={netSales}
           cogsCents={cogsCents}
           expensesCents={expensesCents + commissionsCents}
           goalCents={goalCents}
-          projectionCents={isMonth && totals.totalEurCents > 0 ? monthProjection(totals.totalEurCents, today) : null}
+          projectionCents={isMonth && netSales > 0 ? monthProjection(netSales, today) : null}
           currency={cur}
         />
       </div>
 
       <BreakevenBreakdownCard
-        revenueCents={totals.totalEurCents}
+        revenueCents={netSales}
         expensesCents={expensesCents + commissionsCents}
         categories={categories}
         products={products}
@@ -277,7 +286,7 @@ export default async function FinancePage({
         <StatsCard title="Distribución de ventas" sub={`Ventas por monto de compra · ${label}`}>
           <TicketHistogramChart rows={tickets} symbol={currencySymbol(cur)} />
         </StatsCard>
-        <StatsCard title="Ventas por categoría" sub={`${label} · ${money(catTotal)}`}>
+        <StatsCard title="Ventas por categoría" sub={`${label} · ${money(catTotal)} sin IVA`}>
           {catRows.length === 0 ? (
             <p className={s.empty}>Sin ventas en este período.</p>
           ) : (
@@ -335,7 +344,7 @@ export default async function FinancePage({
 
       <StatsInsights purchased={purchased} rotation={rotation} days={days} periodLabel={label} currency={cur} />
 
-      <StatsCard title="Reposición sugerida" sub="Para cubrir 20 días de ventas, según tu ritmo actual">
+      <StatsCard title="Reposición sugerida" sub="Pedir = ritmo diario de venta (últimos 30 días) × 20 días − existencia actual">
         {restock.length === 0 ? (
           <p className={s.empty}>Nada por reponer: tu stock cubre el ritmo actual.</p>
         ) : (

@@ -84,3 +84,20 @@ export function periodDateRange(period: string): { from: string; to: string } {
   const lastDay = new Date(y, m, 0).getDate();
   return { from: `${y}-${mm}-16`, to: `${y}-${mm}-${String(lastDay).padStart(2, "0")}` };
 }
+
+// Estado de una quincena frente a lo pagado: «debe» = lo que aún se le debe al empleado;
+// «adelanto» = lo pagado de más (queda a favor de la empresa para descontar luego).
+export function payrollSettlement(owedCents: number, paidCents: number): { owedCents: number; paidCents: number; pendingCents: number; advanceCents: number } {
+  const diff = Math.round(owedCents) - Math.round(paidCents);
+  return { owedCents: Math.round(owedCents), paidCents: Math.round(paidCents), pendingCents: Math.max(0, diff), advanceCents: Math.max(0, -diff) };
+}
+
+// Quincena anterior / siguiente de "AAAA-MM-1|2".
+export function shiftPeriod(period: string, delta: number): string {
+  const [y, m, q] = period.split("-").map(Number);
+  let index = y * 24 + (m - 1) * 2 + (q - 1) + delta;
+  const year = Math.floor(index / 24);
+  index -= year * 24;
+  const month = Math.floor(index / 2) + 1;
+  return `${year}-${String(month).padStart(2, "0")}-${(index % 2) + 1}`;
+}

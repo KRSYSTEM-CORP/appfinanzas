@@ -33,9 +33,9 @@ describe("montos", () => {
 });
 
 describe("navegación de Administración", () => {
-  it("tiene los cinco grupos de la preview en orden", () => {
-    expect(ADMIN_GROUPS.map((g) => g.label)).toEqual(["Balance", "Cuentas Bancarias", "Compras", "Consumo Interno", "Contabilidad"]);
-    expect(ADMIN_GROUPS[4].subs.map((s) => s.label)).toEqual([
+  it("tiene los seis grupos en orden (Cuentas por cobrar junto a Compras)", () => {
+    expect(ADMIN_GROUPS.map((g) => g.label)).toEqual(["Balance", "Cuentas Bancarias", "Compras", "Cuentas por cobrar", "Consumo Interno", "Contabilidad"]);
+    expect(ADMIN_GROUPS[5].subs.map((s) => s.label)).toEqual([
       "Movimientos",
       "Estado de resultados",
       "Situación financiera",

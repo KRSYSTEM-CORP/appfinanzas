@@ -45,7 +45,7 @@ Estás rediseñando KR POS para que quede igual a la preview guardada en `redise
 - Nunca dejes una función simulada (toast sin efecto, dato fijo). Todo lo de §7 se implementa de verdad. Si falta una credencial externa, detente y pídela.
 - Nunca implementes factura fiscal: queda bloqueada con "Próximamente".
 - Descuentos de suscripción: el primer mes de Emprende cuesta $9,99 y luego $12,99. Los únicos cupones de suscripción son los de un solo uso que crea el superadmin en /admin y se canjean en Mi Plan. No agregues otros descuentos.
-- Nunca pongas clientes, promociones o cuentas por cobrar fuera del módulo Marketing.
+- Clientes y promociones viven en Marketing. Cuentas por cobrar vive en Administración, junto a Compras.
 
 ## Decisiones del dueño
 Están en `rediseno/PROMPT-MAESTRO.md` (D1 a D10) y mandan sobre la preview: sin horario en Ajustes, sin cupones, factura fiscal con candado, modo sin internet actual, ganancia de Inicio actual, WhatsApp por QR en Marketing, IA con proveedor gratuito.

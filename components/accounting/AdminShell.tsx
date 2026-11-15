@@ -1,4 +1,4 @@
-import { BanknoteIcon, FileTextIcon, LandmarkIcon, PackageIcon, ShoppingCartIcon } from "lucide-react";
+import { BanknoteIcon, FileTextIcon, LandmarkIcon, PackageIcon, ShoppingCartIcon, WalletIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { GroupTabs, SubTabs } from "@/components/shared/GroupTabs";
 import { Pill } from "@/components/shared/Pills";
@@ -11,6 +11,7 @@ const ICONS = {
   money: <BanknoteIcon aria-hidden />,
   bank: <LandmarkIcon aria-hidden />,
   cart: <ShoppingCartIcon aria-hidden />,
+  wallet: <WalletIcon aria-hidden />,
   box: <PackageIcon aria-hidden />,
   doc: <FileTextIcon aria-hidden />,
 };

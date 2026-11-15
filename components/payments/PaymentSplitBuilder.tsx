@@ -17,7 +17,12 @@ export type PaymentSplitRow = {
   amount: string; // raw text input, in the row's own currency (see resolvePaymentCurrency) — converted to cents only at submit time
   paidInForeignCurrency: boolean;
   reference: string;
+  // Solo cuando se pasan `accounts` (compras): cuenta de donde salió el dinero.
+  paymentAccountId?: string;
 };
+
+// Cuenta bancaria o de cobro que puede ser el origen de un pago.
+export type SourceAccount = { id: string; label: string; currency: string };
 
 export function defaultPaymentSplitRows(
   totalCents: number,
@@ -144,7 +149,9 @@ export function PaymentSplitBuilder({
   // totalCents (used as the remaining balance) without requiring the full
   // amount — an abono toward a credit sale, which can be paid off gradually.
   mode = "exact",
+  accounts,
 }: {
+  accounts?: SourceAccount[];
   rows: PaymentSplitRow[];
   onChange: (rows: PaymentSplitRow[]) => void;
   totalCents: number;
@@ -265,6 +272,26 @@ export function PaymentSplitBuilder({
                 </div>
               )}
             </div>
+
+            {accounts && accounts.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${idPrefix}-account-${i}`}>¿De qué cuenta salió el dinero?</Label>
+                <select
+                  id={`${idPrefix}-account-${i}`}
+                  className="h-10 w-full rounded-md border bg-background px-2 text-sm"
+                  value={row.paymentAccountId ?? ""}
+                  onChange={(e) => updateRow(i, { paymentAccountId: e.target.value })}
+                >
+                  <option value="">Efectivo de caja (no descuenta de una cuenta)</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label} · {a.currency === "VES" ? "Bs" : "$"}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">El monto se descuenta del saldo de la cuenta elegida.</p>
+              </div>
+            )}
 
             {isUsdMethod ? (
               <p className="text-xs text-muted-foreground">Este método se cobra siempre en USD.</p>

@@ -115,7 +115,21 @@ Reglas:
   {"type":"PRICE_ADJUST","category":"nombre exacto de la lista","percent":numero entre -50 y 50}
 - La propuesta no se ejecuta sola: el usuario debe confirmarla.`;
 
-export async function askAssistant(question: string): Promise<{ success: true; reply: AssistantReply; entryId: string | null } | { success: false; error: string }> {
+type AskResult = { success: true; reply: AssistantReply; entryId: string | null } | { success: false; error: string };
+
+// Nunca lanza: cualquier fallo vuelve como mensaje para que el chat siempre muestre algo.
+export async function askAssistant(question: string): Promise<AskResult> {
+  try {
+    return await askAssistantInner(question);
+  } catch (err) {
+    // Las redirecciones de Next (sin sesión, sin permiso) deben seguir su curso.
+    if (err && typeof err === "object" && "digest" in err && String((err as { digest: unknown }).digest).startsWith("NEXT_")) throw err;
+    console.error("[asistente] fallo inesperado", err instanceof Error ? err.message : err);
+    return { success: false, error: "El asistente tuvo un problema al preparar tu respuesta. Intenta de nuevo en un momento." };
+  }
+}
+
+async function askAssistantInner(question: string): Promise<AskResult> {
   const { companyId, plan, branchId, userId } = await requireManager();
   const q = question.trim().slice(0, 600);
   if (q.length < 2) return { success: false, error: "Escribe tu pregunta" };
@@ -138,7 +152,19 @@ export async function askAssistant(question: string): Promise<{ success: true; r
     `${SYSTEM}\n\n<manual>\n${supportKnowledge()}\n</manual>`,
     `<datos>\n${ctx.text}\n</datos>\n\nPregunta del usuario: ${q}`
   );
-  if (!model.ok) return { success: false, error: "El asistente no pudo responder ahora. Intenta de nuevo en un momento." };
+  if (!model.ok) {
+    console.error("[asistente] sin respuesta del modelo:", model.reason);
+    // Se devuelve la consulta del día: un fallo del proveedor no debe gastar el cupo del usuario.
+    await withTenant(companyId, (tx) =>
+      tx.company.updateMany({ where: { id: companyId, aiAskDay: today, aiAskCount: { gt: 0 } }, data: { aiAskCount: { decrement: 1 } } })
+    ).catch(() => undefined);
+    const why = model.reason.startsWith("auth:")
+      ? "La llave del proveedor de IA no es válida o no tiene permiso. Avisa a KR System."
+      : model.reason.startsWith("cuota:")
+        ? "El proveedor de IA llegó a su límite por ahora. Intenta de nuevo en unos minutos."
+        : "El asistente no pudo responder ahora. Intenta de nuevo en un momento.";
+    return { success: false, error: why };
+  }
   const raw = model.text;
   const reply = parseAssistantReply(raw);
   // El historial es un extra: si no se puede guardar, la respuesta igual se entrega.

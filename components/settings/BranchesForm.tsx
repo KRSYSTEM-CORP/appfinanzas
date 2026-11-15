@@ -22,7 +22,8 @@ import {
 import { formatDate } from "@/lib/format";
 import { createBranch, updateBranch } from "@/lib/actions/branches";
 
-export function BranchesForm({ branches }: { branches: Branch[] }) {
+export function BranchesForm({ branches, limitMessage = null }: { branches: Branch[]; limitMessage?: string | null }) {
+  // limitMessage viene del servidor solo cuando el plan ya alcanzó su tope de sucursales.
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
@@ -48,9 +49,15 @@ export function BranchesForm({ branches }: { branches: Branch[] }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {limitMessage && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-warning/18 px-4 py-3 text-sm font-semibold text-warning">
+          <span>{limitMessage}</span>
+          <a href="/billing" className="rounded-full bg-primary px-3.5 py-2 text-[13px] font-semibold text-primary-foreground">Ver planes</a>
+        </div>
+      )}
       <div className="flex justify-end">
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger render={<Button disabled={isPending} />}>Nueva sucursal</DialogTrigger>
+          <DialogTrigger render={<Button disabled={isPending || limitMessage != null} />}>Nueva sucursal</DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Nueva sucursal</DialogTitle>

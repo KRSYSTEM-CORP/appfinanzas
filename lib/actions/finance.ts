@@ -45,6 +45,51 @@ export async function costOfGoodsSold(range: DateRangeSelection): Promise<number
   });
 }
 
+// Ventas netas del período: lo vendido sin IVA (el IVA y el IGTF se cobran por cuenta del Estado
+// y no son ingreso). Es la base correcta para restar el costo y los gastos y obtener la utilidad.
+// Solo cuenta días con cierre de caja, igual que las demás cifras de Estadísticas.
+export async function netSalesCents(range: DateRangeSelection): Promise<number> {
+  const { companyId, branchId } = await requireManager();
+  const requestedWindows = selectionToWindows(range);
+  return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return 0;
+    const [row] = await tx.$queryRaw<{ net: bigint | null }[]>`
+      SELECT SUM(si."baseCents")::bigint AS net
+      FROM "SaleItem" si
+      JOIN "Sale" s ON s.id = si."saleId"
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND ${windowsSql('s."createdAt"', windows)}
+        AND s."voided" = false
+    `;
+    return Number(row?.net ?? 0);
+  });
+}
+
+// Ventas netas de productos que no tienen costo cargado (o ya no existen): su costo no se puede
+// restar, así que la utilidad real puede ser menor a la mostrada. Sirve para avisarlo.
+export async function netSalesWithoutCost(range: DateRangeSelection): Promise<number> {
+  const { companyId, branchId } = await requireManager();
+  const requestedWindows = selectionToWindows(range);
+  return withTenant(companyId, async (tx) => {
+    const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
+    if (windows.length === 0) return 0;
+    const [row] = await tx.$queryRaw<{ net: bigint | null }[]>`
+      SELECT SUM(si."baseCents")::bigint AS net
+      FROM "SaleItem" si
+      JOIN "Sale" s ON s.id = si."saleId"
+      LEFT JOIN "Product" p ON p.id = si."productId"
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND ${windowsSql('s."createdAt"', windows)}
+        AND s."voided" = false
+        AND (p.id IS NULL OR p."costCents" IS NULL OR p."costCents" = 0)
+    `;
+    return Number(row?.net ?? 0);
+  });
+}
+
 export async function listExpenses(range: DateRangeSelection, search = "") {
   const { companyId } = await requireManager();
   const windows = selectionToWindows(range);
@@ -152,7 +197,7 @@ export async function expensesTotal(range: DateRangeSelection): Promise<number> 
   });
 }
 
-// Ventas y costo por categoría del período, para el punto de equilibrio. Las
+// Ventas netas (sin IVA) y costo por categoría del período, para el punto de equilibrio. Las
 // ventas sin categoría se agrupan en "Sin categoría".
 export async function categoryMargins(range: DateRangeSelection): Promise<CategoryMargin[]> {
   const { companyId, branchId } = await requireManager();
@@ -163,7 +208,7 @@ export async function categoryMargins(range: DateRangeSelection): Promise<Catego
     if (windows.length === 0) return [];
     const rows = await tx.$queryRaw<{ category: string; revenue: bigint; cogs: bigint | null }[]>`
       SELECT COALESCE(NULLIF(si."category", ''), 'Sin categoría') AS category,
-             SUM(si."subtotalCents")::bigint AS revenue,
+             SUM(si."baseCents")::bigint AS revenue,
              SUM(CASE WHEN p."costCents" IS NOT NULL THEN si."quantity" * p."costCents" ELSE 0 END)::bigint AS cogs
       FROM "SaleItem" si
       JOIN "Sale" s ON s.id = si."saleId"
@@ -189,7 +234,7 @@ export async function productMargins(range: DateRangeSelection): Promise<Categor
     if (windows.length === 0) return [];
     const rows = await tx.$queryRaw<{ name: string; revenue: bigint; cogs: bigint | null }[]>`
       SELECT si."productName" AS name,
-             SUM(si."subtotalCents")::bigint AS revenue,
+             SUM(si."baseCents")::bigint AS revenue,
              SUM(CASE WHEN p."costCents" IS NOT NULL THEN si."quantity" * p."costCents" ELSE 0 END)::bigint AS cogs
       FROM "SaleItem" si
       JOIN "Sale" s ON s.id = si."saleId"

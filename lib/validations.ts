@@ -84,6 +84,13 @@ const PaymentSplitSchema = z.object({
     .trim()
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
+  // Cuenta de donde sale el dinero (solo compras): descuenta de su saldo.
+  paymentAccountId: z
+    .string()
+    .trim()
+    .max(40)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
 });
 
 function validatePaymentSplits(

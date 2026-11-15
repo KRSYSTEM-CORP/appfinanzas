@@ -15,6 +15,10 @@ export type PayrollReceiptData = {
   deductionsCents: number;
   advanceCents: number;
   netCents: number;
+  // Monto de este pago (puede ser parcial o un adelanto).
+  paidCents?: number;
+  isAdvance?: boolean;
+  accountLabel?: string | null;
   paymentMethod: PaymentMethod;
   reference: string | null;
   paidAt: Date;
@@ -66,9 +70,13 @@ export async function buildPayrollReceiptPDF(
   if (data.advanceCents > 0) row("Adelanto descontado", `−${money(data.advanceCents)}`);
   y += 4;
   doc.line(margin, y - 8, pageWidth - margin, y - 8);
-  row("NETO PAGADO", money(data.netCents), true);
+  row("NETO DE LA QUINCENA", money(data.netCents));
+  const paid = data.paidCents ?? data.netCents;
+  row(data.isAdvance ? "ADELANTO PAGADO" : "MONTO PAGADO", money(paid), true);
+  if (paid < data.netCents && !data.isAdvance) row("Saldo pendiente de la quincena", money(data.netCents - paid));
   y += 8;
   row("Método de pago", PAYMENT_METHOD_LABELS[data.paymentMethod]);
+  if (data.accountLabel) row("Pagado desde la cuenta", data.accountLabel);
   if (data.reference) row("Referencia", data.reference);
 
   y += 60;

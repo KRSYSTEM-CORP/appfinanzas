@@ -23,9 +23,13 @@ import {
   accruedProvisionCents,
   computeFortnight,
   monthlyProvisionCents,
+  payrollSettlement,
   periodLabel,
+  shiftPeriod,
   type PayrollRates,
 } from "@/lib/payroll";
+import { AccountSelect, useSourceAccounts } from "@/components/purchases/AccountSelect";
+import { todayDateString } from "@/lib/report-types";
 import { buildPayrollReceiptPDF } from "@/lib/payroll-receipt-pdf";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import {
@@ -36,6 +40,7 @@ import {
   type PayrollSeller,
   setPayrollEmployeeActive,
   type PayrollEmployeeRow,
+  type PayrollLedgerRow,
   type PayrollPaymentRow,
 } from "@/lib/actions/payroll";
 import type { PaymentMethod, ReferenceCurrency } from "@prisma/client";
@@ -51,7 +56,9 @@ export function PayrollPanel({
   rates,
   sellers,
   monthsElapsed,
+  ledger,
 }: {
+  ledger: PayrollLedgerRow[];
   sellers: PayrollSeller[];
   rates: PayrollRates;
   monthsElapsed: number;
@@ -69,13 +76,16 @@ export function PayrollPanel({
   const [proofView, setProofView] = useState<string | null>(null);
   const money = (c: number) => formatCurrencyCents(referenceCurrency, c);
 
-  const paidThisPeriod = new Set(payments.filter((p) => p.period === currentPeriod).map((p) => p.employeeId));
   const active = employees.filter((e) => e.active);
-  const pending = active.filter((e) => !paidThisPeriod.has(e.id));
-  const pendingNet = pending.reduce((a, e) => a + computeFortnight(e.baseCents, e.foodBonusCents, 0, rates, e.commissionCentsNow).netCents, 0);
+  const currentLedger = new Map(ledger.filter((r) => r.period === currentPeriod).map((r) => [r.employeeId, r]));
+  const pending = active.filter((e) => (currentLedger.get(e.id)?.pendingCents ?? 1) > 0);
+  const pendingNet = active.reduce((a, e) => a + (currentLedger.get(e.id)?.pendingCents ?? computeFortnight(e.baseCents, e.foodBonusCents, 0, rates, e.commissionCentsNow).netCents), 0);
+  // Saldo total con el personal: lo que se les debe y los adelantos pagados de más.
+  const totalOwed = ledger.reduce((a, r) => a + r.pendingCents, 0);
+  const totalAdvance = ledger.reduce((a, r) => a + r.surplusCents, 0);
   const provisioned = active.reduce((a, e) => a + accruedProvisionCents(e.baseCents, monthsElapsed), 0);
   const monthlyTotal = active.reduce((a, e) => a + 2 * monthlyProvisionCents(e.baseCents), 0);
-  const paidNet = payments.filter((p) => p.period === currentPeriod).reduce((a, p) => a + p.netCents, 0);
+  const paidNet = payments.filter((p) => p.period === currentPeriod).reduce((a, p) => a + p.paidCents, 0);
 
   function toggleActive(e: PayrollEmployeeRow) {
     setError(null);
@@ -98,7 +108,7 @@ export function PayrollPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border bg-card p-3">
           <p className="text-xs text-muted-foreground">Quincena actual</p>
           <p className="font-semibold">{periodLabel(currentPeriod)}</p>
@@ -110,6 +120,11 @@ export function PayrollPanel({
         <div className="rounded-lg border bg-card p-3">
           <p className="text-xs text-muted-foreground">Pagado esta quincena</p>
           <p className="text-lg font-semibold text-success">{money(paidNet)}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs text-muted-foreground">Saldo con el personal</p>
+          <p className={`text-lg font-semibold ${totalOwed > 0 ? "text-destructive" : ""}`}>{totalOwed > 0 ? `Debes ${money(totalOwed)}` : "Al día"}</p>
+          {totalAdvance > 0 && <p className="text-xs text-muted-foreground">Adelantos por descontar: {money(totalAdvance)}</p>}
         </div>
       </div>
 
@@ -133,7 +148,9 @@ export function PayrollPanel({
             <div className="flex flex-col divide-y">
               {employees.map((e) => {
                 const calc = computeFortnight(e.baseCents, e.foodBonusCents, 0, rates, e.commissionCentsNow);
-                const paid = paidThisPeriod.has(e.id);
+                const row = currentLedger.get(e.id);
+                const fullyPaid = row != null && row.paidCents > 0 && row.pendingCents === 0;
+                const partial = row != null && row.paidCents > 0 && row.pendingCents > 0;
                 return (
                   <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                     <div className="min-w-40">
@@ -151,12 +168,14 @@ export function PayrollPanel({
                     <div className="flex items-center gap-1.5">
                       {!e.active ? (
                         <Badge variant="secondary">Baja</Badge>
-                      ) : paid ? (
-                        <Badge variant="secondary">Pagada</Badge>
                       ) : (
-                        <Button size="sm" onClick={() => setPaying(e)}>
-                          Pagar
-                        </Button>
+                        <>
+                          {fullyPaid && <Badge variant="secondary">{row.surplusCents > 0 ? `Adelanto ${money(row.surplusCents)}` : "Pagada"}</Badge>}
+                          {partial && <Badge variant="outline">Debes {money(row.pendingCents)}</Badge>}
+                          <Button size="sm" onClick={() => setPaying(e)}>
+                            {partial ? "Abonar" : fullyPaid ? "Otro pago" : "Pagar"}
+                          </Button>
+                        </>
                       )}
                       <Button size="sm" variant="outline" onClick={() => setEditing(e)}>
                         Editar
@@ -196,6 +215,52 @@ export function PayrollPanel({
 
       <Card>
         <CardHeader>
+          <CardTitle>Saldos por quincena</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {ledger.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aquí verás, por empleado y quincena, lo devengado, lo pagado y lo que queda debiendo.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-muted-foreground">
+                    <th className="py-1 pr-3 font-medium">Empleado</th>
+                    <th className="py-1 pr-3 font-medium">Quincena</th>
+                    <th className="py-1 pr-3 text-right font-medium">Devengado</th>
+                    <th className="py-1 pr-3 text-right font-medium">Pagado</th>
+                    <th className="py-1 pr-3 text-right font-medium">Adelantos</th>
+                    <th className="py-1 text-right font-medium">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledger.map((r) => (
+                    <tr key={`${r.employeeId}-${r.period}`} className="border-t">
+                      <td className="py-1.5 pr-3">{r.employeeName}</td>
+                      <td className="py-1.5 pr-3">{periodLabel(r.period)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{money(r.owedCents)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{money(r.paidCents)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{r.advancePaidCents > 0 ? money(r.advancePaidCents) : "—"}</td>
+                      <td className="py-1.5 text-right">
+                        {r.pendingCents > 0 ? (
+                          <Badge variant="destructive">{r.paidCents > 0 ? `Falta ${money(r.pendingCents)}` : `Sin pagar ${money(r.pendingCents)}`}</Badge>
+                        ) : r.surplusCents > 0 ? (
+                          <Badge variant="outline">Adelanto {money(r.surplusCents)}</Badge>
+                        ) : (
+                          <Badge variant="secondary">Saldada</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Historial de pagos</CardTitle>
         </CardHeader>
         <CardContent>
@@ -209,8 +274,10 @@ export function PayrollPanel({
                     <th className="py-1 pr-3 font-medium">Fecha</th>
                     <th className="py-1 pr-3 font-medium">Empleado</th>
                     <th className="py-1 pr-3 font-medium">Quincena</th>
-                    <th className="py-1 pr-3 text-right font-medium">Neto</th>
+                    <th className="py-1 pr-3 font-medium">Tipo</th>
+                    <th className="py-1 pr-3 text-right font-medium">Pagado</th>
                     <th className="py-1 pr-3 font-medium">Método</th>
+                    <th className="py-1 pr-3 font-medium">Cuenta</th>
                     <th className="py-1 font-medium">Referencia</th>
                   </tr>
                 </thead>
@@ -220,8 +287,10 @@ export function PayrollPanel({
                       <td className="py-1.5 pr-3">{formatDate(p.paidAt)}</td>
                       <td className="py-1.5 pr-3">{p.employeeName}</td>
                       <td className="py-1.5 pr-3">{periodLabel(p.period)}</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums">{money(p.netCents)}</td>
+                      <td className="py-1.5 pr-3">{p.isAdvance ? "Adelanto" : p.paidCents >= p.netCents ? "Pago" : "Abono"}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{money(p.paidCents)}</td>
                       <td className="py-1.5 pr-3">{PAYMENT_METHOD_LABELS[p.paymentMethod]}</td>
+                      <td className="py-1.5 pr-3">{p.accountLabel ?? "Efectivo de caja"}</td>
                       <td className="py-1.5">
                         {p.reference ?? "—"}
                         <Button size="xs" variant="link" disabled={isPending} onClick={() => downloadReceipt(p)}>
@@ -259,6 +328,7 @@ export function PayrollPanel({
           employee={paying}
           period={currentPeriod}
           rates={rates}
+          payments={payments}
           money={money}
           onClose={() => setPaying(null)}
           onPaid={() => {
@@ -393,8 +463,9 @@ function EmployeeDialog({
 
 function PayDialog({
   employee,
-  period,
+  period: currentPeriod,
   rates,
+  payments,
   money,
   onClose,
   onPaid,
@@ -402,23 +473,42 @@ function PayDialog({
   employee: PayrollEmployeeRow;
   period: string;
   rates: PayrollRates;
+  payments: PayrollPaymentRow[];
   money: (c: number) => string;
   onClose: () => void;
   onPaid: () => void;
 }) {
-  const [advance, setAdvance] = useState("0");
+  const accounts = useSourceAccounts();
+  const [period, setPeriod] = useState(currentPeriod);
+  const [paidDate, setPaidDate] = useState(todayDateString());
+  const [isAdvance, setIsAdvance] = useState(false);
   const [method, setMethod] = useState<PaymentMethod>("CASH");
+  const [accountId, setAccountId] = useState("");
   const [reference, setReference] = useState("");
+  const [note, setNote] = useState("");
   const [proof, setProof] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const calc = computeFortnight(
-    employee.baseCents,
-    employee.foodBonusCents,
-    Math.round(Number(advance || "0") * 100),
-    rates,
-    employee.commissionCentsNow
-  );
+
+  // Quincenas que se pueden saldar: la actual, las dos anteriores y la siguiente (adelanto).
+  const periods = [shiftPeriod(currentPeriod, -2), shiftPeriod(currentPeriod, -1), currentPeriod, shiftPeriod(currentPeriod, 1)];
+  const forPeriod = payments.filter((p) => p.employeeId === employee.id && p.period === period);
+  const alreadyPaid = forPeriod.reduce((n, p) => n + p.paidCents, 0);
+  // Devengado: lo de la quincena en curso se calcula hoy; el de otra, con el último pago registrado.
+  const calc = computeFortnight(employee.baseCents, employee.foodBonusCents, 0, rates, period === currentPeriod ? employee.commissionCentsNow : (forPeriod[0]?.commissionCents ?? 0));
+  const owed = period !== currentPeriod && forPeriod[0] ? forPeriod[0].netCents : calc.netCents;
+  const before = payrollSettlement(owed, alreadyPaid);
+  const [amount, setAmount] = useState(() => (before.pendingCents / 100).toFixed(2));
+  const cents = Math.round((parseFloat(amount.replace(",", ".")) || 0) * 100);
+  const after = payrollSettlement(owed, alreadyPaid + cents);
+
+  function changePeriod(next: string) {
+    setPeriod(next);
+    const paid = payments.filter((p) => p.employeeId === employee.id && p.period === next).reduce((n, p) => n + p.paidCents, 0);
+    const o = next !== currentPeriod && payments.find((p) => p.employeeId === employee.id && p.period === next)?.netCents;
+    const base = typeof o === "number" ? o : computeFortnight(employee.baseCents, employee.foodBonusCents, 0, rates, next === currentPeriod ? employee.commissionCentsNow : 0).netCents;
+    setAmount((payrollSettlement(base, paid).pendingCents / 100).toFixed(2));
+  }
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -435,9 +525,13 @@ function PayDialog({
       const result = await payPayroll({
         employeeId: employee.id,
         period,
-        advanceCents: Math.round(Number(advance || "0") * 100),
+        amountCents: cents,
+        isAdvance,
+        paidDate,
         paymentMethod: method,
+        paymentAccountId: accountId || undefined,
         reference,
+        note: note || undefined,
         proofDataUrl: proof ?? undefined,
       });
       if (result.success) onPaid();
@@ -447,22 +541,49 @@ function PayDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Pagar a {employee.name}</DialogTitle>
-          <DialogDescription>{periodLabel(period)}</DialogDescription>
+          <DialogDescription>Tú decides cuánto, cuándo y desde qué cuenta. Puedes pagar una parte y el resto después.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
-          <div className="rounded-lg border p-3 text-sm">
-            <Row a="Asignaciones" b={money(calc.grossCents)} />
-            {calc.commissionCents > 0 && <Row a="   incluye comisión por ventas" b={money(calc.commissionCents)} />}
-            <Row a="Deducciones" b={`−${money(calc.deductionsCents)}`} />
-            <Row a="Adelanto" b={`−${money(calc.advanceCents)}`} />
-            <Row a="Neto a pagar" b={money(calc.netCents)} bold />
-          </div>
-          <Field id="pp-adv" label="Adelanto a descontar">
-            <Input id="pp-adv" type="number" min="0" step="0.01" inputMode="decimal" value={advance} onChange={(e) => setAdvance(e.target.value)} />
+          <Field id="pp-period" label="Quincena que se paga">
+            <select id="pp-period" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={period} onChange={(e) => changePeriod(e.target.value)}>
+              {periods.map((p) => (
+                <option key={p} value={p}>
+                  {periodLabel(p)}
+                  {p === currentPeriod ? " (actual)" : ""}
+                </option>
+              ))}
+            </select>
           </Field>
+          <div className="rounded-lg border p-3 text-sm">
+            <Row a="Devengado de la quincena (neto)" b={money(owed)} />
+            {calc.commissionCents > 0 && period === currentPeriod && <Row a="   incluye comisión por ventas" b={money(calc.commissionCents)} />}
+            <Row a="Ya pagado en esta quincena" b={`−${money(alreadyPaid)}`} />
+            <Row a={before.advanceCents > 0 ? "Adelanto pagado de más" : "Falta por pagar"} b={money(before.advanceCents > 0 ? before.advanceCents : before.pendingCents)} bold />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field id="pp-date" label="Fecha del pago">
+              <Input id="pp-date" type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} />
+            </Field>
+            <Field id="pp-amount" label="Monto a pagar ahora">
+              <Input id="pp-amount" type="number" min="0" step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={isAdvance} onChange={(e) => setIsAdvance(e.target.checked)} />
+            Es un adelanto (se paga antes de completar la quincena)
+          </label>
+          <div className={`rounded-lg px-3 py-2 text-sm font-semibold ${after.pendingCents > 0 ? "bg-warning/18 text-warning" : after.advanceCents > 0 ? "bg-primary/10 text-primary" : "bg-success/14 text-success"}`}>
+            {cents <= 0
+              ? "Escribe el monto que le vas a pagar."
+              : after.pendingCents > 0
+                ? `Quedará debiéndole ${money(after.pendingCents)} (pago fraccionado).`
+                : after.advanceCents > 0
+                  ? `Le pagas ${money(after.advanceCents)} de más: queda como adelanto por descontar.`
+                  : "Con este pago la quincena queda saldada."}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field id="pp-method" label="Método de pago">
               <select
@@ -482,6 +603,10 @@ function PayDialog({
               <Input id="pp-ref" value={reference} onChange={(e) => setReference(e.target.value)} />
             </Field>
           </div>
+          <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} label="¿De qué cuenta sale la nómina?" />
+          <Field id="pp-note" label="Nota (opcional)">
+            <Input id="pp-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. primer abono, adelanto por emergencia" />
+          </Field>
           <Field id="pp-proof" label="Comprobante (imagen, opcional)">
             <Input id="pp-proof" type="file" accept="image/*" onChange={(e) => onFile(e.target.files?.[0])} />
           </Field>
@@ -493,7 +618,7 @@ function PayDialog({
         </div>
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-          <Button disabled={isPending} onClick={pay}>
+          <Button disabled={isPending || cents <= 0} onClick={pay}>
             Registrar pago
           </Button>
         </DialogFooter>

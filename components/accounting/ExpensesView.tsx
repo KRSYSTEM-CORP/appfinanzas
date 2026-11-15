@@ -11,10 +11,10 @@ import { ConfirmSheet, SheetActions } from "@/components/shared/ConfirmSheet";
 import { RowMenu } from "@/components/shared/RowMenu";
 import { SectionCard, TwoCol } from "@/components/shared/SectionCard";
 import { createExpense, deleteExpense } from "@/lib/actions/finance";
+import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
 import { money } from "@/lib/money-display";
 import { todayDateString } from "@/lib/report-types";
 
-export const EXPENSE_CATEGORIES = ["Alquiler", "Nómina", "Servicios públicos", "Mercadeo", "Otros"];
 const SERIES = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", "bg-chart-6", "bg-chart-7"];
 const SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 

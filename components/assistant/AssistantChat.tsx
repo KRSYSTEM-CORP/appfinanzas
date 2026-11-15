@@ -66,19 +66,28 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
     setMsgs((m) => [...m, { role: "user", text: question }]);
     setText("");
     startTransition(async () => {
-      const r = await askAssistant(question);
-      if (r.success) {
-        setAsked((n) => n + 1);
-        setMsgs((m) => [...m, { role: "assistant", text: r.reply.answer, proposal: r.reply.proposal, state: "open", entryId: r.entryId }]);
-      } else {
-        setMsgs((m) => [...m, { role: "assistant", text: r.error, proposal: null }]);
+      try {
+        const r = await askAssistant(question);
+        if (r.success) {
+          setAsked((n) => n + 1);
+          setMsgs((m) => [...m, { role: "assistant", text: r.reply.answer, proposal: r.reply.proposal, state: "open", entryId: r.entryId }]);
+        } else {
+          setMsgs((m) => [...m, { role: "assistant", text: r.error, proposal: null }]);
+        }
+      } catch {
+        setMsgs((m) => [...m, { role: "assistant", text: "No pude conectar con el asistente. Revisa tu conexión e intenta de nuevo.", proposal: null }]);
       }
     });
   }
 
   function apply(index: number, p: Proposal, entryId?: string | null) {
     startTransition(async () => {
-      const r = await applyProposal(p, entryId);
+      let r: Awaited<ReturnType<typeof applyProposal>>;
+      try {
+        r = await applyProposal(p, entryId);
+      } catch {
+        r = { success: false, error: "No se pudo aplicar el cambio. Intenta de nuevo." };
+      }
       setMsgs((m) =>
         m.map((x, i) =>
           i === index && x.role === "assistant"
@@ -95,7 +104,12 @@ export function AssistantChat({ status, applyCost, history = [] }: { status: Ass
 
   function undo(index: number, entryId: string) {
     startTransition(async () => {
-      const r = await undoProposal(entryId);
+      let r: Awaited<ReturnType<typeof undoProposal>>;
+      try {
+        r = await undoProposal(entryId);
+      } catch {
+        r = { success: false, error: "No se pudo deshacer el cambio. Intenta de nuevo." };
+      }
       setMsgs((m) =>
         m.map((x, i) =>
           i === index && x.role === "assistant"

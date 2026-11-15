@@ -5,18 +5,20 @@ import { PurchaseForm } from "@/components/purchases/PurchaseForm";
 import { listSuppliers } from "@/lib/actions/suppliers";
 import { listActiveProducts, listCategories } from "@/lib/actions/products";
 import { getExchangeRateInfo, getIvaSettings } from "@/lib/actions/settings";
+import { listSourceAccounts } from "@/lib/actions/payment-accounts";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewPurchasePage() {
   await requireAccountingPlan();
-  const [suppliers, products, categories, { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, ivaSettings] =
+  const [suppliers, products, categories, { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, ivaSettings, sourceAccounts] =
     await Promise.all([
       listSuppliers(true),
       listActiveProducts(),
       listCategories(),
       getExchangeRateInfo(),
       getIvaSettings(),
+      listSourceAccounts(),
     ]);
 
   return (
@@ -30,6 +32,7 @@ export default async function NewPurchasePage() {
         currencyCode={localCurrencyCode}
         exchangeRateEnabled={exchangeRateEnabled}
         referenceCurrency={referenceCurrency}
+        sourceAccounts={sourceAccounts}
         ivaSettings={{
           ...ivaSettings,
           ivaGeneralRatePercent: effectiveIvaRates(ivaSettings.ivaEnabled, ivaSettings.ivaGeneralRatePercent, ivaSettings.ivaReducedRatePercent).general,

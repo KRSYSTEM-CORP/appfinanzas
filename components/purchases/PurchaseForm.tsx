@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PaymentSplitBuilder, defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
+import { PaymentSplitBuilder, defaultPaymentSplitRows, type PaymentSplitRow, type SourceAccount } from "@/components/payments/PaymentSplitBuilder";
 import { useDefaultPaymentRow } from "@/components/payments/useDefaultPaymentRow";
 import { createPurchase } from "@/lib/actions/purchases";
 import { quickCreateProduct } from "@/lib/actions/products";
@@ -86,7 +86,9 @@ export function PurchaseForm({
   exchangeRateEnabled,
   referenceCurrency,
   ivaSettings,
+  sourceAccounts = [],
 }: {
+  sourceAccounts?: SourceAccount[];
   suppliers: Supplier[];
   products: PurchaseProduct[];
   categories: string[];
@@ -259,6 +261,7 @@ export function PurchaseForm({
                 amount: r.amount,
                 paidInForeignCurrency: r.paidInForeignCurrency,
                 reference: r.reference,
+                paymentAccountId: r.paymentAccountId || undefined,
               }))
             : [],
         note: note || undefined,
@@ -621,6 +624,7 @@ export function PurchaseForm({
             exchangeRateEnabled={exchangeRateEnabled}
             referenceCurrency={referenceCurrency}
             idPrefix="purchase"
+            accounts={sourceAccounts}
           />
         ) : (
           <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">

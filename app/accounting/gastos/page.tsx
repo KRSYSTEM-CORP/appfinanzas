@@ -1,7 +1,8 @@
 import { FileTextIcon, LightbulbIcon, TrendingDownIcon } from "lucide-react";
 import { requireAccountingPlan, requirePermission } from "@/lib/session";
 import { AdminShell } from "@/components/accounting/AdminShell";
-import { AddExpenseButton, ExpenseCategorySelect, ExpensesView, EXPENSE_CATEGORIES } from "@/components/accounting/ExpensesView";
+import { AddExpenseButton, ExpenseCategorySelect, ExpensesView } from "@/components/accounting/ExpensesView";
+import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
 import { RecurringExpenses } from "@/components/accounting/RecurringExpenses";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { PeriodBar } from "@/components/shared/PeriodBar";

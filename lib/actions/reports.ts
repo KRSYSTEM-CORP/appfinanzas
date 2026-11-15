@@ -433,15 +433,20 @@ export type RestockSuggestion = {
 };
 
 const RESTOCK_COVER_DAYS = 20;
+const RESTOCK_WINDOW_DAYS = 30;
 
-// Reposición sugerida: con el ritmo de venta de los últimos 30 días, cuánto pedir
-// para cubrir 20 días. Solo productos activos con control de stock que vendieron.
+// Reposición sugerida. Ritmo diario = unidades vendidas en la ventana ÷ días con el producto
+// disponible en esa ventana (un producto nuevo no se diluye entre 30 días que no existía).
+// Pedir = ⌈ritmo diario × 20 días de cobertura − existencia actual⌉. Solo productos activos con
+// control de stock que vendieron algo. Se descuenta lo ya pedido y aún no recibido no existe en
+// el sistema, así que la cifra es una sugerencia, no una orden.
 export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]> {
   const { companyId, branchId } = await requireManager();
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const since = new Date(Date.now() - RESTOCK_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   return withTenant(companyId, async (tx) => {
-    const rows = await tx.$queryRaw<{ id: string; name: string; stock: number; cost: number | null; sold: bigint }[]>`
-      SELECT pr.id, pr."name" AS name, pr."stock" AS stock, pr."costCents" AS cost, SUM(si."quantity")::bigint AS sold
+    const rows = await tx.$queryRaw<{ id: string; name: string; stock: number; cost: number | null; sold: bigint; active_days: number }[]>`
+      SELECT pr.id, pr."name" AS name, pr."stock" AS stock, pr."costCents" AS cost, SUM(si."quantity")::bigint AS sold,
+             LEAST(${RESTOCK_WINDOW_DAYS}, GREATEST(1, CEIL(EXTRACT(EPOCH FROM (NOW() - GREATEST(${since}::timestamptz, pr."createdAt"))) / 86400.0)))::float AS active_days
       FROM "Product" pr
       JOIN "SaleItem" si ON si."productId" = pr.id
       JOIN "Sale" s ON s.id = si."saleId"
@@ -449,17 +454,17 @@ export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]
         ${branchId ? Prisma.sql`AND pr."branchId" = ${branchId}` : Prisma.empty}
         AND pr."isActive" = true AND pr."trackStock" = true
         AND s."voided" = false AND s."createdAt" >= ${since}
-      GROUP BY pr.id, pr."name", pr."stock", pr."costCents"
+      GROUP BY pr.id, pr."name", pr."stock", pr."costCents", pr."createdAt"
     `;
     return rows
       .map((r) => {
-        const perDay = Number(r.sold) / 30;
+        const perDay = Number(r.sold) / Math.max(1, r.active_days);
         const need = Math.ceil(perDay * RESTOCK_COVER_DAYS - r.stock);
         return {
           id: r.id,
           name: r.name,
           stock: r.stock,
-          daysLeft: perDay > 0 ? Math.floor(r.stock / perDay) : null,
+          daysLeft: perDay > 0 ? Math.floor(Math.max(0, r.stock) / perDay) : null,
           suggestedQty: need,
           estimatedCostCents: r.cost != null ? need * r.cost : null,
         };

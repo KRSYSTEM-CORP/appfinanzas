@@ -1,10 +1,10 @@
 // Navegación interna de Administración (preview 05 · #adm): tarjetas de grupo y sub-pestañas.
 // Cada sub-pestaña tiene su ruta; todas comparten la misma cabecera (AdminShell).
 
-export type AdminGroupId = "balance" | "bancos" | "compras" | "consumo" | "conta";
+export type AdminGroupId = "balance" | "bancos" | "compras" | "cobrar" | "consumo" | "conta";
 
 export type AdminSub = { id: string; label: string; href: string };
-export type AdminGroup = { id: AdminGroupId; label: string; hint: string; icon: "money" | "bank" | "cart" | "box" | "doc"; subs: AdminSub[] };
+export type AdminGroup = { id: AdminGroupId; label: string; hint: string; icon: "money" | "bank" | "cart" | "wallet" | "box" | "doc"; subs: AdminSub[] };
 
 export const ADMIN_GROUPS: AdminGroup[] = [
   {
@@ -36,6 +36,13 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { id: "ordenes", label: "Órdenes de pago", href: "/purchases/orders" },
       { id: "calif", label: "Calificación", href: "/suppliers/rating" },
     ],
+  },
+  {
+    id: "cobrar",
+    label: "Cuentas por cobrar",
+    hint: "Ventas a crédito, abonos y antigüedad",
+    icon: "wallet",
+    subs: [{ id: "pendientes", label: "Por cobrar", href: "/accounting/receivables" }],
   },
   {
     id: "consumo",
