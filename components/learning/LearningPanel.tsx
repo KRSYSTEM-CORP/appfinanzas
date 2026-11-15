@@ -34,7 +34,6 @@ export function LearningPanel({
   storageReady,
   max,
   maxUploadMb,
-  defaultRoute,
 }: {
   videos: LearningVideoRow[];
   stats: LearningStats | null;
@@ -42,7 +41,6 @@ export function LearningPanel({
   storageReady: boolean;
   max: number;
   maxUploadMb: number;
-  defaultRoute?: string;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -57,7 +55,7 @@ export function LearningPanel({
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [route, setRoute] = useState<string>(defaultRoute ?? "Todo");
+  const [route, setRoute] = useState<string>("Todo");
   const allDone = allVideos.length > 0 && allVideos.every((v) => v.watched);
   const videos = allVideos.filter((v) => route === "Todo" || v.audience === "Todo" || v.audience === route);
   const watchedCount = videos.filter((v) => v.watched).length;
@@ -168,7 +166,7 @@ export function LearningPanel({
         <Card>
           <CardHeader>
             <CardTitle>
-              Agregar video ({videos.length} de {max})
+              Agregar video ({allVideos.length} de {max})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -238,7 +236,7 @@ export function LearningPanel({
                 </p>
               )}
               <div>
-                <Button type="submit" disabled={uploading || videos.length >= max || title.trim().length < 2 || (!file && !url)}>
+                <Button type="submit" disabled={uploading || allVideos.length >= max || title.trim().length < 2 || (!file && !url)}>
                   {file ? "Subir video" : "Agregar video"}
                 </Button>
               </div>

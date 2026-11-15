@@ -26,7 +26,6 @@ export default async function PlatformLearningPage() {
         storageReady={storageReady}
         max={MAX_LEARNING_VIDEOS}
         maxUploadMb={MAX_LEARNING_UPLOAD_BYTES / 1024 / 1024}
-        defaultRoute="Dueño"
       />
     </PlatformShell>
   );
