@@ -133,6 +133,8 @@ export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
   const { companyId } = await requireManager();
   return withTenant(companyId, async (tx) => {
     const accounts = await tx.paymentAccount.findMany({ where: { companyId, active: true }, orderBy: { createdAt: "asc" } });
+    const co = await tx.company.findUnique({ where: { id: companyId }, select: { exchangeRate: true, exchangeRateEnabled: true } });
+    const currentRate = co?.exchangeRateEnabled && co.exchangeRate ? Number(co.exchangeRate) : null;
     const rows: AccountBalanceRow[] = [];
     for (const a of accounts) {
       let collected = 0;
@@ -146,16 +148,25 @@ export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
       const [purchaseOut, payrollOut] = await Promise.all([
         tx.purchasePayment.findMany({
           where: { paymentAccountId: a.id, purchase: { companyId, voided: false }, createdAt: { gte: a.balanceSince } },
-          select: { amountCurrencyCents: true, amountEurCents: true },
+          select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
         }),
         tx.payrollPayment.findMany({
           where: { paymentAccountId: a.id, companyId, createdAt: { gte: a.balanceSince } },
           select: { accountDebitCents: true, paidCents: true },
         }),
       ]);
-      const paidOut =
-        purchaseOut.reduce((n, p) => n + (p.amountCurrencyCents ?? p.amountEurCents), 0) +
-        payrollOut.reduce((n, p) => n + (p.accountDebitCents ?? p.paidCents), 0);
+      // Lo que sale se expresa en la moneda de la cuenta (Bs o divisa): un pago hecho en otra
+      // moneda se convierte con la tasa de ese pago (o la actual si no quedó registrada).
+      const purchaseDebit = (p: (typeof purchaseOut)[number]) => {
+        const rate = p.exchangeRate != null ? Number(p.exchangeRate) : currentRate;
+        if (a.currency === "VES") {
+          if (p.currencyCode === "VES" && p.amountCurrencyCents != null) return p.amountCurrencyCents;
+          return rate ? Math.round(p.amountEurCents * rate) : 0;
+        }
+        if (p.currencyCode === "USD" && p.amountCurrencyCents != null) return p.amountCurrencyCents;
+        return p.amountEurCents;
+      };
+      const paidOut = purchaseOut.reduce((n, p) => n + purchaseDebit(p), 0) + payrollOut.reduce((n, p) => n + (p.accountDebitCents ?? p.paidCents), 0);
       rows.push({
         id: a.id,
         label: [a.bankName, a.accountNumber].filter(Boolean).join(" · "),
