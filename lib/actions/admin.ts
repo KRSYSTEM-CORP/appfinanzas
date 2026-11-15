@@ -2,24 +2,20 @@
 
 import { PLANS, parsePlanRequest, type PlanId } from "@/lib/plans";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
 import { withSuperAdmin } from "@/lib/tenant-db";
+import { requireSuperAdmin } from "@/lib/platform-guard";
+import { logPlatformAudit } from "@/lib/platform-audit";
 import {
   PLATFORM_SETTINGS_ID,
   TRIAL_DAYS,
-  FALLBACK_MONTHLY_FEE_USD_CENTS,
-  LIFETIME_PRICE_USD_CENTS,
   monthsCoveredWithBonus,
   extendDueDateByMonths,
 } from "@/lib/billing";
-import { sendAnnouncementEmail } from "@/lib/email";
 import { fetchBcvRate } from "@/lib/bcv-rate";
 import { invalidateCache } from "@/lib/cache";
 import { isKnownFeature } from "@/lib/features";
 import {
-  AnnouncementSchema,
   BillingCycleSchema,
   MaintenancePaymentSchema,
   RejectPaymentReportSchema,
@@ -28,28 +24,21 @@ import {
 } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 
-async function requireSuperAdmin() {
-  const session = await getSession();
-  // See app/api/auth/clear-session/route.ts — a stale-but-signed cookie
-  // (deleted/suspended user) can't have its cookie cleared here if this is
-  // reached during a plain page render, so route through the Route Handler
-  // instead of redirecting straight to /login.
-  if (!session) redirect("/api/auth/clear-session");
-  if (session.locked) redirect("/lock");
-  if (!session.isSuperAdmin) redirect("/pos");
-  return session;
+// Todas las acciones de este archivo empiezan con requireSuperAdmin() (lib/platform-guard.ts)
+// y las que cambian algo quedan en el registro de auditoría de la Plataforma.
+
+async function companyIdOfUser(userId: string): Promise<string | null> {
+  const u = await withSuperAdmin((tx) => tx.user.findUnique({ where: { id: userId }, select: { companyId: true } }));
+  return u?.companyId ?? null;
 }
 
 // One row per company (not per user) so the panel groups a company's owner
 // account together with any employees it has registered — the users array
 // is ordered owner-first (GERENTE, oldest first) so `users[0]` is always the
 // account created during signup, the one every company-level action targets.
-// select (not include) on purpose: this feeds straight into a Client
-// Component (AdminUserTable) — Company.exchangeRate is a Prisma Decimal,
-// which isn't a plain serializable object, and every User row carries
-// passwordHash. Selecting only what the table actually renders avoids both
-// the Decimal-across-the-client-boundary React error and shipping a
-// password hash to the browser for no reason.
+// select (not include) on purpose: this feeds straight into Client Components —
+// Company.exchangeRate is a Prisma Decimal and every User row carries
+// passwordHash; selecting only what the panel renders avoids both.
 export async function listAllCompanies() {
   await requireSuperAdmin();
   return withSuperAdmin((tx) =>
@@ -64,6 +53,13 @@ export async function listAllCompanies() {
         plan: true,
         enabledFeatures: true,
         createdAt: true,
+        fiscalPhone: true,
+        businessWhatsapp: true,
+        aiCreditsExtra: true,
+        aiCreditsUsed: true,
+        crmNote: true,
+        crmNextContactAt: true,
+        crmTags: true,
         users: {
           orderBy: [{ role: "asc" }, { createdAt: "asc" }],
           select: {
@@ -81,27 +77,21 @@ export async function listAllCompanies() {
   );
 }
 
-// Signup is self-serve now (see createCompanyWithOwner in
-// lib/company-provisioning.ts) — a new company is ACTIVE with its trial
-// running from the moment it's created, no approval needed. This stays only
-// to let a super admin manually reactivate/re-price a PENDING account from
-// before that change (or any created directly in the DB). Approving also
-// sets up the billing cycle in the same step: a monthlyFee/nextPaymentDueDate
-// left blank in the form falls back to the platform's default fee and a free
-// TRIAL_DAYS-day trial starting today. No Payment record is created here
-// since a trial isn't a payment.
+// Signup is self-serve now (see createCompanyWithOwner in lib/company-provisioning.ts) — a new
+// company is ACTIVE with its trial running from creation. This stays to let a super admin
+// reactivate a PENDING account from before that change. The monthly fee defaults to the price of
+// the company's plan (lib/plans.ts) and the due date to a free TRIAL_DAYS-day trial.
 export async function approveUser(userId: string, billing: unknown): Promise<ActionResult> {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
   const parsed = BillingCycleSchema.safeParse(billing);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos de cobro inválidos" };
   }
 
-  const approved = await withSuperAdmin(async (tx) => {
+  const companyId = await withSuperAdmin(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId } });
-    if (!user || user.status !== "PENDING") return false;
-
-    const settings = await tx.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } });
+    if (!user || user.status !== "PENDING") return null;
+    const company = await tx.company.findUnique({ where: { id: user.companyId }, select: { plan: true } });
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
 
@@ -109,42 +99,44 @@ export async function approveUser(userId: string, billing: unknown): Promise<Act
     await tx.company.update({
       where: { id: user.companyId },
       data: {
-        monthlyFeeUsdCents:
-          parsed.data.monthlyFee ?? settings?.defaultMonthlyFeeUsdCents ?? FALLBACK_MONTHLY_FEE_USD_CENTS,
+        monthlyFeeUsdCents: parsed.data.monthlyFee ?? PLANS[(company?.plan ?? "CORPORATIVO") as PlanId].priceUsdCents,
         nextPaymentDueDate: parsed.data.nextPaymentDueDate ?? trialEnd,
       },
     });
-    return true;
+    return user.companyId;
   });
 
-  if (!approved) {
+  if (!companyId) {
     return { success: false, error: "Usuario no encontrado o ya fue procesado" };
   }
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "empresa.aprobar", { companyId });
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
 // Cambia el plan de una empresa y alinea su mensualidad con el precio del plan.
 export async function setCompanyPlan(companyId: string, plan: string): Promise<ActionResult> {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
   if (!(plan in PLANS)) return { success: false, error: "Plan inválido" };
   const def = PLANS[plan as PlanId];
   await withSuperAdmin((tx) =>
     tx.company.update({ where: { id: companyId }, data: { plan: def.id, monthlyFeeUsdCents: def.priceUsdCents } })
   );
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "empresa.plan", { companyId, detail: `Plan ${def.label}` });
+  revalidatePath("/admin", "layout");
   revalidatePath("/billing");
   return { success: true };
 }
 
 // Otorga créditos de IA extra a una empresa (no vencen). Solo super admin.
 export async function grantAiCredits(companyId: string, amount: number): Promise<ActionResult> {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
   if (!Number.isInteger(amount) || amount < 1 || amount > 100_000) {
     return { success: false, error: "La cantidad debe ser un número entero entre 1 y 100.000" };
   }
   await withSuperAdmin((tx) => tx.company.update({ where: { id: companyId }, data: { aiCreditsExtra: { increment: amount } } }));
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "empresa.creditos", { companyId, detail: `${amount} créditos` });
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -161,25 +153,27 @@ export async function listPendingCreditRequests() {
 
 // Aprueba (suma los créditos) o rechaza una solicitud de compra. Solo si sigue pendiente.
 export async function resolveCreditRequest(id: string, approve: boolean): Promise<ActionResult> {
-  await requireSuperAdmin();
-  const done = await withSuperAdmin(async (tx) => {
+  const session = await requireSuperAdmin();
+  const companyId = await withSuperAdmin(async (tx) => {
     const r = await tx.aiCreditRequest.findUnique({ where: { id }, select: { companyId: true, credits: true, status: true } });
-    if (!r || r.status !== "PENDING") return false;
+    if (!r || r.status !== "PENDING") return null;
     const upd = await tx.aiCreditRequest.updateMany({
       where: { id, status: "PENDING" },
       data: { status: approve ? "APPROVED" : "REJECTED", reviewedAt: new Date() },
     });
-    if (upd.count === 0) return false;
+    if (upd.count === 0) return null;
     if (approve) await tx.company.update({ where: { id: r.companyId }, data: { aiCreditsExtra: { increment: r.credits } } });
-    return true;
+    return r.companyId;
   });
-  if (!done) return { success: false, error: "La solicitud ya fue procesada" };
-  revalidatePath("/admin");
+  if (!companyId) return { success: false, error: "La solicitud ya fue procesada" };
+  await logPlatformAudit(session.userId, "creditos.resolver", { companyId, detail: approve ? "Aprobada" : "Rechazada" });
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
 export async function denyUser(userId: string): Promise<ActionResult> {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
+  const companyId = await companyIdOfUser(userId);
   const result = await withSuperAdmin((tx) =>
     tx.user.updateMany({
       where: { id: userId, status: "PENDING" },
@@ -189,7 +183,8 @@ export async function denyUser(userId: string): Promise<ActionResult> {
   if (result.count === 0) {
     return { success: false, error: "Usuario no encontrado o ya fue procesado" };
   }
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "empresa.rechazar", { companyId });
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -198,23 +193,24 @@ export async function suspendUser(userId: string): Promise<ActionResult> {
   if (session.userId === userId) {
     return { success: false, error: "No puedes suspender tu propia cuenta de administrador" };
   }
+  const companyId = await companyIdOfUser(userId);
   await withSuperAdmin((tx) => tx.user.updateMany({ where: { id: userId }, data: { status: "SUSPENDED" } }));
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "empresa.suspender", { companyId });
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
 export async function reactivateUser(userId: string): Promise<ActionResult> {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
+  const companyId = await companyIdOfUser(userId);
   await withSuperAdmin((tx) => tx.user.updateMany({ where: { id: userId }, data: { status: "ACTIVE" } }));
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "empresa.reactivar", { companyId });
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
 // Records a confirmed maintenance payment and pushes out the due date — this
-// is the only way to unblock a company past its grace period. The subscription
-// is always paid in USDT via Binance, so there's no exchange rate to snapshot
-// here anymore — Payment.exchangeRate stays null for anything recorded from
-// this point on (see the historical note on that column).
+// is the only way to unblock a company past its grace period.
 export async function recordMaintenancePayment(companyId: string, input: unknown): Promise<ActionResult> {
   const session = await requireSuperAdmin();
   const parsed = MaintenancePaymentSchema.safeParse(input);
@@ -241,65 +237,65 @@ export async function recordMaintenancePayment(companyId: string, input: unknown
     });
   });
 
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "pago.registrar", { companyId, detail: `$${(parsed.data.amount / 100).toFixed(2)}` });
+  revalidatePath("/admin", "layout");
   revalidatePath("/settings");
   revalidatePath("/billing");
   return { success: true };
 }
 
-// A lighter alternative to recordMaintenancePayment above — for when the
-// super admin wants to manually restart a company's billing cycle (e.g. a
-// payment confirmed outside the normal report flow) without logging a
-// specific verified amount/period. Moves nextPaymentDueDate one month ahead
-// (there are no grace days — see isCompanyBlocked, lib/billing.ts — so leaving
-// it at today would block the company again right away).
+// Reinicia el ciclo de cobro un mes adelante sin registrar un monto (no hay días de gracia:
+// ver isCompanyBlocked, lib/billing.ts).
 export async function renewSubscriptionManually(companyId: string): Promise<ActionResult> {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
   await withSuperAdmin((tx) =>
     tx.company.update({ where: { id: companyId }, data: { nextPaymentDueDate: extendDueDateByMonths(null, 1) } })
   );
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "pago.renovar", { companyId });
+  revalidatePath("/admin", "layout");
   revalidatePath("/settings");
   revalidatePath("/billing");
   return { success: true };
 }
 
 export async function setCompanyExempt(companyId: string, exempt: boolean): Promise<ActionResult> {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
   await withSuperAdmin((tx) => tx.company.update({ where: { id: companyId }, data: { isExempt: exempt } }));
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "empresa.exencion", { companyId, detail: exempt ? "Exenta" : "Con cobro" });
+  revalidatePath("/admin", "layout");
   revalidatePath("/settings");
   return { success: true };
 }
 
-// Replaces the set of custom features (lib/features.ts) enabled for ONE
-// company — the whole point is that nobody else's app changes. Unknown ids
-// are rejected instead of stored so a typo can't silently do nothing.
+// Replaces the set of custom features (lib/features.ts) enabled for ONE company.
+// Unknown ids are rejected instead of stored so a typo can't silently do nothing.
 export async function setCompanyFeatures(companyId: string, features: string[]): Promise<ActionResult> {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
   const unique = [...new Set(features)];
   const unknown = unique.find((id) => !isKnownFeature(id));
   if (unknown) return { success: false, error: `Apartado desconocido: ${unknown}` };
 
   await withSuperAdmin((tx) => tx.company.update({ where: { id: companyId }, data: { enabledFeatures: unique } }));
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "empresa.funciones", { companyId, detail: unique.join(", ") || "Ninguna" });
+  revalidatePath("/admin", "layout");
   revalidatePath("/", "layout");
   return { success: true };
 }
 
-// Permanently removes a denied/suspended company and everything under it
-// (users, products, customers, sales, quotes, payments — all cascade via the
-// schema's onDelete: Cascade). Restricted to companies whose every user is
-// SUSPENDED so an active or pending tenant's data can never be wiped this way.
+// Permanently removes a denied/suspended company and everything under it (all cascade via the
+// schema's onDelete: Cascade). Restricted to companies whose every user is SUSPENDED so an
+// active or pending tenant's data can never be wiped this way.
 export async function deleteCompany(companyId: string): Promise<ActionResult> {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
 
+  let companyName: string | null = null;
   const deleted = await withSuperAdmin(async (tx) => {
     const company = await tx.company.findUnique({
       where: { id: companyId },
       include: { users: true },
     });
     if (!company || company.users.length === 0) return false;
+    companyName = company.name;
     if (!company.users.every((u) => u.status === "SUSPENDED")) return false;
     // Fiscal documents are never deleted (audit KRPOS-DB-002; the FKs
     // RESTRICT it too): a company that already invoiced stays suspended.
@@ -323,7 +319,29 @@ export async function deleteCompany(companyId: string): Promise<ActionResult> {
   if (!deleted) {
     return { success: false, error: "Solo se pueden eliminar empresas denegadas o suspendidas" };
   }
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "empresa.eliminar", { companyId: null, companyName, detail: companyId });
+  revalidatePath("/admin", "layout");
+  return { success: true };
+}
+
+// Notas internas, etiquetas y próximo contacto de una empresa (CRM). Solo superadmin.
+export async function updateCompanyCrm(
+  companyId: string,
+  input: { note: string; tags: string[]; nextContactAt: string | null }
+): Promise<ActionResult> {
+  const session = await requireSuperAdmin();
+  const note = (input.note ?? "").trim().slice(0, 2000);
+  const tags = [...new Set((input.tags ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 8).map((t) => t.slice(0, 24));
+  let next: Date | null = null;
+  if (input.nextContactAt) {
+    next = new Date(`${input.nextContactAt}T12:00:00Z`);
+    if (Number.isNaN(next.getTime())) return { success: false, error: "Fecha inválida" };
+  }
+  await withSuperAdmin((tx) =>
+    tx.company.update({ where: { id: companyId }, data: { crmNote: note || null, crmTags: tags, crmNextContactAt: next } })
+  );
+  await logPlatformAudit(session.userId, "empresa.crm", { companyId });
+  revalidatePath("/admin", "layout");
   return { success: true };
 }
 
@@ -338,16 +356,31 @@ export async function listPendingPaymentReports() {
   );
 }
 
-// Approving a self-reported payment sums up the payment-method lines the
-// company user entered (their claim of what they actually paid) rather than
-// assuming it matches the configured monthly fee exactly — it creates the
-// same kind of Payment record recordMaintenancePayment does, using the
-// platform-wide rate, and pushes the due date out by however many months
-// that amount covers (see monthsCoveredWithBonus — a full year prepaid
-// earns 2 bonus months), which unblocks the company. Falls back to a flat
-// single month if the company somehow has no monthlyFeeUsdCents configured
-// (shouldn't happen for anything approved after the trial-defaults change,
-// but a pre-existing company could still be in that state).
+// Historial de reportes de pago de suscripción (todos los estados), los más recientes primero.
+export async function listPaymentReportHistory(take = 50) {
+  await requireSuperAdmin();
+  return withSuperAdmin((tx) =>
+    tx.paymentReport.findMany({
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        id: true,
+        status: true,
+        note: true,
+        createdAt: true,
+        reviewedAt: true,
+        company: { select: { name: true } },
+        lines: { select: { paymentMethod: true, amountUsdCents: true, reference: true } },
+      },
+    })
+  );
+}
+
+// Approving a self-reported payment sums up the payment-method lines the company user entered
+// rather than assuming it matches the configured monthly fee exactly — it creates the same kind
+// of Payment record recordMaintenancePayment does and pushes the due date out by however many
+// months that amount covers (see monthsCoveredWithBonus). Un cupón reservado al reportar queda
+// consumido al aprobar.
 export async function approvePaymentReport(reportId: string): Promise<ActionResult> {
   const session = await requireSuperAdmin();
 
@@ -370,46 +403,27 @@ export async function approvePaymentReport(reportId: string): Promise<ActionResu
 
     const totalUsdCents = report.lines.reduce((sum, line) => sum + line.amountUsdCents, 0);
 
-    // Lifetime plan: approving it exempts the company from every future
-    // monthly fee, instead of extending the due date.
-    if (report.isLifetime) {
-      if (totalUsdCents < LIFETIME_PRICE_USD_CENTS) {
-        return { ok: false as const, error: "El monto reportado es menor que el pago único" };
-      }
-      await tx.payment.create({
-        data: {
-          companyId: report.companyId,
-          amountUsdCents: totalUsdCents,
-          periodEnd: company.nextPaymentDueDate ?? new Date(),
-          note: report.note ? `Pago único de por vida. Nota: ${report.note}` : "Pago único de por vida",
-          verifiedById: session.userId,
-        },
-      });
-      await tx.company.update({ where: { id: report.companyId }, data: { isExempt: true } });
-      await tx.paymentReport.update({
-        where: { id: reportId },
-        data: { status: "APPROVED", reviewedById: session.userId, reviewedAt: new Date() },
-      });
-      return { ok: true as const };
-    }
-
     // Si la empresa pidió cambiar de plan al reportar el pago (nota «Plan solicitado: X.»),
     // el plan y la tarifa se actualizan al aprobar y los meses se calculan con la tarifa nueva.
-    // La nota la escribe la empresa: el cambio solo se aplica si lo pagado cubre al menos un mes
-    // del plan pedido (el primer mes de Emprende vale lo que indique su precio de bienvenida).
+    // El cambio solo se aplica si lo pagado cubre al menos un mes del plan pedido (el primer mes
+    // de Emprende vale lo que indique su precio de bienvenida), con el descuento de cupón ya
+    // descontado (se suma de vuelta para comparar contra el precio de lista).
     const requestedPlan = parsePlanRequest(report.note);
     const requestedMin = requestedPlan
       ? Math.min(PLANS[requestedPlan].priceUsdCents, PLANS[requestedPlan].firstMonthUsdCents ?? PLANS[requestedPlan].priceUsdCents)
       : 0;
+    const redeemed = await tx.platformCouponRedemption.findMany({ where: { paymentReportId: reportId }, select: { discountUsdCents: true } });
+    const discountCents = redeemed.reduce((s, r) => s + r.discountUsdCents, 0);
+    const effectiveCents = totalUsdCents + discountCents;
     let feeUsdCents = company.monthlyFeeUsdCents;
-    if (requestedPlan && totalUsdCents >= requestedMin) {
+    if (requestedPlan && effectiveCents >= requestedMin) {
       feeUsdCents = PLANS[requestedPlan].priceUsdCents;
       await tx.company.update({
         where: { id: report.companyId },
         data: { plan: requestedPlan, monthlyFeeUsdCents: feeUsdCents, planChosen: true },
       });
     }
-    const months = feeUsdCents ? monthsCoveredWithBonus(totalUsdCents, feeUsdCents) : 1;
+    const months = feeUsdCents ? monthsCoveredWithBonus(effectiveCents, feeUsdCents) : 1;
     const periodEnd = extendDueDateByMonths(company.nextPaymentDueDate, months || 1);
 
     await tx.payment.create({
@@ -427,18 +441,21 @@ export async function approvePaymentReport(reportId: string): Promise<ActionResu
       data: { status: "APPROVED", reviewedById: session.userId, reviewedAt: new Date() },
     });
 
-    return { ok: true as const };
+    return { ok: true as const, companyId: report.companyId, totalUsdCents };
   });
 
   if (!result.ok) {
     return { success: false, error: result.error };
   }
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "pago.aprobar", { companyId: result.companyId, detail: `$${(result.totalUsdCents / 100).toFixed(2)}` });
+  revalidatePath("/admin", "layout");
   revalidatePath("/billing");
   revalidatePath("/settings");
   return { success: true };
 }
 
+// Al rechazar un reporte se LIBERA el cupón que se reservó al reportarlo (la empresa puede
+// reportar de nuevo con el mismo cupón).
 export async function rejectPaymentReport(reportId: string, input: unknown): Promise<ActionResult> {
   const session = await requireSuperAdmin();
   const parsed = RejectPaymentReportSchema.safeParse(input);
@@ -446,35 +463,47 @@ export async function rejectPaymentReport(reportId: string, input: unknown): Pro
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  const result = await withSuperAdmin((tx) =>
-    tx.paymentReport.updateMany({
-      where: { id: reportId, status: "PENDING" },
+  const companyId = await withSuperAdmin(async (tx) => {
+    const report = await tx.paymentReport.findFirst({ where: { id: reportId, status: "PENDING" }, select: { companyId: true } });
+    if (!report) return null;
+    await tx.paymentReport.update({
+      where: { id: reportId },
       data: {
         status: "REJECTED",
         reviewedById: session.userId,
         reviewedAt: new Date(),
         reviewNote: parsed.data.reviewNote,
       },
-    })
-  );
+    });
+    const held = await tx.platformCouponRedemption.findMany({ where: { paymentReportId: reportId }, select: { id: true, couponId: true } });
+    for (const h of held) {
+      await tx.platformCouponRedemption.delete({ where: { id: h.id } });
+      await tx.platformCoupon.update({ where: { id: h.couponId }, data: { usedCount: { decrement: 1 } } });
+    }
+    return report.companyId;
+  });
 
-  if (result.count === 0) {
+  if (!companyId) {
     return { success: false, error: "Reporte no encontrado o ya fue procesado" };
   }
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "pago.rechazar", { companyId, detail: parsed.data.reviewNote });
+  revalidatePath("/admin", "layout");
   revalidatePath("/billing");
   return { success: true };
 }
 
-export async function getPlatformSettings(): Promise<{
+export type PlatformSettingsView = {
   paymentInstructions: string | null;
   binanceQrDataUrl: string | null;
   binanceId: string | null;
   pagoMovilBank: string | null;
   pagoMovilPhone: string | null;
   pagoMovilId: string | null;
-  defaultMonthlyFeeUsdCents: number | null;
-}> {
+  pagoMovilEnabled: boolean;
+  binanceEnabled: boolean;
+};
+
+export async function getPlatformSettings(): Promise<PlatformSettingsView> {
   await requireSuperAdmin();
   const settings = await prisma.platformSettings.findUnique({ where: { id: PLATFORM_SETTINGS_ID } });
   return {
@@ -484,92 +513,58 @@ export async function getPlatformSettings(): Promise<{
     pagoMovilBank: settings?.pagoMovilBank ?? null,
     pagoMovilPhone: settings?.pagoMovilPhone ?? null,
     pagoMovilId: settings?.pagoMovilId ?? null,
-    defaultMonthlyFeeUsdCents: settings?.defaultMonthlyFeeUsdCents ?? null,
+    pagoMovilEnabled: settings?.pagoMovilEnabled ?? true,
+    binanceEnabled: settings?.binanceEnabled ?? true,
   };
 }
 
-// One row per company owner (GERENTE, real email) — excludes employee
-// accounts, which get an auto-generated @kyra.local placeholder email at
-// creation (see createEmployee, lib/actions/employees.ts) that nobody reads.
-export async function listAnnouncementRecipients(): Promise<{ email: string; companyName: string }[]> {
-  await requireSuperAdmin();
-  const owners = await withSuperAdmin((tx) =>
-    tx.user.findMany({
-      where: { role: "GERENTE", status: "ACTIVE" },
-      select: { email: true, company: { select: { name: true } } },
-    })
-  );
-  return owners.map((o) => ({ email: o.email, companyName: o.company.name }));
-}
-
-export type SendAnnouncementResult =
-  | { success: true; sent: number; total: number }
-  | { success: false; error: string };
-
-// Sends the same announcement to every active company's owner — used for
-// product news/updates, not scoped to any one tenant. Individual send
-// failures don't fail the whole batch (Promise.allSettled): the admin sees
-// how many of the total actually went out.
-export async function sendAnnouncement(input: unknown): Promise<SendAnnouncementResult> {
-  await requireSuperAdmin();
-  const parsed = AnnouncementSchema.safeParse(input);
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
-  }
-
-  const recipients = await listAnnouncementRecipients();
-  if (recipients.length === 0) {
-    return { success: false, error: "No hay empresas activas para notificar" };
-  }
-
-  const results = await Promise.allSettled(
-    recipients.map((r) => sendAnnouncementEmail(r.email, parsed.data.subject, parsed.data.message))
-  );
-  const sent = results.filter((r) => r.status === "fulfilled" && r.value).length;
-
-  return { success: true, sent, total: recipients.length };
-}
-
 export async function updatePlatformSettings(input: unknown): Promise<ActionResult> {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
   const parsed = PlatformSettingsSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
+  const data = {
+    paymentInstructions: parsed.data.paymentInstructions,
+    binanceQrDataUrl: parsed.data.binanceQrDataUrl,
+    binanceId: parsed.data.binanceId,
+    pagoMovilBank: parsed.data.pagoMovilBank,
+    pagoMovilPhone: parsed.data.pagoMovilPhone,
+    pagoMovilId: parsed.data.pagoMovilId,
+  };
 
   await prisma.platformSettings.upsert({
     where: { id: PLATFORM_SETTINGS_ID },
-    create: {
-      id: PLATFORM_SETTINGS_ID,
-      paymentInstructions: parsed.data.paymentInstructions,
-      binanceQrDataUrl: parsed.data.binanceQrDataUrl,
-      binanceId: parsed.data.binanceId,
-      pagoMovilBank: parsed.data.pagoMovilBank,
-      pagoMovilPhone: parsed.data.pagoMovilPhone,
-      pagoMovilId: parsed.data.pagoMovilId,
-      defaultMonthlyFeeUsdCents: parsed.data.defaultMonthlyFee,
-    },
-    update: {
-      paymentInstructions: parsed.data.paymentInstructions,
-      binanceQrDataUrl: parsed.data.binanceQrDataUrl,
-      binanceId: parsed.data.binanceId,
-      pagoMovilBank: parsed.data.pagoMovilBank,
-      pagoMovilPhone: parsed.data.pagoMovilPhone,
-      pagoMovilId: parsed.data.pagoMovilId,
-      defaultMonthlyFeeUsdCents: parsed.data.defaultMonthlyFee,
-    },
+    create: { id: PLATFORM_SETTINGS_ID, ...data },
+    update: data,
   });
 
-  revalidatePath("/admin");
+  await logPlatformAudit(session.userId, "pago.metodo", { detail: "Datos de pago actualizados" });
+  revalidatePath("/admin", "layout");
   revalidatePath("/billing");
   revalidatePath("/settings");
   return { success: true };
 }
 
-// Manual override for KR System's own USD/Bs rate (see
-// getPlatformExchangeRateInfo, lib/actions/billing.ts) — same schema and
-// pattern as a company's own updateExchangeRate in lib/actions/settings.ts,
-// just writing PlatformSettings instead of one Company.
+// Muestra u oculta un método en el pago de la suscripción de las empresas (Mi plan).
+export async function setPlatformPaymentMethodEnabled(method: "PAGO_MOVIL" | "BINANCE", enabled: boolean): Promise<ActionResult> {
+  const session = await requireSuperAdmin();
+  if (method !== "PAGO_MOVIL" && method !== "BINANCE") return { success: false, error: "Método inválido" };
+  const data = method === "PAGO_MOVIL" ? { pagoMovilEnabled: enabled } : { binanceEnabled: enabled };
+  await prisma.platformSettings.upsert({
+    where: { id: PLATFORM_SETTINGS_ID },
+    create: { id: PLATFORM_SETTINGS_ID, ...data },
+    update: data,
+  });
+  await logPlatformAudit(session.userId, "pago.metodo", { detail: `${method === "BINANCE" ? "Binance Pay" : "Pago Móvil"}: ${enabled ? "visible" : "oculto"}` });
+  revalidatePath("/admin", "layout");
+  revalidatePath("/settings");
+  revalidatePath("/billing");
+  return { success: true };
+}
+
+// Manual override for KR System's own USD/Bs rate (see getPlatformExchangeRateInfo,
+// lib/actions/billing.ts).
 export async function updatePlatformExchangeRate(formData: FormData): Promise<ActionResult> {
   await requireSuperAdmin();
   const parsed = ExchangeRateSchema.safeParse({ rate: formData.get("rate") });
@@ -584,15 +579,13 @@ export async function updatePlatformExchangeRate(formData: FormData): Promise<Ac
   });
 
   await invalidateCache("platformExchangeRateInfo");
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
   revalidatePath("/billing");
   return { success: true };
 }
 
-// Manual on-demand refresh — the same rate also gets pulled automatically
-// once a day by app/api/cron/bcv-rate/route.ts, so this button is only for
-// "I don't want to wait for tonight's run" (mirrors fetchAndUpdateBcvRate in
-// lib/actions/settings.ts).
+// Manual on-demand refresh — the same rate also gets pulled automatically once a day by
+// app/api/cron/bcv-rate/route.ts.
 export async function fetchAndUpdatePlatformBcvRate(): Promise<ActionResult> {
   await requireSuperAdmin();
 
@@ -610,7 +603,7 @@ export async function fetchAndUpdatePlatformBcvRate(): Promise<ActionResult> {
   });
 
   await invalidateCache("platformExchangeRateInfo");
-  revalidatePath("/admin");
+  revalidatePath("/admin", "layout");
   revalidatePath("/billing");
   return { success: true };
 }

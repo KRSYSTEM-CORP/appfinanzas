@@ -9,6 +9,8 @@ import { getSession } from "@/lib/session";
 import { RenewalBanner } from "@/components/nav/RenewalBanner";
 import { IdleLock } from "@/components/lock/IdleLock";
 import { renewalNotice } from "@/lib/renewal";
+import { AnnouncementBanners } from "@/components/nav/AnnouncementBanners";
+import { getActiveBanners } from "@/lib/platform-banner";
 import { FEATURES, hasFeature } from "@/lib/features";
 import { getBranding, getSidebarRate } from "@/lib/actions/settings";
 import { getPlan } from "@/lib/plans";
@@ -60,10 +62,12 @@ export default async function RootLayout({
   const canLoadAppChrome = Boolean(session && !session.billingBlocked && !session.locked && !session.needsPlanChoice);
   const renewal =
     canLoadAppChrome && session && !session.isSuperAdmin && session.role === "GERENTE" && (session.roleName == null || session.roleName === "Dueño") ? renewalNotice(session.nextPaymentDueDate, session.isExempt) : null;
-  const [branding, branches, sidebarRate] = await Promise.all([
+  const [branding, branches, sidebarRate, banners] = await Promise.all([
     session ? getBranding() : Promise.resolve({ logoDataUrl: null, brandColor: null, brandBackground: null }),
     canManage && canLoadAppChrome ? listBranches() : Promise.resolve([]),
     canLoadAppChrome ? getSidebarRate() : Promise.resolve(null),
+    // Avisos de la Plataforma: una falla de lectura nunca debe tumbar la app.
+    canLoadAppChrome && session && !session.isSuperAdmin ? getActiveBanners(session).catch(() => []) : Promise.resolve([]),
   ]);
   // The accent (buttons/links) applies in both themes, but the company's
   // chosen background and the surface colors derived from it only make sense
@@ -120,7 +124,10 @@ export default async function RootLayout({
           />
         )}
         {canLoadAppChrome && session && <KrPosTour hasSeenTour={session.hasSeenTour} />}
-        <main className={`flex-1 min-w-0 ${canLoadAppChrome ? "md:h-full md:overflow-y-auto max-md:pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-[1120px]" : "min-h-0"}`}>{children}</main>
+        <main className={`flex-1 min-w-0 ${canLoadAppChrome ? "md:h-full md:overflow-y-auto max-md:pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-[1120px]" : "min-h-0"}`}>
+          {banners.length > 0 && <AnnouncementBanners items={banners} />}
+          {children}
+        </main>
         <Toaster richColors closeButton position="bottom-right" />
       </body>
     </html>

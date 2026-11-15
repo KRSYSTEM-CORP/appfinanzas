@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { LIFETIME_PRICE_USD_CENTS } from "@/lib/billing";
 import { PaymentMethod, TaxCategory } from "@prisma/client";
 import { CURRENCIES } from "@/lib/currencies";
 import { zonedDateStringToUtc } from "@/lib/report-types";
@@ -534,8 +533,6 @@ export const PaymentReportSchema = z
       .string()
       .regex(/^data:image\/(png|jpe?g|webp);base64,/, "Adjunta el comprobante del pago (imagen)")
       .max(2_500_000, "La imagen es muy pesada (máx. 2 MB)"),
-    // The company chose the one-time lifetime plan instead of a monthly fee.
-    lifetime: z.boolean().default(false),
     // No longer collected in-app — the comprobante is sent by WhatsApp
     // instead (see app/billing/page.tsx). Kept optional, not removed, so
     // PaymentReport.proofImageDataUrl still displays for reports submitted
@@ -560,16 +557,6 @@ export const PaymentReportSchema = z
         });
       }
     });
-    if (data.lifetime) {
-      const total = data.lines.reduce((sum, l) => sum + l.amount, 0);
-      if (total < LIFETIME_PRICE_USD_CENTS) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["lines"],
-          message: `El pago único es de $${(LIFETIME_PRICE_USD_CENTS / 100).toFixed(2)}; el monto reportado es menor.`,
-        });
-      }
-    }
   });
 
 export type PaymentReportInput = z.infer<typeof PaymentReportSchema>;
@@ -618,10 +605,6 @@ export const PlatformSettingsSchema = z.object({
     .trim()
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
-  defaultMonthlyFee: z.preprocess(
-    blankToUndefined,
-    z.coerce.number().positive("El monto debe ser mayor a 0").transform(toCents).optional()
-  ),
 });
 
 export const FiscalDataSchema = z.object({

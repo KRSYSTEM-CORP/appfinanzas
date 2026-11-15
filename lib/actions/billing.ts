@@ -101,6 +101,8 @@ export type BillingInfo = {
   pagoMovilBank: string | null;
   pagoMovilPhone: string | null;
   pagoMovilId: string | null;
+  pagoMovilEnabled: boolean;
+  binanceEnabled: boolean;
 };
 
 export async function getBillingInfo(): Promise<BillingInfo> {
@@ -155,6 +157,8 @@ export async function getBillingInfo(): Promise<BillingInfo> {
     pagoMovilBank: settings?.pagoMovilBank ?? null,
     pagoMovilPhone: settings?.pagoMovilPhone ?? null,
     pagoMovilId: settings?.pagoMovilId ?? null,
+    pagoMovilEnabled: settings?.pagoMovilEnabled ?? true,
+    binanceEnabled: settings?.binanceEnabled ?? true,
   };
 }
 
@@ -192,7 +196,6 @@ export async function submitPaymentReport(input: unknown): Promise<ActionResult>
         reporterPhone: parsed.data.reporterPhone,
         reporterEmail: parsed.data.reporterEmail,
         proofImageDataUrl: parsed.data.proofImageDataUrl,
-        isLifetime: parsed.data.lifetime,
         lines: {
           create: parsed.data.lines.map((line) => ({
             paymentMethod: line.paymentMethod,
