@@ -65,16 +65,17 @@ export async function askModel(system: string, user: string, maxTokens = 700): P
       const configured = process.env.AI_MODEL;
       // Primero el modelo actual, luego el configurado y los alternos. Un 404/400 (modelo retirado o
       // parámetro no aceptado) pasa de inmediato al siguiente; nunca se espera de más: el total
-      // se corta a los 45 s para no agotar la función.
+      // se corta a los 55 s (la página del asistente permite 60).
       const models = [...new Set([...(configured ? [configured] : []), ...FALLBACK_MODELS])];
-      const deadline = Date.now() + 45_000;
+      const deadline = Date.now() + 55_000;
       let last = "sin intentos";
       for (const model of models) {
-        // Esfuerzo de razonamiento mínimo para responder rápido; si el modelo no lo acepta, sin él.
-        for (const effort of ["minimal", "none", null] as const) {
+        // Razonamiento «low»: los modelos Gemini 3 no pueden apagarlo ('minimal'/'none' dan 400 o se quedan
+        // pensando). Si el modelo no acepta el parámetro, se prueba sin él.
+        for (const effort of ["low", null] as const) {
           const left = deadline - Date.now();
           if (left < 4_000) return { ok: false, reason: `tiempo agotado · ${last}` };
-          const r = await callCompatible(base, key, model, system, user, maxTokens, effort, Math.min(20_000, left)).catch(
+          const r = await callCompatible(base, key, model, system, user, maxTokens, effort, Math.min(35_000, left)).catch(
             (e: unknown) => ({ status: 0, detail: e instanceof Error ? e.message : "error" })
           );
           if ("text" in r) return { ok: true, text: r.text };

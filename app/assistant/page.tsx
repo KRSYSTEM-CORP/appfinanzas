@@ -9,6 +9,8 @@ import { getAssistantStatus, listAssistantHistory, listMyCreditRequests } from "
 import { AI_APPLY_COST } from "@/lib/assistant";
 
 export const dynamic = "force-dynamic";
+// Las consultas al modelo (acciones del servidor de esta página) pueden tardar; 60 s de tope.
+export const maxDuration = 60;
 
 export default async function AssistantPage() {
   const session = await requirePermission("assistant");
