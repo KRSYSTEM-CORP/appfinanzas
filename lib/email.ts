@@ -133,6 +133,50 @@ export async function sendPaymentReportEmail(
   );
 }
 
+// Aviso al administrador cuando una empresa paga una recarga de créditos del Asistente IA: mismo
+// formato que el de la suscripción (contacto, referencia, comprobante adjunto y botón para aprobar).
+export async function sendCreditRequestEmail(
+  to: string,
+  companyName: string,
+  credits: number,
+  priceUsdCents: number,
+  contact: PaymentReportContact & { method: string },
+): Promise<void> {
+  const amount = (priceUsdCents / 100).toLocaleString("es-VE", { style: "currency", currency: "USD" });
+  const phoneDigits = contact.phone.replace(/\D/g, "");
+  const waUrl = phoneDigits
+    ? `https://wa.me/${phoneDigits.replace(/^0/, "58")}?text=${encodeURIComponent(
+        `Hola ${contact.name}, recibimos tu comprobante de la recarga de ${credits} créditos de ${companyName}.`,
+      )}`
+    : null;
+  const proof = contact.proofImageDataUrl?.match(/^data:image\/(png|jpe?g|webp);base64,(.+)$/);
+  const attachments = proof
+    ? [{ filename: `comprobante-creditos-${companyName.replace(/[^\w-]+/g, "-")}.${proof[1] === "jpeg" ? "jpg" : proof[1]}`, content: proof[2] }]
+    : undefined;
+  await send(
+    to,
+    `Recarga de créditos IA por aprobar — ${companyName}`,
+    `
+      <h2>Recarga de créditos por aprobar</h2>
+      <p><strong>${escapeHtml(companyName)}</strong> pagó <strong>${credits} créditos</strong> del Asistente IA por <strong>${amount}</strong> (${escapeHtml(contact.method)}).</p>
+      <ul style="padding-left: 18px; color: #333;">
+        <li>Nombre: <strong>${escapeHtml(contact.name)}</strong></li>
+        <li>Teléfono: <strong>${escapeHtml(contact.phone)}</strong></li>
+        ${contact.email ? `<li>Correo: <strong>${escapeHtml(contact.email)}</strong></li>` : ""}
+        ${contact.references.length ? `<li>Referencia: <strong>${contact.references.map(escapeHtml).join(", ")}</strong></li>` : ""}
+      </ul>
+      ${waUrl ? `<p><a href="${waUrl}">Escribirle por WhatsApp</a></p>` : ""}
+      <p>
+        <a href="${APP_URL}/admin/aprobaciones" style="display: inline-block; background: #433ddd; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+          Revisar y aprobar
+        </a>
+      </p>
+      <p>El comprobante va adjunto. Los créditos se suman a la empresa en cuanto apruebes.</p>
+    `,
+    attachments,
+  );
+}
+
 export async function sendPasswordResetEmail(to: string, token: string): Promise<void> {
   const resetUrl = `${APP_URL}/reset-password/${token}`;
   await send(

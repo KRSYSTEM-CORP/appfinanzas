@@ -4,7 +4,9 @@ import { aiConfigured, askModel } from "@/lib/ai-provider";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/session";
-import { withTenant } from "@/lib/tenant-db";
+import { z } from "zod";
+import { withSuperAdmin, withTenant } from "@/lib/tenant-db";
+import { sendCreditRequestEmail } from "@/lib/email";
 import { dayBoundsUtc, todayDateString } from "@/lib/report-types";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { getPlan } from "@/lib/plans";
@@ -13,11 +15,14 @@ import { planSale, resolveBlocks, type DataCtx } from "@/lib/assistant-data";
 import type { ResolvedBlock, SalePreview } from "@/lib/assistant-types";
 import { completeSale, voidSale } from "@/lib/actions/sales";
 import {
-  AI_APPLY_COST,
+  AI_ASK_COST,
+  AI_BIG_COST,
+  MAX_HISTORY_TURNS,
+  MAX_QUESTION_CHARS,
+  consultCost,
   ProposalSchema,
   creditsRemaining,
   findPack,
-  dailyAskCap,
   parseAssistantReply,
   periodKey,
   spendCredits,
@@ -33,8 +38,6 @@ export type AssistantStatus = {
   planCredits: number;
   creditsLeft: number;
   extraCredits: number;
-  askedToday: number;
-  askCap: number;
 };
 
 function isConfigured(): boolean {
@@ -46,7 +49,7 @@ export async function getAssistantStatus(): Promise<AssistantStatus> {
   const c = await withTenant(companyId, (tx) =>
     tx.company.findUnique({
       where: { id: companyId },
-      select: { aiCreditsExtra: true, aiCreditsUsed: true, aiPeriod: true, aiAskDay: true, aiAskCount: true },
+      select: { aiCreditsExtra: true, aiCreditsUsed: true, aiPeriod: true },
     })
   );
   const now = new Date();
@@ -58,8 +61,6 @@ export async function getAssistantStatus(): Promise<AssistantStatus> {
     planCredits: getPlan(plan).aiCredits,
     creditsLeft: left.total,
     extraCredits: left.extra,
-    askedToday: c?.aiAskDay === todayDateString() ? c.aiAskCount : 0,
-    askCap: dailyAskCap(plan),
   };
 }
 
@@ -146,7 +147,7 @@ Cuando pidan un PDF, reporte, lista o documento: incluye el bloque «table» del
 - Nunca digas que ya hiciste una acción: solo la propones; se ejecuta cuando el usuario confirma.`;
 
 export type AskResult =
-  | { success: true; reply: AssistantReply; entryId: string | null; blocks: ResolvedBlock[]; salePreview: SalePreview | null; saleOk: boolean }
+  | { success: true; reply: AssistantReply; entryId: string | null; blocks: ResolvedBlock[]; salePreview: SalePreview | null; saleOk: boolean; cost: number; creditsLeft: number }
   | { success: false; error: string };
 
 export type ChatTurn = { q: string; a: string };
@@ -165,26 +166,25 @@ export async function askAssistant(question: string, history: ChatTurn[] = []): 
 
 async function askAssistantInner(question: string, history: ChatTurn[]): Promise<AskResult> {
   const { companyId, plan, branchId, userId } = await requireManager();
-  const q = question.trim().slice(0, 600);
+  const q = question.trim().slice(0, MAX_QUESTION_CHARS);
   if (q.length < 2) return { success: false, error: "Escribe tu pregunta" };
   if (!isConfigured()) return { success: false, error: "El asistente todavía no está activado en esta plataforma." };
 
-  // Tope diario de consultas, contado en la base de datos.
-  const today = todayDateString();
-  const cap = dailyAskCap(plan);
-  const allowed = await withTenant(companyId, async (tx) => {
-    const c = await tx.company.findUnique({ where: { id: companyId }, select: { aiAskDay: true, aiAskCount: true } });
-    const count = c?.aiAskDay === today ? c.aiAskCount : 0;
-    if (count >= cap) return false;
-    await tx.company.update({ where: { id: companyId }, data: { aiAskDay: today, aiAskCount: count + 1 } });
-    return true;
+  // Cada consulta cuesta créditos: se verifica el saldo ANTES de llamar al modelo (mínimo 1) y se
+  // cobra DESPUÉS, solo si hubo respuesta; un fallo del proveedor nunca descuenta créditos.
+  const credits = await withTenant(companyId, async (tx) => {
+    const c = await tx.company.findUnique({ where: { id: companyId }, select: { aiCreditsExtra: true, aiCreditsUsed: true, aiPeriod: true } });
+    const used = c?.aiPeriod === periodKey(new Date()) ? c.aiCreditsUsed : 0;
+    return creditsRemaining({ plan, usedThisPeriod: used, extra: c?.aiCreditsExtra ?? 0 }).total;
   });
-  if (!allowed) return { success: false, error: `Llegaste al límite de ${cap} consultas de hoy. Mañana se reinicia.` };
+  if (credits < AI_ASK_COST) {
+    return { success: false, error: `No tienes créditos. Cada consulta cuesta ${AI_ASK_COST} crédito (${AI_BIG_COST} si es un documento o consulta grande). Recarga créditos en Mi Plan.` };
+  }
 
   const ctx = await buildContext(companyId, branchId, q);
   // Memoria corta: las últimas 3 vueltas (recortadas) para entender «y ese producto…».
   const convo = history
-    .slice(-3)
+    .slice(-MAX_HISTORY_TURNS)
     .map((t) => `Usuario: ${String(t.q).slice(0, 300)}\nAsistente: ${String(t.a).slice(0, 500)}`)
     .join("\n");
   const model = await askModel(
@@ -194,10 +194,6 @@ async function askAssistantInner(question: string, history: ChatTurn[]): Promise
   );
   if (!model.ok) {
     console.error("[asistente] sin respuesta del modelo:", model.reason);
-    // Se devuelve la consulta del día: un fallo del proveedor no debe gastar el cupo del usuario.
-    await withTenant(companyId, (tx) =>
-      tx.company.updateMany({ where: { id: companyId, aiAskDay: today, aiAskCount: { gt: 0 } }, data: { aiAskCount: { decrement: 1 } } })
-    ).catch(() => undefined);
     const why = model.reason.startsWith("auth:")
       ? "La llave del proveedor de IA no es válida o no tiene permiso. Avisa a KR System."
       : model.reason.startsWith("cuota:")
@@ -207,6 +203,27 @@ async function askAssistantInner(question: string, history: ChatTurn[]): Promise
   }
   const raw = model.text;
   const reply = parseAssistantReply(raw);
+  // Costo según el tamaño de la respuesta; si no alcanzan los créditos, no se cobra ni se entrega.
+  const cost = consultCost(reply);
+  if (credits < cost) {
+    return {
+      success: false,
+      error: `Esta respuesta es un documento o una consulta grande (${cost} créditos) y te quedan ${credits}. Recarga créditos en Mi Plan o pregunta algo más corto.`,
+    };
+  }
+  const creditsLeft = await withTenant(companyId, async (tx) => {
+    const c = await tx.company.findUnique({ where: { id: companyId }, select: { aiCreditsExtra: true, aiCreditsUsed: true, aiPeriod: true } });
+    const period = periodKey(new Date());
+    const used = c?.aiPeriod === period ? c.aiCreditsUsed : 0;
+    const spend = spendCredits({ plan, usedThisPeriod: used, extra: c?.aiCreditsExtra ?? 0 }, cost);
+    if (!spend) return null;
+    await tx.company.update({
+      where: { id: companyId },
+      data: { aiPeriod: period, aiCreditsUsed: used + spend.planUsed, aiCreditsExtra: (c?.aiCreditsExtra ?? 0) - spend.extraUsed },
+    });
+    return creditsRemaining({ plan, usedThisPeriod: used + spend.planUsed, extra: (c?.aiCreditsExtra ?? 0) - spend.extraUsed }).total;
+  });
+  if (creditsLeft == null) return { success: false, error: "No alcanzan tus créditos para esta respuesta. Recarga créditos en Mi Plan." };
   // El historial es un extra: si no se puede guardar, la respuesta igual se entrega.
   let entryId: string | null = null;
   try {
@@ -243,7 +260,7 @@ async function askAssistantInner(question: string, history: ChatTurn[]): Promise
   } catch (e) {
     console.error("[asistente] bloques/venta fallaron", e instanceof Error ? e.message : e);
   }
-  return { success: true, reply, entryId, blocks, salePreview, saleOk };
+  return { success: true, reply, entryId, blocks, salePreview, saleOk, cost, creditsLeft };
 }
 
 export type HistoryEntry = {
@@ -281,7 +298,7 @@ export async function listAssistantHistory(): Promise<HistoryEntry[]> {
 // nada de lo que venga del navegador o del modelo se ejecuta sin comprobarlo.
 export async function applyProposal(input: unknown, entryId?: string | null): Promise<ActionResult & { summary?: string }> {
   const session = await requireManager();
-  const { companyId, userId, plan } = session;
+  const { companyId, userId } = session;
   const parsed = ProposalSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "La propuesta no es válida" };
   const p: Proposal = parsed.data;
@@ -293,15 +310,8 @@ export async function applyProposal(input: unknown, entryId?: string | null): Pr
 
   try {
     const summary = await withTenant(companyId, async (tx) => {
-      const c = await tx.company.findUnique({
-        where: { id: companyId },
-        select: { aiCreditsExtra: true, aiCreditsUsed: true, aiPeriod: true, referenceCurrency: true },
-      });
+      const c = await tx.company.findUnique({ where: { id: companyId }, select: { referenceCurrency: true } });
       const now = new Date();
-      const period = periodKey(now);
-      const used = c?.aiPeriod === period ? c.aiCreditsUsed : 0;
-      const spend = spendCredits({ plan, usedThisPeriod: used, extra: c?.aiCreditsExtra ?? 0 }, AI_APPLY_COST);
-      if (!spend) throw new Error(`No tienes créditos suficientes (cada aplicación cuesta ${AI_APPLY_COST}).`);
 
       let text: string;
       let undoData: Prisma.InputJsonValue;
@@ -328,14 +338,6 @@ export async function applyProposal(input: unknown, entryId?: string | null): Pr
         throw new Error("Esta propuesta no se puede aplicar.");
       }
 
-      await tx.company.update({
-        where: { id: companyId },
-        data: {
-          aiPeriod: period,
-          aiCreditsUsed: used + spend.planUsed,
-          aiCreditsExtra: (c?.aiCreditsExtra ?? 0) - spend.extraUsed,
-        },
-      });
       if (entryId) {
         await tx.assistantEntry.updateMany({ where: { id: entryId, companyId, userId }, data: { applied: true, appliedAt: now, undoData, undone: false } });
       }
@@ -357,27 +359,17 @@ async function applySale(
   p: Extract<Proposal, { type: "SALE" }>,
   entryId?: string | null
 ): Promise<ActionResult & { summary?: string }> {
-  const { companyId, userId, plan, branchId } = session;
+  const { companyId, userId, branchId } = session;
   try {
     const prep = await withTenant(companyId, async (tx) => {
-      const c = await tx.company.findUnique({
-        where: { id: companyId },
-        select: { aiCreditsExtra: true, aiCreditsUsed: true, aiPeriod: true, referenceCurrency: true },
-      });
-      const used = c?.aiPeriod === periodKey(new Date()) ? c.aiCreditsUsed : 0;
-      const spend = spendCredits({ plan, usedThisPeriod: used, extra: c?.aiCreditsExtra ?? 0 }, AI_APPLY_COST);
-      if (!spend) throw new Error(`No tienes créditos suficientes (cada aplicación cuesta ${AI_APPLY_COST}).`);
+      const c = await tx.company.findUnique({ where: { id: companyId }, select: { referenceCurrency: true } });
       const sp = await planSale(tx, { companyId, branchId, currency: c?.referenceCurrency ?? "USD" }, p);
-      return { c, used, spend, sp };
+      return { sp };
     });
     if (!prep.sp.ok || !prep.sp.input) throw new Error(prep.sp.preview.issues[0] ?? "La venta no es válida.");
     const sale = await completeSale(prep.sp.input);
     if (!sale.success) throw new Error(sale.error);
     await withTenant(companyId, async (tx) => {
-      await tx.company.update({
-        where: { id: companyId },
-        data: { aiPeriod: periodKey(new Date()), aiCreditsUsed: prep.used + prep.spend.planUsed, aiCreditsExtra: (prep.c?.aiCreditsExtra ?? 0) - prep.spend.extraUsed },
-      });
       if (entryId) {
         await tx.assistantEntry.updateMany({ where: { id: entryId, companyId, userId }, data: { applied: true, appliedAt: new Date(), undoData: { kind: "SALE", saleId: sale.saleId }, undone: false } });
       }
@@ -406,21 +398,66 @@ export async function listMyCreditRequests(): Promise<CreditRequestRow[]> {
   );
 }
 
-// La empresa pide un paquete: queda pendiente hasta que KR System confirme el pago.
-export async function requestCreditPack(credits: number, reference: string): Promise<ActionResult> {
-  const { companyId, userId } = await requireManager();
-  const pack = findPack(credits);
-  const ref = reference.trim().slice(0, 200);
+const CreditRequestSchema = z.object({
+  credits: z.number().int(),
+  method: z.string().trim().min(2).max(40),
+  reference: z.string().trim().min(4, "Escribe la referencia del pago").max(40),
+  name: z.string().trim().min(2, "Escribe tu nombre").max(80),
+  phone: z.string().trim().min(10, "Escribe tu teléfono").max(30),
+  email: z.string().trim().max(120).optional(),
+  proofImageDataUrl: z
+    .string()
+    .regex(/^data:image\/(png|jpe?g|webp);base64,/, "El comprobante debe ser una imagen")
+    .max(2_500_000, "El comprobante es demasiado grande"),
+});
+
+// La empresa paga un paquete (mismo flujo que la suscripción): queda pendiente hasta que KR System
+// apruebe, y al administrador le llega el correo con el comprobante adjunto.
+export async function requestCreditPack(input: unknown): Promise<ActionResult> {
+  const { companyId, companyName, userId } = await requireManager();
+  const parsed = CreditRequestSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  const d = parsed.data;
+  const pack = findPack(d.credits);
   if (!pack) return { success: false, error: "Elige un paquete válido" };
-  if (ref.length < 3) return { success: false, error: "Escribe la referencia o el comprobante del pago" };
   const pending = await withTenant(companyId, (tx) => tx.aiCreditRequest.count({ where: { companyId, status: "PENDING" } }));
   if (pending >= 3) return { success: false, error: "Ya tienes 3 solicitudes pendientes. Espera a que se aprueben." };
   await withTenant(companyId, (tx) =>
     tx.aiCreditRequest.create({
-      data: { companyId, requestedBy: userId, credits: pack.credits, priceCents: pack.priceCents, reference: ref },
+      data: {
+        companyId,
+        requestedBy: userId,
+        credits: pack.credits,
+        priceCents: pack.priceCents,
+        reference: d.reference,
+        paymentMethod: d.method,
+        reporterName: d.name,
+        reporterPhone: d.phone,
+        reporterEmail: d.email || null,
+        proofImageDataUrl: d.proofImageDataUrl,
+      },
     })
   );
+  // Ya está guardada: un fallo del correo nunca rompe el flujo (solo se registra).
+  try {
+    const admins = await withSuperAdmin((tx) => tx.user.findMany({ where: { isSuperAdmin: true }, select: { email: true } }));
+    await Promise.allSettled(
+      admins.map((a) =>
+        sendCreditRequestEmail(a.email, companyName, pack.credits, pack.priceCents, {
+          name: d.name,
+          phone: d.phone,
+          email: d.email ?? "",
+          references: [d.reference],
+          proofImageDataUrl: d.proofImageDataUrl,
+          method: d.method,
+        })
+      )
+    );
+  } catch (err) {
+    console.error("[asistente] no se pudo avisar al administrador de la recarga:", err);
+  }
   revalidatePath("/assistant");
+  revalidatePath("/settings");
   return { success: true };
 }
 

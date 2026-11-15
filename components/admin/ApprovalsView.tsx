@@ -28,13 +28,25 @@ export type PendingReportRow = {
   company: { name: string };
   lines: { paymentMethod: PaymentMethod; amountUsdCents: number; reference: string | null }[];
 };
-export type CreditRequestRow = { id: string; credits: number; priceCents: number; reference: string; createdAt: Date; company: { name: string } };
+export type CreditRequestRow = {
+  id: string;
+  credits: number;
+  priceCents: number;
+  reference: string;
+  createdAt: Date;
+  paymentMethod: string | null;
+  reporterName: string | null;
+  reporterPhone: string | null;
+  reporterEmail: string | null;
+  proofImageDataUrl: string | null;
+  company: { name: string };
+};
 
 export function ApprovalsView({ companies, reports, credits }: { companies: PendingCompanyRow[]; reports: PendingReportRow[]; credits: CreditRequestRow[] }) {
   const { pending, run } = useAction();
   const [rejecting, setRejecting] = useState<PendingReportRow | null>(null);
   const [note, setNote] = useState("");
-  const [proof, setProof] = useState<PendingReportRow | null>(null);
+  const [proof, setProof] = useState<{ company: { name: string }; proofImageDataUrl: string | null } | null>(null);
   const totalPending = reports.reduce((s, r) => s + r.lines.reduce((a, l) => a + l.amountUsdCents, 0), 0);
 
   return (
@@ -98,12 +110,25 @@ export function ApprovalsView({ companies, reports, credits }: { companies: Pend
         {credits.length === 0 ? (
           <EmptyCard>No hay solicitudes pendientes.</EmptyCard>
         ) : (
-          credits.map((r) => (
-            <Row key={r.id} title={r.company.name} sub={`${r.credits} créditos · ${formatUSD(r.priceCents)} · ${formatDate(r.createdAt)} · ref. ${r.reference}`}>
-              <Button disabled={pending} onClick={() => run(() => resolveCreditRequest(r.id, true), "Créditos sumados a la empresa")}>Aprobar</Button>
-              <Button variant="outline" disabled={pending} onClick={() => run(() => resolveCreditRequest(r.id, false), "Solicitud rechazada")}>Rechazar</Button>
-            </Row>
-          ))
+          credits.map((r) => {
+            const wa = whatsappUrl(r.reporterPhone, `Hola ${r.reporterName ?? ""}, recibimos tu comprobante de la recarga de ${r.credits} créditos de ${r.company.name}.`);
+            return (
+              <Row
+                key={r.id}
+                title={r.company.name}
+                sub={[
+                  `${r.credits} créditos · ${formatUSD(r.priceCents)} · ${formatDate(r.createdAt)}`,
+                  [r.paymentMethod, `ref. ${r.reference}`].filter(Boolean).join(" · "),
+                  [r.reporterName, r.reporterPhone, r.reporterEmail].filter(Boolean).join(" · "),
+                ].filter(Boolean).join(" — ")}
+              >
+                <Button disabled={pending} onClick={() => run(() => resolveCreditRequest(r.id, true), "Créditos sumados a la empresa")}>Aprobar</Button>
+                <Button variant="outline" disabled={pending} onClick={() => run(() => resolveCreditRequest(r.id, false), "Solicitud rechazada")}>Rechazar</Button>
+                {r.proofImageDataUrl && <Button variant="outline" onClick={() => setProof(r)}>Ver comprobante</Button>}
+                {wa && <Button variant="outline" render={<a href={wa} target="_blank" rel="noopener noreferrer" />}>WhatsApp</Button>}
+              </Row>
+            );
+          })
         )}
       </SectionCard>
 

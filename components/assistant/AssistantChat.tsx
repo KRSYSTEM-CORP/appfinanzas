@@ -2,17 +2,17 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BanknoteIcon, BarChart3Icon, CheckIcon, FileTextIcon, MicIcon, PackageIcon, SendIcon, SparklesIcon, ZapIcon } from "lucide-react";
+import { BanknoteIcon, BarChart3Icon, CheckIcon, FileTextIcon, MicIcon, PackageIcon, SendIcon, SparklesIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { applyProposal, askAssistant, undoProposal, type AssistantStatus, type HistoryEntry } from "@/lib/actions/assistant";
-import type { Proposal } from "@/lib/assistant";
+import { AI_ASK_COST, AI_BIG_COST, MAX_CONVERSATION_MESSAGES, MAX_QUESTION_CHARS, type Proposal } from "@/lib/assistant";
 import type { ResolvedBlock, SalePreview } from "@/lib/assistant-types";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import { AssistantBlocks, SalePreviewCard } from "@/components/assistant/AssistantBlocks";
 
 type Msg =
   | { role: "user"; text: string }
-  | { role: "assistant"; text: string; proposal: Proposal | null; state?: "open" | "applied" | "dropped" | "undone"; canUndo?: boolean; note?: string; entryId?: string | null; blocks?: ResolvedBlock[]; salePreview?: SalePreview | null; saleOk?: boolean };
+  | { role: "assistant"; text: string; proposal: Proposal | null; state?: "open" | "applied" | "dropped" | "undone"; canUndo?: boolean; note?: string; entryId?: string | null; cost?: number; blocks?: ResolvedBlock[]; salePreview?: SalePreview | null; saleOk?: boolean };
 
 const SUGGESTIONS = [
   { title: "¿Cuánto vendí este mes?", desc: "Con gráfica por día y el total del período.", prompt: "Muéstrame una gráfica de mis ventas por día de este mes y cuánto he vendido en total.", Icon: BarChart3Icon },
@@ -53,13 +53,12 @@ function fromHistory(history: HistoryEntry[]): Msg[] {
   ]);
 }
 
-export function AssistantChat({ status, applyCost, history = [], company }: { status: AssistantStatus; applyCost: number; history?: HistoryEntry[]; company: DeliveryNoteCompany }) {
+export function AssistantChat({ status, history = [], company }: { status: AssistantStatus; history?: HistoryEntry[]; company: DeliveryNoteCompany }) {
   const router = useRouter();
   const [msgs, setMsgs] = useState<Msg[]>(() => fromHistory(history));
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const [creditsLeft, setCreditsLeft] = useState(status.creditsLeft);
-  const [asked, setAsked] = useState(status.askedToday);
   const [isPending, startTransition] = useTransition();
   const recRef = useRef<SpeechRec | null>(null);
 
@@ -78,8 +77,8 @@ export function AssistantChat({ status, applyCost, history = [], company }: { st
         }
         const r = await askAssistant(question, turns.slice(-3));
         if (r.success) {
-          setAsked((n) => n + 1);
-          setMsgs((m) => [...m, { role: "assistant", text: r.reply.answer, proposal: r.reply.proposal, state: "open", entryId: r.entryId, blocks: r.blocks, salePreview: r.salePreview, saleOk: r.saleOk }]);
+          setCreditsLeft(r.creditsLeft);
+          setMsgs((m) => [...m, { role: "assistant", text: r.reply.answer, proposal: r.reply.proposal, state: "open", entryId: r.entryId, cost: r.cost, blocks: r.blocks, salePreview: r.salePreview, saleOk: r.saleOk }]);
         } else {
           setMsgs((m) => [...m, { role: "assistant", text: r.error, proposal: null }]);
         }
@@ -105,7 +104,6 @@ export function AssistantChat({ status, applyCost, history = [], company }: { st
         )
       );
       if (r.success) {
-        setCreditsLeft((c) => Math.max(0, c - applyCost));
         router.refresh();
       }
     });
@@ -174,7 +172,7 @@ export function AssistantChat({ status, applyCost, history = [], company }: { st
               </span>
               <h2 className="mb-1 mt-3 text-[clamp(1.4rem,4vw,1.9rem)] font-bold tracking-[-0.03em]">¿Qué hacemos hoy por tu negocio?</h2>
               <p className="mx-auto max-w-[46ch] text-muted-foreground">
-                Primero te muestro los cambios y su costo en créditos, gratis. Tú decides si continuar.
+                Pregúntame lo que quieras de tu negocio: datos, gráficos, PDF o una venta. Cada consulta usa créditos; las acciones se confirman antes de aplicarse.
               </p>
             </div>
             <div className="mt-2.5 grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,250px),1fr))" }}>
@@ -205,6 +203,7 @@ export function AssistantChat({ status, applyCost, history = [], company }: { st
               <div key={i} className="flex w-full max-w-[min(100%,560px)] flex-col self-start rounded-[20px] rounded-bl-[6px] bg-muted px-3.5 py-3">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
                   <SparklesIcon className="size-3.5" aria-hidden /> Asistente IA
+                  {m.cost != null && <span className="ml-auto rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-bold">−{m.cost} {m.cost === 1 ? "crédito" : "créditos"}</span>}
                 </div>
                 <p className="mb-2 mt-1 whitespace-pre-wrap">{m.text}</p>
                 {m.blocks && m.blocks.length > 0 && <AssistantBlocks blocks={m.blocks} company={company} />}
@@ -233,24 +232,18 @@ export function AssistantChat({ status, applyCost, history = [], company }: { st
                       </div>
                     ) : (
                       <>
-                        <div className="mt-2.5 flex items-center justify-between gap-2.5 rounded-xl bg-warning/18 px-3 py-2.5 font-bold text-warning">
-                          <span className="inline-flex items-center gap-1.5">
-                            <ZapIcon className="size-4" aria-hidden /> Costo para aplicar
-                          </span>
-                          <b>{applyCost} {applyCost === 1 ? "crédito" : "créditos"}</b>
-                        </div>
-                        <p className="mb-2.5 mt-1 text-xs text-muted-foreground">
-                          Ver la propuesta es gratis. Solo se cobra si confirmas: {applyCost} créditos por uso.
+                        <p className="mb-2.5 mt-2 text-xs text-muted-foreground">
+                          Esta acción ya está incluida en el costo de esta consulta. Revisa la vista previa y confirma solo si es correcta.
                         </p>
                         {m.note && <p className="mb-2 text-xs text-destructive">{m.note}</p>}
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
-                            disabled={isPending || creditsLeft < applyCost || (m.proposal.type === "SALE" && m.saleOk === false)}
+                            disabled={isPending || (m.proposal.type === "SALE" && m.saleOk === false)}
                             onClick={() => apply(i, m.proposal as Proposal, m.entryId)}
                             className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground transition-transform active:scale-[0.97] disabled:opacity-50"
                           >
-                            <CheckIcon className="size-4" aria-hidden /> Aplicar · {applyCost} créditos
+                            <CheckIcon className="size-4" aria-hidden /> Confirmar y aplicar
                           </button>
                           <button
                             type="button"
@@ -260,7 +253,6 @@ export function AssistantChat({ status, applyCost, history = [], company }: { st
                             Descartar
                           </button>
                         </div>
-                        {creditsLeft < applyCost && <p className="mt-2 text-xs text-destructive">No tienes créditos suficientes.</p>}
                       </>
                     )}
                   </div>
@@ -287,19 +279,29 @@ export function AssistantChat({ status, applyCost, history = [], company }: { st
           send(text);
         }}
       >
-        <div className="mx-1 mb-2 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+        <div className="mx-1 mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>
-            Consultar y crear propuestas es <b>gratis</b> · solo se cobra al confirmar: {applyCost} créditos
+            <b>{AI_ASK_COST} crédito</b> por consulta · <b>{AI_BIG_COST} créditos</b> por documento o consulta grande
           </span>
-          <span className="ml-auto tabular-nums">Consultas hoy: {asked} de {status.askCap}</span>
+          <span className="ml-auto tabular-nums">Créditos: <b>{creditsLeft}</b></span>
+          {msgs.length > 0 && (
+            <button type="button" onClick={() => { setMsgs([]); setText(""); }} className="font-semibold text-primary">
+              Nueva conversación
+            </button>
+          )}
         </div>
+        {msgs.length >= MAX_CONVERSATION_MESSAGES && (
+          <p role="status" className="mx-1 mb-2 rounded-xl bg-warning/18 px-3 py-2 text-xs font-semibold text-warning">
+            Esta conversación ya es larga y el asistente solo recuerda lo más reciente. Empieza una nueva para mejores respuestas.
+          </p>
+        )}
         <div className="flex gap-2">
           <input
             aria-label="Tu solicitud"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={listening ? "Escuchando… habla ahora" : "Escribe o dicta lo que necesitas…"}
-            maxLength={600}
+            maxLength={MAX_QUESTION_CHARS}
             autoComplete="off"
             className="min-h-12 min-w-0 flex-1 rounded-full border-[1.5px] bg-background px-[18px] outline-none focus-visible:border-ring"
           />
@@ -315,7 +317,7 @@ export function AssistantChat({ status, applyCost, history = [], company }: { st
           </button>
           <button
             type="submit"
-            disabled={isPending || text.trim().length < 2}
+            disabled={isPending || text.trim().length < 2 || creditsLeft < AI_ASK_COST}
             aria-label="Enviar"
             className="grid size-12 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition active:scale-[0.94] disabled:opacity-50"
           >

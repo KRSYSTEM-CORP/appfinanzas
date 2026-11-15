@@ -146,7 +146,7 @@ export async function listPendingCreditRequests() {
     tx.aiCreditRequest.findMany({
       where: { status: "PENDING" },
       orderBy: { createdAt: "asc" },
-      select: { id: true, credits: true, priceCents: true, reference: true, createdAt: true, company: { select: { name: true } } },
+      select: { id: true, credits: true, priceCents: true, reference: true, createdAt: true, paymentMethod: true, reporterName: true, reporterPhone: true, reporterEmail: true, proofImageDataUrl: true, company: { select: { name: true } } },
     })
   );
 }

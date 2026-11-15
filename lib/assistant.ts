@@ -2,9 +2,17 @@ import { z } from "zod";
 import { PLANS, type PlanId } from "@/lib/plans";
 import { ASSISTANT_LINKS, DATASETS } from "@/lib/assistant-types";
 
-// Consultar es gratis (con tope diario para cuidar el costo); aplicar una
-// propuesta cuesta créditos, solo si el usuario confirma.
-export const AI_APPLY_COST = 5;
+// Cada consulta cuesta créditos (sin tope diario): 1 por una consulta normal y 5 cuando la respuesta
+// es un documento o una consulta grande (tabla/PDF, varios bloques o una acción propuesta).
+export const AI_ASK_COST = 1;
+export const AI_BIG_COST = 5;
+// Compatibilidad: ya no se cobra al aplicar; la acción va incluida en el costo de la consulta.
+export const AI_APPLY_COST = 0;
+
+// Límites de contexto: lo que el asistente recibe en cada consulta.
+export const MAX_QUESTION_CHARS = 500;
+export const MAX_HISTORY_TURNS = 3;
+export const MAX_CONVERSATION_MESSAGES = 30;
 
 // Paquetes de créditos extra (no vencen). Precio en dólares.
 export const AI_PACKS = [
@@ -17,13 +25,6 @@ export const AI_PACKS = [
 
 export function findPack(credits: number) {
   return AI_PACKS.find((p) => p.credits === credits) ?? null;
-}
-
-// Tope diario de consultas, igual para todos los planes.
-export const DAILY_ASK_CAP = 20;
-export function dailyAskCap(_plan?: PlanId): number {
-  void _plan;
-  return DAILY_ASK_CAP;
 }
 
 export type CreditsState = {
@@ -102,6 +103,12 @@ export const BlockSpecSchema = z.discriminatedUnion("type", [
 export type BlockSpec = z.infer<typeof BlockSpecSchema>;
 
 export type AssistantReply = { answer: string; proposal: Proposal | null; blocks: BlockSpec[] };
+
+// Costo de una respuesta: grande si trae una tabla (documento/PDF), varios bloques o una acción propuesta.
+export function consultCost(reply: AssistantReply): number {
+  const big = reply.proposal != null || reply.blocks.length >= 2 || reply.blocks.some((b) => b.type === "table");
+  return big ? AI_BIG_COST : AI_ASK_COST;
+}
 
 // Lee la respuesta del modelo: JSON {answer, proposal?}. Si no es JSON válido,
 // se usa el texto tal cual como respuesta y sin propuesta. Una propuesta que no
