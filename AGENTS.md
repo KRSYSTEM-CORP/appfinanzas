@@ -44,7 +44,7 @@ Estás rediseñando KR POS para que quede igual a la preview guardada en `redise
 - Nunca borres ni migres tablas con datos sin pedir confirmación.
 - Nunca dejes una función simulada (toast sin efecto, dato fijo). Todo lo de §7 se implementa de verdad. Si falta una credencial externa, detente y pídela.
 - Nunca implementes factura fiscal: queda bloqueada con "Próximamente".
-- Nunca agregues cupones ni descuentos de suscripción. El único es Emprende a $10 el primer mes.
+- Descuentos de suscripción: el primer mes de Emprende cuesta $9,99 y luego $12,99. Los únicos cupones de suscripción son los de un solo uso que crea el superadmin en /admin y se canjean en Mi Plan. No agregues otros descuentos.
 - Nunca pongas clientes, promociones o cuentas por cobrar fuera del módulo Marketing.
 
 ## Decisiones del dueño
