@@ -65,8 +65,8 @@ export function PaymentMethodsView({
   return (
     <div className="flex flex-col gap-3.5">
       <SectionCard title="Métodos de pago de la suscripción" subtitle="Los que ven las empresas en Ajustes → Mi plan al pagar. Pago Móvil se cobra en bolívares a la tasa BCV; Binance en dólares">
-        <ListRow>
-          <div className="flex items-center gap-2.5">
+        <ListRow className="flex-wrap gap-y-2">
+          <div className="flex min-w-0 items-center gap-2.5">
             <span className="inline-flex size-[46px] flex-none items-center justify-center rounded-[14px] bg-accent text-primary">
               <SmartphoneIcon className="size-[22px]" aria-hidden />
             </span>
@@ -75,13 +75,13 @@ export function PaymentMethodsView({
               <small>Moneda: bolívares · {pmLoaded ? "Datos cargados" : "Sin datos cargados"}</small>
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex flex-none items-center gap-2">
             <Button variant="outline" onClick={() => setEditing("PAGO_MOVIL")}>Editar</Button>
             <Switch on={settings.pagoMovilEnabled} disabled={pending} onChange={(v) => toggle("PAGO_MOVIL", v)} label="Pago Móvil: mostrar en el pago de la suscripción" />
           </div>
         </ListRow>
-        <ListRow>
-          <div className="flex items-center gap-2.5">
+        <ListRow className="flex-wrap gap-y-2">
+          <div className="flex min-w-0 items-center gap-2.5">
             <span className="inline-flex h-[46px] w-[68px] flex-none items-center justify-center overflow-hidden rounded-[14px] bg-white px-2 py-1.5 shadow-[inset_0_0_0_1px_rgba(20,22,31,.1)]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/banks/binance.png" alt="Binance" className="size-full object-contain" />
@@ -91,7 +91,7 @@ export function PaymentMethodsView({
               <small>Moneda: divisa · {bnLoaded ? "Datos cargados" : "Sin datos cargados"}</small>
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex flex-none items-center gap-2">
             <Button variant="outline" onClick={() => setEditing("BINANCE")}>Editar</Button>
             <Switch on={settings.binanceEnabled} disabled={pending} onChange={(v) => toggle("BINANCE", v)} label="Binance Pay: mostrar en el pago de la suscripción" />
           </div>
