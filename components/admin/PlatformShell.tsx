@@ -43,6 +43,7 @@ export async function PlatformShell({ sub, children }: { sub: string; children: 
         </div>
       </PageHeader>
       <GroupTabs
+        compactOnMobile
         label="Grupos de la Plataforma"
         value={group.id}
         groups={PLATFORM_GROUPS.map((x) => ({ value: x.id, label: x.label, hint: x.hint, icon: ICONS[x.icon], href: x.subs[0].href }))}
