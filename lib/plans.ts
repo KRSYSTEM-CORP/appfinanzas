@@ -28,7 +28,6 @@ export const PLANS: Record<PlanId, PlanDef> = {
     features: [
       "Todos los módulos excepto Contabilidad",
       "Learning y Asistente IA (1 crédito por consulta)",
-      "1 sucursal: la principal",
       "1 usuario: el dueño o gerente",
       "Hasta 100 productos en el inventario",
     ],
