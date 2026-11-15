@@ -23,7 +23,7 @@ import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { AI_PACKS } from "@/lib/assistant";
 import { PLANS, planAmountDueUsdCents, recommendPlan, type PlanDef } from "@/lib/plans";
 import { TRIAL_DAYS } from "@/lib/billing";
-import { WHATSAPP_PHONE } from "@/lib/legal";
+import { CONTACT_EMAIL, WHATSAPP_PHONE } from "@/lib/legal";
 import { formatDate } from "@/lib/format";
 import { previewPlanCoupon, reportPlanPayment, type PlanUsage } from "@/lib/actions/plan";
 import { requestCreditPack } from "@/lib/actions/assistant";
@@ -87,7 +87,7 @@ function Packs({ onBuy }: { onBuy: (credits: number, priceCents: number) => void
       <header>
         <div>
           <h3>Recarga de créditos</h3>
-          <p>Cada uso del Asistente IA cuesta 5 créditos. Consultar siempre es gratis y los créditos comprados no vencen.</p>
+          <p>Cada consulta al Asistente IA cuesta 1 crédito; un documento o consulta grande, 5. Los créditos comprados no vencen.</p>
         </div>
       </header>
       <div className="kp-packs2">
@@ -97,7 +97,7 @@ function Packs({ onBuy }: { onBuy: (credits: number, priceCents: number) => void
             <b className="kc kp-mono">{nf(k.credits, 0)}</b>
             <span className="kl">créditos</span>
             <div className="kpz kp-mono">{usd(k.priceCents)}</div>
-            <small>{nf((k.priceCents / k.credits), 1)} ¢ por crédito · {nf(k.credits / 5, 0)} usos</small>
+            <small>{nf((k.priceCents / k.credits), 1)} ¢ por crédito · {nf(k.credits, 0)} consultas</small>
             {PACK_TAG[k.credits] ? <span className="sv">{PACK_TAG[k.credits]}</span> : <span className="sv no">Para empezar</span>}
             <button type="button" className="kp-btn" onClick={() => onBuy(k.credits, k.priceCents)}>Comprar</button>
           </article>
@@ -121,9 +121,9 @@ function Support() {
           <i className="kp-supi"><WhatsappIcon className="size-6" /></i>
           <span><b>WhatsApp</b><small>+1 (904) 579-6156</small></span>
         </a>
-        <a className="kp-supb ml" href="mailto:contacto@krsystem-corp.com">
+        <a className="kp-supb ml" href={`mailto:${CONTACT_EMAIL}`}>
           <i className="kp-supi"><MailIcon className="size-6" aria-hidden /></i>
-          <span><b>Correo</b><small>contacto@krsystem-corp.com</small></span>
+          <span><b>Correo</b><small>{CONTACT_EMAIL}</small></span>
         </a>
       </div>
     </section>
@@ -136,6 +136,9 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
   const router = useRouter();
   // /settings?tab=plan&vista=planes abre directo la elección de plan (aviso de renovación).
   const wantedView = useSearchParams().get("vista");
+  useEffect(() => {
+    if (wantedView === "recarga") setTimeout(() => document.getElementById("packs")?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+  }, [wantedView]);
   const [view, setView] = useState<View>(wantedView === "planes" ? "plans" : "home");
   const [sel, setSel] = useState<Sel | null>(null);
   const [step, setStep] = useState(1);
@@ -269,7 +272,15 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
               proofImageDataUrl: proof.dataUrl,
               coupon: coupon?.code,
             })
-          : await requestCreditPack(sel.credits, `${METHOD_NAME[method]} ref. ${ref} · ${form.name.trim()} · ${form.phone.trim()}`);
+          : await requestCreditPack({
+              credits: sel.credits,
+              method: METHOD_NAME[method],
+              reference: ref,
+              name: form.name,
+              phone: form.phone,
+              email: form.email,
+              proofImageDataUrl: proof.dataUrl,
+            });
       if (!r.success) {
         toast.error(r.error);
         return;
@@ -345,7 +356,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
             {current.aiCredits > 0 ? (
               <UsageRow label="Créditos IA" used={Math.min(current.aiCredits, Math.max(0, current.aiCredits - usage.creditsLeft))} max={current.aiCredits} />
             ) : (
-              <div className="kp-li"><span>Asistente IA</span><b>Consulta gratis · recarga créditos para aplicar</b></div>
+              <div className="kp-li"><span>Asistente IA</span><b>1 crédito por consulta · 5 por documento</b></div>
             )}
             <p className="kp-note">
               Con {current.maxUsers} {current.maxUsers === 1 ? "usuario" : "usuarios"} y {current.maxProducts == null ? "productos ilimitados" : `${nf(current.maxProducts, 0)} productos máximo`}. Si llegas al límite, te avisamos para cambiar de plan.
@@ -622,7 +633,12 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
       ["Plan activo", "Todo listo para seguir creciendo"],
     ];
     const s = 1;
-    const msg = encodeURIComponent(`Hola, les envío el comprobante de pago de la suscripción de ${usage.companyName}.`);
+    const isCredits = sent?.title.startsWith("Recarga") ?? false;
+    const msg = encodeURIComponent(
+      isCredits
+        ? `Hola, les envío el comprobante de pago de la ${sent?.title.toLowerCase()} de ${usage.companyName}.`
+        : `Hola, les envío el comprobante de pago de la suscripción de ${usage.companyName}.`
+    );
     return (
       <section className="kp-card" style={{ textAlign: "center" }}>
         <span className="kp-ck kp-bigck"><ClockIcon aria-hidden strokeWidth={3} /></span>

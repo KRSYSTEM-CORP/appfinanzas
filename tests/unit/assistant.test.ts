@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_PACKS, findPack, creditsRemaining, dailyAskCap, parseAssistantReply, periodKey, spendCredits } from "@/lib/assistant";
+import { AI_PACKS, findPack, creditsRemaining, parseAssistantReply, periodKey, spendCredits } from "@/lib/assistant";
 
 describe("créditos del asistente", () => {
   it("cuenta primero los del plan y luego los extra", () => {
@@ -11,8 +11,7 @@ describe("créditos del asistente", () => {
     expect(spendCredits({ plan: "EMPRENDE", usedThisPeriod: 0, extra: 3 }, 5)).toBeNull();
     expect(creditsRemaining({ plan: "EMPRENDE", usedThisPeriod: 0, extra: 0 }).total).toBe(0);
   });
-  it("tiene un tope diario único y periodo mensual", () => {
-    expect(dailyAskCap("EMPRENDE")).toBe(dailyAskCap("CORPORATIVO"));
+  it("el periodo de créditos es mensual", () => {
     expect(periodKey(new Date(2026, 10, 9))).toBe("2026-11");
   });
 });

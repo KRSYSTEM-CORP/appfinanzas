@@ -7,7 +7,6 @@ import { RechargeButton } from "@/components/assistant/RechargeButton";
 import { AssistantTabs } from "@/components/assistant/AssistantTabs";
 import { BuyCredits } from "@/components/assistant/BuyCredits";
 import { getAssistantStatus, listAssistantHistory, listMyCreditRequests } from "@/lib/actions/assistant";
-import { AI_APPLY_COST } from "@/lib/assistant";
 
 export const dynamic = "force-dynamic";
 // Las consultas al modelo (acciones del servidor de esta página) pueden tardar; 60 s de tope.
@@ -31,10 +30,10 @@ export default async function AssistantPage() {
         history={history}
         credits={
           <div id="recargar" className="scroll-mt-4">
-            <BuyCredits requests={requests} creditsLeft={status.creditsLeft} applyCost={AI_APPLY_COST} />
+            <BuyCredits requests={requests} creditsLeft={status.creditsLeft} />
           </div>
         }
-        chat={<AssistantChat status={status} applyCost={AI_APPLY_COST} history={history} company={company} />}
+        chat={<AssistantChat status={status} history={history} company={company} />}
       />
     </div>
   );

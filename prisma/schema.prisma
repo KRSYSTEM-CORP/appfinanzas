@@ -1505,17 +1505,23 @@ model AssistantEntry {
 // medios de siempre y manda la referencia; el administrador de KR System la
 // aprueba (suma los créditos) o la rechaza.
 model AiCreditRequest {
-  id          String    @id @default(cuid())
-  companyId   String
-  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  requestedBy String
-  credits     Int
-  priceCents  Int
-  reference   String
-  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED
-  reviewNote  String?
-  reviewedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  id                String    @id @default(cuid())
+  companyId         String
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requestedBy       String
+  credits           Int
+  priceCents        Int
+  reference         String
+  // Igual que el reporte de pago de la suscripción: método, quién pagó y el comprobante.
+  paymentMethod     String?
+  reporterName      String?
+  reporterPhone     String?
+  reporterEmail     String?
+  proofImageDataUrl String?   @db.Text
+  status            String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewNote        String?
+  reviewedAt        DateTime?
+  createdAt         DateTime  @default(now())
 
   @@index([companyId, createdAt])
   @@index([status, createdAt])

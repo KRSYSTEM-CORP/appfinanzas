@@ -11,7 +11,8 @@ export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURICom
   "Hola, quiero obtener este sistema para mi negocio / más información."
 )}`;
 
-export const CONTACT_EMAIL = "contacto@krsystem-corp.com";
+// Correo de soporte de KR POS (a donde llegan los mensajes de contacto y soporte).
+export const CONTACT_EMAIL = "soportekrpos@gmail.com";
 
 // Prefilled with context so support doesn't have to ask what happened first
 // — shown on the account-suspended screen (LoginForm.tsx).

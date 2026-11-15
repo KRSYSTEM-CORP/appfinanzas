@@ -1,4 +1,4 @@
-import { AI_APPLY_COST, AI_PACKS } from "@/lib/assistant";
+import { AI_ASK_COST, AI_BIG_COST, AI_PACKS } from "@/lib/assistant";
 import { TRIAL_DAYS } from "@/lib/billing";
 import { PLANS } from "@/lib/plans";
 
@@ -22,7 +22,7 @@ function plansSection(): string {
     ...lines,
     `- Toda empresa nueva tiene ${TRIAL_DAYS} días gratis. La suscripción se paga en bolívares a la tasa dólar BCV del día, en el menú «Suscripción mensual».`,
     "- Para cambiar de plan o pagar, la persona dueña usa «Suscripción mensual»; los pagos los confirma el equipo de KR System.",
-    `- Créditos de IA: preguntar es gratis (con un tope de 20 consultas al día, igual para todos los planes). Aplicar un cambio que proponga el asistente cuesta ${AI_APPLY_COST} créditos y solo si confirmas. Se pueden comprar créditos extra, que no vencen: ${packs}. Se piden desde la pantalla del Asistente y se suman cuando KR System confirma el pago.`,
+    `- Créditos de IA: cada consulta al asistente cuesta ${AI_ASK_COST} crédito y un documento o consulta grande (tabla/PDF, varios bloques o una acción propuesta) cuesta ${AI_BIG_COST}; no hay tope diario de consultas. Las acciones que propone (gasto, precios, venta) se confirman antes de aplicarse, ya vienen incluidas en el costo y se pueden deshacer 24 horas. Se pueden comprar créditos extra, que no vencen: ${packs}. Se compran en Mi Plan con el mismo proceso de la suscripción (pagas, subes el comprobante y KR System lo aprueba; avisamos por correo y WhatsApp).`,
   ].join("\n");
 }
 
@@ -53,8 +53,8 @@ const PROBLEMS = `PROBLEMAS FRECUENTES
 - «No puedo agregar más productos / usuarios / sucursales»: se llegó al tope del plan (Emprende: 1 sucursal). Solución: subir de plan, o desactivar usuarios que ya no trabajan (eso libera cupo).
 - «No veo Contabilidad»: está solo en Pyme y Corporativo.
 - «Los precios en bolívares no cuadran»: revisar en Ajustes que la tasa esté al día.
-- «El asistente dice que llegué al límite de consultas»: el tope es de 20 consultas al día; se reinicia al día siguiente.
-- «No tengo créditos para aplicar un cambio»: comprar un paquete desde el Asistente, o esperar al mes siguiente (los del plan se reinician cada mes).
+- «El asistente dice que no tengo créditos»: cada consulta usa 1 crédito (5 si es un documento o consulta grande); se recargan en Mi Plan o se reinician los del plan cada mes.
+- «No me alcanzan los créditos»: comprar un paquete en Mi Plan, o esperar al mes siguiente (los del plan se reinician cada mes).
 - «No puedo cambiar precios con “Todas las sucursales”»: elegir primero una sucursal.`;
 
 export function supportKnowledge(): string {

@@ -27,7 +27,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     tagline: "Todo el sistema para empezar",
     features: [
       "Todos los módulos excepto Contabilidad",
-      "Learning y Asistente IA (consultar es gratis)",
+      "Learning y Asistente IA (1 crédito por consulta)",
       "1 sucursal: la principal",
       "1 usuario: el dueño o gerente",
       "Hasta 100 productos en el inventario",
