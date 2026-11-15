@@ -6,9 +6,10 @@ import "server-only";
 //
 //   AI_API_KEY    llave de Google AI Studio (https://aistudio.google.com/apikey)
 //   AI_BASE_URL   opcional, por defecto el endpoint OpenAI-compatible de Gemini
-//   AI_MODEL      opcional, por defecto gemini-2.5-flash
+//   AI_MODEL      opcional, por defecto gemini-3.8-flash
 const DEFAULT_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
-const DEFAULT_MODEL = "gemini-2.5-flash";
+// Si el modelo configurado ya no existe (Google retira modelos), se prueban estos en orden.
+const FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"];
 
 export function aiConfigured(): boolean {
   return Boolean(process.env.AI_API_KEY || process.env.ANTHROPIC_API_KEY);
@@ -26,7 +27,8 @@ async function callCompatible(
   system: string,
   user: string,
   maxTokens: number,
-  withReasoning: boolean
+  effort: string | null,
+  timeoutMs: number
 ): Promise<{ text: string } | { status: number; detail: string }> {
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
@@ -35,13 +37,13 @@ async function callCompatible(
       model,
       // Gemini 2.5 gasta tokens «pensando»: con un tope bajo la respuesta llegaba vacía.
       max_tokens: Math.max(maxTokens, 2048),
-      ...(withReasoning ? { reasoning_effort: "none" } : {}),
+      ...(effort ? { reasoning_effort: effort } : {}),
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
       ],
     }),
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const raw = await res.text().catch(() => "");
   if (!res.ok) return { status: res.status, detail: raw.slice(0, 300) };
@@ -60,22 +62,28 @@ export async function askModel(system: string, user: string, maxTokens = 700): P
   try {
     if (key) {
       const base = (process.env.AI_BASE_URL || DEFAULT_BASE).replace(/\/$/, "");
-      const configured = process.env.AI_MODEL || DEFAULT_MODEL;
-      // El modelo configurado primero; si el proveedor lo rechaza (retirado, sin cupo),
-      // se prueba el alias «latest» de Gemini antes de rendirse.
-      const models = [...new Set([configured, "gemini-flash-latest"])];
+      const configured = process.env.AI_MODEL;
+      // Primero el modelo actual, luego el configurado y los alternos. Un 404/400 (modelo retirado o
+      // parámetro no aceptado) pasa de inmediato al siguiente; nunca se espera de más: el total
+      // se corta a los 45 s para no agotar la función.
+      const models = [...new Set([...(configured ? [configured] : []), ...FALLBACK_MODELS])];
+      const deadline = Date.now() + 45_000;
       let last = "sin intentos";
       for (const model of models) {
-        // Con y sin `reasoning_effort`: algunos modelos lo rechazan con 400.
-        for (const withReasoning of [true, false]) {
-          const r = await callCompatible(base, key, model, system, user, maxTokens, withReasoning);
+        // Esfuerzo de razonamiento mínimo para responder rápido; si el modelo no lo acepta, sin él.
+        for (const effort of ["minimal", "none", null] as const) {
+          const left = deadline - Date.now();
+          if (left < 4_000) return { ok: false, reason: `tiempo agotado · ${last}` };
+          const r = await callCompatible(base, key, model, system, user, maxTokens, effort, Math.min(20_000, left)).catch(
+            (e: unknown) => ({ status: 0, detail: e instanceof Error ? e.message : "error" })
+          );
           if ("text" in r) return { ok: true, text: r.text };
-          last = `${model} → ${r.status} ${r.detail}`;
+          last = `${model}/${effort ?? "-"} → ${r.status} ${r.detail}`;
           console.error("[asistente] intento fallido", last);
-          // Llave inválida o sin permiso: no sirve reintentar con otras variantes.
           if (r.status === 401 || r.status === 403) return { ok: false, reason: `auth:${r.status}` };
           if (r.status === 429) return { ok: false, reason: "cuota:429" };
-          if (r.status !== 400 && r.status !== 404 && r.status !== 204) break;
+          // 400: el parámetro de razonamiento no se acepta → siguiente variante. Otro código: siguiente modelo.
+          if (r.status !== 400) break;
         }
       }
       return { ok: false, reason: last };
