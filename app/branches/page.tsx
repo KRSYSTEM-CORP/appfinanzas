@@ -4,6 +4,7 @@ import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { BranchCards } from "@/components/branches/BranchCards";
 import { branchOverview } from "@/lib/actions/branches";
 import { requirePermission } from "@/lib/session";
+import { branchLimitMessage, getPlan } from "@/lib/plans";
 import Link from "next/link";
 import { PlusIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
@@ -20,6 +21,8 @@ export default async function BranchesPage() {
     listTransfers(5),
     getExchangeRateInfo(),
   ]);
+  const planDef = getPlan(session.plan);
+  const atLimit = !session.isSuperAdmin && planDef.maxBranches != null && summaries.length >= planDef.maxBranches;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const monthLabel = now.toLocaleDateString("es-VE", { month: "long" }).replace(/^./, (c) => c.toUpperCase());
@@ -29,8 +32,8 @@ export default async function BranchesPage() {
         eyebrow={`${session.companyName} · Acceso por sede`}
         title="Sucursales"
         actions={
-          <Link href="/settings" className={buttonVariants({ size: "lg" })}>
-            <PlusIcon aria-hidden /> Nueva sucursal
+          <Link href={atLimit ? "/billing" : "/settings"} className={buttonVariants({ size: "lg" })}>
+            <PlusIcon aria-hidden /> {atLimit ? "Sube de plan para más sucursales" : "Nueva sucursal"}
           </Link>
         }
       >
@@ -38,6 +41,7 @@ export default async function BranchesPage() {
           <PeriodBar label={`${monthLabel} · día ${now.getDate()} de ${daysInMonth}`} />
         </div>
       </PageHeader>
+      {atLimit && <p className="text-sm text-muted-foreground">{branchLimitMessage(planDef)}</p>}
       {summaries.length === 0 ? (
         <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Aún no hay sucursales.</p>
       ) : (

@@ -129,80 +129,80 @@ enum QuoteStatus {
 }
 
 model Company {
-  id                    String            @id @default(cuid())
+  id                    String                     @id @default(cuid())
   roles                 CompanyRole[]
   promotions            Promotion[]
   name                  String
   // Short code (derived from id, see signup()) employees use, together with
   // their name and password, to log in without needing an email address.
-  loginCode             String            @unique
+  loginCode             String                     @unique
   // Whether this company uses the dual-currency conversion feature at all.
   // When false, every price/payment is shown/collected in a single
   // referenceCurrency below — no local-currency conversion, no exchange-rate
   // requirement anywhere (POS, reports, PDFs all collapse to one currency).
-  exchangeRateEnabled   Boolean           @default(true)
+  exchangeRateEnabled   Boolean                    @default(true)
   // See ReferenceCurrency above. Defaults to EUR to preserve the meaning of
   // every company's already-stored prices from before this field existed.
   // USD by default (audit KRPOS-FIS-002): payments in dollars (Zelle, Binance,
   // divisas) are counted 1:1 against the reference currency, which is only
   // exact when the reference is USD.
-  referenceCurrency     ReferenceCurrency @default(USD)
+  referenceCurrency     ReferenceCurrency          @default(USD)
   // IGTF agent (see lib/igtf.ts): when true, payments in foreign currency
   // carry igtfRatePercent on top of the sale total.
-  isIgtfAgent           Boolean           @default(false)
-  igtfRatePercent       Int               @default(3)
+  isIgtfAgent           Boolean                    @default(false)
+  igtfRatePercent       Int                        @default(3)
   // Local currency per 1 referenceCurrency unit. Set by the shop owner and
   // updated daily. Only meaningful when exchangeRateEnabled is true.
-  exchangeRate          Decimal?          @db.Decimal(12, 4)
+  exchangeRate          Decimal?                   @db.Decimal(12, 4)
   exchangeRateUpdatedAt DateTime?
   // ISO 4217 code of the currency this company sells in locally (see
   // lib/currencies.ts for the supported list) — drives all retail-facing
   // formatting (POS, inventory, reports, PDFs). Defaults to VES since every
   // company predating this feature was Venezuelan. Only meaningful when
   // exchangeRateEnabled is true.
-  localCurrencyCode     String            @default("VES")
+  localCurrencyCode     String                     @default("VES")
   // Small logo image as a base64 data URL, a hex brand accent color (buttons,
   // icons, links), and a hex background color — all optional; when unset the
   // app falls back to its default light/blue theme. Applied app-wide for the
   // company's own users (owners and employees alike) and on the login screen
   // itself once the company is identified (by email or company code), before
   // the user has actually authenticated.
-  logoDataUrl           String?           @db.Text
+  logoDataUrl           String?                    @db.Text
   brandColor            String?
   brandBackground       String?
   // Fiscal/legal data for delivery notes, quotes and payment receipts. Optional
   // — printed only when the company has filled them in from Settings.
   fiscalLegalName       String?
   fiscalRif             String?
-  fiscalAddress         String?           @db.Text
+  fiscalAddress         String?                    @db.Text
   fiscalPhone           String?
   // Contacto del negocio (Ajustes · Negocio).
   businessCountry       String?
   // Si está activo, no se puede vender como «Cliente general»: cada venta pide nombre y teléfono.
-  requireCustomerOnSale Boolean           @default(false)
+  requireCustomerOnSale Boolean                    @default(false)
   businessWhatsapp      String?
   businessInstagram     String?
   // Default paper size for the "Imprimir" browser print view. Editable
   // per-print from the print dialog itself; this is just the preselected
   // default.
-  printPaperSize        PrintPaperSize    @default(LETTER)
+  printPaperSize        PrintPaperSize             @default(LETTER)
   // Venezuelan IVA rates, configurable since they change by law over time
   // (e.g. the general rate has moved between 12%/15%/16% historically) —
   // see TaxCategory/lib/tax.ts. Defaults match the rate in effect when this
   // feature was added.
   // Interruptor «Usar IVA»: apagado = no se calcula ni se desglosa IVA (alícuotas efectivas 0).
-  ivaEnabled            Boolean           @default(true)
-  ivaGeneralRatePercent Int               @default(16)
-  ivaReducedRatePercent Int               @default(8)
+  ivaEnabled            Boolean                    @default(true)
+  ivaGeneralRatePercent Int                        @default(16)
+  ivaReducedRatePercent Int                        @default(8)
   // "Contribuyente especial" status — SENIAT designates certain companies as
   // agentes de retención, requiring them to withhold a percentage of IVA on
   // supplier purchases and remit it directly instead of paying the supplier
   // in full (see Purchase.ivaRetainedCents). Most SMBs are NOT designated
   // special taxpayers, hence defaulting to false.
-  isIvaWithholdingAgent Boolean           @default(false)
-  ivaWithholdingPercent Int               @default(75)
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
+  isIvaWithholdingAgent Boolean                    @default(false)
+  ivaWithholdingPercent Int                        @default(75)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
   users                 User[]
   products              Product[]
   sales                 Sale[]
@@ -220,26 +220,26 @@ model Company {
   // retail currency above. The USD/Bs rate used to preview what's owed in
   // bolívares (for VES companies paying via Pago Móvil) is platform-wide
   // (see PlatformSettings), not per company.
-  isExempt              Boolean           @default(false)
+  isExempt              Boolean                    @default(false)
   // Meta de ganancia neta mensual (divisa referencial), editable desde Finanzas.
   profitGoalCents       Int?
   // Deducciones de nómina en % sobre el sueldo base (editables en Nómina).
-  payrollIvssPct        Float             @default(4)
-  payrollParoPct        Float             @default(0.5)
-  payrollFaovPct        Float             @default(1)
+  payrollIvssPct        Float                      @default(4)
+  payrollParoPct        Float                      @default(0.5)
+  payrollFaovPct        Float                      @default(1)
   // Asistente IA: créditos comprados/otorgados (no vencen), consumo del mes y tope diario de consultas.
-  aiCreditsExtra        Int               @default(0)
-  aiCreditsUsed         Int               @default(0)
+  aiCreditsExtra        Int                        @default(0)
+  aiCreditsUsed         Int                        @default(0)
   aiPeriod              String?
   aiAskDay              String?
-  aiAskCount            Int               @default(0)
-  plan                  PlanTier          @default(CORPORATIVO)
+  aiAskCount            Int                        @default(0)
+  plan                  PlanTier                   @default(CORPORATIVO)
   // false hasta que el dueño elige su plan al crear la cuenta (pantalla /choose-plan).
-  planChosen            Boolean           @default(true)
+  planChosen            Boolean                    @default(true)
   // Reporte semanal por correo a los gerentes (domingo por la noche); opt-in.
-  weeklyReportEnabled   Boolean           @default(false)
+  weeklyReportEnabled   Boolean                    @default(false)
   // Destinatarios (hasta 5) del reporte diario de ventas por correo.
-  dailyReportEmails     String[]          @default([])
+  dailyReportEmails     String[]                   @default([])
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?
   payments              Payment[]
@@ -261,11 +261,11 @@ model Company {
   // from /admin for ONE company only (see lib/features.ts) — every other
   // company keeps the app exactly as designed. Holds ids from that registry;
   // empty means the company has no custom features.
-  enabledFeatures       String[]          @default([])
+  enabledFeatures       String[]                   @default([])
   // CRM de empresas (Plataforma): notas internas y fecha del próximo contacto.
-  crmNote               String?           @db.Text
+  crmNote               String?                    @db.Text
   crmNextContactAt      DateTime?
-  crmTags               String[]          @default([])
+  crmTags               String[]                   @default([])
   platformCoupons       PlatformCoupon[]
   couponRedemptions     PlatformCouponRedemption[]
 }
@@ -777,27 +777,27 @@ model SaleItem {
 // stock or takes a payment — just produces a "PRESUPUESTO" PDF with its own
 // control-number sequence, separate from Sale.controlNumber.
 model Quote {
-  id                String      @id @default(cuid())
-  createdAt         DateTime    @default(now())
+  id                String          @id @default(cuid())
+  createdAt         DateTime        @default(now())
   controlNumber     Int?
   totalCents        Int
-  exchangeRate      Decimal?    @db.Decimal(12, 4)
+  exchangeRate      Decimal?        @db.Decimal(12, 4)
   // Which currency this specific quote was issued in — chosen by the seller
   // at generation time, independent of the company's own display defaults.
   // Only meaningful when the company has exchangeRateEnabled; otherwise the
   // quote is always in the reference currency regardless of this flag.
-  useLocalCurrency  Boolean     @default(true)
+  useLocalCurrency  Boolean         @default(true)
   customerFirstName String?
   customerLastName  String?
   customerPhone     String?
   customerAddress   String?
   companyId         String
-  company           Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   branchId          String
-  branch            Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch            Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
   items             QuoteItem[]
   sellerId          String?
-  seller            User?       @relation("QuoteSeller", fields: [sellerId], references: [id], onDelete: SetNull)
+  seller            User?           @relation("QuoteSeller", fields: [sellerId], references: [id], onDelete: SetNull)
   sellerName        String?
   // Free-text, optional — printed on the generated PDF/print view when set.
   note              String?
@@ -807,7 +807,7 @@ model Quote {
   // hand for a quote that was invoiced some other way, in which case `sale`
   // stays null; the presence of `sale` is what "seguimiento de presupuestos"
   // uses to link straight to the resulting document.
-  status            QuoteStatus @default(PENDING)
+  status            QuoteStatus     @default(PENDING)
   // Seguimiento: cuándo se marcó como enviado / visto por el cliente y por qué se perdió.
   sentAt            DateTime?
   viewedAt          DateTime?
@@ -945,9 +945,9 @@ model Purchase {
 // purchase (e.g. half cash Bs., half Zelle USD), instead of the single
 // paymentStatus flag a Purchase had before this existed.
 model PurchasePayment {
-  id                    String        @id @default(cuid())
+  id                    String          @id @default(cuid())
   purchaseId            String
-  purchase              Purchase      @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchase              Purchase        @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
   paymentMethod         PaymentMethod
   amountEurCents        Int
   // The currency this line was actually paid in — "USD" for Zelle/Binance/
@@ -957,14 +957,19 @@ model PurchasePayment {
   // the raw as-entered amount in currencyCode's own cents.
   currencyCode          String?
   amountCurrencyCents   Int?
-  paidInForeignCurrency Boolean       @default(false)
+  paidInForeignCurrency Boolean         @default(false)
   reference             String?
   // Snapshot of Company.exchangeRate on the day this line was recorded —
   // same reasoning as SalePayment.exchangeRate.
-  exchangeRate          Decimal?      @db.Decimal(12, 4)
-  createdAt             DateTime      @default(now())
+  exchangeRate          Decimal?        @db.Decimal(12, 4)
+  // Cuenta (banco, Zelle, Binance…) de donde salió el dinero: descuenta de su saldo.
+  // Null = salió del efectivo de caja o no se indicó.
+  paymentAccountId      String?
+  paymentAccount        PaymentAccount? @relation(fields: [paymentAccountId], references: [id], onDelete: SetNull)
+  createdAt             DateTime        @default(now())
 
   @@index([purchaseId])
+  @@index([paymentAccountId])
 }
 
 model PurchaseItem {
@@ -1155,23 +1160,23 @@ model Expense {
 // a real end-of-day reconciliation would. closingDate is a calendar day in
 // the shop's timezone (America/Caracas, see SHOP_TIME_ZONE), not a instant.
 model CashClosing {
-  id          String   @id @default(cuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  branchId    String
-  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  closingDate DateTime @db.Date
-  totalCents  Int
-  salesCount  Int
-  note        String?
+  id                String   @id @default(cuid())
+  companyId         String
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branchId          String
+  branch            Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  closingDate       DateTime @db.Date
+  totalCents        Int
+  salesCount        Int
+  note              String?
   // Conteo físico al cerrar: total contado en $ y en Bs, efectivo esperado y diferencia
   // (en centavos de la divisa de referencia). Nulos en cierres anteriores.
-  countedUsdCents  Int?
-  countedBsCents   Int?
+  countedUsdCents   Int?
+  countedBsCents    Int?
   expectedCashCents Int?
-  differenceCents  Int?
-  closedById  String
-  closedAt    DateTime @default(now())
+  differenceCents   Int?
+  closedById        String
+  closedAt          DateTime @default(now())
 
   @@unique([branchId, closingDate])
   @@index([companyId, closingDate])
@@ -1281,19 +1286,19 @@ model DebitNote {
 // Efectivo con el que arranca la caja de una sucursal en un día (Caja Chica).
 // Montos en la divisa referencial, como el resto de la contabilidad.
 model CashOpening {
-  id          String   @id @default(cuid())
-  companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  branchId    String
-  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  date        DateTime @db.Date
-  amountCents Int
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId        String
+  branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  date            DateTime @db.Date
+  amountCents     Int
   // Saldo inicial por método de efectivo (Bs en céntimos de bolívar; $ en céntimos de la referencia).
   openingBsCents  Int?
   openingUsdCents Int?
-  setById     String
-  updatedAt   DateTime @updatedAt
-  createdAt   DateTime @default(now())
+  setById         String
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
 
   @@unique([branchId, date])
   @@index([companyId, date])
@@ -1337,29 +1342,46 @@ model PayrollEmployee {
   @@index([companyId, active])
 }
 
-// Pago de una quincena a un empleado. `period` es "AAAA-MM-1" o "AAAA-MM-2".
-// Al registrarse crea también un Expense (categoría Nómina) para Finanzas.
+// Pago de nómina a un empleado. `period` es "AAAA-MM-1" o "AAAA-MM-2" (la quincena que se
+// salda). Una quincena puede pagarse en varios abonos (fraccionado) o por adelantado; cada
+// fila es un desembolso con su monto (`paidCents`), fecha elegida, cuenta de origen y
+// referencia. gross/deductions/commission/net son lo devengado de la quincena al momento del
+// pago; lo que se debe = net − suma de paidCents de esa quincena. Cada desembolso crea
+// también un Expense (categoría Nómina) para Finanzas.
 model PayrollPayment {
-  id              String          @id @default(cuid())
-  companyId       String
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employeeId      String
-  employee        PayrollEmployee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  period          String
-  grossCents      Int
-  deductionsCents Int
-  advanceCents    Int             @default(0)
-  commissionCents Int             @default(0)
-  netCents        Int
-  paymentMethod   PaymentMethod
-  reference       String?
-  proofDataUrl    String?         @db.Text
-  expenseId       String?
-  paidById        String
-  paidAt          DateTime        @default(now())
+  id                String          @id @default(cuid())
+  companyId         String
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeId        String
+  employee          PayrollEmployee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  period            String
+  grossCents        Int
+  deductionsCents   Int
+  advanceCents      Int             @default(0)
+  commissionCents   Int             @default(0)
+  netCents          Int
+  // Lo desembolsado en este pago (moneda referencial).
+  paidCents         Int             @default(0)
+  // true = adelanto (se paga antes de que se complete la quincena).
+  isAdvance         Boolean         @default(false)
+  paymentMethod     PaymentMethod
+  reference         String?
+  proofDataUrl      String?         @db.Text
+  // Cuenta de donde salió el dinero y lo debitado en la moneda de esa cuenta.
+  paymentAccountId  String?
+  paymentAccount    PaymentAccount? @relation(fields: [paymentAccountId], references: [id], onDelete: SetNull)
+  accountDebitCents Int?
+  note              String?
+  expenseId         String?
+  paidById          String
+  // Fecha que elige el gerente (no todos cobran el mismo día).
+  paidAt            DateTime        @default(now())
+  // Cuándo se registró el pago (distinto de paidAt, que puede ser una fecha pasada).
+  createdAt         DateTime        @default(now())
 
-  @@unique([employeeId, period])
+  @@index([employeeId, period])
   @@index([companyId, period])
+  @@index([paymentAccountId])
 }
 
 enum PaymentAccountKind {
@@ -1373,26 +1395,28 @@ enum PaymentAccountKind {
 // Datos que el cliente necesita para pagarle a la empresa (varios pagos móviles,
 // cuentas, Zelle, etc.). Se muestran en el POS con el logo del banco.
 model PaymentAccount {
-  id            String             @id @default(cuid())
-  companyId     String
-  company       Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  kind          PaymentAccountKind
+  id               String             @id @default(cuid())
+  companyId        String
+  company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  kind             PaymentAccountKind
   // Clave del logo (ver lib/payment-accounts.ts) y nombre del banco o servicio.
-  bankKey       String?
-  bankName      String?
-  holder        String?
+  bankKey          String?
+  bankName         String?
+  holder           String?
   // Teléfono (pago móvil), número de cuenta, correo (Zelle/PayPal) o ID (Binance).
-  accountNumber String
+  accountNumber    String
   // Cédula o RIF del titular.
-  docId         String?
-  note          String?
-  active        Boolean            @default(true)
-  createdAt     DateTime           @default(now())
+  docId            String?
+  note             String?
+  active           Boolean            @default(true)
+  createdAt        DateTime           @default(now())
   // Saldo: inicial + cobros del método vinculado desde balanceSince.
-  currency      String             @default("USD")
-  openingCents  Int                @default(0)
-  linkedMethod  PaymentMethod?
-  balanceSince  DateTime           @default(now())
+  currency         String             @default("USD")
+  openingCents     Int                @default(0)
+  linkedMethod     PaymentMethod?
+  balanceSince     DateTime           @default(now())
+  purchasePayments PurchasePayment[]
+  payrollPayments  PayrollPayment[]
 
   @@index([companyId, active])
 }
@@ -1460,19 +1484,19 @@ model LearningProgress {
 // Historial del Asistente IA: cada pregunta con su respuesta y, si el asistente
 // propuso un cambio, si el usuario lo aplicó. Es de cada usuario (userId).
 model AssistantEntry {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId    String
   question  String
   answer    String
   proposal  Json?
-  applied   Boolean  @default(false)
+  applied   Boolean   @default(false)
   // Deshacer 24 h sin costo: qué hacer para revertir y si ya se revirtió.
   appliedAt DateTime?
   undoData  Json?
-  undone    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  undone    Boolean   @default(false)
+  createdAt DateTime  @default(now())
 
   @@index([companyId, userId, createdAt])
 }
@@ -1499,9 +1523,9 @@ model AiCreditRequest {
 
 // Promoción de Marketing: descuento con código y vigencia dirigido a un grupo de clientes.
 model Promotion {
-  id              String   @id @default(cuid())
+  id              String                @id @default(cuid())
   companyId       String
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company         Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name            String
   code            String
   discountPercent Int
@@ -1511,8 +1535,8 @@ model Promotion {
   // cumpleaneros usa rangeFrom/rangeTo (AAAA-MM-DD; solo cuentan día y mes); clientes usa customerIds.
   rangeFrom       String?
   rangeTo         String?
-  customerIds     String[] @default([])
-  createdAt       DateTime @default(now())
+  customerIds     String[]              @default([])
+  createdAt       DateTime              @default(now())
   redemptions     PromotionRedemption[]
 
   @@unique([companyId, code])
@@ -1539,34 +1563,34 @@ model PromotionRedemption {
 // El precio base sigue siendo el de lib/plans.ts; el cupón solo descuenta. Si lleva
 // companyId, solo esa empresa lo puede canjear.
 model PlatformCoupon {
-  id           String   @id @default(cuid())
-  code         String   @unique
+  id           String                     @id @default(cuid())
+  code         String                     @unique
   // PERCENT (percentOff) o AMOUNT (amountOffUsdCents).
   discountType String
   percentOff   Int?
   amountOffUsd Int?
   plan         PlanTier?
   companyId    String?
-  company      Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      Company?                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   expiresAt    DateTime?
-  maxUses      Int?     @default(1)
-  usedCount    Int      @default(0)
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  maxUses      Int?                       @default(1)
+  usedCount    Int                        @default(0)
+  active       Boolean                    @default(true)
+  createdAt    DateTime                   @default(now())
   redemptions  PlatformCouponRedemption[]
 
   @@index([companyId])
 }
 
 model PlatformCouponRedemption {
-  id              String         @id @default(cuid())
-  couponId        String
-  coupon          PlatformCoupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
-  companyId       String
-  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  paymentReportId String?
+  id               String         @id @default(cuid())
+  couponId         String
+  coupon           PlatformCoupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  companyId        String
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  paymentReportId  String?
   discountUsdCents Int
-  createdAt       DateTime       @default(now())
+  createdAt        DateTime       @default(now())
 
   @@unique([couponId, companyId])
   @@index([companyId])

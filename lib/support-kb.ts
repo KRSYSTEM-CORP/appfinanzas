@@ -33,13 +33,13 @@ OPERACIÓN
 - Inventario: productos, existencias, categorías, movimientos de cada producto, importar desde archivo y traspasos entre sucursales. Para subir existencias: Editar producto → «Sumar existencias».
 - Presupuestos: cotizaciones para clientes; se pueden convertir en venta y compartir.
 CONTROL
-- Caja Chica: cierre y control del turno, días pendientes por cerrar, ventas del día y su estado.
+- Caja Chica: abrir y cerrar la caja del turno (el cierre incluye contar el efectivo), días pendientes por cerrar, ventas del día y su estado. Las Estadísticas solo cuentan los días con caja cerrada.
 - Estadísticas: ventas, costos, gastos y ganancia, distribución de ventas por método de pago, productos más comprados, rotación y punto de equilibrio. Solo en los planes Pyme y Corporativo.
 - Marketing: clientes, su historial, notas, próximo contacto y cumpleaños.
-- Administración: compras, proveedores, libro de impuestos y nómina. Contabilidad: solo en los planes Pyme y Corporativo.
+- Administración: Balance, cuentas bancarias, compras y proveedores, cuentas por cobrar (ventas a crédito y abonos), libro de impuestos y nómina. Al registrar una compra o pagar la nómina se elige de qué cuenta sale el dinero y se descuenta de su saldo. En nómina el gerente decide el monto, la fecha y la cuenta de cada pago; puede pagar por partes o adelantar, y el sistema muestra cuánto queda debiendo. Contabilidad: solo en los planes Pyme y Corporativo.
 - Documentos: facturas, notas de entrega y comprobantes generados.
 RED Y PLATAFORMA
-- Sucursales: resumen de cada sede; para entrar a una se pide la clave de administrador.
+- Sucursales: resumen de cada sede; para entrar a una se pide la clave de administrador. El plan Emprende incluye una sola sucursal; Pyme y Corporativo permiten varias.
 - Asistente IA: responde preguntas sobre los datos del negocio y puede proponer registrar un gasto o ajustar precios de una categoría.
 - Learning: videos cortos de cómo usar el sistema (solo los sube el equipo de KR System).
 - Ajustes: Mi plan, moneda y tasa, apariencia, impresión, datos fiscales, IVA, datos para cobrar, sucursales y cambio de clave. Los perfiles y su PIN se administran desde la búsqueda («Perfiles y PIN»).`;
@@ -50,7 +50,7 @@ const ACCESS = `ACCESO
 - Cuando se llega al tope de usuarios o de productos del plan, el sistema lo avisa y hay que subir de plan o desactivar a alguien.`;
 
 const PROBLEMS = `PROBLEMAS FRECUENTES
-- «No puedo agregar más productos / usuarios»: se llegó al tope del plan. Solución: subir de plan, o desactivar usuarios que ya no trabajan (eso libera cupo).
+- «No puedo agregar más productos / usuarios / sucursales»: se llegó al tope del plan (Emprende: 1 sucursal). Solución: subir de plan, o desactivar usuarios que ya no trabajan (eso libera cupo).
 - «No veo Contabilidad»: está solo en Pyme y Corporativo.
 - «Los precios en bolívares no cuadran»: revisar en Ajustes que la tasa esté al día.
 - «El asistente dice que llegué al límite de consultas»: es un tope diario según el plan; se reinicia al día siguiente.

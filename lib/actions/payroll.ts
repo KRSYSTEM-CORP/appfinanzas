@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAccountingPlan } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { commissionFor, computeFortnight, isValidPeriod, periodDateRange, type PayrollRates } from "@/lib/payroll";
-import { dayBoundsUtc } from "@/lib/report-types";
+import { commissionFor, computeFortnight, isValidPeriod, payrollSettlement, periodDateRange, type PayrollRates } from "@/lib/payroll";
+import { dayBoundsUtc, zonedDateStringToUtc } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
 import type { PaymentMethod, Prisma } from "@prisma/client";
 
@@ -47,10 +47,28 @@ export type PayrollPaymentRow = {
   advanceCents: number;
   commissionCents: number;
   netCents: number;
+  // Lo desembolsado en este pago y si fue un adelanto.
+  paidCents: number;
+  isAdvance: boolean;
   paymentMethod: PaymentMethod;
   reference: string | null;
+  accountLabel: string | null;
+  note: string | null;
   hasProof: boolean;
   paidAt: Date;
+};
+
+// Estado de una quincena por empleado: devengado, pagado y lo que falta (o adelanto).
+export type PayrollLedgerRow = {
+  employeeId: string;
+  employeeName: string;
+  period: string;
+  owedCents: number;
+  paidCents: number;
+  advancePaidCents: number;
+  pendingCents: number;
+  surplusCents: number;
+  payments: number;
 };
 
 // Total vendido (sin ventas anuladas) por un usuario en una quincena.
@@ -82,6 +100,7 @@ export async function listPayroll(currentPeriod?: string): Promise<{
   payments: PayrollPaymentRow[];
   rates: PayrollRates;
   sellers: PayrollSeller[];
+  ledger: PayrollLedgerRow[];
 }> {
   const { companyId } = await requirePayrollManager();
   return withTenant(companyId, async (tx) => {
@@ -90,8 +109,11 @@ export async function listPayroll(currentPeriod?: string): Promise<{
       tx.payrollPayment.findMany({
         where: { companyId },
         orderBy: { paidAt: "desc" },
-        take: 100,
-        include: { employee: { select: { name: true, nationalId: true, position: true } } },
+        take: 300,
+        include: {
+          employee: { select: { name: true, nationalId: true, position: true } },
+          paymentAccount: { select: { bankName: true, accountNumber: true, kind: true } },
+        },
       }),
       tx.company.findUnique({
         where: { id: companyId },
@@ -112,16 +134,55 @@ export async function listPayroll(currentPeriod?: string): Promise<{
         }
       }
     }
+    // Estado por empleado y quincena. Lo devengado sale del último pago de esa quincena; para la
+    // quincena en curso se recalcula con lo vendido hasta hoy.
+    const rates: PayrollRates = {
+      ivssPct: company?.payrollIvssPct ?? 4,
+      paroPct: company?.payrollParoPct ?? 0.5,
+      faovPct: company?.payrollFaovPct ?? 1,
+    };
+    const ledgerMap = new Map<string, PayrollLedgerRow & { latest: number }>();
+    for (const p of payments) {
+      const key = `${p.employeeId}|${p.period}`;
+      const cur = ledgerMap.get(key) ?? {
+        employeeId: p.employeeId, employeeName: p.employee.name, period: p.period,
+        owedCents: p.netCents, paidCents: 0, advancePaidCents: 0, pendingCents: 0, surplusCents: 0, payments: 0, latest: 0,
+      };
+      cur.paidCents += p.paidCents;
+      if (p.isAdvance) cur.advancePaidCents += p.paidCents;
+      cur.payments += 1;
+      if (p.paidAt.getTime() >= cur.latest) {
+        cur.latest = p.paidAt.getTime();
+        cur.owedCents = p.netCents;
+      }
+      ledgerMap.set(key, cur);
+    }
+    if (currentPeriod && isValidPeriod(currentPeriod)) {
+      for (const e of employees.filter((x) => x.active)) {
+        const key = `${e.id}|${currentPeriod}`;
+        const owed = computeFortnight(e.baseCents, e.foodBonusCents, 0, rates, commissionNow.get(e.id) ?? 0).netCents;
+        const cur = ledgerMap.get(key) ?? {
+          employeeId: e.id, employeeName: e.name, period: currentPeriod,
+          owedCents: owed, paidCents: 0, advancePaidCents: 0, pendingCents: 0, surplusCents: 0, payments: 0, latest: 0,
+        };
+        cur.owedCents = owed;
+        ledgerMap.set(key, cur);
+      }
+    }
+    const ledger: PayrollLedgerRow[] = [...ledgerMap.values()]
+      .map(({ latest: _latest, ...r }) => {
+        void _latest;
+        const st = payrollSettlement(r.owedCents, r.paidCents);
+        return { ...r, pendingCents: st.pendingCents, surplusCents: st.advanceCents };
+      })
+      .sort((a, b) => (a.period === b.period ? a.employeeName.localeCompare(b.employeeName) : a.period < b.period ? 1 : -1));
     return {
+      ledger,
       sellers: users.map((u) => ({
         id: u.id,
         name: u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.email,
       })),
-      rates: {
-        ivssPct: company?.payrollIvssPct ?? 4,
-        paroPct: company?.payrollParoPct ?? 0.5,
-        faovPct: company?.payrollFaovPct ?? 1,
-      },
+      rates,
       employees: employees.map((e) => ({
         id: e.id,
         name: e.name,
@@ -146,8 +207,12 @@ export async function listPayroll(currentPeriod?: string): Promise<{
         advanceCents: p.advanceCents,
         commissionCents: p.commissionCents,
         netCents: p.netCents,
+        paidCents: p.paidCents,
+        isAdvance: p.isAdvance,
         paymentMethod: p.paymentMethod,
         reference: p.reference,
+        accountLabel: p.paymentAccount ? [p.paymentAccount.bankName ?? p.paymentAccount.kind, p.paymentAccount.accountNumber].filter(Boolean).join(" · ") : null,
+        note: p.note,
         hasProof: p.proofDataUrl != null,
         paidAt: p.paidAt,
       })),
@@ -198,9 +263,15 @@ export async function setPayrollEmployeeActive(id: string, active: boolean): Pro
 const PaySchema = z.object({
   employeeId: z.string().min(1),
   period: z.string().refine(isValidPeriod, "Quincena inválida"),
-  advanceCents: z.number().int().min(0).default(0),
+  // Lo que se paga ahora, en la moneda referencial: lo decide el gerente (puede ser parcial).
+  amountCents: z.number().int().min(1, "El monto a pagar debe ser mayor a 0").max(1_000_000_000),
+  isAdvance: z.boolean().default(false),
+  // Día en que se paga (no todos cobran el mismo día): AAAA-MM-DD.
+  paidDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Elige la fecha del pago"),
   paymentMethod: z.enum(["CASH", "CARD", "OTHER", "ZELLE", "BINANCE", "PAYPAL", "POS", "TRANSFER"]),
+  paymentAccountId: z.string().trim().max(40).optional(),
   reference: z.string().trim().optional(),
+  note: z.string().trim().max(200).optional(),
   proofDataUrl: z
     .string()
     .regex(/^data:image\/(png|jpe?g|webp);base64,/, "El comprobante debe ser una imagen")
@@ -208,8 +279,9 @@ const PaySchema = z.object({
     .optional(),
 });
 
-// Registrar el pago de la quincena a un empleado: guarda el pago con su método,
-// referencia y comprobante, y lo anota como gasto de Nómina en Finanzas.
+// Registra un pago (completo, parcial o adelanto) de una quincena: guarda el monto que el gerente
+// decidió, la fecha, la cuenta de origen y la referencia, descuenta de esa cuenta y lo anota
+// como gasto de Nómina en Finanzas. Una quincena admite varios pagos.
 export async function payPayroll(input: unknown): Promise<ActionResult> {
   const session = await requirePayrollManager();
   const { companyId, userId } = session;
@@ -219,6 +291,8 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
   if (d.paymentMethod !== "CASH" && !d.reference) {
     return { success: false, error: "Escribe la referencia del pago" };
   }
+  const paidAt = new Date(zonedDateStringToUtc(d.paidDate).getTime() + 12 * 3600_000);
+  if (Number.isNaN(paidAt.getTime())) return { success: false, error: "Fecha inválida" };
 
   try {
     await withTenant(companyId, async (tx) => {
@@ -226,20 +300,39 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
       if (!employee) throw new Error("Empleado no encontrado");
       const company = await tx.company.findUnique({
         where: { id: companyId },
-        select: { payrollIvssPct: true, payrollParoPct: true, payrollFaovPct: true },
+        select: { payrollIvssPct: true, payrollParoPct: true, payrollFaovPct: true, exchangeRate: true, exchangeRateEnabled: true },
       });
       const sold = employee.userId ? await salesTotalForPeriod(tx, companyId, employee.userId, d.period) : 0;
-      const calc = computeFortnight(employee.baseCents, employee.foodBonusCents, d.advanceCents, {
+      const calc = computeFortnight(employee.baseCents, employee.foodBonusCents, 0, {
         ivssPct: company?.payrollIvssPct ?? 4,
         paroPct: company?.payrollParoPct ?? 0.5,
         faovPct: company?.payrollFaovPct ?? 1,
       }, commissionFor(sold, employee.commissionPct));
+
+      // Cuenta de origen: debe ser de la empresa; el débito va en la moneda de esa cuenta.
+      let accountDebitCents: number | null = null;
+      let accountId: string | null = null;
+      if (d.paymentAccountId) {
+        const acc = await tx.paymentAccount.findFirst({ where: { id: d.paymentAccountId, companyId }, select: { id: true, currency: true } });
+        if (!acc) throw new Error("La cuenta elegida no existe");
+        accountId = acc.id;
+        if (acc.currency === "VES") {
+          const rate = company?.exchangeRateEnabled && company.exchangeRate ? Number(company.exchangeRate) : null;
+          if (rate == null) throw new Error("Configura la tasa de cambio para pagar desde una cuenta en bolívares");
+          accountDebitCents = Math.round(d.amountCents * rate);
+        } else {
+          accountDebitCents = d.amountCents;
+        }
+      }
+
+      const label = d.isAdvance ? "Adelanto de nómina" : "Nómina";
       const expense = await tx.expense.create({
         data: {
           companyId,
-          description: `Nómina ${employee.name} · ${d.period}`,
+          description: `${label} ${employee.name} · ${d.period}`,
           category: "Nómina",
-          amountCents: calc.netCents,
+          amountCents: d.amountCents,
+          spentAt: paidAt,
           createdById: userId,
         },
       });
@@ -250,25 +343,30 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
           period: d.period,
           grossCents: calc.grossCents,
           deductionsCents: calc.deductionsCents,
-          advanceCents: calc.advanceCents,
+          advanceCents: 0,
           commissionCents: calc.commissionCents,
           netCents: calc.netCents,
+          paidCents: d.amountCents,
+          isAdvance: d.isAdvance,
           paymentMethod: d.paymentMethod,
           reference: d.reference || null,
           proofDataUrl: d.proofDataUrl ?? null,
+          paymentAccountId: accountId,
+          accountDebitCents,
+          note: d.note || null,
           expenseId: expense.id,
           paidById: userId,
+          paidAt,
         },
       });
     });
   } catch (err) {
-    if (err instanceof Error && "code" in err && (err as { code?: string }).code === "P2002") {
-      return { success: false, error: "Esa quincena ya está pagada a este empleado." };
-    }
     return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar el pago" };
   }
   revalidatePath("/payroll");
   revalidatePath("/finance");
+  revalidatePath("/accounting");
+  revalidatePath("/accounting/accounts");
   return { success: true };
 }
 

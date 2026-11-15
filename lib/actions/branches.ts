@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireManager, requireSession, setSessionCookie } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
+import { branchLimitError } from "@/lib/plan-limits";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { dayBoundsUtc, todayDateString } from "@/lib/report-types";
@@ -43,12 +44,18 @@ export async function setBranchKey(branchId: string, key: string | null): Promis
 }
 
 export async function createBranch(formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireManager();
+  const { companyId, plan, isSuperAdmin } = await requireManager();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { success: false, error: "El nombre de la sucursal es obligatorio" };
 
   try {
-    await withTenant(companyId, (tx) => tx.branch.create({ data: { companyId, name } }));
+    const limit = await withTenant(companyId, async (tx) => {
+      const over = isSuperAdmin ? null : await branchLimitError(tx, companyId, plan);
+      if (over) return over;
+      await tx.branch.create({ data: { companyId, name } });
+      return null;
+    });
+    if (limit) return { success: false, error: limit };
   } catch {
     return { success: false, error: "Ya existe una sucursal con ese nombre" };
   }
@@ -59,15 +66,24 @@ export async function createBranch(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateBranch(id: string, formData: FormData): Promise<ActionResult> {
-  const { companyId } = await requireManager();
+  const { companyId, plan, isSuperAdmin } = await requireManager();
   const name = String(formData.get("name") ?? "").trim();
   const isActive = formData.get("isActive") === "true";
   if (!name) return { success: false, error: "El nombre de la sucursal es obligatorio" };
 
   try {
-    const result = await withTenant(companyId, (tx) =>
-      tx.branch.updateMany({ where: { id, companyId }, data: { name, isActive } })
-    );
+    const result = await withTenant(companyId, async (tx) => {
+      // Reactivar una sucursal también cuenta contra el tope del plan.
+      if (isActive && !isSuperAdmin) {
+        const current = await tx.branch.findFirst({ where: { id, companyId }, select: { isActive: true } });
+        if (current && !current.isActive) {
+          const over = await branchLimitError(tx, companyId, plan);
+          if (over) return over;
+        }
+      }
+      return tx.branch.updateMany({ where: { id, companyId }, data: { name, isActive } });
+    });
+    if (typeof result === "string") return { success: false, error: result };
     if (result.count === 0) return { success: false, error: "Sucursal no encontrada" };
   } catch {
     return { success: false, error: "Ya existe una sucursal con ese nombre" };

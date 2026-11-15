@@ -11,6 +11,8 @@ export type PlanDef = {
   maxUsers: number;
   // null = ilimitado.
   maxProducts: number | null;
+  // null = ilimitadas.
+  maxBranches: number | null;
   aiCredits: number;
   accounting: boolean;
   // Texto de la tarjeta de «Mi plan» (copiado de la preview).
@@ -21,18 +23,19 @@ export type PlanDef = {
 export const PLANS: Record<PlanId, PlanDef> = {
   EMPRENDE: {
     id: "EMPRENDE", label: "Emprende", priceUsdCents: 1299, firstMonthUsdCents: 999,
-    maxUsers: 1, maxProducts: 100, aiCredits: 0, accounting: false,
+    maxUsers: 1, maxProducts: 100, maxBranches: 1, aiCredits: 0, accounting: false,
     tagline: "Todo el sistema para empezar",
     features: [
       "Todos los módulos excepto Contabilidad",
-      "Sucursales, Learning y Asistente IA (consultar es gratis)",
+      "Learning y Asistente IA (consultar es gratis)",
+      "1 sucursal: la principal",
       "1 usuario: el dueño o gerente",
       "Hasta 100 productos en el inventario",
     ],
   },
   PYME: {
     id: "PYME", label: "Pyme", priceUsdCents: 2399,
-    maxUsers: 5, maxProducts: 500, aiCredits: 100, accounting: true,
+    maxUsers: 5, maxProducts: 500, maxBranches: null, aiCredits: 100, accounting: true,
     tagline: "Más equipo, más inventario y IA",
     features: [
       "Todo lo de Emprende",
@@ -44,7 +47,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
   },
   CORPORATIVO: {
     id: "CORPORATIVO", label: "Corporativo", priceUsdCents: 4499,
-    maxUsers: 10, maxProducts: null, aiCredits: 200, accounting: true,
+    maxUsers: 10, maxProducts: null, maxBranches: null, aiCredits: 200, accounting: true,
     tagline: "Para equipos grandes y a tu medida",
     features: [
       "Todo lo de Pyme",
@@ -106,6 +109,12 @@ export function planRequestNote(plan: PlanId, extra?: string): string {
 export function parsePlanRequest(note: string | null | undefined): PlanId | null {
   const m = note ? PLAN_NOTE_RE.exec(note) : null;
   return m ? (m[1] as PlanId) : null;
+}
+
+export function branchLimitMessage(plan: PlanDef): string | null {
+  return plan.maxBranches == null
+    ? null
+    : `Tu plan ${plan.label} incluye ${plan.maxBranches} ${plan.maxBranches === 1 ? "sucursal" : "sucursales"}. Sube de plan para agregar más.`;
 }
 
 export function userLimitMessage(plan: PlanDef): string {

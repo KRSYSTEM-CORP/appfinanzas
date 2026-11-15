@@ -149,6 +149,7 @@ export default async function ReportsPage({
               branchName={session.branchName}
               printPaperSize={printPaperSize}
               canClose={canManage}
+              branchSelected={session.branchId != null}
             />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">

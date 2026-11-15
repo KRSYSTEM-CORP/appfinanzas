@@ -44,6 +44,25 @@ export async function listPaymentAccounts(onlyActive = true): Promise<PaymentAcc
   );
 }
 
+export type SourceAccountRow = { id: string; label: string; currency: string };
+
+// Cuentas activas que pueden ser el origen de un pago (compras, nómina): su saldo baja al pagar.
+export async function listSourceAccounts(): Promise<SourceAccountRow[]> {
+  const { companyId } = await requireManager();
+  const rows = await withTenant(companyId, (tx) =>
+    tx.paymentAccount.findMany({
+      where: { companyId, active: true },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, bankName: true, accountNumber: true, kind: true, currency: true },
+    })
+  );
+  return rows.map((a) => ({
+    id: a.id,
+    label: [a.bankName ?? a.kind, a.accountNumber].filter(Boolean).join(" · "),
+    currency: a.currency,
+  }));
+}
+
 export async function savePaymentAccount(input: unknown, id?: string): Promise<ActionResult> {
   const { companyId } = await requireManager();
   const parsed = AccountSchema.safeParse(input);
@@ -103,14 +122,19 @@ export type AccountBalanceRow = {
   linkedMethod: string | null;
   openingCents: number;
   collectedCents: number;
+  // Lo que salió de la cuenta: pagos de compras y de nómina desde esta cuenta.
+  paidOutCents: number;
   balanceCents: number;
 };
 
-// Saldo por cuenta = inicial + cobros (no anulados) del método vinculado desde la fecha de inicio.
+// Saldo por cuenta = inicial + cobros (no anulados) del método vinculado − pagos hechos desde la
+// cuenta (compras y nómina), todo desde la fecha de inicio.
 export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
   const { companyId } = await requireManager();
   return withTenant(companyId, async (tx) => {
     const accounts = await tx.paymentAccount.findMany({ where: { companyId, active: true }, orderBy: { createdAt: "asc" } });
+    const co = await tx.company.findUnique({ where: { id: companyId }, select: { exchangeRate: true, exchangeRateEnabled: true } });
+    const currentRate = co?.exchangeRateEnabled && co.exchangeRate ? Number(co.exchangeRate) : null;
     const rows: AccountBalanceRow[] = [];
     for (const a of accounts) {
       let collected = 0;
@@ -121,6 +145,28 @@ export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
         });
         collected = pays.reduce((n, p) => n + (p.amountCurrencyCents ?? p.amountEurCents), 0);
       }
+      const [purchaseOut, payrollOut] = await Promise.all([
+        tx.purchasePayment.findMany({
+          where: { paymentAccountId: a.id, purchase: { companyId, voided: false }, createdAt: { gte: a.balanceSince } },
+          select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
+        }),
+        tx.payrollPayment.findMany({
+          where: { paymentAccountId: a.id, companyId, createdAt: { gte: a.balanceSince } },
+          select: { accountDebitCents: true, paidCents: true },
+        }),
+      ]);
+      // Lo que sale se expresa en la moneda de la cuenta (Bs o divisa): un pago hecho en otra
+      // moneda se convierte con la tasa de ese pago (o la actual si no quedó registrada).
+      const purchaseDebit = (p: (typeof purchaseOut)[number]) => {
+        const rate = p.exchangeRate != null ? Number(p.exchangeRate) : currentRate;
+        if (a.currency === "VES") {
+          if (p.currencyCode === "VES" && p.amountCurrencyCents != null) return p.amountCurrencyCents;
+          return rate ? Math.round(p.amountEurCents * rate) : 0;
+        }
+        if (p.currencyCode === "USD" && p.amountCurrencyCents != null) return p.amountCurrencyCents;
+        return p.amountEurCents;
+      };
+      const paidOut = purchaseOut.reduce((n, p) => n + purchaseDebit(p), 0) + payrollOut.reduce((n, p) => n + (p.accountDebitCents ?? p.paidCents), 0);
       rows.push({
         id: a.id,
         label: [a.bankName, a.accountNumber].filter(Boolean).join(" · "),
@@ -128,7 +174,8 @@ export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
         linkedMethod: a.linkedMethod,
         openingCents: a.openingCents,
         collectedCents: collected,
-        balanceCents: a.openingCents + collected,
+        paidOutCents: paidOut,
+        balanceCents: a.openingCents + collected - paidOut,
       });
     }
     return rows;

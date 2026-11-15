@@ -24,6 +24,7 @@ import { listEmployees } from "@/lib/actions/employees";
 import { listRoles } from "@/lib/actions/roles";
 import { TeamPinPanel } from "@/components/settings/TeamPinPanel";
 import { requirePermission } from "@/lib/session";
+import { branchLimitMessage, getPlan } from "@/lib/plans";
 import { SHOP_TIME_ZONE, zonedDateParts } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,11 @@ export default async function SettingsPage() {
     canManage ? listEmployees() : Promise.resolve([]),
   ]);
   const stale = isStale(updatedAt);
+  // Emprende incluye solo la sucursal principal: con el tope alcanzado se bloquea «Nueva sucursal».
+  const planDef = getPlan(session.plan);
+  const activeBranches = branches.filter((b) => b.isActive).length;
+  const branchLimit =
+    !session.isSuperAdmin && planDef.maxBranches != null && activeBranches >= planDef.maxBranches ? branchLimitMessage(planDef) : null;
 
   const roles = await listRoles();
   const managersWithPin = people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length;
@@ -187,7 +193,7 @@ export default async function SettingsPage() {
                   vendedores entran directo a la suya; tú puedes elegir a cuál entrar o ver todas
                   juntas desde el selector en la barra de navegación.
                 </p>
-                <BranchesForm branches={branches} />
+                <BranchesForm branches={branches} limitMessage={branchLimit} />
               </div>
             ),
           } satisfies SettingsSection,

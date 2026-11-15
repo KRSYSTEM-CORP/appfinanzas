@@ -12,6 +12,7 @@ import { Kpi, KpiGrid } from "@/components/shared/Kpi";
 import { RowMenu } from "@/components/shared/RowMenu";
 import { SectionCard } from "@/components/shared/SectionCard";
 import { registerPurchasePayment, type PaymentOrderRow } from "@/lib/actions/purchases";
+import { AccountSelect, useSourceAccounts } from "@/components/purchases/AccountSelect";
 import { money } from "@/lib/money-display";
 
 const METHODS: [string, string][] = [
@@ -105,13 +106,15 @@ function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrde
   const router = useRouter();
   const [method, setMethod] = useState("TRANSFER");
   const [ref, setRef] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const accounts = useSourceAccounts();
   const [pending, start] = useTransition();
   const total = orders.reduce((n, o) => n + o.remainingCents, 0);
   function pay() {
     start(async () => {
       let ok = 0;
       for (const o of orders) {
-        const r = await registerPurchasePayment(o.id, method, o.remainingCents, ref);
+        const r = await registerPurchasePayment(o.id, method, o.remainingCents, ref, accountId || undefined);
         if (r.success) ok++;
         else toast.error(`${o.supplierName}: ${r.error}`);
       }
@@ -153,6 +156,7 @@ function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrde
             ))}
           </select>
         </Field>
+        <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
         <Field label="Referencia (opcional)">
           <input className={FIELD_CONTROL} value={ref} onChange={(e) => setRef(e.target.value)} />
         </Field>
@@ -175,13 +179,15 @@ export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow
   const [method, setMethod] = useState("TRANSFER");
   const [amount, setAmount] = useState((order.remainingCents / 100).toFixed(2));
   const [ref, setRef] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const accounts = useSourceAccounts();
   const [pending, start] = useTransition();
   const cents = Math.round((parseFloat(amount.replace(",", ".")) || 0) * 100);
   const left = order.remainingCents - cents;
 
   function save() {
     start(async () => {
-      const r = await registerPurchasePayment(order.id, method, cents, ref);
+      const r = await registerPurchasePayment(order.id, method, cents, ref, accountId || undefined);
       if (r.success) {
         toast.success("Pago registrado");
         onClose();
@@ -211,6 +217,7 @@ export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow
         <Field label="Monto a pagar">
           <input className={FIELD_CONTROL} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
+        <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
         <Field label="Referencia (opcional)">
           <input className={FIELD_CONTROL} value={ref} onChange={(e) => setRef(e.target.value)} />
         </Field>

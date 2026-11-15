@@ -35,6 +35,7 @@ export function CashClosingPanel({
   branchName,
   printPaperSize,
   canClose,
+  branchSelected = true,
 }: {
   summary: CashClosingSummary;
   rate: number | null;
@@ -45,12 +46,16 @@ export function CashClosingPanel({
   branchName: string | null;
   printPaperSize: PrintPaperSize;
   canClose: boolean;
+  // false con «Todas las sucursales»: la caja se abre y se cierra por sucursal.
+  branchSelected?: boolean;
 }) {
   const router = useRouter();
   const [openSheet, setOpenSheet] = useState<"open" | "close" | null>(null);
   const [opening, setOpening] = useState(summary.openingCents != null ? String(summary.openingCents / 100) : "");
   const [openingBs, setOpeningBs] = useState("");
   const [note, setNote] = useState("");
+  const [countedUsd, setCountedUsd] = useState("");
+  const [countedBs, setCountedBs] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
@@ -97,10 +102,16 @@ export function CashClosingPanel({
 
   function handleClose() {
     setError(null);
+    const hasCount = countedUsd.trim() !== "" || countedBs.trim() !== "";
+    const counted = hasCount
+      ? { usdCents: Math.round((Number(countedUsd) || 0) * 100), bsCents: Math.round((Number(countedBs) || 0) * 100) }
+      : undefined;
     startTransition(async () => {
-      const result = await closeCashRegister(summary.date, note);
+      const result = await closeCashRegister(summary.date, note, counted);
       if (result.success) {
         setNote("");
+        setCountedUsd("");
+        setCountedBs("");
         setOpenSheet(null);
         router.refresh();
       } else {
@@ -113,8 +124,13 @@ export function CashClosingPanel({
     <>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={isOpen ? "success" : "destructive"}>{isOpen ? "Abierta" : "Cerrada"}</Badge>
-        {canClose && !summary.closed && (
-          <Button type="button" onClick={() => { setError(null); setOpenSheet("open"); }}>
+        {canClose && (
+          <Button
+            type="button"
+            disabled={summary.closed != null || !branchSelected}
+            title={!branchSelected ? "Selecciona una sucursal para abrir la caja" : summary.closed ? "La caja de hoy ya fue cerrada" : undefined}
+            onClick={() => { setError(null); setOpenSheet("open"); }}
+          >
             {isOpen ? "Ajustar apertura" : "Abrir caja"}
           </Button>
         )}
@@ -140,11 +156,21 @@ export function CashClosingPanel({
             />
           )}
         </PrintDialog>
-        {canClose && !summary.closed && (
-          <Button type="button" variant="destructive" onClick={() => { setError(null); setOpenSheet("close"); }}>
-            Cerrar caja
+        {canClose && (
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={summary.closed != null || !branchSelected}
+            title={!branchSelected ? "Selecciona una sucursal para cerrar la caja" : summary.closed ? "La caja de hoy ya fue cerrada" : undefined}
+            onClick={() => { setError(null); setOpenSheet("close"); }}
+          >
+            {summary.closed ? "Caja cerrada" : "Cerrar caja"}
           </Button>
         )}
+        {canClose && !branchSelected && (
+          <p className="basis-full text-xs text-muted-foreground">Elige una sucursal arriba para abrir o cerrar su caja.</p>
+        )}
+        {!canClose && <p className="basis-full text-xs text-muted-foreground">Solo el gerente abre y cierra la caja.</p>}
       </div>
 
       <Dialog open={openSheet === "open"} onOpenChange={(o) => !o && setOpenSheet(null)}>
@@ -176,16 +202,51 @@ export function CashClosingPanel({
           <DialogHeader>
             <DialogTitle>Cerrar caja</DialogTitle>
             <DialogDescription>
-              {summary.salesCount === 0 ? "No hay ventas este día para cerrar." : "Se cierra el turno de hoy y queda en el historial de cierres."}
+              {summary.salesCount === 0
+                ? "No hay ventas este día. Puedes cerrar el turno igualmente."
+                : "Cuenta el efectivo de la gaveta. Se cierra el turno de hoy y queda en el historial de cierres."}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="closing-note">Nota (opcional)</Label>
-            <Input id="closing-note" value={note} onChange={(e) => setNote(e.target.value)} />
-          </div>
+          {(() => {
+            const sym = referenceCurrency === "EUR" ? "€" : "$";
+            const usd = Number(countedUsd) || 0;
+            const bs = Number(countedBs) || 0;
+            const rateOn = exchangeRateEnabled && rate != null;
+            const countedRef = usd + (rateOn && rate ? bs / rate : 0);
+            const expected = summary.expectedCashCents / 100;
+            const hasCount = countedUsd.trim() !== "" || countedBs.trim() !== "";
+            const diff = countedRef - expected;
+            return (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between rounded-xl bg-muted px-3.5 py-2.5 text-sm">
+                  <span className="text-muted-foreground">Efectivo esperado en caja</span>
+                  <b className="tabular-nums">{sym}{expected.toFixed(2)}</b>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="cc-counted-usd">Efectivo contado {sym}</Label>
+                    <Input id="cc-counted-usd" type="number" min="0" step="0.01" inputMode="decimal" value={countedUsd} onChange={(e) => setCountedUsd(e.target.value)} />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="cc-counted-bs">Efectivo contado Bs</Label>
+                    <Input id="cc-counted-bs" type="number" min="0" step="0.01" inputMode="decimal" value={countedBs} onChange={(e) => setCountedBs(e.target.value)} disabled={!rateOn} />
+                  </div>
+                </div>
+                {hasCount && (
+                  <p className={`rounded-xl px-3.5 py-2.5 text-sm font-semibold ${Math.abs(diff) < 0.005 ? "bg-success/14 text-success" : "bg-warning/18 text-warning"}`}>
+                    {Math.abs(diff) < 0.005 ? "La caja cuadra." : diff > 0 ? `Sobrante de ${sym}${diff.toFixed(2)}.` : `Faltante de ${sym}${Math.abs(diff).toFixed(2)}.`}
+                  </p>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="closing-note">Nota (opcional)</Label>
+                  <Input id="closing-note" value={note} onChange={(e) => setNote(e.target.value)} />
+                </div>
+              </div>
+            );
+          })()}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <div className="flex gap-2">
-            <Button type="button" variant="destructive" disabled={isPending || summary.salesCount === 0} onClick={handleClose}>
+            <Button type="button" variant="destructive" disabled={isPending} onClick={handleClose}>
               {isPending ? "Cerrando..." : "Cerrar caja"}
             </Button>
             <Button type="button" variant="outline" onClick={() => setOpenSheet(null)}>Cancelar</Button>

@@ -14,36 +14,71 @@ export function aiConfigured(): boolean {
   return Boolean(process.env.AI_API_KEY || process.env.ANTHROPIC_API_KEY);
 }
 
-export type AiResult = { ok: true; text: string } | { ok: false };
+export type AiResult = { ok: true; text: string } | { ok: false; reason: string };
+
+type ChatJson = { choices?: { message?: { content?: string | null } }[]; error?: { message?: string } };
+
+// Un intento contra el endpoint OpenAI-compatible. Devuelve el texto o el motivo del fallo.
+async function callCompatible(
+  base: string,
+  key: string,
+  model: string,
+  system: string,
+  user: string,
+  maxTokens: number,
+  withReasoning: boolean
+): Promise<{ text: string } | { status: number; detail: string }> {
+  const res = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      // Gemini 2.5 gasta tokens «pensando»: con un tope bajo la respuesta llegaba vacía.
+      max_tokens: Math.max(maxTokens, 2048),
+      ...(withReasoning ? { reasoning_effort: "none" } : {}),
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+    signal: AbortSignal.timeout(25_000),
+  });
+  const raw = await res.text().catch(() => "");
+  if (!res.ok) return { status: res.status, detail: raw.slice(0, 300) };
+  let json: ChatJson = {};
+  try {
+    json = JSON.parse(raw) as ChatJson;
+  } catch {
+    return { status: 502, detail: "respuesta no válida del proveedor" };
+  }
+  const text = json.choices?.[0]?.message?.content ?? "";
+  return text ? { text } : { status: 204, detail: "respuesta vacía" };
+}
 
 export async function askModel(system: string, user: string, maxTokens = 700): Promise<AiResult> {
   const key = process.env.AI_API_KEY;
   try {
     if (key) {
       const base = (process.env.AI_BASE_URL || DEFAULT_BASE).replace(/\/$/, "");
-      const res = await fetch(`${base}/chat/completions`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-        body: JSON.stringify({
-          model: process.env.AI_MODEL || DEFAULT_MODEL,
-          // Gemini 2.5 gasta tokens «pensando»: con un tope bajo la respuesta llegaba vacía.
-          max_tokens: Math.max(maxTokens, 2048),
-          reasoning_effort: "none",
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: user },
-          ],
-        }),
-        signal: AbortSignal.timeout(25_000),
-      });
-      if (!res.ok) {
-        console.error("[asistente] proveedor respondió", res.status, (await res.text().catch(() => "")).slice(0, 300));
-        return { ok: false };
+      const configured = process.env.AI_MODEL || DEFAULT_MODEL;
+      // El modelo configurado primero; si el proveedor lo rechaza (retirado, sin cupo),
+      // se prueba el alias «latest» de Gemini antes de rendirse.
+      const models = [...new Set([configured, "gemini-flash-latest"])];
+      let last = "sin intentos";
+      for (const model of models) {
+        // Con y sin `reasoning_effort`: algunos modelos lo rechazan con 400.
+        for (const withReasoning of [true, false]) {
+          const r = await callCompatible(base, key, model, system, user, maxTokens, withReasoning);
+          if ("text" in r) return { ok: true, text: r.text };
+          last = `${model} → ${r.status} ${r.detail}`;
+          console.error("[asistente] intento fallido", last);
+          // Llave inválida o sin permiso: no sirve reintentar con otras variantes.
+          if (r.status === 401 || r.status === 403) return { ok: false, reason: `auth:${r.status}` };
+          if (r.status === 429) return { ok: false, reason: "cuota:429" };
+          if (r.status !== 400 && r.status !== 404 && r.status !== 204) break;
+        }
       }
-      const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-      const text = json.choices?.[0]?.message?.content ?? "";
-      if (!text) console.error("[asistente] respuesta vacía del proveedor");
-      return text ? { ok: true, text } : { ok: false };
+      return { ok: false, reason: last };
     }
     if (process.env.ANTHROPIC_API_KEY) {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -61,14 +96,17 @@ export async function askModel(system: string, user: string, maxTokens = 700): P
         }),
         signal: AbortSignal.timeout(25_000),
       });
-      if (!res.ok) return { ok: false };
+      if (!res.ok) {
+        console.error("[asistente] Anthropic respondió", res.status);
+        return { ok: false, reason: `anthropic:${res.status}` };
+      }
       const json = (await res.json()) as { content?: { type: string; text?: string }[] };
       const text = json.content?.find((c) => c.type === "text")?.text ?? "";
-      return text ? { ok: true, text } : { ok: false };
+      return text ? { ok: true, text } : { ok: false, reason: "vacía" };
     }
   } catch (e) {
     console.error("[asistente] error llamando al proveedor", e instanceof Error ? e.message : e);
-    return { ok: false };
+    return { ok: false, reason: e instanceof Error ? e.message : "error" };
   }
-  return { ok: false };
+  return { ok: false, reason: "sin proveedor" };
 }

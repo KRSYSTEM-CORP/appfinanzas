@@ -27,6 +27,7 @@ export default async function AccountsPage() {
             currency: b.currency,
             linkedMethod: b.linkedMethod,
             openingCents: b.openingCents,
+            paidOutCents: b.paidOutCents,
             balanceCents: b.balanceCents,
           },
         ]

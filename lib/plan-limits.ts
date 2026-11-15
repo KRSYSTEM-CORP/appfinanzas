@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { getPlan, productLimitMessage, userLimitMessage, type PlanId } from "@/lib/plans";
+import { branchLimitMessage, getPlan, productLimitMessage, userLimitMessage, type PlanId } from "@/lib/plans";
 
 // Devuelve el mensaje de error si agregar `adding` productos pasaría el tope
 // del plan, o null si cabe. Cuenta los productos de toda la empresa.
@@ -24,4 +24,17 @@ export async function userLimitError(
   const plan = getPlan(planId);
   const count = await tx.user.count({ where: { companyId, status: "ACTIVE" } });
   return count + 1 > plan.maxUsers ? userLimitMessage(plan) : null;
+}
+
+// Sucursales activas de la empresa contra el tope del plan (Emprende: solo la principal).
+export async function branchLimitError(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  planId: PlanId,
+  adding = 1
+): Promise<string | null> {
+  const plan = getPlan(planId);
+  if (plan.maxBranches == null) return null;
+  const count = await tx.branch.count({ where: { companyId, isActive: true } });
+  return count + adding > plan.maxBranches ? branchLimitMessage(plan) : null;
 }

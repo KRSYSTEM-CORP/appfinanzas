@@ -176,6 +176,13 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         assertPaymentsMatchTotal(resolvedPayments, amountOwedCents, referenceCurrency);
       }
 
+      // Las cuentas de origen deben ser de esta empresa: se descartan ids ajenos o inactivos.
+      const accountIds = [...new Set(resolvedPayments.map((p) => p.paymentAccountId).filter((x): x is string => !!x))];
+      const validAccounts = accountIds.length
+        ? new Set((await tx.paymentAccount.findMany({ where: { id: { in: accountIds }, companyId }, select: { id: true } })).map((a) => a.id))
+        : new Set<string>();
+      if (accountIds.some((id) => !validAccounts.has(id))) throw new Error("La cuenta elegida no existe. Recarga la página e inténtalo de nuevo.");
+
       const controlNumber = await nextDocumentNumber(tx, branchId, "purchase");
 
       const purchase = await tx.purchase.create({
@@ -203,6 +210,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
                   amountCurrencyCents: p.amountCurrencyCents,
                   paidInForeignCurrency: p.paidInForeignCurrency,
                   reference: p.reference,
+                  paymentAccountId: p.paymentAccountId ?? null,
                   exchangeRate,
                 })),
               }
@@ -621,7 +629,8 @@ export async function registerPurchasePayment(
   purchaseId: string,
   method: string,
   amountCents: number,
-  reference?: string
+  reference?: string,
+  paymentAccountId?: string
 ): Promise<ActionResult> {
   const { companyId, branchId: sessionBranchId } = await requireManager();
   if (!(PAY_METHODS as readonly string[]).includes(method)) return { success: false, error: "Elige un método de pago" };
@@ -637,8 +646,18 @@ export async function registerPurchasePayment(
       const paid = p.payments.reduce((n, x) => n + x.amountEurCents, 0);
       const remaining = owed - paid;
       if (amountCents > remaining) throw new Error("El abono es mayor al saldo pendiente");
+      if (paymentAccountId) {
+        const acc = await tx.paymentAccount.findFirst({ where: { id: paymentAccountId, companyId }, select: { id: true } });
+        if (!acc) throw new Error("La cuenta elegida no existe");
+      }
       await tx.purchasePayment.create({
-        data: { purchaseId: p.id, paymentMethod: method as (typeof PAY_METHODS)[number], amountEurCents: amountCents, reference: reference?.trim().slice(0, 80) || null },
+        data: {
+          purchaseId: p.id,
+          paymentMethod: method as (typeof PAY_METHODS)[number],
+          amountEurCents: amountCents,
+          reference: reference?.trim().slice(0, 80) || null,
+          paymentAccountId: paymentAccountId || null,
+        },
       });
       if (amountCents === remaining) {
         await tx.purchase.update({ where: { id: p.id }, data: { paymentStatus: "PAID", paidAt: new Date() } });
