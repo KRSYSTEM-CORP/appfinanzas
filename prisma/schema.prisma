@@ -1376,6 +1376,8 @@ model PayrollPayment {
   paidById          String
   // Fecha que elige el gerente (no todos cobran el mismo día).
   paidAt            DateTime        @default(now())
+  // Cuándo se registró el pago (distinto de paidAt, que puede ser una fecha pasada).
+  createdAt         DateTime        @default(now())
 
   @@index([employeeId, period])
   @@index([companyId, period])

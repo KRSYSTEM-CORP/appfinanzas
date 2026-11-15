@@ -9,6 +9,7 @@ ALTER TABLE "PurchasePayment" ADD COLUMN     "paymentAccountId" TEXT;
 
 -- AlterTable
 ALTER TABLE "PayrollPayment" ADD COLUMN     "accountDebitCents" INTEGER,
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 ADD COLUMN     "isAdvance" BOOLEAN NOT NULL DEFAULT false,
 ADD COLUMN     "note" TEXT,
 ADD COLUMN     "paidCents" INTEGER NOT NULL DEFAULT 0,

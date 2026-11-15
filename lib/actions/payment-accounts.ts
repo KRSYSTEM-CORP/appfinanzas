@@ -149,7 +149,7 @@ export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
           select: { amountCurrencyCents: true, amountEurCents: true },
         }),
         tx.payrollPayment.findMany({
-          where: { paymentAccountId: a.id, companyId, paidAt: { gte: a.balanceSince } },
+          where: { paymentAccountId: a.id, companyId, createdAt: { gte: a.balanceSince } },
           select: { accountDebitCents: true, paidCents: true },
         }),
       ]);
