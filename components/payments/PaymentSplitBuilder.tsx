@@ -212,18 +212,18 @@ export function PaymentSplitBuilder({
         const rowRemainingAmount =
           leftoverRefCents > 0 ? refCentsToRowAmount(leftoverRefCents, rowCurrencyCode, rate, referenceCurrency) : null;
         return (
-          <div key={i} className="flex flex-col gap-2 rounded-lg border p-3">
+          <div key={i} className="flex flex-col gap-2.5 rounded-[16px] bg-muted/60 p-3.5">
             <div className="flex gap-2 flex-wrap">
               {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((method) => (
-                <Button
+                <button
                   key={method}
                   type="button"
-                  size="sm"
-                  variant={row.paymentMethod === method ? "default" : "outline"}
+                  aria-pressed={row.paymentMethod === method}
                   onClick={() => updateRow(i, { paymentMethod: method })}
+                  className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold transition-colors ${row.paymentMethod === method ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)] hover:bg-accent"}`}
                 >
                   {PAYMENT_METHOD_LABELS[method]}
-                </Button>
+                </button>
               ))}
               {rows.length > 1 && (
                 <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={() => removeRow(i)}>
@@ -278,7 +278,7 @@ export function PaymentSplitBuilder({
                 <Label htmlFor={`${idPrefix}-account-${i}`}>¿De qué cuenta salió el dinero?</Label>
                 <select
                   id={`${idPrefix}-account-${i}`}
-                  className="h-10 w-full rounded-md border bg-background px-2 text-sm"
+                  className="min-h-11 w-full rounded-[12px] border border-border bg-background px-3 text-sm"
                   value={row.paymentAccountId ?? ""}
                   onChange={(e) => updateRow(i, { paymentAccountId: e.target.value })}
                 >

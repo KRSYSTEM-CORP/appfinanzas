@@ -6,6 +6,9 @@ import type { Product, Supplier, TaxCategory } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "@/components/ui/segmented";
+import { SectionCard } from "@/components/shared/SectionCard";
+import { Pill } from "@/components/shared/Pills";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PaymentSplitBuilder, defaultPaymentSplitRows, type PaymentSplitRow, type SourceAccount } from "@/components/payments/PaymentSplitBuilder";
 import { useDefaultPaymentRow } from "@/components/payments/useDefaultPaymentRow";
@@ -45,9 +48,8 @@ function emptyRow(defaultProductId: string, defaultTaxCategory: TaxCategory = "G
   };
 }
 
-// Small Bolívares/Divisas toggle, shared visual pattern between the per-line
-// unit cost and the invoice amount below — only meaningful while the company
-// tracks a separate local currency at all (exchangeRateEnabled).
+// Bolívares/Divisas: solo tiene sentido mientras la empresa maneje una moneda local aparte
+// (exchangeRateEnabled). Se comparte entre el costo de cada línea y el monto de la factura.
 function CurrencyToggle({
   inForeignCurrency,
   onChange,
@@ -58,22 +60,15 @@ function CurrencyToggle({
   referenceCurrency: string;
 }) {
   return (
-    <div className="flex w-fit rounded-md border overflow-hidden">
-      <button
-        type="button"
-        onClick={() => onChange(false)}
-        className={`px-3 py-1.5 text-sm ${!inForeignCurrency ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-      >
-        Bolívares
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange(true)}
-        className={`px-3 py-1.5 text-sm ${inForeignCurrency ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-      >
-        Divisas ({referenceCurrency})
-      </button>
-    </div>
+    <Segmented
+      label="Moneda"
+      value={inForeignCurrency ? "fx" : "local"}
+      onChange={(v) => onChange(v === "fx")}
+      options={[
+        { value: "local", label: "Bolívares" },
+        { value: "fx", label: `Divisas (${referenceCurrency})` },
+      ]}
+    />
   );
 }
 
@@ -283,133 +278,150 @@ export function PurchaseForm({
     });
   }
 
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-5xl">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border p-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="supplier">Proveedor</Label>
-          <div className="flex w-fit rounded-md border overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setUseManualSupplier(false)}
-              className={`px-3 py-1.5 text-sm ${!useManualSupplier ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-            >
-              Registrado
-            </button>
-            <button
-              type="button"
-              onClick={() => setUseManualSupplier(true)}
-              className={`px-3 py-1.5 text-sm ${useManualSupplier ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-            >
-              Proveedor manual
-            </button>
-          </div>
-          {useManualSupplier ? (
-            <>
-              <Input
-                id="supplier"
-                placeholder="Nombre del proveedor"
-                value={manualSupplierName}
-                onChange={(e) => setManualSupplierName(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Solo queda anotado en esta compra — no crea un proveedor nuevo en tu lista.
-              </p>
-            </>
-          ) : (
-            <>
-              <Select value={supplierId} onValueChange={(v) => v && setSupplierId(v)}>
-                <SelectTrigger id="supplier">
-                  <SelectValue placeholder="Selecciona un proveedor">
-                    {(value: string | null) => suppliers.find((s) => s.id === value)?.name ?? "Selecciona"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {suppliers.length === 0 && (
-                <p className="text-xs text-destructive">
-                  No tienes proveedores registrados — crea uno o usa &quot;Proveedor manual&quot;.
-                </p>
-              )}
-            </>
-          )}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="supplierInvoiceNo">Nº de factura del proveedor (opcional)</Label>
-          <Input
-            id="supplierInvoiceNo"
-            value={supplierInvoiceNo}
-            onChange={(e) => setSupplierInvoiceNo(e.target.value)}
-          />
-        </div>
-      </div>
+  const lbl = "text-[13px] font-semibold";
+  const cost = (row: PurchaseItemRow) => (exchangeRateEnabled && !row.unitCostInForeignCurrency ? currencyCode : referenceCurrency);
 
-      <div className="flex flex-col gap-2">
-        <Label>Productos comprados</Label>
-        {rows.map((row, i) => {
-          const product = productById.get(row.productId);
-          return (
-            <div key={i} className="flex flex-col gap-2 rounded-lg border p-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                <div className="flex flex-col gap-1.5 lg:col-span-2">
-                  <Label htmlFor={`product-${i}`}>Producto</Label>
-                  <Select value={row.productId} onValueChange={(v) => v && selectProduct(i, v)}>
-                    <SelectTrigger id={`product-${i}`}>
-                      <SelectValue placeholder="Selecciona un producto">
-                        {(value: string | null) => productById.get(value ?? "")?.name ?? "Selecciona"}
+  return (
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="flex min-w-0 flex-col gap-4">
+        <SectionCard title="Proveedor" subtitle="¿A quién le compraste?">
+          <Segmented
+            label="Tipo de proveedor"
+            value={useManualSupplier ? "manual" : "reg"}
+            onChange={(v) => setUseManualSupplier(v === "manual")}
+            options={[
+              { value: "reg", label: "Registrado" },
+              { value: "manual", label: "Proveedor manual" },
+            ]}
+          />
+          <div className="mt-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="supplier" className={lbl}>
+                Proveedor
+              </Label>
+              {useManualSupplier ? (
+                <>
+                  <Input id="supplier" placeholder="Nombre del proveedor" value={manualSupplierName} onChange={(e) => setManualSupplierName(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">Solo queda anotado en esta compra: no crea un proveedor nuevo en tu lista.</p>
+                </>
+              ) : (
+                <>
+                  <Select value={supplierId} onValueChange={(v) => v && setSupplierId(v)}>
+                    <SelectTrigger id="supplier">
+                      <SelectValue placeholder="Selecciona un proveedor">
+                        {(value: string | null) => suppliers.find((s) => s.id === value)?.name ?? "Selecciona"}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {products.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
+                      {suppliers.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <button
-                    type="button"
-                    onClick={() => (newProductRow === i ? setNewProductRow(null) : openNewProduct(i))}
-                    className="text-xs text-left text-primary underline underline-offset-4 w-fit"
-                  >
-                    {newProductRow === i ? "Cancelar" : "+ Crear producto nuevo"}
-                  </button>
+                  {suppliers.length === 0 && (
+                    <p className="text-xs text-destructive">No tienes proveedores registrados: crea uno o usa «Proveedor manual».</p>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="supplierInvoiceNo" className={lbl}>
+                Nº de factura del proveedor <span className="font-normal text-muted-foreground">(opcional)</span>
+              </Label>
+              <Input id="supplierInvoiceNo" value={supplierInvoiceNo} onChange={(e) => setSupplierInvoiceNo(e.target.value)} />
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Productos comprados"
+          subtitle={`${rows.length} ${rows.length === 1 ? "línea" : "líneas"} · costo estimado ${formatCurrencyCents(referenceCurrency, estimatedTotalCents)}`}
+          action={
+            <Button type="button" size="sm" variant="outline" onClick={addRow}>
+              + Agregar producto
+            </Button>
+          }
+        >
+          <div className="flex flex-col gap-3">
+            {rows.map((row, i) => {
+              const product = productById.get(row.productId);
+              return (
+                <div key={i} className="flex flex-col gap-3 rounded-[16px] bg-muted/60 p-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Pill tone="val">Línea {i + 1}</Pill>
+                    <div className="flex items-center gap-2">
+                      {product && <span className="text-xs text-muted-foreground">Stock actual: {product.stock}</span>}
+                      {rows.length > 1 && (
+                        <Button type="button" size="sm" variant="ghost" onClick={() => removeRow(i)}>
+                          Quitar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="flex flex-col gap-1.5 sm:col-span-2">
+                      <Label htmlFor={`product-${i}`} className={lbl}>
+                        Producto
+                      </Label>
+                      <Select value={row.productId} onValueChange={(v) => v && selectProduct(i, v)}>
+                        <SelectTrigger id={`product-${i}`}>
+                          <SelectValue placeholder="Selecciona un producto">
+                            {(value: string | null) => productById.get(value ?? "")?.name ?? "Selecciona"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {products.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <button
+                        type="button"
+                        onClick={() => (newProductRow === i ? setNewProductRow(null) : openNewProduct(i))}
+                        className="w-fit text-left text-xs font-semibold text-primary"
+                      >
+                        {newProductRow === i ? "Cancelar" : "+ Crear producto nuevo"}
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`tax-${i}`} className={lbl}>
+                        IVA
+                      </Label>
+                      <Select value={row.taxCategory} onValueChange={(v) => v && updateRow(i, { taxCategory: v as TaxCategory })}>
+                        <SelectTrigger id={`tax-${i}`}>
+                          <SelectValue placeholder="IVA">{(value: string | null) => (value ? TAX_CATEGORY_LABELS[value as TaxCategory] : "IVA")}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(TAX_CATEGORY_LABELS) as TaxCategory[]).map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {TAX_CATEGORY_LABELS[cat]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`quantity-${i}`} className={lbl}>
+                        Cantidad
+                      </Label>
+                      <Input id={`quantity-${i}`} type="number" min="1" step="1" value={row.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} />
+                    </div>
+                  </div>
+
                   {newProductRow === i && (
-                    <div className="flex flex-col gap-2 rounded-md border border-dashed p-2.5 mt-1">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <Input
-                          placeholder="Nombre del producto"
-                          value={newProductDraft.name}
-                          onChange={(e) => setNewProductDraft((d) => ({ ...d, name: e.target.value }))}
-                        />
-                        <Input
-                          list="purchase-category-options"
-                          placeholder="Categoría (opcional)"
-                          value={newProductDraft.category}
-                          onChange={(e) => setNewProductDraft((d) => ({ ...d, category: e.target.value }))}
-                        />
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder={`Precio de venta (${referenceCurrency})`}
-                          value={newProductDraft.price}
-                          onChange={(e) => setNewProductDraft((d) => ({ ...d, price: e.target.value }))}
-                        />
-                        <Select
-                          value={newProductDraft.taxCategory}
-                          onValueChange={(v) => v && setNewProductDraft((d) => ({ ...d, taxCategory: v as TaxCategory }))}
-                        >
+                    <div className="flex flex-col gap-2.5 rounded-[14px] border-2 border-dashed border-primary/40 bg-card p-3">
+                      <p className="text-[13px] font-bold">Producto nuevo</p>
+                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                        <Input placeholder="Nombre del producto" value={newProductDraft.name} onChange={(e) => setNewProductDraft((d) => ({ ...d, name: e.target.value }))} />
+                        <Input list="purchase-category-options" placeholder="Categoría (opcional)" value={newProductDraft.category} onChange={(e) => setNewProductDraft((d) => ({ ...d, category: e.target.value }))} />
+                        <Input type="number" min="0" step="0.01" placeholder={`Precio de venta (${referenceCurrency})`} value={newProductDraft.price} onChange={(e) => setNewProductDraft((d) => ({ ...d, price: e.target.value }))} />
+                        <Select value={newProductDraft.taxCategory} onValueChange={(v) => v && setNewProductDraft((d) => ({ ...d, taxCategory: v as TaxCategory }))}>
                           <SelectTrigger>
-                            <SelectValue placeholder="IVA">
-                              {(value: string | null) => (value ? TAX_CATEGORY_LABELS[value as TaxCategory] : "IVA")}
-                            </SelectValue>
+                            <SelectValue placeholder="IVA">{(value: string | null) => (value ? TAX_CATEGORY_LABELS[value as TaxCategory] : "IVA")}</SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {(Object.keys(TAX_CATEGORY_LABELS) as TaxCategory[]).map((cat) => (
@@ -421,229 +433,148 @@ export function PurchaseForm({
                         </Select>
                       </div>
                       {newProductError && <p className="text-xs text-destructive">{newProductError}</p>}
-                      <Button type="button" size="sm" disabled={creatingProduct} onClick={submitNewProduct}>
+                      <Button type="button" size="sm" disabled={creatingProduct} onClick={submitNewProduct} className="w-fit">
                         {creatingProduct ? "Creando..." : "Crear y usar en esta línea"}
                       </Button>
                     </div>
                   )}
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`tax-${i}`}>IVA</Label>
-                  <Select
-                    value={row.taxCategory}
-                    onValueChange={(v) => v && updateRow(i, { taxCategory: v as TaxCategory })}
-                  >
-                    <SelectTrigger id={`tax-${i}`}>
-                      <SelectValue placeholder="IVA">
-                        {(value: string | null) => (value ? TAX_CATEGORY_LABELS[value as TaxCategory] : "IVA")}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(Object.keys(TAX_CATEGORY_LABELS) as TaxCategory[]).map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {TAX_CATEGORY_LABELS[cat]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`quantity-${i}`}>Cantidad</Label>
-                  <Input
-                    id={`quantity-${i}`}
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={row.quantity}
-                    onChange={(e) => updateRow(i, { quantity: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`unitCost-${i}`}>
-                    Costo unitario ({exchangeRateEnabled && !row.unitCostInForeignCurrency ? currencyCode : referenceCurrency})
-                  </Label>
-                  <Input
-                    id={`unitCost-${i}`}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={row.unitCost}
-                    onChange={(e) => updateRow(i, { unitCost: e.target.value })}
-                  />
-                  {exchangeRateEnabled && (
-                    <>
-                      <CurrencyToggle
-                        inForeignCurrency={row.unitCostInForeignCurrency}
-                        onChange={(v) => updateRow(i, { unitCostInForeignCurrency: v })}
-                        referenceCurrency={referenceCurrency}
-                      />
-                      {!row.unitCostInForeignCurrency && row.unitCost && (
-                        <p className="text-xs text-muted-foreground">
-                          ≈ {formatCurrencyCents(referenceCurrency, unitCostEurCents(row))}
-                          {rate == null && " — configura la tasa de cambio para convertir"}
-                        </p>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`unitCost-${i}`} className={lbl}>
+                        Costo unitario ({cost(row)})
+                      </Label>
+                      <Input id={`unitCost-${i}`} type="number" min="0" step="0.01" value={row.unitCost} onChange={(e) => updateRow(i, { unitCost: e.target.value })} />
+                      {exchangeRateEnabled && (
+                        <>
+                          <CurrencyToggle inForeignCurrency={row.unitCostInForeignCurrency} onChange={(v) => updateRow(i, { unitCostInForeignCurrency: v })} referenceCurrency={referenceCurrency} />
+                          {!row.unitCostInForeignCurrency && row.unitCost && (
+                            <p className="text-xs text-muted-foreground">
+                              ≈ {formatCurrencyCents(referenceCurrency, unitCostEurCents(row))}
+                              {rate == null && " — configura la tasa de cambio para convertir"}
+                            </p>
+                          )}
+                        </>
                       )}
-                    </>
-                  )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <span className={lbl}>Vincular al inventario</span>
+                      <Segmented
+                        label="Vincular al inventario"
+                        value={row.affectsStock ? "on" : "off"}
+                        onChange={(v) => updateRow(i, { affectsStock: v === "on" })}
+                        options={[
+                          { value: "on", label: "Activado" },
+                          { value: "off", label: "Desactivado" },
+                        ]}
+                      />
+                      {!row.affectsStock && (
+                        <p className="text-xs text-muted-foreground">Queda en el libro de compras pero no suma al stock del producto.</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between gap-2">
-                  {product && (
-                    <p className="text-xs text-muted-foreground">Stock actual: {product.stock}</p>
-                  )}
-                  {rows.length > 1 && (
-                    <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={() => removeRow(i)}>
-                      Quitar
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Vincular al inventario</Label>
-                <div className="flex w-fit rounded-md border overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => updateRow(i, { affectsStock: true })}
-                    className={`px-3 py-1.5 text-sm ${row.affectsStock ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-                  >
-                    Activado
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateRow(i, { affectsStock: false })}
-                    className={`px-3 py-1.5 text-sm ${!row.affectsStock ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-                  >
-                    Desactivado
-                  </button>
-                </div>
-                {!row.affectsStock && (
-                  <p className="text-xs text-muted-foreground">
-                    Esta línea quedará en el libro de compras pero no sumará al stock del producto.
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-        <Button type="button" size="sm" variant="outline" onClick={addRow}>
-          + Agregar otro producto
-        </Button>
-      </div>
+              );
+            })}
+          </div>
+        </SectionCard>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="note">Nota (opcional)</Label>
-        <Input id="note" value={note} onChange={(e) => setNote(e.target.value)} />
-      </div>
-
-      <div className="flex flex-col gap-3 rounded-lg border p-3">
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>Total estimado según productos</span>
-          <span>{formatCurrencyCents(referenceCurrency, estimatedTotalCents)}</span>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="invoiceAmount">
-            Monto de la factura ({exchangeRateEnabled && !invoiceAmountInForeignCurrency ? currencyCode : referenceCurrency})
-          </Label>
-          <Input
-            id="invoiceAmount"
-            type="number"
-            min="0"
-            step="0.01"
-            value={invoiceAmount}
-            onChange={(e) => setInvoiceAmount(e.target.value)}
+        <SectionCard title="¿Cómo se pagó?" subtitle="Elige de dónde salió el dinero para descontarlo de tus cuentas">
+          <Segmented
+            label="Forma de pago"
+            value={paymentStatus}
+            onChange={(v) => setPaymentStatus(v)}
+            options={[
+              { value: "PAID", label: "Pagada de contado" },
+              { value: "PENDING", label: "A crédito (cuenta por pagar)" },
+            ]}
           />
-          {exchangeRateEnabled && (
-            <>
-              <CurrencyToggle
-                inForeignCurrency={invoiceAmountInForeignCurrency}
-                onChange={setInvoiceAmountInForeignCurrency}
+          <div className="mt-3.5">
+            {paymentStatus === "PAID" ? (
+              <PaymentSplitBuilder
+                rows={paymentRows}
+                onChange={setPaymentRows}
+                totalCents={amountOwedCents}
+                rate={rate}
+                currencyCode={currencyCode}
+                exchangeRateEnabled={exchangeRateEnabled}
                 referenceCurrency={referenceCurrency}
+                idPrefix="purchase"
+                accounts={sourceAccounts}
               />
-              {!invoiceAmountInForeignCurrency && invoiceAmount && (
-                <p className="text-xs text-muted-foreground">
-                  ≈ {formatCurrencyCents(referenceCurrency, invoiceTotalCents)}
-                  {rate == null && " — configura la tasa de cambio para convertir"}
-                </p>
-              )}
-            </>
-          )}
-          <p className="text-xs text-muted-foreground">
-            El monto real de la factura del proveedor — este es el total que queda registrado en la compra,
-            no la suma de los productos de arriba (que solo estima el costo por producto).
-          </p>
-        </div>
+            ) : (
+              <p className="rounded-[14px] bg-muted p-3.5 text-sm text-muted-foreground">
+                Esta compra quedará pendiente de pago (cuenta por pagar). Págala después desde Órdenes de pago o desde el historial de Compras.
+              </p>
+            )}
+          </div>
+        </SectionCard>
 
-        <div className="flex items-center justify-between border-t pt-3">
-          <span className="text-sm text-muted-foreground">Total de la compra</span>
-          <span className="font-semibold">{formatCurrencyCents(referenceCurrency, invoiceTotalCents)}</span>
-        </div>
-        {ivaRetainedCents > 0 && (
-          <>
+        <SectionCard title="Nota" subtitle="Opcional">
+          <Input id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. entrega parcial, descuento pactado…" />
+        </SectionCard>
+      </div>
+
+      <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
+        <SectionCard title="Resumen de la compra" subtitle="Lo que queda registrado">
+          <div className="flex flex-col gap-3.5">
             <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>IVA retenido</span>
-              <span>−{formatCurrencyCents(referenceCurrency, ivaRetainedCents)}</span>
+              <span>Total estimado según productos</span>
+              <span className="tabular-nums">{formatCurrencyCents(referenceCurrency, estimatedTotalCents)}</span>
             </div>
-            <div className="flex items-center justify-between text-sm font-medium">
-              <span>Monto a pagar al proveedor</span>
-              <span>{formatCurrencyCents(referenceCurrency, amountOwedCents)}</span>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="invoiceAmount" className={lbl}>
+                Monto de la factura ({exchangeRateEnabled && !invoiceAmountInForeignCurrency ? currencyCode : referenceCurrency})
+              </Label>
+              <Input id="invoiceAmount" type="number" min="0" step="0.01" value={invoiceAmount} onChange={(e) => setInvoiceAmount(e.target.value)} />
+              {exchangeRateEnabled && (
+                <>
+                  <CurrencyToggle inForeignCurrency={invoiceAmountInForeignCurrency} onChange={setInvoiceAmountInForeignCurrency} referenceCurrency={referenceCurrency} />
+                  {!invoiceAmountInForeignCurrency && invoiceAmount && (
+                    <p className="text-xs text-muted-foreground">
+                      ≈ {formatCurrencyCents(referenceCurrency, invoiceTotalCents)}
+                      {rate == null && " — configura la tasa de cambio para convertir"}
+                    </p>
+                  )}
+                </>
+              )}
+              <p className="text-xs text-muted-foreground">El total real de la factura del proveedor: es el que queda registrado, no la suma estimada de los productos.</p>
             </div>
-          </>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label>¿Cómo se pagó?</Label>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Button
-            type="button"
-            variant={paymentStatus === "PAID" ? "default" : "outline"}
-            onClick={() => setPaymentStatus("PAID")}
-            className="flex-1"
-          >
-            Pagada de contado
-          </Button>
-          <Button
-            type="button"
-            variant={paymentStatus === "PENDING" ? "default" : "outline"}
-            onClick={() => setPaymentStatus("PENDING")}
-            className="flex-1"
-          >
-            A crédito (cuenta por pagar)
-          </Button>
-        </div>
-
-        {paymentStatus === "PAID" ? (
-          <PaymentSplitBuilder
-            rows={paymentRows}
-            onChange={setPaymentRows}
-            totalCents={amountOwedCents}
-            rate={rate}
-            currencyCode={currencyCode}
-            exchangeRateEnabled={exchangeRateEnabled}
-            referenceCurrency={referenceCurrency}
-            idPrefix="purchase"
-            accounts={sourceAccounts}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
-            Esta compra quedará pendiente de pago (cuenta por pagar). Márcala como pagada desde el
-            historial de Compras cuando le pagues al proveedor.
-          </p>
-        )}
-      </div>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      <div className="flex gap-2">
-        <Button type="submit" disabled={isPending || (!useManualSupplier && suppliers.length === 0)}>
-          {isPending ? "Guardando..." : "Registrar compra"}
-        </Button>
-        <Button type="button" variant="outline" onClick={() => router.push("/purchases")}>
-          Cancelar
-        </Button>
-      </div>
+            <div className="flex items-end justify-between border-t pt-3">
+              <span className="text-sm text-muted-foreground">Total de la compra</span>
+              <span className="text-[28px] font-extrabold leading-none tracking-[-0.03em] tabular-nums">{formatCurrencyCents(referenceCurrency, invoiceTotalCents)}</span>
+            </div>
+            {ivaRetainedCents > 0 && (
+              <>
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>IVA retenido</span>
+                  <span className="tabular-nums">−{formatCurrencyCents(referenceCurrency, ivaRetainedCents)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm font-semibold">
+                  <span>Monto a pagar al proveedor</span>
+                  <span className="tabular-nums">{formatCurrencyCents(referenceCurrency, amountOwedCents)}</span>
+                </div>
+              </>
+            )}
+            <Pill tone={paymentStatus === "PAID" ? "ok" : "warn"} className="w-fit">
+              {paymentStatus === "PAID" ? "Pagada de contado" : "A crédito · cuenta por pagar"}
+            </Pill>
+            {error && (
+              <p role="alert" className="rounded-[12px] bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
+                {error}
+              </p>
+            )}
+            <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+              <Button type="submit" size="lg" className="flex-1" disabled={isPending || (!useManualSupplier && suppliers.length === 0)}>
+                {isPending ? "Guardando..." : "Registrar compra"}
+              </Button>
+              <Button type="button" size="lg" variant="outline" className="flex-1" onClick={() => router.push("/purchases")}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </SectionCard>
+      </aside>
 
       <datalist id="purchase-category-options">
         {categories.map((c) => (
