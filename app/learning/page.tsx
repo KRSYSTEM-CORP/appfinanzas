@@ -1,4 +1,3 @@
-import { getSession } from "@/lib/session";
 import { GraduationCapIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { IconTile } from "@/components/ui/icon-tile";
@@ -9,15 +8,7 @@ import { MAX_LEARNING_UPLOAD_BYTES, MAX_LEARNING_VIDEOS } from "@/lib/learning";
 export const dynamic = "force-dynamic";
 
 export default async function LearningPage() {
-  const session = await getSession();
-  // «Para ti»: la ruta que corresponde al rol de quien entra (rol personalizado si coincide con una ruta).
-  const defaultRoute =
-    session?.roleName && ["Dueño", "Cajero", "Vendedor", "Contador"].includes(session.roleName)
-      ? session.roleName
-      : session?.role === "GERENTE"
-        ? "Dueño"
-        : "Vendedor";
-  const [videos, admin, storageReady, stats] = await Promise.all([
+    const [videos, admin, storageReady, stats] = await Promise.all([
     listLearningVideos(),
     isLearningAdmin(),
     isLearningStorageReady(),
@@ -48,7 +39,6 @@ export default async function LearningPage() {
         storageReady={storageReady}
         max={MAX_LEARNING_VIDEOS}
         maxUploadMb={MAX_LEARNING_UPLOAD_BYTES / 1024 / 1024}
-        defaultRoute={defaultRoute}
       />
     </div>
   );
