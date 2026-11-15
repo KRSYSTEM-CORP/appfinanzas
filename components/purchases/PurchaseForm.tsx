@@ -307,7 +307,7 @@ export function PurchaseForm({
               ) : (
                 <>
                   <Select value={supplierId} onValueChange={(v) => v && setSupplierId(v)}>
-                    <SelectTrigger id="supplier">
+                    <SelectTrigger id="supplier" className="w-full">
                       <SelectValue placeholder="Selecciona un proveedor">
                         {(value: string | null) => suppliers.find((s) => s.id === value)?.name ?? "Selecciona"}
                       </SelectValue>
@@ -366,7 +366,7 @@ export function PurchaseForm({
                         Producto
                       </Label>
                       <Select value={row.productId} onValueChange={(v) => v && selectProduct(i, v)}>
-                        <SelectTrigger id={`product-${i}`}>
+                        <SelectTrigger id={`product-${i}`} className="w-full">
                           <SelectValue placeholder="Selecciona un producto">
                             {(value: string | null) => productById.get(value ?? "")?.name ?? "Selecciona"}
                           </SelectValue>
@@ -392,7 +392,7 @@ export function PurchaseForm({
                         IVA
                       </Label>
                       <Select value={row.taxCategory} onValueChange={(v) => v && updateRow(i, { taxCategory: v as TaxCategory })}>
-                        <SelectTrigger id={`tax-${i}`}>
+                        <SelectTrigger id={`tax-${i}`} className="w-full">
                           <SelectValue placeholder="IVA">{(value: string | null) => (value ? TAX_CATEGORY_LABELS[value as TaxCategory] : "IVA")}</SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -420,7 +420,7 @@ export function PurchaseForm({
                         <Input list="purchase-category-options" placeholder="Categoría (opcional)" value={newProductDraft.category} onChange={(e) => setNewProductDraft((d) => ({ ...d, category: e.target.value }))} />
                         <Input type="number" min="0" step="0.01" placeholder={`Precio de venta (${referenceCurrency})`} value={newProductDraft.price} onChange={(e) => setNewProductDraft((d) => ({ ...d, price: e.target.value }))} />
                         <Select value={newProductDraft.taxCategory} onValueChange={(v) => v && setNewProductDraft((d) => ({ ...d, taxCategory: v as TaxCategory }))}>
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full">
                             <SelectValue placeholder="IVA">{(value: string | null) => (value ? TAX_CATEGORY_LABELS[value as TaxCategory] : "IVA")}</SelectValue>
                           </SelectTrigger>
                           <SelectContent>
