@@ -9,7 +9,28 @@ import "server-only";
 //   AI_MODEL      opcional, por defecto gemini-3.8-flash
 const DEFAULT_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
 // Si el modelo configurado ya no existe (Google retira modelos), se prueban estos en orden.
-const FALLBACK_MODELS = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"];
+const FALLBACK_MODELS = ["gemini-flash-lite-latest", "gemini-3.8-flash", "gemini-flash-latest"];
+
+// Modelos que la cuenta de Google tiene disponibles ahora (cambian cuando Google retira o saca uno).
+// Se prefieren los «lite» (más rápidos y menos saturados) y la versión más nueva de cada familia.
+let modelCache: { at: number; ids: string[] } | null = null;
+async function discoverModels(base: string, key: string): Promise<string[]> {
+  if (modelCache && Date.now() - modelCache.at < 10 * 60_000) return modelCache.ids;
+  try {
+    const res = await fetch(`${base}/models`, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(6_000) });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { data?: { id?: string }[] };
+    const all = (json.data ?? []).map((m) => (m.id ?? "").replace(/^models\//, "")).filter(Boolean);
+    const ver = (id: string) => Number(/gemini-(\d+(?:\.\d+)?)/.exec(id)?.[1] ?? 0);
+    const pick = (re: RegExp) => all.filter((id) => re.test(id) && !/preview|exp|image|tts|live|audio|thinking/i.test(id)).sort((a, b) => ver(b) - ver(a));
+    const ids = [...pick(/^gemini-[\d.]+-flash-lite$/), ...pick(/^gemini-[\d.]+-flash$/)];
+    console.error("[asistente] modelos disponibles:", all.filter((id) => /gemini/.test(id)).slice(0, 25).join(", "));
+    modelCache = { at: Date.now(), ids };
+    return ids;
+  } catch {
+    return [];
+  }
+}
 
 export function aiConfigured(): boolean {
   return Boolean(process.env.AI_API_KEY || process.env.ANTHROPIC_API_KEY);
@@ -66,16 +87,19 @@ export async function askModel(system: string, user: string, maxTokens = 700): P
       // Primero el modelo actual, luego el configurado y los alternos. Un 404/400 (modelo retirado o
       // parámetro no aceptado) pasa de inmediato al siguiente; nunca se espera de más: el total
       // se corta a los 55 s (la página del asistente permite 60).
-      const models = [...new Set([...(configured ? [configured] : []), ...FALLBACK_MODELS])];
+      const discovered = await discoverModels(base, key);
+      const models = [...new Set([...(configured ? [configured] : []), ...discovered.slice(0, 4), ...FALLBACK_MODELS])].slice(0, 5);
       const deadline = Date.now() + 55_000;
       let last = "sin intentos";
       for (const model of models) {
         // Razonamiento «low»: los modelos Gemini 3 no pueden apagarlo ('minimal'/'none' dan 400 o se quedan
         // pensando). Si el modelo no acepta el parámetro, se prueba sin él.
-        for (const effort of ["low", null] as const) {
+        // Los «lite» no piensan por defecto: sin parámetro. Los demás, razonamiento «low».
+        const efforts = /lite/.test(model) ? ([null] as const) : (["low", null] as const);
+        for (const effort of efforts) {
           const left = deadline - Date.now();
           if (left < 4_000) return { ok: false, reason: `tiempo agotado · ${last}` };
-          const r = await callCompatible(base, key, model, system, user, maxTokens, effort, Math.min(35_000, left)).catch(
+          const r = await callCompatible(base, key, model, system, user, maxTokens, effort, Math.min(14_000, left)).catch(
             (e: unknown) => ({ status: 0, detail: e instanceof Error ? e.message : "error" })
           );
           if ("text" in r) return { ok: true, text: r.text };
