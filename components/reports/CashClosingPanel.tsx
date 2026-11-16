@@ -33,7 +33,6 @@ export function CashClosingPanel({
   referenceCurrency,
   company,
   branchName,
-  printPaperSize,
   canClose,
   branchSelected = true,
 }: {
@@ -140,8 +139,8 @@ export function CashClosingPanel({
         <PrintDialog
           triggerLabel="Imprimir Corte Z"
           title="Imprimir cierre de caja"
-          defaultPaperSize={printPaperSize}
-          buildPdfBlob={async (paperSize) => (await buildPdf(paperSize)).output("blob") as Blob}
+          defaultPaperSize="THERMAL_80"
+          paperSizes={["THERMAL_80", "THERMAL_58", "LETTER"]}
         >
           {(paperSize) => (
             <PrintableCashClosing

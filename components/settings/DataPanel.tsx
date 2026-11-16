@@ -7,6 +7,7 @@ import { FileTextIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PrintPaperSizeForm } from "@/components/settings/PrintPaperSizeForm";
 import { FieldTextarea, Field, ListRow, SCard, SubTitle, TWO_COLS } from "@/components/settings/team-print-kit";
+import { printHtmlDocument } from "@/lib/print-html";
 import { downloadWorkbook } from "@/lib/spreadsheet";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { listPendingSales } from "@/lib/offline/sync";
@@ -17,29 +18,17 @@ import {
   setDailyReportEmails,
 } from "@/lib/actions/data-export";
 
-const PRINTERS = [
-  { id: "t80", label: "Ticket 80 mm", desc: "Impresora térmica del mostrador", note: "Principal", page: "80mm auto", width: "72mm" },
-  { id: "t58", label: "Ticket 58 mm", desc: "Impresora portátil", note: "Reserva", page: "58mm auto", width: "50mm" },
-  { id: "carta", label: "Hoja carta", desc: "Impresora de oficina / PDF", note: "Facturas y presupuestos", page: "letter", width: "180mm" },
+const PRINTERS: { id: string; label: string; desc: string; note: string; paper: PrintPaperSize }[] = [
+  { id: "t80", label: "Ticket 80 mm", desc: "Impresora térmica del mostrador", note: "Principal", paper: "THERMAL_80" },
+  { id: "t58", label: "Ticket 58 mm", desc: "Impresora portátil", note: "Reserva", paper: "THERMAL_58" },
+  { id: "carta", label: "Hoja carta", desc: "Impresora de oficina / PDF", note: "Facturas y presupuestos", paper: "LETTER" },
 ];
 
-// Abre el diálogo de impresión con una página de prueba en el formato elegido.
+// Imprime una página de prueba en el formato elegido, con el mismo mecanismo
+// (iframe aislado + @page del tamaño) que el resto de documentos.
 function printTest(p: (typeof PRINTERS)[number]) {
-  const w = window.open("", "_blank", "width=480,height=640");
-  if (!w) {
-    toast.error("El navegador bloqueó la ventana de impresión. Permite ventanas emergentes e inténtalo de nuevo.");
-    return;
-  }
-  w.document.write(
-    `<!doctype html><html><head><meta charset="utf-8"><title>Prueba de impresión</title>
-    <style>@page{size:${p.page};margin:4mm}body{font-family:system-ui,sans-serif;width:${p.width};margin:0 auto}
-    h1{font-size:16px;margin:8px 0}p{font-size:12px;margin:4px 0}.box{border:1px dashed #000;padding:6px;margin-top:8px;text-align:center}</style></head>
-    <body><h1>Prueba de impresión</h1><p>Formato: ${p.label}</p><p>${new Date().toLocaleString("es-VE")}</p>
-    <div class="box">Si ves este recuadro completo, tu impresora está bien configurada.</div></body></html>`
-  );
-  w.document.close();
-  w.focus();
-  w.print();
+  const body = `<div style="font-family:system-ui,sans-serif"><h1 style="font-size:1.3em;margin:8px 0">Prueba de impresión</h1><p style="margin:4px 0">Formato: ${p.label}</p><p style="margin:4px 0">${new Date().toLocaleString("es-VE")}</p><div style="border:1px dashed #000;padding:6px;margin-top:8px;text-align:center">Si ves este recuadro completo, tu impresora está bien configurada.</div></div>`;
+  printHtmlDocument(body, p.paper, "Prueba de impresión").catch(() => toast.error("No se pudo abrir la impresión."));
 }
 
 export function DataPanel({ initialEmails, currentPaperSize, canManage }: { initialEmails: string[]; currentPaperSize: PrintPaperSize; canManage: boolean }) {

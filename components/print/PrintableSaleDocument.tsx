@@ -17,7 +17,7 @@ import {
   type DeliveryNoteCompany,
   type DeliveryNoteSale,
 } from "@/lib/delivery-note";
-import { isThermal } from "@/lib/print-paper-sizes";
+import { isThermal, printRootClass } from "@/lib/print-paper-sizes";
 
 // Plain HTML/CSS rendering of a Nota de Entrega / Recibo de Pago for the
 // browser print dialog (see PrintDialog.tsx) — a separate path from the
@@ -69,7 +69,7 @@ export function PrintableSaleDocument({
       : formatCurrencyCents(referenceCurrency, cents);
 
   return (
-    <div className={thermal ? "font-mono text-[11px] leading-snug" : "font-sans text-sm"}>
+    <div className={printRootClass(paperSize)}>
       <div className="mb-2 text-center">
         {company.logoDataUrl && !thermal && (
           // eslint-disable-next-line @next/next/no-img-element

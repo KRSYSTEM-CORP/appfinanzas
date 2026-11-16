@@ -24,6 +24,8 @@ import {
 import { FOLLOW_UP_KINDS, QUOTE_LOST_REASONS, closeProbability, daysToExpire, expiryPill, nextStepSuggestion, type FollowUpKind } from "@/lib/quote-follow-up";
 import { buildQuotePDF, quoteControlNumberLabel } from "@/lib/quote-pdf";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
+import { PrintDialog } from "@/components/print/PrintDialog";
+import { PrintableQuote } from "@/components/print/PrintableQuote";
 
 type QuoteWithSale = Omit<Quote, "exchangeRate"> & {
   exchangeRate: number | null;
@@ -84,6 +86,7 @@ export function QuoteHistoryTable({
   const [detail, setDetail] = useState<QuoteDetail | null>(null);
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [printQuote, setPrintQuote] = useState<QuoteDetail | null>(null);
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -149,14 +152,18 @@ export function QuoteHistoryTable({
   async function printOrShare(q: QuoteWithSale) {
     const full = await getQuote(q.id);
     if (!full) return;
-    const doc = await buildQuotePDF(full, company, full.exchangeRate ?? rate, currencyCode, exchangeRateEnabled, referenceCurrency, "letter", full.useLocalCurrency);
+    setPrintQuote(full);
+    close();
+  }
+  async function downloadPrintQuote() {
+    if (!printQuote) return;
+    const doc = await buildQuotePDF(printQuote, company, printQuote.exchangeRate ?? rate, currencyCode, exchangeRateEnabled, referenceCurrency, "letter", printQuote.useLocalCurrency);
     const url = URL.createObjectURL(doc.output("blob") as Blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `presupuesto-${quoteControlNumberLabel(full)}.pdf`;
+    a.download = `presupuesto-${quoteControlNumberLabel(printQuote)}.pdf`;
     a.click();
-    URL.revokeObjectURL(url);
-    close();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   const pillRow = (q: QuoteWithSale) => {
@@ -484,6 +491,28 @@ export function QuoteHistoryTable({
           )}
         </DialogContent>
       </Dialog>
+      <PrintDialog
+        open={printQuote != null}
+        onOpenChange={(o) => { if (!o) setPrintQuote(null); }}
+        title="Imprimir presupuesto"
+        defaultPaperSize="LETTER"
+        onDownload={downloadPrintQuote}
+      >
+        {(paperSize) =>
+          printQuote && (
+            <PrintableQuote
+              quote={printQuote}
+              company={company}
+              rate={printQuote.exchangeRate ?? rate}
+              currencyCode={currencyCode}
+              exchangeRateEnabled={exchangeRateEnabled}
+              referenceCurrency={referenceCurrency}
+              useLocalCurrency={printQuote.useLocalCurrency}
+              paperSize={paperSize}
+            />
+          )
+        }
+      </PrintDialog>
     </div>
   );
 }

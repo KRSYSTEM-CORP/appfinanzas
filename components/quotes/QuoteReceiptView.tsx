@@ -182,7 +182,6 @@ export function QuoteReceiptView({
         triggerLabel="Imprimir presupuesto"
         title="Imprimir presupuesto"
         defaultPaperSize={printPaperSize}
-        buildPdfBlob={(paperSize) => generatePdfBlob(paperSize)}
       >
         {(paperSize) => (
           <PrintableQuote

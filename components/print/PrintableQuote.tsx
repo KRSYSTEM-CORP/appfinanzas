@@ -9,7 +9,7 @@ import {
 } from "@/lib/currencies";
 import { quoteControlNumberLabel, type QuoteForPdf } from "@/lib/quote-pdf";
 import { itemDescription, type DeliveryNoteCompany } from "@/lib/delivery-note";
-import { isThermal } from "@/lib/print-paper-sizes";
+import { isThermal, printRootClass } from "@/lib/print-paper-sizes";
 
 // Plain HTML/CSS rendering of a Presupuesto for the browser print dialog —
 // mirrors PrintableSaleDocument.tsx's structure, separate from the
@@ -43,7 +43,7 @@ export function PrintableQuote({
       : formatCurrencyCents(referenceCurrency, cents);
 
   return (
-    <div className={thermal ? "font-mono text-[11px] leading-snug" : "font-sans text-sm"}>
+    <div className={printRootClass(paperSize)}>
       <div className="mb-2 text-center">
         {company.logoDataUrl && !thermal && (
           // eslint-disable-next-line @next/next/no-img-element
