@@ -6,6 +6,7 @@ import { requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import type { ActionResult } from "@/lib/types";
 import type { PaymentAccountKind } from "@prisma/client";
+import { defaultCurrencyForKind, lineInAccountCurrency, payrollDebitCents } from "@/lib/account-money";
 
 export type PaymentAccountRow = {
   id: string;
@@ -44,7 +45,7 @@ export async function listPaymentAccounts(onlyActive = true): Promise<PaymentAcc
   );
 }
 
-export type SourceAccountRow = { id: string; label: string; currency: string };
+export type SourceAccountRow = { id: string; label: string; currency: string; kind: PaymentAccountKind };
 
 // Cuentas activas que pueden ser el origen de un pago (compras, nómina): su saldo baja al pagar.
 export async function listSourceAccounts(): Promise<SourceAccountRow[]> {
@@ -60,6 +61,7 @@ export async function listSourceAccounts(): Promise<SourceAccountRow[]> {
     id: a.id,
     label: [a.bankName ?? a.kind, a.accountNumber].filter(Boolean).join(" · "),
     currency: a.currency,
+    kind: a.kind,
   }));
 }
 
@@ -79,7 +81,7 @@ export async function savePaymentAccount(input: unknown, id?: string): Promise<A
   };
   await withTenant(companyId, async (tx) => {
     if (id) await tx.paymentAccount.updateMany({ where: { id, companyId }, data });
-    else await tx.paymentAccount.create({ data: { ...data, companyId } });
+    else await tx.paymentAccount.create({ data: { ...data, companyId, currency: defaultCurrencyForKind(d.kind) } });
   });
   revalidatePath("/settings");
   revalidatePath("/pos");
@@ -141,9 +143,9 @@ export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
       if (a.linkedMethod) {
         const pays = await tx.salePayment.findMany({
           where: { paymentMethod: a.linkedMethod, sale: { companyId, voided: false }, createdAt: { gte: a.balanceSince } },
-          select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true },
+          select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
         });
-        collected = pays.reduce((n, p) => n + (p.amountCurrencyCents ?? p.amountEurCents), 0);
+        collected = pays.reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0);
       }
       const [purchaseOut, payrollOut] = await Promise.all([
         tx.purchasePayment.findMany({
@@ -157,16 +159,9 @@ export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
       ]);
       // Lo que sale se expresa en la moneda de la cuenta (Bs o divisa): un pago hecho en otra
       // moneda se convierte con la tasa de ese pago (o la actual si no quedó registrada).
-      const purchaseDebit = (p: (typeof purchaseOut)[number]) => {
-        const rate = p.exchangeRate != null ? Number(p.exchangeRate) : currentRate;
-        if (a.currency === "VES") {
-          if (p.currencyCode === "VES" && p.amountCurrencyCents != null) return p.amountCurrencyCents;
-          return rate ? Math.round(p.amountEurCents * rate) : 0;
-        }
-        if (p.currencyCode === "USD" && p.amountCurrencyCents != null) return p.amountCurrencyCents;
-        return p.amountEurCents;
-      };
-      const paidOut = purchaseOut.reduce((n, p) => n + purchaseDebit(p), 0) + payrollOut.reduce((n, p) => n + (p.accountDebitCents ?? p.paidCents), 0);
+      const paidOut =
+        purchaseOut.reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0) +
+        payrollOut.reduce((n, p) => n + payrollDebitCents(p, a.currency, currentRate), 0);
       rows.push({
         id: a.id,
         label: [a.bankName, a.accountNumber].filter(Boolean).join(" · "),
