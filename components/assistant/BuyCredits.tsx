@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AI_ASK_COST, AI_BIG_COST } from "@/lib/assistant";
+import { useAssistantCredits } from "./AssistantCredits";
 import type { CreditRequestRow } from "@/lib/actions/assistant";
 import { formatUSD } from "@/lib/format";
 
 const STATUS: Record<string, string> = { PENDING: "En revisión", APPROVED: "Aprobada", REJECTED: "Rechazada" };
 
-export function BuyCredits({ requests, creditsLeft }: { requests: CreditRequestRow[]; creditsLeft: number }) {
+export function BuyCredits({ requests }: { requests: CreditRequestRow[] }) {
+  const { creditsLeft } = useAssistantCredits();
   return (
     <section className="relative flex flex-col gap-3 rounded-[19px] bg-card p-4 shadow-(--shadow-card)">
       <header className="flex flex-wrap items-start justify-between gap-2.5">

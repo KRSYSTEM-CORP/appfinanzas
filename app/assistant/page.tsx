@@ -1,5 +1,5 @@
 import { requirePermission } from "@/lib/session";
-import { ZapIcon } from "lucide-react";
+import { AssistantCreditsProvider, CreditsBadge } from "@/components/assistant/AssistantCredits";
 import { AssistantChat } from "@/components/assistant/AssistantChat";
 import { getBranding, getFiscalData } from "@/lib/actions/settings";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -17,12 +17,11 @@ export default async function AssistantPage() {
   const [status, history, requests, { logoDataUrl }, fiscalData] = await Promise.all([getAssistantStatus(), listAssistantHistory(), listMyCreditRequests(), getBranding(), getFiscalData()]);
   const company = { name: session.companyName, logoDataUrl, ...fiscalData };
   return (
+    <AssistantCreditsProvider initial={status.creditsLeft}>
     <div className="flex flex-col gap-4 px-4 py-5">
       <PageHeader eyebrow={session.companyName} title="Asistente IA">
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/12 px-3.5 py-2 text-sm text-primary" title="Créditos disponibles">
-            <ZapIcon className="size-4" aria-hidden /> <b className="tabular-nums">{status.creditsLeft}</b> créditos
-          </span>
+          <CreditsBadge />
           <RechargeButton />
         </div>
       </PageHeader>
@@ -30,11 +29,12 @@ export default async function AssistantPage() {
         history={history}
         credits={
           <div id="recargar" className="scroll-mt-4">
-            <BuyCredits requests={requests} creditsLeft={status.creditsLeft} />
+            <BuyCredits requests={requests} />
           </div>
         }
         chat={<AssistantChat status={status} history={history} company={company} />}
       />
     </div>
+    </AssistantCreditsProvider>
   );
 }
