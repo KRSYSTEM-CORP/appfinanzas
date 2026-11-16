@@ -50,6 +50,12 @@ export function PrintableCashClosing({
       <p className="text-center font-bold">CORTE Z · CIERRE DE CAJA</p>
       <p className="text-center text-xs">Fecha: {formatDateOnly(summary.date)}</p>
       {branchName && <p className="text-center text-xs">Sucursal: {branchName}</p>}
+      {summary.shiftNumber != null && (
+        <p className="text-center text-xs">
+          Turno {summary.shiftNumber}
+          {summary.responsibleName ? ` · Responsable: ${summary.responsibleName}` : ""}
+        </p>
+      )}
       <div className="my-2 border-t border-dashed border-black" />
 
       {summary.closed ? (

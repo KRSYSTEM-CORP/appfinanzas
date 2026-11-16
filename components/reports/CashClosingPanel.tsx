@@ -52,6 +52,7 @@ export function CashClosingPanel({
   const [openSheet, setOpenSheet] = useState<"open" | "close" | null>(null);
   const [opening, setOpening] = useState(summary.openingCents != null ? String(summary.openingCents / 100) : "");
   const [openingBs, setOpeningBs] = useState("");
+  const [responsible, setResponsible] = useState(summary.responsibleName ?? "");
   const [note, setNote] = useState("");
   const [countedUsd, setCountedUsd] = useState("");
   const [countedBs, setCountedBs] = useState("");
@@ -59,7 +60,9 @@ export function CashClosingPanel({
   const [isPending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
 
-  const isOpen = !summary.closed && summary.openingCents != null;
+  const isOpen = summary.shiftOpen;
+  const hadShiftToday = summary.shifts.length > 0;
+  const nextShiftNo = summary.shifts.length > 0 ? Math.max(...summary.shifts.map((x) => x.shiftNumber)) + 1 : 1;
 
   async function buildPdf(paperSize?: PrintPaperSize) {
     return buildCashClosingPDF(
@@ -89,7 +92,7 @@ export function CashClosingPanel({
     const cents = Math.round((Number(opening) || 0) * 100);
     const bsCents = Math.round((Number(openingBs) || 0) * 100);
     startTransition(async () => {
-      const result = await setCashOpening(summary.date, cents, { usdCents: cents, bsCents });
+      const result = await setCashOpening(summary.date, cents, { usdCents: cents, bsCents }, responsible, isOpen ? "adjust" : "start");
       if (result.success) {
         setOpenSheet(null);
         router.refresh();
@@ -126,11 +129,21 @@ export function CashClosingPanel({
         {canClose && (
           <Button
             type="button"
-            disabled={summary.closed != null || !branchSelected}
-            title={!branchSelected ? "Selecciona una sucursal para abrir la caja" : summary.closed ? "La caja de hoy ya fue cerrada" : undefined}
-            onClick={() => { setError(null); setOpenSheet("open"); }}
+            disabled={!branchSelected}
+            title={!branchSelected ? "Selecciona una sucursal para abrir la caja" : undefined}
+            onClick={() => {
+              setError(null);
+              if (isOpen) {
+                setOpening(summary.openingCents != null ? String(summary.openingCents / 100) : "");
+              } else {
+                setOpening("");
+                setOpeningBs("");
+                setResponsible("");
+              }
+              setOpenSheet("open");
+            }}
           >
-            {isOpen ? "Ajustar apertura" : "Abrir caja"}
+            {isOpen ? "Ajustar apertura" : hadShiftToday ? "Abrir nuevo turno" : "Abrir caja"}
           </Button>
         )}
         <Button type="button" variant="outline" disabled={busy} onClick={downloadPdf}>
@@ -166,6 +179,13 @@ export function CashClosingPanel({
             {summary.closed ? "Caja cerrada" : "Cerrar caja"}
           </Button>
         )}
+        {summary.shiftNumber != null && (
+          <p className="basis-full text-xs text-muted-foreground">
+            Turno {summary.shiftNumber}
+            {summary.responsibleName ? ` · Responsable: ${summary.responsibleName}` : ""}
+            {summary.shifts.length > 1 ? ` · ${summary.shifts.length} turnos hoy` : ""}
+          </p>
+        )}
         {canClose && !branchSelected && (
           <p className="basis-full text-xs text-muted-foreground">Elige una sucursal arriba para abrir o cerrar su caja.</p>
         )}
@@ -175,9 +195,13 @@ export function CashClosingPanel({
       <Dialog open={openSheet === "open"} onOpenChange={(o) => !o && setOpenSheet(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{isOpen ? "Ajustar apertura" : "Abrir caja"}</DialogTitle>
-            <DialogDescription>Saldo inicial por método de pago. Arranca el turno de hoy.</DialogDescription>
+            <DialogTitle>{isOpen ? "Ajustar apertura" : hadShiftToday ? `Abrir turno ${nextShiftNo}` : "Abrir caja"}</DialogTitle>
+            <DialogDescription>Saldo inicial por método de pago. Indica quién es el responsable de la caja en este turno.</DialogDescription>
           </DialogHeader>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cc-responsible">Responsable de la caja</Label>
+            <Input id="cc-responsible" value={responsible} maxLength={80} placeholder="Nombre de quien recibe la caja" onChange={(e) => setResponsible(e.target.value)} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="cc-opening">Efectivo $</Label>

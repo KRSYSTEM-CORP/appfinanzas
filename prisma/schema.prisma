@@ -1177,8 +1177,12 @@ model CashClosing {
   differenceCents   Int?
   closedById        String
   closedAt          DateTime @default(now())
+  // Turnos: puede haber varios por día y sede. shiftNumber 1 = turnos/cierres anteriores.
+  shiftNumber       Int      @default(1)
+  responsibleName   String?
+  openedAt          DateTime?
 
-  @@unique([branchId, closingDate])
+  @@unique([branchId, closingDate, shiftNumber])
   @@index([companyId, closingDate])
 }
 
@@ -1297,10 +1301,13 @@ model CashOpening {
   openingBsCents  Int?
   openingUsdCents Int?
   setById         String
+  // Turno dentro del día (1, 2, ...) y persona responsable de la caja.
+  shiftNumber     Int      @default(1)
+  responsibleName String?
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())
 
-  @@unique([branchId, date])
+  @@unique([branchId, date, shiftNumber])
   @@index([companyId, date])
 }
 
@@ -1315,6 +1322,7 @@ model CashOutflow {
   concept     String
   amountCents Int
   createdById String
+  shiftNumber Int      @default(1)
   createdAt   DateTime @default(now())
 
   @@index([companyId, branchId, date])

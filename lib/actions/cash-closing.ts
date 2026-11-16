@@ -5,13 +5,30 @@ import { requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { SHOP_TIME_ZONE, dayBoundsUtc, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { closingDateFromString, openDayList } from "@/lib/closed-days";
+import { activeShiftNumber, isDayClosed, nextShiftNumber, shiftWindow } from "@/lib/cash-shifts";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type PaymentMethod } from "@prisma/client";
 
 export type CashOutflowRow = { id: string; concept: string; amountCents: number; createdAt: Date };
 
+export type CashShiftRow = {
+  shiftNumber: number;
+  responsibleName: string | null;
+  openedAt: Date | null;
+  closedAt: Date | null;
+};
+
 export type CashClosingSummary = {
   date: string;
+  // Turno que se muestra (el abierto o, si no hay, el último cerrado). En la vista
+  // de «Todas las sucursales» es null y los totales abarcan todo el día.
+  shiftNumber: number | null;
+  responsibleName: string | null;
+  openedAt: Date | null;
+  // Hay un turno abierto ahora mismo (se puede vender / registrar salidas).
+  shiftOpen: boolean;
+  // Todos los turnos del día (sede activa), para mostrarlos en el panel.
+  shifts: CashShiftRow[];
   // Caja Chica: efectivo de apertura, efectivo cobrado en ventas, salidas y
   // efectivo esperado en caja (apertura + ventas en efectivo − salidas).
   openingCents: number | null;
@@ -30,27 +47,55 @@ export type CashClosingSummary = {
   closed: { closedAt: Date; note: string | null } | null;
 };
 
+const MAX_RESPONSIBLE_LENGTH = 80;
+
 // Computed live (not just read from the CashClosing row) even for an
-// already-closed day, so the UI can show "at close time" vs. "right now"
-// side by side if they ever drift apart — they shouldn't, since closing a
-// day blocks voiding/deleting its sales (see assertDayNotClosed in
-// lib/actions/sales.ts), but the frozen CashClosing.totalCents is always the
-// source of truth for a closed day once one exists.
+// already-closed shift. Con una sede seleccionada el resumen es el del TURNO
+// abierto (o el último cerrado): solo sus ventas, salidas y apertura. Con
+// «Todas las sucursales» se agrega el día completo.
 export async function getDailyClosingSummary(dateStr: string): Promise<CashClosingSummary> {
   const { companyId, branchId } = await requireSession();
-  const { start, end } = dayBoundsUtc(dateStr);
+  const { start: dayStart, end: dayEnd } = dayBoundsUtc(dateStr);
   const closingDate = closingDateFromString(dateStr);
 
   return withTenant(companyId, async (tx) => {
-    const [totals, byStatus, byMethodRows, closings, activeBranchCount, openings, outflows] = await Promise.all([
+    const [closings, activeBranches, openings] = await Promise.all([
+      tx.cashClosing.findMany({
+        where: { companyId, closingDate, ...(branchId ? { branchId } : {}) },
+        orderBy: [{ shiftNumber: "asc" }, { closedAt: "asc" }],
+      }),
+      branchId
+        ? Promise.resolve([{ id: branchId }])
+        : tx.branch.findMany({ where: { companyId, isActive: true }, select: { id: true } }),
+      tx.cashOpening.findMany({
+        where: { companyId, date: closingDate, ...(branchId ? { branchId } : {}) },
+        orderBy: { shiftNumber: "asc" },
+      }),
+    ]);
+
+    // Turno a mostrar (solo con sede seleccionada).
+    let viewShift: number | null = null;
+    let shiftOpen = false;
+    let window = { start: dayStart, end: dayEnd };
+    if (branchId) {
+      const active = activeShiftNumber(openings, closings);
+      shiftOpen = active != null;
+      viewShift = active ?? (closings.length > 0 ? Math.max(...closings.map((c) => c.shiftNumber)) : null);
+      if (viewShift != null) window = shiftWindow(viewShift, dayStart, dayEnd, closings);
+    }
+    const viewOpenings = viewShift != null ? openings.filter((o) => o.shiftNumber === viewShift) : openings;
+    const viewClosing = viewShift != null ? closings.find((c) => c.shiftNumber === viewShift) ?? null : null;
+    const viewOpening = viewShift != null ? viewOpenings[0] ?? null : null;
+
+    const [totals, byStatus, byMethodRows, outflows] = await Promise.all([
       tx.sale.aggregate({
-        where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: start, lt: end }, voided: false },
+        where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: window.start, lt: window.end }, voided: false },
         _sum: { totalCents: true },
         _count: true,
       }),
       tx.sale.groupBy({
         by: ["paymentStatus"],
-        where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: start, lt: end }, voided: false },
+        where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: window.start, lt: window.end }, voided: false },
         _sum: { totalCents: true },
         _count: true,
       }),
@@ -60,46 +105,71 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
         JOIN "Sale" s ON s.id = sp."saleId"
         WHERE s."companyId" = ${companyId}
           ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
-          AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
+          AND s."createdAt" >= ${window.start} AND s."createdAt" < ${window.end}
           AND s."voided" = false
         GROUP BY sp."paymentMethod"
         ORDER BY total_cents DESC
       `,
-      // Scoped to one branch: at most one row. Consolidated ("Todas las
-      // sucursales", branchId null): every branch's closing for this date.
-      tx.cashClosing.findMany({
-        where: { companyId, closingDate, ...(branchId ? { branchId } : {}) },
-        orderBy: { closedAt: "desc" },
-      }),
-      branchId ? Promise.resolve(1) : tx.branch.count({ where: { companyId, isActive: true } }),
-      tx.cashOpening.findMany({ where: { companyId, date: closingDate, ...(branchId ? { branchId } : {}) } }),
       tx.cashOutflow.findMany({
-        where: { companyId, date: closingDate, ...(branchId ? { branchId } : {}) },
+        where: {
+          companyId,
+          date: closingDate,
+          ...(branchId ? { branchId } : {}),
+          ...(viewShift != null ? { shiftNumber: viewShift } : {}),
+        },
         orderBy: { createdAt: "asc" },
         select: { id: true, concept: true, amountCents: true, createdAt: true },
       }),
     ]);
-    const openingCents = openings.length > 0 ? openings.reduce((a, o) => a + o.amountCents, 0) : null;
+    const openingCents = viewOpenings.length > 0 ? viewOpenings.reduce((a, o) => a + o.amountCents, 0) : null;
     const cashSalesCents = Number(byMethodRows.find((r) => r.paymentMethod === "CASH")?.total_cents ?? 0);
     const outflowsCents = outflows.reduce((a, o) => a + o.amountCents, 0);
 
-    // In consolidated view the day only counts as "closed" once every active
-    // branch has closed it — otherwise sales from a still-open branch could
-    // keep changing after the day reads as done.
-    const allClosed = closings.length > 0 && closings.length >= activeBranchCount;
-    const closed = branchId
-      ? closings[0]
-        ? { closedAt: closings[0].closedAt, note: closings[0].note }
-        : null
-      : allClosed
+    // En la vista consolidada el día solo cuenta como «cerrado» cuando TODAS las
+    // sedes activas lo cerraron (y ninguna tiene un turno abierto).
+    let closed: CashClosingSummary["closed"];
+    if (branchId) {
+      closed = !shiftOpen && viewClosing ? { closedAt: viewClosing.closedAt, note: viewClosing.note } : null;
+    } else {
+      const allClosed =
+        activeBranches.length > 0 &&
+        activeBranches.every((b) =>
+          isDayClosed(
+            openings.filter((o) => o.branchId === b.id),
+            closings.filter((c) => c.branchId === b.id)
+          )
+        );
+      closed = allClosed
         ? {
-            closedAt: closings[0].closedAt,
+            closedAt: closings.reduce((m, c) => (c.closedAt > m ? c.closedAt : m), closings[0].closedAt),
             note: closings.map((c) => c.note).filter(Boolean).join("; ") || null,
           }
         : null;
+      shiftOpen = openings.some((o) => !closings.some((c) => c.branchId === o.branchId && c.shiftNumber === o.shiftNumber));
+    }
+
+    const shifts: CashShiftRow[] = branchId
+      ? [...new Set([...openings.map((o) => o.shiftNumber), ...closings.map((c) => c.shiftNumber)])]
+          .sort((a, b) => a - b)
+          .map((n) => {
+            const o = openings.find((x) => x.shiftNumber === n);
+            const c = closings.find((x) => x.shiftNumber === n);
+            return {
+              shiftNumber: n,
+              responsibleName: o?.responsibleName ?? c?.responsibleName ?? null,
+              openedAt: o?.createdAt ?? c?.openedAt ?? null,
+              closedAt: c?.closedAt ?? null,
+            };
+          })
+      : [];
 
     return {
       date: dateStr,
+      shiftNumber: viewShift,
+      responsibleName: viewOpening?.responsibleName ?? viewClosing?.responsibleName ?? null,
+      openedAt: viewOpening?.createdAt ?? viewClosing?.openedAt ?? null,
+      shiftOpen,
+      shifts,
       openingCents,
       cashSalesCents,
       outflows,
@@ -117,10 +187,14 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
   });
 }
 
+// Cierra el turno abierto de la sede (o, si el día no tuvo apertura ni cierre, el
+// día completo como turno 1). Cada cierre guarda su responsable y solo suma las
+// ventas de su turno.
 export async function closeCashRegister(
   dateStr: string,
   note?: string,
-  counted?: { usdCents: number; bsCents: number }
+  counted?: { usdCents: number; bsCents: number },
+  responsibleName?: string
 ): Promise<ActionResult> {
   // Closing the day is the manager's call (KRPOS-SEC-004); sellers still see
   // the summary through the read actions below.
@@ -132,17 +206,25 @@ export async function closeCashRegister(
       error: 'Selecciona una sucursal antes de cerrar caja — no se puede con "Todas las sucursales".',
     };
   }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { success: false, error: "Fecha inválida" };
   const branchId = session.branchId;
-  const { start, end } = dayBoundsUtc(dateStr);
+  const { start: dayStart, end: dayEnd } = dayBoundsUtc(dateStr);
   const closingDate = closingDateFromString(dateStr);
 
   const summaryForCount = counted ? await getDailyClosingSummary(dateStr) : null;
   try {
     await withTenant(companyId, async (tx) => {
-      const existing = await tx.cashClosing.findUnique({
-        where: { branchId_closingDate: { branchId, closingDate } },
-      });
-      if (existing) throw new Error("Ese día ya fue cerrado.");
+      const [openings, closings] = await Promise.all([
+        tx.cashOpening.findMany({ where: { branchId, date: closingDate } }),
+        tx.cashClosing.findMany({ where: { branchId, closingDate } }),
+      ]);
+      const active = activeShiftNumber(openings, closings);
+      if (active == null && closings.length > 0) {
+        throw new Error("No hay un turno abierto: ese día ya fue cerrado. Abre un nuevo turno para seguir.");
+      }
+      const shiftNumber = active ?? nextShiftNumber(openings, closings);
+      const opening = openings.find((o) => o.shiftNumber === shiftNumber) ?? null;
+      const { start, end } = shiftWindow(shiftNumber, dayStart, dayEnd, closings, new Date());
 
       const totals = await tx.sale.aggregate({
         where: { companyId, branchId, createdAt: { gte: start, lt: end }, voided: false },
@@ -172,6 +254,9 @@ export async function closeCashRegister(
           companyId,
           branchId,
           closingDate,
+          shiftNumber,
+          responsibleName: opening?.responsibleName ?? (responsibleName?.trim().slice(0, MAX_RESPONSIBLE_LENGTH) || null),
+          openedAt: opening?.createdAt ?? null,
           totalCents: totals._sum.totalCents ?? 0,
           salesCount: totals._count,
           note: note?.trim() || null,
@@ -180,11 +265,15 @@ export async function closeCashRegister(
       });
     });
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { success: false, error: "Ese turno ya fue cerrado." };
+    }
     const message = err instanceof Error ? err.message : "No se pudo cerrar la caja";
     return { success: false, error: message };
   }
 
   revalidatePath("/reports");
+  revalidatePath("/pos");
   return { success: true };
 }
 
@@ -241,57 +330,105 @@ export async function listCashClosings() {
   );
 }
 
-async function requireOpenBranchDay(dateStr: string) {
+async function requireBranchDay(dateStr: string) {
   const session = await requireManager();
   if (!session.branchId) {
     return { ok: false, error: 'Selecciona una sucursal — no se puede con "Todas las sucursales".' } as const;
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { ok: false, error: "Fecha inválida" } as const;
-  const closingDate = closingDateFromString(dateStr);
-  const closed = await withTenant(session.companyId, (tx) =>
-    tx.cashClosing.findUnique({
-      where: { branchId_closingDate: { branchId: session.branchId as string, closingDate } },
-      select: { id: true },
-    })
-  );
-  if (closed) return { ok: false, error: "Ese día ya fue cerrado." } as const;
-  return { ok: true, session, branchId: session.branchId as string, closingDate } as const;
+  return { ok: true, session, branchId: session.branchId as string, closingDate: closingDateFromString(dateStr) } as const;
 }
 
-// Fija (o corrige) el efectivo con el que abre la caja ese día.
+// Abre un turno nuevo o ajusta el abierto. Un turno nuevo exige responsable y falla
+// si ya hay otro turno abierto en la sede (nunca dos abiertos a la vez).
 export async function setCashOpening(
   dateStr: string,
   amountCents: number,
-  byMethod?: { bsCents: number; usdCents: number }
+  byMethod?: { bsCents: number; usdCents: number },
+  responsibleName?: string,
+  mode: "start" | "adjust" = "start"
 ): Promise<ActionResult> {
-  const ctx = await requireOpenBranchDay(dateStr);
+  const ctx = await requireBranchDay(dateStr);
   if (!ctx.ok) return { success: false, error: ctx.error };
   if (!Number.isInteger(amountCents) || amountCents < 0) {
     return { success: false, error: "El monto de apertura no puede ser negativo" };
   }
+  const responsible = responsibleName?.trim().slice(0, MAX_RESPONSIBLE_LENGTH) ?? "";
+  if (mode === "start" && !responsible) {
+    return { success: false, error: "Indica quién es el responsable de la caja en este turno" };
+  }
   const { session, branchId, closingDate } = ctx;
-  await withTenant(session.companyId, async (tx) => {
-    let total = amountCents;
-    let methodFields = {};
-    if (byMethod) {
-      if (byMethod.bsCents < 0 || byMethod.usdCents < 0) throw new Error("El monto de apertura no puede ser negativo");
-      const company = await tx.company.findUnique({ where: { id: session.companyId }, select: { exchangeRate: true, exchangeRateEnabled: true } });
-      const rate = company?.exchangeRateEnabled && company.exchangeRate ? Number(company.exchangeRate) : null;
-      total = byMethod.usdCents + (rate ? Math.round(byMethod.bsCents / rate) : 0);
-      methodFields = { openingBsCents: byMethod.bsCents, openingUsdCents: byMethod.usdCents };
-    }
-    await tx.cashOpening.upsert({
-      where: { branchId_date: { branchId, date: closingDate } },
-      create: { companyId: session.companyId, branchId, date: closingDate, amountCents: total, setById: session.userId, ...methodFields },
-      update: { amountCents: total, setById: session.userId, ...methodFields },
+  try {
+    await withTenant(session.companyId, async (tx) => {
+      const [openings, closings] = await Promise.all([
+        tx.cashOpening.findMany({ where: { branchId, date: closingDate } }),
+        tx.cashClosing.findMany({ where: { branchId, closingDate } }),
+      ]);
+      const active = activeShiftNumber(openings, closings);
+      if (mode === "start" && active != null) {
+        const who = openings.find((o) => o.shiftNumber === active)?.responsibleName;
+        throw new Error(`Ya hay un turno abierto (Turno ${active}${who ? `, responsable ${who}` : ""}). Ciérralo antes de abrir otro.`);
+      }
+      if (mode === "adjust" && active == null) throw new Error("No hay un turno abierto para ajustar.");
+
+      let total = amountCents;
+      let methodFields = {};
+      if (byMethod) {
+        if (byMethod.bsCents < 0 || byMethod.usdCents < 0) throw new Error("El monto de apertura no puede ser negativo");
+        const company = await tx.company.findUnique({ where: { id: session.companyId }, select: { exchangeRate: true, exchangeRateEnabled: true } });
+        const rate = company?.exchangeRateEnabled && company.exchangeRate ? Number(company.exchangeRate) : null;
+        total = byMethod.usdCents + (rate ? Math.round(byMethod.bsCents / rate) : 0);
+        methodFields = { openingBsCents: byMethod.bsCents, openingUsdCents: byMethod.usdCents };
+      }
+      if (mode === "adjust") {
+        await tx.cashOpening.update({
+          where: { branchId_date_shiftNumber: { branchId, date: closingDate, shiftNumber: active as number } },
+          data: { amountCents: total, setById: session.userId, ...methodFields, ...(responsible ? { responsibleName: responsible } : {}) },
+        });
+      } else {
+        await tx.cashOpening.create({
+          data: {
+            companyId: session.companyId,
+            branchId,
+            date: closingDate,
+            shiftNumber: nextShiftNumber(openings, closings),
+            amountCents: total,
+            setById: session.userId,
+            responsibleName: responsible,
+            ...methodFields,
+          },
+        });
+      }
     });
-  });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { success: false, error: "Ya hay un turno abierto en esta sede. Actualiza la pantalla." };
+    }
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo abrir la caja" };
+  }
   revalidatePath("/reports");
+  revalidatePath("/pos");
   return { success: true };
 }
 
+// Las salidas de Caja Chica pertenecen al turno abierto; con el día cerrado no se pueden tocar.
+async function activeShiftForOutflow(
+  tx: Prisma.TransactionClient,
+  branchId: string,
+  closingDate: Date
+): Promise<number> {
+  const [openings, closings] = await Promise.all([
+    tx.cashOpening.findMany({ where: { branchId, date: closingDate }, select: { shiftNumber: true } }),
+    tx.cashClosing.findMany({ where: { branchId, closingDate }, select: { shiftNumber: true, closedAt: true } }),
+  ]);
+  const active = activeShiftNumber(openings, closings);
+  if (active != null) return active;
+  if (closings.length > 0) throw new Error("Ese día ya fue cerrado.");
+  return 1;
+}
+
 export async function addCashOutflow(dateStr: string, concept: string, amountCents: number): Promise<ActionResult> {
-  const ctx = await requireOpenBranchDay(dateStr);
+  const ctx = await requireBranchDay(dateStr);
   if (!ctx.ok) return { success: false, error: ctx.error };
   const text = concept.trim();
   if (!text) return { success: false, error: "Escribe el concepto de la salida" };
@@ -299,34 +436,55 @@ export async function addCashOutflow(dateStr: string, concept: string, amountCen
     return { success: false, error: "El monto debe ser mayor a 0" };
   }
   const { session, branchId, closingDate } = ctx;
-  await withTenant(session.companyId, (tx) =>
-    tx.cashOutflow.create({
-      data: {
-        companyId: session.companyId,
-        branchId,
-        date: closingDate,
-        concept: text,
-        amountCents,
-        createdById: session.userId,
-      },
-    })
-  );
+  try {
+    await withTenant(session.companyId, async (tx) => {
+      const shiftNumber = await activeShiftForOutflow(tx, branchId, closingDate);
+      await tx.cashOutflow.create({
+        data: {
+          companyId: session.companyId,
+          branchId,
+          date: closingDate,
+          shiftNumber,
+          concept: text,
+          amountCents,
+          createdById: session.userId,
+        },
+      });
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar la salida" };
+  }
   revalidatePath("/reports");
   return { success: true };
 }
 
 export async function deleteCashOutflow(dateStr: string, id: string): Promise<ActionResult> {
-  const ctx = await requireOpenBranchDay(dateStr);
+  const ctx = await requireBranchDay(dateStr);
   if (!ctx.ok) return { success: false, error: ctx.error };
   const { session, branchId, closingDate } = ctx;
-  await withTenant(session.companyId, (tx) =>
-    tx.cashOutflow.deleteMany({ where: { id, companyId: session.companyId, branchId, date: closingDate } })
-  );
+  try {
+    await withTenant(session.companyId, async (tx) => {
+      const shiftNumber = await activeShiftForOutflow(tx, branchId, closingDate);
+      await tx.cashOutflow.deleteMany({ where: { id, companyId: session.companyId, branchId, date: closingDate, shiftNumber } });
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "No se pudo eliminar la salida" };
+  }
   revalidatePath("/reports");
   return { success: true };
 }
 
-export type RecentClosing = { id: string; date: string; totalCents: number; salesCount: number; note: string | null };
+export type RecentClosing = {
+  id: string;
+  date: string;
+  shiftNumber: number;
+  responsibleName: string | null;
+  openedAt: Date | null;
+  closedAt: Date;
+  totalCents: number;
+  salesCount: number;
+  note: string | null;
+};
 
 // Últimos cierres de caja (de la sede activa o de todas), para el «Historial de cierres».
 export async function listRecentClosings(limit = 5): Promise<RecentClosing[]> {
@@ -334,10 +492,20 @@ export async function listRecentClosings(limit = 5): Promise<RecentClosing[]> {
   const rows = await withTenant(companyId, (tx) =>
     tx.cashClosing.findMany({
       where: { companyId, ...(branchId ? { branchId } : {}) },
-      orderBy: { closingDate: "desc" },
+      orderBy: [{ closingDate: "desc" }, { closedAt: "desc" }],
       take: limit,
-      select: { id: true, closingDate: true, totalCents: true, salesCount: true, note: true },
+      select: { id: true, closingDate: true, shiftNumber: true, responsibleName: true, openedAt: true, closedAt: true, totalCents: true, salesCount: true, note: true },
     })
   );
-  return rows.map((r) => ({ id: r.id, date: r.closingDate.toISOString().slice(0, 10), totalCents: r.totalCents, salesCount: r.salesCount, note: r.note }));
+  return rows.map((r) => ({
+    id: r.id,
+    date: r.closingDate.toISOString().slice(0, 10),
+    shiftNumber: r.shiftNumber,
+    responsibleName: r.responsibleName,
+    openedAt: r.openedAt,
+    closedAt: r.closedAt,
+    totalCents: r.totalCents,
+    salesCount: r.salesCount,
+    note: r.note,
+  }));
 }
