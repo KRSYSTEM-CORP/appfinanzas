@@ -65,8 +65,8 @@ export default async function PosPage({
               </span>
             )}
             {todaySummary && (
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${todaySummary.closed ? "bg-muted text-muted-foreground" : todaySummary.openingCents != null ? "bg-success/14 text-success" : "bg-warning/18 text-warning"}`}>
-                {todaySummary.closed ? "Caja cerrada" : todaySummary.openingCents != null ? "Caja abierta" : "Caja sin abrir"}
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${todaySummary.shiftOpen ? "bg-success/14 text-success" : todaySummary.closed ? "bg-muted text-muted-foreground" : "bg-warning/18 text-warning"}`}>
+                {todaySummary.shiftOpen ? "Caja abierta" : todaySummary.closed ? "Caja cerrada" : "Caja sin abrir"}
               </span>
             )}
             <PosSalesSheet referenceCurrency={referenceCurrency} />
