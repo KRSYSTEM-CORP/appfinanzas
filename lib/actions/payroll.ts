@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAccountingPlan } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { methodForAccountKind, refToAccountCents } from "@/lib/account-money";
 import { commissionFor, computeFortnight, isValidPeriod, payrollSettlement, periodDateRange, type PayrollRates } from "@/lib/payroll";
 import { dayBoundsUtc, zonedDateStringToUtc } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
@@ -312,17 +313,18 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
       // Cuenta de origen: debe ser de la empresa; el débito va en la moneda de esa cuenta.
       let accountDebitCents: number | null = null;
       let accountId: string | null = null;
+      let method: PaymentMethod = d.paymentMethod;
       if (d.paymentAccountId) {
-        const acc = await tx.paymentAccount.findFirst({ where: { id: d.paymentAccountId, companyId }, select: { id: true, currency: true } });
+        const acc = await tx.paymentAccount.findFirst({ where: { id: d.paymentAccountId, companyId }, select: { id: true, currency: true, kind: true } });
         if (!acc) throw new Error("La cuenta elegida no existe");
         accountId = acc.id;
-        if (acc.currency === "VES") {
-          const rate = company?.exchangeRateEnabled && company.exchangeRate ? Number(company.exchangeRate) : null;
-          if (rate == null) throw new Error("Configura la tasa de cambio para pagar desde una cuenta en bolívares");
-          accountDebitCents = Math.round(d.amountCents * rate);
-        } else {
-          accountDebitCents = d.amountCents;
-        }
+        // El método sale de la cuenta elegida (pago móvil, transferencia, Zelle...): así el pago
+        // no queda como «Efectivo» aunque el selector de método no se haya tocado.
+        method = methodForAccountKind(acc.kind);
+        const rate = company?.exchangeRateEnabled && company.exchangeRate ? Number(company.exchangeRate) : null;
+        const debit = refToAccountCents(d.amountCents, acc.currency, rate);
+        if (debit == null) throw new Error("Configura la tasa de cambio para pagar desde una cuenta en bolívares");
+        accountDebitCents = debit;
       }
 
       const label = d.isAdvance ? "Adelanto de nómina" : "Nómina";
@@ -348,7 +350,7 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
           netCents: calc.netCents,
           paidCents: d.amountCents,
           isAdvance: d.isAdvance,
-          paymentMethod: d.paymentMethod,
+          paymentMethod: method,
           reference: d.reference || null,
           proofDataUrl: d.proofDataUrl ?? null,
           paymentAccountId: accountId,

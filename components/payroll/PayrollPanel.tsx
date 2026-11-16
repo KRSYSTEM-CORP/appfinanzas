@@ -43,6 +43,7 @@ import {
   type PayrollLedgerRow,
   type PayrollPaymentRow,
 } from "@/lib/actions/payroll";
+import { methodForAccountKind } from "@/lib/account-money";
 import type { PaymentMethod, ReferenceCurrency } from "@prisma/client";
 
 const METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
@@ -603,7 +604,16 @@ function PayDialog({
               <Input id="pp-ref" value={reference} onChange={(e) => setReference(e.target.value)} />
             </Field>
           </div>
-          <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} label="¿De qué cuenta sale la nómina?" />
+          <AccountSelect
+            accounts={accounts}
+            value={accountId}
+            onChange={(id) => {
+              setAccountId(id);
+              const acc = accounts.find((a) => a.id === id);
+              if (acc) setMethod(methodForAccountKind(acc.kind));
+            }}
+            label="¿De qué cuenta sale la nómina?"
+          />
           <Field id="pp-note" label="Nota (opcional)">
             <Input id="pp-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. primer abono, adelanto por emergencia" />
           </Field>
