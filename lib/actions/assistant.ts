@@ -137,8 +137,8 @@ FORMATO: responde SOLO con JSON válido:
   {"type":"chart","dataset":"ventas_por_dia"|"gastos_por_categoria"|"top_productos","kind":"bar"|"line","from":...,"to":...}   gráfico
   {"type":"products","query":"palabras del producto"}   tarjetas con foto, precio y stock
   {"type":"link","to":"pos"|"inventario"|"caja"|"estadisticas"|"marketing"|"administracion"|"compras"|"cuentas_por_cobrar"|"nomina"|"sucursales"|"ajustes"}   botón para abrir esa pantalla
-  D = ventas_por_dia | ventas_recientes | top_productos | stock_bajo | inventario | cuentas_por_cobrar | gastos_por_categoria | clientes_top
-Cuando pidan un PDF, reporte, lista o documento: incluye el bloque «table» del dataset adecuado (el usuario verá la vista previa y el botón Descargar PDF). Cuando pidan ver, mostrar, comparar o «una gráfica»: usa «chart». Cuando pregunten por un producto: usa «products». Cuando pidan «llévame a…»: usa «link». Combina bloques si ayuda (por ejemplo gráfico + tabla).
+  D = ventas_por_dia | ventas_recientes | top_productos | stock_bajo | inventario | cuentas_por_cobrar | gastos_por_categoria | clientes_top | reporte_completo
+Cuando pidan un reporte, informe o PDF de ventas / del negocio / del período: usa SIEMPRE el dataset «reporte_completo» (trae todo: cobrado por moneda y método, por día, productos, vendedores, descuentos, crédito, gastos, compras y ganancia). Para otros PDFs, lista o documento: incluye el bloque «table» del dataset adecuado (el usuario verá la vista previa y el botón Descargar PDF). Cuando pidan ver, mostrar, comparar o «una gráfica»: usa «chart». Cuando pregunten por un producto: usa «products». Cuando pidan «llévame a…»: usa «link». Combina bloques si ayuda (por ejemplo gráfico + tabla).
 «proposal» solo si piden EXPLÍCITAMENTE hacer algo (el usuario debe confirmarla; ves su vista previa antes de confirmar):
   {"type":"EXPENSE","description":"...","category":"...","amount":numero}  (amount en la moneda de referencia)
   {"type":"PRICE_ADJUST","category":"nombre exacto de la lista","percent":numero entre -50 y 50}
