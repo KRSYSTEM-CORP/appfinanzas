@@ -27,7 +27,7 @@ const PRINTERS: { id: string; label: string; desc: string; note: string; paper: 
 // Imprime una página de prueba en el formato elegido, con el mismo mecanismo
 // (iframe aislado + @page del tamaño) que el resto de documentos.
 function printTest(p: (typeof PRINTERS)[number]) {
-  const body = `<div style="font-family:system-ui,sans-serif"><h1 style="font-size:1.3em;margin:8px 0">Prueba de impresión</h1><p style="margin:4px 0">Formato: ${p.label}</p><p style="margin:4px 0">${new Date().toLocaleString("es-VE")}</p><div style="border:1px dashed #000;padding:6px;margin-top:8px;text-align:center">Si ves este recuadro completo, tu impresora está bien configurada.</div></div>`;
+  const body = `<div style="font-family:system-ui,sans-serif"><h1 class="print-title" style="margin:0 0 6px">Prueba de impresión</h1><p style="margin:4px 0">Formato: ${p.label}</p><p style="margin:4px 0">${new Date().toLocaleString("es-VE")}</p><div style="border:1px solid #000;padding:6px;margin-top:8px;text-align:center">Si ves este recuadro completo, tu impresora está bien configurada.</div></div>`;
   printHtmlDocument(body, p.paper, "Prueba de impresión").catch(() => toast.error("No se pudo abrir la impresión."));
 }
 

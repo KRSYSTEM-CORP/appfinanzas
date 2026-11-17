@@ -75,14 +75,14 @@ export function PrintableSaleDocument({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={company.logoDataUrl} alt="" className="mx-auto mb-1 h-10 object-contain" />
         )}
-        <p className="font-bold">{company.name}</p>
+        <p className="print-title">{company.name}</p>
         {company.fiscalLegalName && <p className="text-xs">{company.fiscalLegalName}</p>}
         {company.fiscalRif && <p className="text-xs">RIF: {company.fiscalRif}</p>}
         {company.fiscalAddress && <p className="text-xs">{company.fiscalAddress}</p>}
         {company.fiscalPhone && <p className="text-xs">Tel: {company.fiscalPhone}</p>}
       </div>
       <div className="my-2 border-t border-dashed border-black" />
-      <p className="text-center font-bold">{title}</p>
+      <p className="print-title">{title}</p>
       <p className="text-center text-xs">Nº de control: {controlLabel}</p>
       {variant === "receipt" && (
         <p className="text-center text-xs">Nota de entrega Nº: {controlNumberLabel(sale)}</p>
@@ -130,7 +130,7 @@ export function PrintableSaleDocument({
               <p>
                 {item.quantity} x {itemDescription(item)}
               </p>
-              <p className="text-[10px] text-gray-600">{money(item.unitPriceCents)} c/u</p>
+              <p>{money(item.unitPriceCents)} c/u</p>
               <p className="text-right font-medium">{money(item.subtotalCents)}</p>
             </div>
           ))}
@@ -147,7 +147,7 @@ export function PrintableSaleDocument({
           </thead>
           <tbody>
             {sale.items.map((item, i) => (
-              <tr key={i} className="border-b border-gray-300">
+              <tr key={i} className="border-b border-black">
                 <td className="py-1">{item.quantity}</td>
                 <td className="py-1">{itemDescription(item)}</td>
                 <td className="py-1 text-right">{money(item.unitPriceCents)}</td>
@@ -159,7 +159,7 @@ export function PrintableSaleDocument({
       )}
       <div className="my-2 border-t border-dashed border-black" />
       {sale.paymentStatus === "CREDIT" ? (
-        <p className="text-center font-bold">PAGO PENDIENTE</p>
+        <p className="print-title">PAGO PENDIENTE</p>
       ) : (
         <div className="mb-2">
           {payments.length <= 1 ? (
@@ -179,7 +179,7 @@ export function PrintableSaleDocument({
                   )}
                   {p.reference ? ` (${p.reference})` : ""}
                   {(p.createdAt || p.exchangeRate != null) && (
-                    <span className="block text-xs text-gray-600 ml-3">
+                    <span className="block ml-3">
                       {[p.createdAt ? formatDate(p.createdAt) : null, p.exchangeRate != null ? `Tasa ${formatLocalCurrency(p.exchangeRate, currencyCode)}` : null]
                         .filter(Boolean)
                         .join(" · ")}
@@ -219,7 +219,7 @@ export function PrintableSaleDocument({
           {referenceNote(currencyCode, referenceCurrency)}: {formatCurrencyCents(referenceCurrency, sale.totalCents)}
         </p>
       )}
-      <p className="mt-3 text-center text-[10px]">KR POS — Ventas e Inventario</p>
+      <p className="mt-3 text-center">KR POS — Ventas e Inventario</p>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from "react";
 import { createPortal } from "react-dom";
 import type { PrintPaperSize } from "@prisma/client";
-import { isThermal, pageRule, printBaseCss, printGeometry } from "@/lib/print-paper-sizes";
+import { isThermal, pageRule, printBaseCss, printGeometry, printPageHeightMm, printShellHtml } from "@/lib/print-paper-sizes";
 
 export type PrintFrameHandle = { print: () => Promise<void> };
 
@@ -61,14 +61,9 @@ export function PrintFrame({
     style.setAttribute("data-page", "1");
     doc.head.appendChild(style);
     pageStyleRef.current = style;
-    let root = doc.getElementById("print-root");
-    if (!root) {
-      root = doc.createElement("div");
-      root.id = "print-root";
-      doc.body.appendChild(root);
-    }
-    setMountNode(root);
-  }, [title]);
+    doc.body.innerHTML = printShellHtml(paperSize);
+    setMountNode(doc.getElementById("print-root"));
+  }, [title, paperSize]);
 
   // Ancho disponible para escalar la hoja dentro del diálogo.
   useLayoutEffect(() => {
@@ -86,19 +81,20 @@ export function PrintFrame({
     const style = pageStyleRef.current;
     if (!style) return;
     const measure = () => {
-      const mm = mountNode.getBoundingClientRect().height / MM_TO_PX;
+      // Alto total del documento = contenido + padding vertical (solo tickets).
+      const mm = mountNode.getBoundingClientRect().height / MM_TO_PX + (thermal ? 2 * g.marginMm : 0);
       setContentMm((prev) => (prev != null && Math.abs(prev - mm) < 0.2 ? prev : mm));
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(mountNode);
     return () => ro.disconnect();
-  }, [mountNode, paperSize]);
+  }, [mountNode, paperSize, thermal, g.marginMm]);
 
   useEffect(() => {
     const style = pageStyleRef.current;
     if (!style || !mountNode) return;
-    style.textContent = `${printBaseCss(paperSize)}\n${pageRule(paperSize, thermal ? (contentMm ?? undefined) : undefined)}`;
+    style.textContent = `${printBaseCss(paperSize, thermal ? (contentMm ?? undefined) : undefined)}\n${pageRule(paperSize, thermal ? (contentMm ?? undefined) : undefined)}`;
   }, [mountNode, paperSize, contentMm, thermal]);
 
   useImperativeHandle(
@@ -126,7 +122,7 @@ export function PrintFrame({
 
   const widthPx = g.pageWidthMm * MM_TO_PX;
   const scale = availPx > 0 ? Math.min(1, availPx / widthPx) : 1;
-  const heightMm = Math.max(g.pageHeightMm ?? 0, (contentMm ?? 40) + 2 * g.marginMm);
+  const heightMm = thermal ? printPageHeightMm(contentMm ?? 40) : (g.pageHeightMm ?? 0);
   const heightPx = heightMm * MM_TO_PX;
 
   return (
@@ -142,6 +138,7 @@ export function PrintFrame({
         }}
       >
         <iframe
+          key={paperSize}
           ref={iframeRef}
           title={title}
           srcDoc={'<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>'}

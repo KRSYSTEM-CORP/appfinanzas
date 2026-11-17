@@ -49,14 +49,14 @@ export function PrintableQuote({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={company.logoDataUrl} alt="" className="mx-auto mb-1 h-10 object-contain" />
         )}
-        <p className="font-bold">{company.name}</p>
+        <p className="print-title">{company.name}</p>
         {company.fiscalLegalName && <p className="text-xs">{company.fiscalLegalName}</p>}
         {company.fiscalRif && <p className="text-xs">RIF: {company.fiscalRif}</p>}
         {company.fiscalAddress && <p className="text-xs">{company.fiscalAddress}</p>}
         {company.fiscalPhone && <p className="text-xs">Tel: {company.fiscalPhone}</p>}
       </div>
       <div className="my-2 border-t border-dashed border-black" />
-      <p className="text-center font-bold">PRESUPUESTO</p>
+      <p className="print-title">PRESUPUESTO</p>
       <p className="text-center text-xs">Nº de control: {quoteControlNumberLabel(quote)}</p>
       <p className="text-center text-xs">Fecha: {formatDate(quote.createdAt)}</p>
       <div className="my-2 border-t border-dashed border-black" />
@@ -93,7 +93,7 @@ export function PrintableQuote({
               <p>
                 {item.quantity} x {itemDescription(item)}
               </p>
-              <p className="text-[10px] text-gray-600">{money(item.unitPriceCents)} c/u</p>
+              <p>{money(item.unitPriceCents)} c/u</p>
               <p className="text-right font-medium">{money(item.subtotalCents)}</p>
             </div>
           ))}
@@ -110,7 +110,7 @@ export function PrintableQuote({
           </thead>
           <tbody>
             {quote.items.map((item, i) => (
-              <tr key={i} className="border-b border-gray-300">
+              <tr key={i} className="border-b border-black">
                 <td className="py-1">{item.quantity}</td>
                 <td className="py-1">{itemDescription(item)}</td>
                 <td className="py-1 text-right">{money(item.unitPriceCents)}</td>
@@ -130,7 +130,7 @@ export function PrintableQuote({
           {referenceNote(currencyCode, referenceCurrency)}: {formatCurrencyCents(referenceCurrency, quote.totalCents)}
         </p>
       )}
-      <p className="mt-3 text-center text-[10px]">KR POS — Ventas e Inventario</p>
+      <p className="mt-3 text-center">KR POS — Ventas e Inventario</p>
     </div>
   );
 }
