@@ -141,7 +141,7 @@ export async function buildCashClosingPDF(
     autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },
-      head: [["Método de pago", "Total"]],
+      head: [["Método de pago", "Total (ref.)"]],
       body: rows,
       theme: "grid",
       headStyles: { fillColor: [30, 41, 59] },

@@ -129,7 +129,7 @@ export function PrintableCashClosing({
       {summary.byMethod.length > 0 && (
         <>
           <div className="my-2 border-t border-dashed border-black" />
-          <p className="print-title">Por método de pago</p>
+          <p className="print-title">Por método de pago (ref.)</p>
           {summary.byMethod.map((m) => (
             <div key={m.paymentMethod} className="flex justify-between">
               <span>{PAYMENT_METHOD_LABELS[m.paymentMethod]}</span>
