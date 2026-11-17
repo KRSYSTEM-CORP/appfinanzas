@@ -5,7 +5,7 @@ import { LightbulbIcon, ShoppingCartIcon, TrendingDownIcon, TrendingUpIcon, Wall
 import { ExpensesPanel } from "@/components/finance/ExpensesPanel";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { PeriodBar } from "@/components/shared/PeriodBar";
-import { formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { formatCurrencyCents } from "@/lib/currencies";
 import {
   revenueTotals,
   receivablesTotals,

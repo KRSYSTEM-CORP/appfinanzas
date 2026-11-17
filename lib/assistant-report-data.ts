@@ -174,7 +174,6 @@ export async function buildFullReport(tx: Tx, ctx: ReportCtx, from: string, to: 
   const cogs = n(cogsRow?.cogs);
   const costedRev = n(cogsRow?.costed);
   const grossProfit = costedRev - cogs;
-  const margin = costedRev > 0 ? (grossProfit / costedRev) * 100 : 0;
   const netProfit = grossProfit - expTotal;
   const pct = (a: number, b: number) => (b > 0 ? `${((a / b) * 100).toFixed(1).replace(".", ",")} %` : "—");
   const localLbl = (c: string) => (c === ctx.localCurrency ? "Bs" : c);
