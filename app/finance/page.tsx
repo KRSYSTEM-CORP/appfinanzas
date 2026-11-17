@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { formatCurrencyTotals } from "@/lib/currency-breakdown";
 import { requireAccountingPlan, requirePermission } from "@/lib/session";
 import { LightbulbIcon, ShoppingCartIcon, TrendingDownIcon, TrendingUpIcon, WalletIcon } from "lucide-react";
 import { ExpensesPanel } from "@/components/finance/ExpensesPanel";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { PeriodBar } from "@/components/shared/PeriodBar";
-import { formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { formatCurrencyCents } from "@/lib/currencies";
 import {
   revenueTotals,
   receivablesTotals,
@@ -216,10 +217,10 @@ export default async function FinancePage({
           index={0}
           tone="all"
           icon="money"
-          label="Ventas"
+          label={`Ventas (ref. ${cur})`}
           value={totals.totalEurCents}
           format={{ kind: "money", currency: cur }}
-          hint={exchangeRateEnabled ? `Total cobrado · ${formatLocalCurrency(totals.totalVES, localCurrencyCode)}` : "Total cobrado"}
+          hint={currencyIncome.length > 0 ? `Cobrado: ${formatCurrencyTotals(currencyIncome.map((r) => ({ code: r.currencyCode, cents: r.totalCents })))}` : "Referencia a la tasa BCV"}
           spark={byDay.map((d) => d.totalEurCents)}
         />
         <Kpi index={1} tone="warn" icon="stats" label="Venta promedio" value={totals.avgEurCents} format={{ kind: "money", currency: cur }} hint="Por venta" />

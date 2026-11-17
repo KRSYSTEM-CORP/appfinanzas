@@ -42,12 +42,12 @@ export function PrintableCashClosing({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={company.logoDataUrl} alt="" className="mx-auto mb-1 h-10 object-contain" />
         )}
-        <p className="font-bold">{company.name}</p>
+        <p className="print-title">{company.name}</p>
         {company.fiscalLegalName && <p className="text-xs">{company.fiscalLegalName}</p>}
         {company.fiscalRif && <p className="text-xs">RIF: {company.fiscalRif}</p>}
       </div>
       <div className="my-2 border-t border-dashed border-black" />
-      <p className="text-center font-bold">CORTE Z · CIERRE DE CAJA</p>
+      <p className="print-title">CORTE Z · CIERRE DE CAJA</p>
       <p className="text-center text-xs">Fecha: {formatDateOnly(summary.date)}</p>
       {branchName && <p className="text-center text-xs">Sucursal: {branchName}</p>}
       {summary.shiftNumber != null && (
@@ -93,7 +93,7 @@ export function PrintableCashClosing({
       </div>
 
       <div className="my-2 border-t border-dashed border-black" />
-      <p className="font-bold">Caja Chica</p>
+      <p className="print-title">Caja Chica</p>
       <div className="flex justify-between">
         <span>Apertura:</span>
         <span>{money(summary.openingCents ?? 0)}</span>
@@ -113,10 +113,23 @@ export function PrintableCashClosing({
         <span>{money(summary.expectedCashCents)}</span>
       </div>
 
+      {summary.byCurrency.length > 0 && (
+        <>
+          <div className="my-2 border-t border-dashed border-black" />
+          <p className="font-bold">Cobrado por moneda</p>
+          {summary.byCurrency.map((c) => (
+            <div key={c.currencyCode} className="flex justify-between">
+              <span>{c.currencyCode}</span>
+              <span>{formatCurrencyCents(c.currencyCode, c.cents)}</span>
+            </div>
+          ))}
+        </>
+      )}
+
       {summary.byMethod.length > 0 && (
         <>
           <div className="my-2 border-t border-dashed border-black" />
-          <p className="font-bold">Por método de pago</p>
+          <p className="print-title">Por método de pago</p>
           {summary.byMethod.map((m) => (
             <div key={m.paymentMethod} className="flex justify-between">
               <span>{PAYMENT_METHOD_LABELS[m.paymentMethod]}</span>

@@ -44,6 +44,8 @@ export type CashClosingSummary = {
   creditCents: number;
   creditCount: number;
   byMethod: { paymentMethod: PaymentMethod; totalCents: number }[];
+  // Lo realmente cobrado en cada moneda (Bs en Bs, divisas en divisas); refCents es solo referencia.
+  byCurrency: { currencyCode: string; cents: number; refCents: number }[];
   closed: { closedAt: Date; note: string | null } | null;
 };
 
@@ -87,7 +89,7 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
     const viewClosing = viewShift != null ? closings.find((c) => c.shiftNumber === viewShift) ?? null : null;
     const viewOpening = viewShift != null ? viewOpenings[0] ?? null : null;
 
-    const [totals, byStatus, byMethodRows, outflows] = await Promise.all([
+    const [totals, byStatus, byMethodRows, byCurrencyRows, outflows] = await Promise.all([
       tx.sale.aggregate({
         where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: window.start, lt: window.end }, voided: false },
         _sum: { totalCents: true },
@@ -109,6 +111,18 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
           AND s."voided" = false
         GROUP BY sp."paymentMethod"
         ORDER BY total_cents DESC
+      `,
+      tx.$queryRaw<{ currency: string; cents: bigint; ref: bigint }[]>`
+        SELECT COALESCE(sp."currencyCode", CASE WHEN sp."paymentMethod"::text IN ('ZELLE','BINANCE','PAYPAL') THEN 'USD' ELSE 'EUR' END) AS currency,
+               SUM(COALESCE(sp."amountCurrencyCents", sp."amountEurCents"))::bigint AS cents, SUM(sp."amountEurCents")::bigint AS ref
+        FROM "SalePayment" sp
+        JOIN "Sale" s ON s.id = sp."saleId"
+        WHERE s."companyId" = ${companyId}
+          ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+          AND s."createdAt" >= ${window.start} AND s."createdAt" < ${window.end}
+          AND s."voided" = false
+        GROUP BY 1
+        ORDER BY ref DESC
       `,
       tx.cashOutflow.findMany({
         where: {
@@ -182,6 +196,7 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
       creditCents: byStatus.find((r) => r.paymentStatus === "CREDIT")?._sum.totalCents ?? 0,
       creditCount: byStatus.find((r) => r.paymentStatus === "CREDIT")?._count ?? 0,
       byMethod: byMethodRows.map((r) => ({ paymentMethod: r.paymentMethod, totalCents: Number(r.total_cents) })),
+      byCurrency: byCurrencyRows.map((r) => ({ currencyCode: r.currency, cents: Number(r.cents), refCents: Number(r.ref) })),
       closed,
     };
   });

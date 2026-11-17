@@ -10,6 +10,7 @@ export const DATASETS = [
   "cuentas_por_cobrar",
   "gastos_por_categoria",
   "clientes_top",
+  "reporte_completo",
 ] as const;
 export type DatasetId = (typeof DATASETS)[number];
 
@@ -22,6 +23,7 @@ export const DATASET_LABELS: Record<DatasetId, string> = {
   cuentas_por_cobrar: "Cuentas por cobrar",
   gastos_por_categoria: "Gastos por categoría",
   clientes_top: "Mejores clientes",
+  reporte_completo: "Reporte completo de ventas",
 };
 
 // Rutas a las que el asistente puede llevar al usuario (lista cerrada).
@@ -39,7 +41,24 @@ export const ASSISTANT_LINKS: Record<string, string> = {
   ajustes: "/settings",
 };
 
+// Reporte completo (PDF): indicadores y secciones ya formateadas por el servidor.
+export type ReportKpi = { label: string; value: string; hint?: string };
+export type ReportSection = {
+  title: string;
+  note?: string;
+  columns: string[];
+  rows: string[][];
+  totals?: string[];
+};
+export type FullReport = {
+  kpis: ReportKpi[];
+  sections: ReportSection[];
+  notes: string[];
+};
+
 export type ResolvedTable = {
+  // Presente solo en el reporte completo.
+  report?: FullReport;
   type: "table";
   dataset: DatasetId;
   title: string;

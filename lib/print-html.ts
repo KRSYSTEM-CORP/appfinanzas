@@ -1,5 +1,5 @@
 import type { PrintPaperSize } from "@prisma/client";
-import { pageRule, printBaseCss } from "@/lib/print-paper-sizes";
+import { isThermal, pageRule, printBaseCss, printGeometry, printShellHtml } from "@/lib/print-paper-sizes";
 
 // Imprime un fragmento HTML ya armado (sin React) en un iframe oculto, con el
 // mismo @page y estilos base que la vista previa (components/print/PrintFrame).
@@ -22,10 +22,14 @@ export function printHtmlDocument(bodyHtml: string, paperSize: PrintPaperSize, t
       doc.title = title;
       const style = doc.createElement("style");
       doc.head.appendChild(style);
-      doc.body.innerHTML = `<div id="print-root">${bodyHtml}</div>`;
+      doc.body.innerHTML = printShellHtml(paperSize);
       const root = doc.getElementById("print-root")!;
-      const heightMm = (root.getBoundingClientRect().height * 25.4) / 96;
-      style.textContent = `${printBaseCss(paperSize)}\n${pageRule(paperSize, heightMm)}`;
+      root.innerHTML = bodyHtml;
+      // La medida necesita los estilos base ya aplicados (ancho y fuente).
+      style.textContent = printBaseCss(paperSize);
+      const thermal = isThermal(paperSize);
+      const heightMm = (root.getBoundingClientRect().height * 25.4) / 96 + (thermal ? 2 * printGeometry(paperSize).marginMm : 0);
+      style.textContent = `${printBaseCss(paperSize, thermal ? heightMm : undefined)}\n${pageRule(paperSize, thermal ? heightMm : undefined)}`;
       const done = () => {
         win.removeEventListener("afterprint", done);
         setTimeout(() => iframe.remove(), 500);

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatCurrencyCents } from "@/lib/currencies";
 import { Price } from "@/components/money/Price";
 import { addCashOutflow, deleteCashOutflow, type CashClosingSummary } from "@/lib/actions/cash-closing";
 import type { ReferenceCurrency } from "@prisma/client";
@@ -78,6 +79,23 @@ export function CajaChicaCard({
               <Button type="submit" disabled={isPending}>Registrar salida</Button>
             </form>
             {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {summary.byCurrency.length > 0 && (
+        <Card>
+          <CardContent className="flex flex-col divide-y">
+            <p className="py-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">Cobrado hoy por moneda (lo que realmente entró)</p>
+            {summary.byCurrency.map((c) => (
+              <div key={c.currencyCode} className="flex items-center justify-between gap-3 py-3 text-sm">
+                <span className="font-bold">{c.currencyCode === "VES" ? "Bolívares" : c.currencyCode === "USD" ? "Dólares" : c.currencyCode === "EUR" ? "Euros" : c.currencyCode}</span>
+                <span className="text-right">
+                  <span className="block font-extrabold tabular-nums">{formatCurrencyCents(c.currencyCode, c.cents)}</span>
+                  <span className="block text-xs text-muted-foreground tabular-nums">ref. {formatCurrencyCents(priceProps.referenceCurrency ?? "EUR", c.refCents)}</span>
+                </span>
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}
