@@ -204,7 +204,7 @@ export function CashClosingPanel({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cc-opening">Efectivo $</Label>
+              <Label htmlFor="cc-opening">Efectivo {referenceCurrency === "EUR" ? "€" : "$"}</Label>
               <Input id="cc-opening" type="number" min="0" step="0.01" inputMode="decimal" value={opening} onChange={(e) => setOpening(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
