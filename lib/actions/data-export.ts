@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/session";
+import { lineCurrency, lineNativeCents } from "@/lib/currency-breakdown";
 import { withTenant } from "@/lib/tenant-db";
 import { buildDailyReport } from "@/lib/daily-report";
 import { sendWeeklyReportEmail } from "@/lib/email";
@@ -22,10 +23,16 @@ export async function exportSalesHistory(): Promise<Cell[][]> {
       select: {
         createdAt: true, controlNumber: true, customerFirstName: true, customerLastName: true,
         totalCents: true, baseImponibleCents: true, taxCents: true, paymentStatus: true,
+        payments: { select: { paymentMethod: true, currencyCode: true, amountCurrencyCents: true, amountEurCents: true } },
       },
     });
+    const ref = (await tx.company.findUnique({ where: { id: companyId }, select: { referenceCurrency: true } }))?.referenceCurrency ?? "USD";
+    const paidIn = (s: (typeof sales)[number], code: string) => {
+      const v = s.payments.filter((p) => lineCurrency(p, ref) === code).reduce((a, p) => a + lineNativeCents(p), 0);
+      return v ? v / 100 : null;
+    };
     return [
-      ["Fecha", "N.º", "Cliente", "Base imponible", "IVA", "Total", "Estado de pago"],
+      ["Fecha", "N.º", "Cliente", "Base imponible (ref.)", "IVA (ref.)", "Total (referencia)", "Cobrado en Bs", "Cobrado en USD", "Cobrado en EUR", "Estado de pago"],
       ...sales.map((s): Cell[] => [
         s.createdAt.toISOString().slice(0, 16).replace("T", " "),
         s.controlNumber ?? null,
@@ -33,6 +40,9 @@ export async function exportSalesHistory(): Promise<Cell[][]> {
         s.baseImponibleCents / 100,
         s.taxCents / 100,
         s.totalCents / 100,
+        paidIn(s, "VES"),
+        paidIn(s, "USD"),
+        paidIn(s, "EUR"),
         String(s.paymentStatus),
       ]),
     ];

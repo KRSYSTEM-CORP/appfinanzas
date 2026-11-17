@@ -26,11 +26,20 @@ export async function buildDailyReport(companyId: string): Promise<{ subject: st
         WHERE s."companyId" = ${companyId} AND s."voided" = false AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
         GROUP BY si."productName" ORDER BY SUM(si."quantity") DESC LIMIT 3`,
     ]);
+    const byCur = await tx.$queryRaw<{ cur: string; cents: bigint }[]>`
+      SELECT COALESCE(sp."currencyCode", CASE WHEN sp."paymentMethod"::text IN ('ZELLE','BINANCE','PAYPAL') THEN 'USD' ELSE ${c.referenceCurrency} END) AS cur,
+             SUM(COALESCE(sp."amountCurrencyCents", sp."amountEurCents"))::bigint AS cents
+      FROM "SalePayment" sp JOIN "Sale" s ON s.id = sp."saleId"
+      WHERE s."companyId" = ${companyId} AND s."voided" = false AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
+      GROUP BY 1 ORDER BY 2 DESC`;
+    const cobrado = byCur.length ? `<p><strong>Cobrado por moneda:</strong> ${byCur.map((r) => esc(formatCurrencyCents(r.cur, Number(r.cents)))).join(" + ")}</p>` : "";
     const body = `
       <h2>Ventas de hoy en ${esc(c.name)}</h2>
       <p>${day}</p>
       <p style="font-size: 28px; font-weight: 700; margin: 12px 0;">${formatCurrencyCents(c.referenceCurrency, agg._sum.totalCents ?? 0)}</p>
+      <p style="color:#555;font-size:12px;margin:0">Valor vendido (referencia a la tasa BCV)</p>
       <p>${agg._count} ${agg._count === 1 ? "venta" : "ventas"}</p>
+      ${cobrado}
       ${top.length ? `<p><strong>Lo más vendido:</strong></p><ul>${top.map((t) => `<li>${esc(t.name)} — ${Number(t.qty)} und.</li>`).join("")}</ul>` : ""}
       <p>Puedes cambiar los destinatarios en Ajustes → Impresión y Datos.</p>`;
     return { subject: `Ventas de hoy — ${c.name}`, body, emails: c.dailyReportEmails };

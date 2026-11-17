@@ -122,6 +122,20 @@ export async function buildCashClosingPDF(
     y += 8;
   }
 
+  if (summary.byCurrency.length > 0) {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [["Cobrado por moneda (lo que realmente entró)", "Monto", "Equiv. referencia"]],
+      body: summary.byCurrency.map((c) => [c.currencyCode, formatCurrencyCents(c.currencyCode, c.cents), formatCurrencyCents(referenceCurrency, c.refCents)]),
+      theme: "grid",
+      headStyles: { fillColor: [225, 225, 225], textColor: 0 },
+      styles: { fontSize: 10, cellPadding: 6, textColor: 0 },
+      columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } },
+    });
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 20;
+  }
+
   if (summary.byMethod.length > 0) {
     const rows = summary.byMethod.map((m) => [PAYMENT_METHOD_LABELS[m.paymentMethod], money(m.totalCents)]);
     autoTable(doc, {

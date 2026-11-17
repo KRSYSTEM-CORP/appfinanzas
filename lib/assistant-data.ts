@@ -12,6 +12,7 @@ import {
 import { formatCurrencyCents, eurCentsToLocal } from "@/lib/currencies";
 import { computeItemDiscountCents } from "@/lib/discount";
 import { resolveTierPrice } from "@/lib/pricing";
+import { buildFullReport } from "@/lib/assistant-report-data";
 import { dayBoundsUtc, SHOP_TIME_ZONE, todayDateString } from "@/lib/report-types";
 
 // Los datos que muestra el Asistente salen SIEMPRE de la base de datos (nunca del modelo):
@@ -90,27 +91,33 @@ export async function dataset(tx: Tx, ctx: DataCtx, id: DatasetId, fromIn?: stri
   const base = { type: "table" as const, dataset: id, title: DATASET_LABELS[id], from, to };
   let table: ResolvedTable;
   let chartPoints: DatasetResult["chartPoints"];
+  const comp = await tx.company.findUnique({ where: { id: ctx.companyId }, select: { name: true, localCurrencyCode: true, exchangeRate: true, exchangeRateEnabled: true } });
+  const rate = comp?.exchangeRateEnabled && comp.exchangeRate ? Number(comp.exchangeRate) : null;
+  const refTag = `(ref. ${ctx.currency})`;
 
-  if (id === "ventas_por_dia") {
+  if (id === "reporte_completo") {
+    const full = await buildFullReport(tx, { companyId: ctx.companyId, branchId: ctx.branchId, refCurrency: ctx.currency, localCurrency: comp?.localCurrencyCode ?? "VES", rate }, from, to, comp?.name ?? "la empresa");
+    table = { ...base, subtitle: `${period} · ${full.salesCount} venta(s) · cobrado por moneda`, columns: full.columns, rows: full.rows, totals: full.totals, report: full.report };
+  } else if (id === "ventas_por_dia") {
     const rows = await tx.$queryRaw<{ day: string; n: bigint; total: bigint }[]>`
       SELECT to_char(s."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE ${SHOP_TIME_ZONE}, 'YYYY-MM-DD') AS day, COUNT(*)::bigint AS n, COALESCE(SUM(s."totalCents"),0)::bigint AS total
       FROM "Sale" s WHERE s."companyId" = ${ctx.companyId} ${br} AND s."voided" = false AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
       GROUP BY 1 ORDER BY 1`;
     const sum = rows.reduce((a, r) => a + Number(r.total), 0);
-    table = { ...base, subtitle: period, columns: ["Fecha", "Ventas", "Total"], rows: rows.map((r) => [fmtDate(r.day), String(r.n), m(Number(r.total))]), totals: ["Total", String(rows.reduce((a, r) => a + Number(r.n), 0)), m(sum)] };
+    table = { ...base, subtitle: period, columns: ["Fecha", "Ventas", `Vendido ${refTag}`], rows: rows.map((r) => [fmtDate(r.day), String(r.n), m(Number(r.total))]), totals: ["Total", String(rows.reduce((a, r) => a + Number(r.n), 0)), m(sum)] };
     chartPoints = rows.map((r) => ({ label: fmtDate(r.day), value: Number(r.total) / 100, display: m(Number(r.total)) }));
   } else if (id === "ventas_recientes") {
     const rows = await tx.$queryRaw<{ n: number | null; at: Date; cust: string; st: string; total: number; voided: boolean }[]>`
       SELECT s."controlNumber" AS n, s."createdAt" AS at, TRIM(COALESCE(s."customerFirstName",'') || ' ' || COALESCE(s."customerLastName",'')) AS cust, s."paymentStatus"::text AS st, s."totalCents" AS total, s."voided" AS voided
       FROM "Sale" s WHERE s."companyId" = ${ctx.companyId} ${br} ORDER BY s."createdAt" DESC LIMIT 15`;
-    table = { ...base, subtitle: "Las 15 más recientes", columns: ["Nº", "Fecha", "Cliente", "Estado", "Total"], rows: rows.map((r) => [r.n != null ? String(r.n) : "—", fmtDate(r.at), r.cust || "—", r.voided ? "Anulada" : r.st === "CREDIT" ? "A crédito" : "Pagada", m(r.total)]) };
+    table = { ...base, subtitle: "Las 15 más recientes", columns: ["Nº", "Fecha", "Cliente", "Estado", `Total ${refTag}`], rows: rows.map((r) => [r.n != null ? String(r.n) : "—", fmtDate(r.at), r.cust || "—", r.voided ? "Anulada" : r.st === "CREDIT" ? "A crédito" : "Pagada", m(r.total)]) };
   } else if (id === "top_productos") {
     const rows = await tx.$queryRaw<{ name: string; qty: bigint; total: bigint }[]>`
       SELECT si."productName" AS name, SUM(si."quantity")::bigint AS qty, SUM(si."subtotalCents")::bigint AS total
       FROM "SaleItem" si JOIN "Sale" s ON s.id = si."saleId"
       WHERE s."companyId" = ${ctx.companyId} ${br} AND s."voided" = false AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
       GROUP BY 1 ORDER BY total DESC LIMIT 10`;
-    table = { ...base, subtitle: period, columns: ["Producto", "Unidades", "Vendido"], rows: rows.map((r) => [r.name, String(r.qty), m(Number(r.total))]) };
+    table = { ...base, subtitle: period, columns: ["Producto", "Unidades", `Vendido ${refTag}`], rows: rows.map((r) => [r.name, String(r.qty), m(Number(r.total))]) };
     chartPoints = rows.map((r) => ({ label: r.name.slice(0, 16), value: Number(r.total) / 100, display: m(Number(r.total)) }));
   } else if (id === "stock_bajo") {
     const rows = await tx.$queryRaw<{ name: string; category: string | null; stock: number; min: number }[]>`
@@ -132,20 +139,20 @@ export async function dataset(tx: Tx, ctx: DataCtx, id: DatasetId, fromIn?: stri
       FROM "Sale" s WHERE s."companyId" = ${ctx.companyId} ${br} AND s."paymentStatus" = 'CREDIT' AND s."voided" = false
       ORDER BY s."createdAt" ASC LIMIT 40`;
     const open = rows.map((r) => ({ ...r, left: r.total - Number(r.paid) })).filter((r) => r.left > 0);
-    table = { ...base, subtitle: "Ventas a crédito con saldo, de la más antigua a la más reciente", columns: ["Nº", "Fecha", "Cliente", "Debe"], rows: open.map((r) => [r.n != null ? String(r.n) : "—", fmtDate(r.at), r.cust || "—", m(r.left)]), totals: ["", "", "Total por cobrar", m(open.reduce((a, r) => a + r.left, 0))] };
+    table = { ...base, subtitle: "Ventas a crédito con saldo, de la más antigua a la más reciente", columns: ["Nº", "Fecha", "Cliente", `Debe ${refTag}`, "Equiv. Bs hoy"], rows: open.map((r) => [r.n != null ? String(r.n) : "—", fmtDate(r.at), r.cust || "—", m(r.left), rate ? formatCurrencyCents(comp?.localCurrencyCode ?? "VES", Math.round(r.left * rate)) : "—"]), totals: ["", "", "Total por cobrar", m(open.reduce((a, r) => a + r.left, 0)), rate ? formatCurrencyCents(comp?.localCurrencyCode ?? "VES", Math.round(open.reduce((a, r) => a + r.left, 0) * rate)) : "—"] };
   } else if (id === "gastos_por_categoria") {
     const rows = await tx.$queryRaw<{ cat: string; total: bigint }[]>`
       SELECT COALESCE(NULLIF("category",''),'Otros') AS cat, SUM("amountCents")::bigint AS total FROM "Expense"
       WHERE "companyId" = ${ctx.companyId} AND "spentAt" >= ${start} AND "spentAt" < ${end} GROUP BY 1 ORDER BY total DESC`;
     const sum = rows.reduce((a, r) => a + Number(r.total), 0);
-    table = { ...base, subtitle: period, columns: ["Categoría", "Gastado"], rows: rows.map((r) => [r.cat, m(Number(r.total))]), totals: ["Total", m(sum)] };
+    table = { ...base, subtitle: period, columns: ["Categoría", `Gastado ${refTag}`], rows: rows.map((r) => [r.cat, m(Number(r.total))]), totals: ["Total", m(sum)] };
     chartPoints = rows.map((r) => ({ label: r.cat.slice(0, 16), value: Number(r.total) / 100, display: m(Number(r.total)) }));
   } else {
     const rows = await tx.$queryRaw<{ cust: string; n: bigint; total: bigint }[]>`
       SELECT TRIM(COALESCE(s."customerFirstName",'') || ' ' || COALESCE(s."customerLastName",'')) AS cust, COUNT(*)::bigint AS n, SUM(s."totalCents")::bigint AS total
       FROM "Sale" s WHERE s."companyId" = ${ctx.companyId} ${br} AND s."voided" = false AND s."customerPhone" <> '0000-0000000' AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
       GROUP BY 1 ORDER BY total DESC LIMIT 10`;
-    table = { ...base, subtitle: period, columns: ["Cliente", "Compras", "Total"], rows: rows.map((r) => [r.cust || "—", String(r.n), m(Number(r.total))]) };
+    table = { ...base, subtitle: period, columns: ["Cliente", "Compras", `Total ${refTag}`], rows: rows.map((r) => [r.cust || "—", String(r.n), m(Number(r.total))]) };
   }
   return { ...table, table, chartPoints };
 }

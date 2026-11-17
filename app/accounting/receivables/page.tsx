@@ -57,7 +57,7 @@ export default async function ReceivablesPage() {
   return (
     <AdminShell group="cobrar" sub="pendientes">
       <KpiGrid>
-        <Kpi tone="info" icon={<BanknoteIcon />} label="Por cobrar" value={m(total)} hint={`En ${rows.length} clientes`} />
+        <Kpi tone="info" icon={<BanknoteIcon />} label="Por cobrar (ref.)" value={m(total)} hint={`En ${rows.length} clientes`} />
         <Kpi tone="bad" icon={<TrendingDownIcon />} label="Vencido" value={m(agg.b + agg.c)} hint="Más de 30 días" />
       </KpiGrid>
       <SectionCard

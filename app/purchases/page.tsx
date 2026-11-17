@@ -60,8 +60,8 @@ export default async function PurchasesPage({
         <DateRangeSwitcher selection={range} />
       </PeriodBar>
       <KpiGrid>
-        <Kpi tone="info" icon={<ShoppingCartIcon />} label="Comprado" value={money(referenceCurrency, bought, 0)} hint={`${label} · ${live.length} compras`} />
-        <Kpi tone="warn" icon={<TrendingDownIcon />} label="Por pagar" value={money(referenceCurrency, owed, 0)} hint={`${owedSuppliers} proveedores`} />
+        <Kpi tone="info" icon={<ShoppingCartIcon />} label="Comprado (ref.)" value={money(referenceCurrency, bought, 0)} hint={`${label} · ${live.length} compras`} />
+        <Kpi tone="warn" icon={<TrendingDownIcon />} label="Por pagar (ref.)" value={money(referenceCurrency, owed, 0)} hint={`${owedSuppliers} proveedores`} />
         <Kpi tone="ok" icon={<LandmarkIcon />} label="Proveedores" value={activeSuppliers} hint="Activos en el periodo" />
       </KpiGrid>
       <RestockCard rows={restock} currency={referenceCurrency} />
