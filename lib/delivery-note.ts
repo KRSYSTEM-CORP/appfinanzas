@@ -278,6 +278,21 @@ export function resolvePaymentLines(sale: DeliveryNoteSale, referenceCurrency: R
   return [];
 }
 
+// Un solo pago: si se cobró en una moneda distinta a la local (p. ej. Efectivo $
+// con totales en Bs), el documento debe decir cuánto se cobró en esa moneda.
+export function singlePaymentPaidLine(
+  p: SalePaymentLine | undefined,
+  referenceCurrency: ReferenceCurrency,
+  localCurrencyCode: string
+): string | null {
+  if (!p) return null;
+  const currency = p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency);
+  if (currency === localCurrencyCode) return null;
+  const cents = p.amountCurrencyCents ?? p.amountEurCents;
+  const rate = p.exchangeRate != null ? ` · Tasa ${formatLocalCurrency(p.exchangeRate, localCurrencyCode)}` : "";
+  return `Cobrado: ${formatCurrencyCents(currency, cents)}${rate}`;
+}
+
 function renderPaymentSection(
   doc: jsPDF,
   sale: DeliveryNoteSale,
@@ -304,6 +319,11 @@ function renderPaymentSection(
     const p = payments[0];
     doc.text(`Método de pago: ${p ? PAYMENT_METHOD_LABELS[p.paymentMethod] : "—"}`, margin, y);
     y += 16;
+    const paid = singlePaymentPaidLine(p, referenceCurrency, currencyCode);
+    if (paid) {
+      doc.text(paid, margin, y);
+      y += 16;
+    }
     if (p?.reference) {
       doc.text(`Referencia: ${p.reference}`, margin, y);
       y += 16;

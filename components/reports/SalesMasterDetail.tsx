@@ -115,6 +115,8 @@ export function SalesMasterDetail({
                 <dd>
                   {!exchangeRateEnabled ? (
                     <Badge variant="outline">{referenceCurrency}</Badge>
+                  ) : s.paidInForeignCurrency && s.payments.some((x) => x.currencyCode === localCurrencyCode) ? (
+                    <Badge variant="secondary">Mixta (Bs y divisas)</Badge>
                   ) : s.paidInForeignCurrency ? (
                     <Badge variant="secondary">Divisas</Badge>
                   ) : (

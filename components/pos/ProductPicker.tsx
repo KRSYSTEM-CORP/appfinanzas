@@ -122,7 +122,7 @@ export function ProductPicker({
             ref={searchRef}
             type="search"
             aria-label="Buscar producto, SKU o escanear"
-            placeholder="Buscar producto, SKU o escanear (/)"
+            placeholder="Buscar producto o SKU (/)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {

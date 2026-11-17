@@ -54,11 +54,15 @@ export function formatEUR(cents: number): string {
 
 // KR System's own maintenance-billing currency — independent of whatever
 // local currency a company sells in (see lib/currencies.ts).
+// Mismo formato numérico que el resto de la interfaz (coma decimal, punto de
+// miles): «$6,00» junto a «Bs. 1.604.931,59». Con en-US («$6.00») no se
+// distinguía un decimal de un separador de miles.
 export function formatUSD(cents: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(cents / 100);
+  const amount = new Intl.NumberFormat("es-VE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Math.abs(cents) / 100);
+  return `${cents < 0 ? "-" : ""}$${amount}`;
 }
 
 // Binance Pay settles in USDT, not USD — same 1:1 amount as formatUSD, but

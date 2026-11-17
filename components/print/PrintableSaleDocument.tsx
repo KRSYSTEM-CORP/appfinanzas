@@ -14,6 +14,7 @@ import {
   invoiceNumberLabel,
   itemDescription,
   resolvePaymentLines,
+  singlePaymentPaidLine,
   type DeliveryNoteCompany,
   type DeliveryNoteSale,
 } from "@/lib/delivery-note";
@@ -165,6 +166,9 @@ export function PrintableSaleDocument({
           {payments.length <= 1 ? (
             <>
               <p>Método de pago: {payments[0] ? PAYMENT_METHOD_LABELS[payments[0].paymentMethod] : "—"}</p>
+              {singlePaymentPaidLine(payments[0], referenceCurrency, currencyCode) && (
+                <p>{singlePaymentPaidLine(payments[0], referenceCurrency, currencyCode)}</p>
+              )}
               {payments[0]?.reference && <p>Referencia: {payments[0].reference}</p>}
             </>
           ) : (
