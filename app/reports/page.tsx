@@ -178,7 +178,7 @@ export default async function ReportsPage({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {[
-                { label: "Ventas del día", value: formatCurrencyCents(referenceCurrency, todaySummary.totalCents), sub: `${todaySummary.paidCount} ventas pagadas`, Icon: BanknoteIcon, tone: "bg-success/14 text-success" },
+                { label: "Ventas del día", value: formatCurrencyCents(referenceCurrency, todaySummary.totalCents), sub: `${todaySummary.paidCount} ${todaySummary.paidCount === 1 ? "venta pagada" : "ventas pagadas"}`, Icon: BanknoteIcon, tone: "bg-success/14 text-success" },
                 { label: "Efectivo esperado", value: formatCurrencyCents(referenceCurrency, todaySummary.expectedCashCents), sub: rate != null && exchangeRateEnabled ? `Bs ${Math.round((todaySummary.expectedCashCents / 100) * rate).toLocaleString("es-VE")}` : "Apertura + efectivo − salidas", Icon: WalletIcon, tone: "bg-primary/12 text-primary" },
                 { label: "Salidas", value: formatCurrencyCents(referenceCurrency, todaySummary.outflowsCents), sub: `${todaySummary.outflows.length} movimientos`, Icon: TrendingDownIcon, tone: "bg-destructive/12 text-destructive" },
               ].map((k) => (
