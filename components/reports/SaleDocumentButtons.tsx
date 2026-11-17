@@ -197,7 +197,6 @@ export function SaleDocumentButtons({
                 triggerLabel="Imprimir"
                 title="Imprimir nota de entrega"
                 defaultPaperSize={printPaperSize}
-                buildPdfBlob={async (paperSize) => (await buildNotePdf(paperSize)).output("blob") as Blob}
               >
                 {(paperSize) => (
                   <PrintableSaleDocument
@@ -235,7 +234,6 @@ export function SaleDocumentButtons({
                   triggerLabel="Imprimir"
                   title="Imprimir factura"
                   defaultPaperSize={printPaperSize}
-                  buildPdfBlob={async (paperSize) => (await buildInvoicePdf(paperSize)).output("blob") as Blob}
                 >
                   {(paperSize) => (
                     <PrintableSaleDocument
@@ -274,7 +272,6 @@ export function SaleDocumentButtons({
                   triggerLabel="Imprimir"
                   title="Imprimir recibo de pago"
                   defaultPaperSize={printPaperSize}
-                  buildPdfBlob={async (paperSize) => (await buildReceiptPdf(paperSize)).output("blob") as Blob}
                 >
                   {(paperSize) => (
                     <PrintableSaleDocument

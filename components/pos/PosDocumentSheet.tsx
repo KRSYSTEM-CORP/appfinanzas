@@ -1,23 +1,18 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState } from "react";
 import { FileTextIcon, PrinterIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PrintableSaleDocument } from "@/components/print/PrintableSaleDocument";
+import { PrintFrame, type PrintFrameHandle } from "@/components/print/PrintFrame";
 import { buildDeliveryNotePDF, controlNumberLabel, type DeliveryNoteCompany, type DeliveryNoteSale } from "@/lib/delivery-note";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 
 type Fmt = "58" | "80" | "c";
 const PAPER: Record<Fmt, PrintPaperSize> = { "58": "THERMAL_58", "80": "THERMAL_80", c: "LETTER" };
-const PAGE_CSS: Record<Fmt, string> = {
-  "58": "@page { size: 58mm auto; margin: 2mm; }",
-  "80": "@page { size: 80mm auto; margin: 3mm; }",
-  c: "@page { size: letter; margin: 0.5in; }",
-};
 
 // «Imprimir o compartir» de la preview: formato (ticket 58/80 mm u hoja carta)
 // con vista previa, Imprimir, Descargar PDF y envío por WhatsApp al cliente.
@@ -52,11 +47,7 @@ export function PosDocumentSheet({
   const [phone, setPhone] = useState(sale.customerPhone && sale.customerPhone !== "0000-0000000" ? sale.customerPhone : "");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const mounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
+  const frameRef = useRef<PrintFrameHandle>(null);
   const title = kind === "ticket" ? "TICKET DE CAJA" : "NOTA DE ENTREGA";
   const number = pendingSync ? "pendiente" : controlNumberLabel(sale);
   const fileBase = `${kind === "ticket" ? "ticket" : "nota-entrega"}-${number}`;
@@ -156,16 +147,13 @@ export function PosDocumentSheet({
               ? "Hoja carta (8,5 × 11 pulgadas), lista para impresora de oficina o para guardar en PDF."
               : `Ticket térmico de ${fmt} mm para impresora de punto de venta.`}
           </p>
-          <div className="flex max-h-[44vh] justify-center overflow-auto rounded-[14px] bg-muted p-3">
-            <div
-              className="h-fit bg-white p-3.5 text-black shadow-[0_1px_3px_rgba(0,0,0,.2)]"
-              style={{ width: fmt === "c" ? "100%" : fmt === "58" ? 220 : 300 }}
-            >
+          <div className="max-h-[48vh] overflow-auto rounded-[14px] bg-muted p-3">
+            <PrintFrame ref={frameRef} paperSize={PAPER[fmt]} title={title}>
               {doc(PAPER[fmt])}
-            </div>
+            </PrintFrame>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => window.print()}>
+            <Button type="button" onClick={() => void frameRef.current?.print()}>
               <PrinterIcon className="size-4" strokeWidth={2.2} /> Imprimir
             </Button>
             <Button type="button" variant="outline" disabled={busy} onClick={download}>
@@ -200,15 +188,6 @@ export function PosDocumentSheet({
           </div>
         </DialogContent>
       </Dialog>
-      {mounted &&
-        open &&
-        createPortal(
-          <div className="print-portal-content">
-            <style>{PAGE_CSS[fmt]}</style>
-            <div style={{ width: fmt === "c" ? "100%" : `${fmt}mm` }}>{doc(PAPER[fmt])}</div>
-          </div>,
-          document.body
-        )}
     </>
   );
 }

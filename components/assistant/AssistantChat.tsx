@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BanknoteIcon, BarChart3Icon, CheckIcon, FileTextIcon, MicIcon, PackageIcon, SendIcon, SparklesIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAssistantCredits } from "./AssistantCredits";
 import { applyProposal, askAssistant, undoProposal, type AssistantStatus, type HistoryEntry } from "@/lib/actions/assistant";
 import { AI_ASK_COST, AI_BIG_COST, MAX_CONVERSATION_MESSAGES, MAX_QUESTION_CHARS, type Proposal } from "@/lib/assistant";
 import type { ResolvedBlock, SalePreview } from "@/lib/assistant-types";
@@ -58,7 +59,7 @@ export function AssistantChat({ status, history = [], company }: { status: Assis
   const [msgs, setMsgs] = useState<Msg[]>(() => fromHistory(history));
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
-  const [creditsLeft, setCreditsLeft] = useState(status.creditsLeft);
+  const { creditsLeft, setCreditsLeft } = useAssistantCredits();
   const [isPending, startTransition] = useTransition();
   const recRef = useRef<SpeechRec | null>(null);
 

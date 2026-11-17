@@ -1,5 +1,6 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
+import { isDayClosed } from "@/lib/cash-shifts";
 import { SHOP_TIME_ZONE, zonedDateParts, zonedMidnightUtc } from "@/lib/report-types";
 
 // Prisma's CashClosing.closingDate is a @db.Date column — Postgres drops the
@@ -57,22 +58,37 @@ async function closedDateSet(
 ): Promise<Set<string>> {
   if (days.length === 0) return new Set();
   const closingDates = days.map((d) => closingDateFromString(d.dateStr));
-  const closings = await tx.cashClosing.findMany({
-    where: { companyId, closingDate: { in: closingDates }, ...(branchId ? { branchId } : {}) },
-    select: { branchId: true, closingDate: true },
-  });
+  const [closings, openings] = await Promise.all([
+    tx.cashClosing.findMany({
+      where: { companyId, closingDate: { in: closingDates }, ...(branchId ? { branchId } : {}) },
+      select: { branchId: true, closingDate: true, shiftNumber: true, closedAt: true },
+    }),
+    tx.cashOpening.findMany({
+      where: { companyId, date: { in: closingDates }, ...(branchId ? { branchId } : {}) },
+      select: { branchId: true, date: true, shiftNumber: true },
+    }),
+  ]);
 
-  if (branchId) {
-    return new Set(closings.map((c) => c.closingDate.toISOString().slice(0, 10)));
-  }
+  // Un día de una sede cuenta como cerrado cuando tiene al menos un cierre y ningún
+  // turno sigue abierto (varios turnos por día: se cierra el último).
+  const key = (b: string, d: Date) => `${b}|${d.toISOString().slice(0, 10)}`;
+  const byBranchDay = new Map<string, { branchId: string; date: string; openings: { shiftNumber: number }[]; closings: { shiftNumber: number; closedAt: Date }[] }>();
+  const entry = (b: string, d: Date) => {
+    const k = key(b, d);
+    let e = byBranchDay.get(k);
+    if (!e) byBranchDay.set(k, (e = { branchId: b, date: d.toISOString().slice(0, 10), openings: [], closings: [] }));
+    return e;
+  };
+  for (const c of closings) entry(c.branchId, c.closingDate).closings.push(c);
+  for (const o of openings) entry(o.branchId, o.date).openings.push(o);
+  const closedEntries = [...byBranchDay.values()].filter((e) => isDayClosed(e.openings, e.closings));
+
+  if (branchId) return new Set(closedEntries.map((e) => e.date));
 
   const activeBranchCount = await tx.branch.count({ where: { companyId, isActive: true } });
   if (activeBranchCount === 0) return new Set();
   const countByDate = new Map<string, number>();
-  for (const c of closings) {
-    const key = c.closingDate.toISOString().slice(0, 10);
-    countByDate.set(key, (countByDate.get(key) ?? 0) + 1);
-  }
+  for (const e of closedEntries) countByDate.set(e.date, (countByDate.get(e.date) ?? 0) + 1);
   return new Set([...countByDate].filter(([, count]) => count >= activeBranchCount).map(([date]) => date));
 }
 

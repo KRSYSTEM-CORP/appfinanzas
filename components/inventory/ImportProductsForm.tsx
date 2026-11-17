@@ -12,7 +12,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { parseImageUrlCell } from "@/lib/bulk-image";
 import { Badge } from "@/components/ui/badge";
 import { ProductSchema } from "@/lib/validations";
 import { bulkImportProducts, type BulkImportResult } from "@/lib/actions/products";
@@ -47,10 +46,6 @@ const HEADER_MAP: Record<string, string> = {
   bulkprice: "bulkPrice",
   "cantidad minima gran mayor": "bulkMinQty",
   bulkminqty: "bulkMinQty",
-  imagen: "imageUrl",
-  "url de imagen": "imageUrl",
-  imageurl: "imageUrl",
-  image: "imageUrl",
 };
 
 function normalizeHeader(header: string): string {
@@ -77,7 +72,6 @@ type ParsedRow = {
   wholesaleMinQty?: unknown;
   bulkPrice?: unknown;
   bulkMinQty?: unknown;
-  imageUrl?: unknown;
   error: string | null;
 };
 
@@ -91,13 +85,10 @@ async function parseWorkbook(buffer: ArrayBuffer): Promise<ParsedRow[]> {
       if (canonical) mapped[canonical] = value;
     }
     const parsed = ProductSchema.safeParse(mapped);
-    const imageCell = parseImageUrlCell(mapped.imageUrl);
     return {
       row: index + 2, // +1 for header row, +1 for 1-indexing
       ...mapped,
-      error: parsed.success
-        ? imageCell.kind === "error" ? imageCell.error : null
-        : (parsed.error.issues[0]?.message ?? "Datos inválidos"),
+      error: parsed.success ? null : (parsed.error.issues[0]?.message ?? "Datos inválidos"),
     };
   });
 }
@@ -120,10 +111,9 @@ async function downloadTemplate() {
       "Cantidad mínima mayor",
       "Precio gran mayor",
       "Cantidad mínima gran mayor",
-      "Imagen",
     ],
-    ["Camisa azul", "CAM-001", "Ropa", 12.5, 7, "Sí", 20, 5, "General", "No", "", "", "", "", "https://ejemplo.com/camisa-azul.jpg"],
-    ["Camisa azul (al mayor)", "CAM-002", "Ropa", 12.5, 7, "Sí", 500, 20, "General", "Sí", 10, 51, 8, 100, ""],
+    ["Camisa azul", "CAM-001", "Ropa", 12.5, 7, "Sí", 20, 5, "General", "No", "", "", "", ""],
+    ["Camisa azul (al mayor)", "CAM-002", "Ropa", 12.5, 7, "Sí", 500, 20, "General", "Sí", 10, 51, 8, 100],
   ]);
   appendSheet(wb, ws, "Productos");
   await downloadWorkbook(wb, "plantilla-productos.xlsx");
@@ -179,7 +169,6 @@ export function ImportProductsForm() {
           wholesaleMinQty: r.wholesaleMinQty,
           bulkPrice: r.bulkPrice,
           bulkMinQty: r.bulkMinQty,
-          imageUrl: r.imageUrl,
         }))
       );
       setResult(res);
@@ -200,7 +189,7 @@ export function ImportProductsForm() {
             Precios por cantidad, Precio mayor, Cantidad mínima mayor, Precio gran mayor, Cantidad
             mínima gran mayor
           </strong>{" "}
-          para activar precios al mayor/gran mayor, e <strong>Imagen</strong> (URL https de la foto del producto, JPG/PNG/WEBP de hasta 480 KB; en blanco no cambia la imagen). Si un SKU ya existe en tu inventario, ese
+          para activar precios al mayor/gran mayor. Las fotos no se cargan desde el Excel: súbelas en cada producto desde Inventario. Si un SKU ya existe en tu inventario, ese
           producto se actualizará en vez de duplicarse.
         </p>
         <div className="flex gap-2 mt-2">

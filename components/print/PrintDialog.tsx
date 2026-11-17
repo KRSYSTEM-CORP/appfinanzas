@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState } from "react";
 import type { PrintPaperSize } from "@prisma/client";
+import { PrinterIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,171 +15,91 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { PAPER_SIZES, getPaperSize, isThermal } from "@/lib/print-paper-sizes";
+import { PAPER_SIZES, getPaperSize } from "@/lib/print-paper-sizes";
+import { PrintFrame, type PrintFrameHandle } from "@/components/print/PrintFrame";
 
-// @page rules keyed by paper size — injected as an inline <style> tag scoped
-// to this dialog instance, since @page can't be conditioned on a class. Only
-// used for the thermal fallback path below; the letter/A4 path prints an
-// actual PDF (which carries its own page size) instead.
-const PAGE_CSS: Record<PrintPaperSize, string> = {
-  THERMAL_58: "@page { size: 58mm auto; margin: 2mm; }",
-  THERMAL_80: "@page { size: 80mm auto; margin: 3mm; }",
-  LETTER: "@page { size: letter; margin: 0.5in; }",
-  A4: "@page { size: A4; margin: 12mm; }",
-};
-
-// A print-optimized preview + native browser print dialog for a single
-// document.
+// Vista previa + impresión de un documento. El documento se dibuja UNA vez en
+// un <PrintFrame> (iframe con @page y márgenes del tamaño elegido) y ese mismo
+// iframe es el que se imprime: lo impreso es exactamente lo previsualizado, en
+// 58 mm, 80 mm, carta o A4. Ver components/print/PrintFrame.tsx.
 //
-// Letter/A4 (the common case): rendered and printed as the SAME PDF the
-// "Descargar" button produces (buildPdfBlob), shown in an <iframe> and
-// printed via that iframe's own contentWindow.print() — this guarantees the
-// preview, the print output, and the downloaded file are pixel-identical and
-// always portrait, since that's what the PDF itself is.
-//
-// Thermal receipt paper (58/80mm): no letter-sized PDF makes sense to compare
-// against a narrow receipt roll, so this keeps the original hand-rolled HTML
-// preview (`children`), printed through a SEPARATE React portal straight onto
-// document.body (see .print-portal-content in app/globals.css) rather than
-// printed from inside the visible preview dialog. Base UI's DialogContent is
-// `position: fixed` with a translate transform, which makes it the CSS
-// containing block for any `position: absolute` descendant — so a naive
-// ".print-area" nested inside the dialog gets sized/clipped to the small
-// on-screen modal box once @media print kicks in. Rendering the printable
-// content as a body-level sibling of the dialog avoids that trap entirely.
+// Uso normal: con `triggerLabel` (botón que abre el diálogo). Uso controlado:
+// pasar `open`/`onOpenChange` y omitir `triggerLabel`.
 export function PrintDialog({
   triggerLabel,
   title,
   defaultPaperSize,
-  buildPdfBlob,
+  paperSizes,
+  onDownload,
+  open: openProp,
+  onOpenChange,
   children,
 }: {
-  triggerLabel: string;
+  triggerLabel?: string;
   title: string;
   defaultPaperSize: PrintPaperSize;
-  // Builds the exact same PDF as the "Descargar"/"Copiar" buttons, for the
-  // given paper size — only called (and only relevant) for LETTER/A4.
-  buildPdfBlob: (paperSize: PrintPaperSize) => Promise<Blob>;
+  // Tamaños ofrecidos (por defecto los cuatro). El Corte Z ofrece 80/58/carta.
+  paperSizes?: PrintPaperSize[];
+  // Si se pasa, aparece «Descargar PDF» junto a Imprimir.
+  onDownload?: () => void | Promise<void>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   children: (paperSize: PrintPaperSize) => React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
   const [paperSize, setPaperSize] = useState<PrintPaperSize>(defaultPaperSize);
-  // False on the server and during hydration, true once on the client.
-  const mounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const thermal = isThermal(paperSize);
+  const frameRef = useRef<PrintFrameHandle>(null);
+  const options = paperSizes ? PAPER_SIZES.filter((p) => paperSizes.includes(p.code)) : PAPER_SIZES;
 
-  useEffect(() => {
-    if (!open || thermal) return;
-    let cancelled = false;
-    buildPdfBlob(paperSize)
-      .then((blob) => {
-        if (cancelled) return;
-        setPdfError(null);
-        setPdfUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return URL.createObjectURL(blob);
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setPdfError("No se pudo generar el documento.");
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, thermal, paperSize]);
-
-  useEffect(() => {
-    return () => {
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Release the generated PDF as soon as the dialog closes.
   function handleOpenChange(next: boolean) {
-    setOpen(next);
-    setPdfError(null);
-    if (!next) {
-      setPdfUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
-    }
-  }
-
-  function handlePrint() {
-    if (thermal) {
-      window.print();
-    } else {
-      iframeRef.current?.contentWindow?.print();
-    }
+    setOpenState(next);
+    onOpenChange?.(next);
   }
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogTrigger render={<Button size="sm" variant="outline" />}>{triggerLabel}</DialogTrigger>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-          </DialogHeader>
-          <div className="flex items-center gap-3">
-            <Label htmlFor="print-paper-size" className="shrink-0">
-              Tamaño de papel
-            </Label>
-            <Select value={paperSize} onValueChange={(v) => v && setPaperSize(v as PrintPaperSize)}>
-              <SelectTrigger id="print-paper-size" className="max-w-[220px]">
-                <SelectValue>{getPaperSize(paperSize).label}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {PAPER_SIZES.map((p) => (
-                  <SelectItem key={p.code} value={p.code}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {thermal ? (
-            <div
-              className="mx-auto rounded-md border bg-white p-4 text-black"
-              style={{ width: `${getPaperSize(paperSize).widthMm}mm` }}
-            >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {triggerLabel && <DialogTrigger render={<Button size="sm" variant="outline" />}>{triggerLabel}</DialogTrigger>}
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <div className="flex items-center gap-3">
+          <Label htmlFor="print-paper-size" className="shrink-0">
+            Tamaño de papel
+          </Label>
+          <Select value={paperSize} onValueChange={(v) => v && setPaperSize(v as PrintPaperSize)}>
+            <SelectTrigger id="print-paper-size" className="max-w-[220px]">
+              <SelectValue>{getPaperSize(paperSize).label}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((p) => (
+                <SelectItem key={p.code} value={p.code}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {open && (
+          <div className="min-w-0 rounded-md bg-muted p-3">
+            <PrintFrame ref={frameRef} paperSize={paperSize} title={title}>
               {children(paperSize)}
-            </div>
-          ) : pdfError ? (
-            <p className="text-sm text-destructive">{pdfError}</p>
-          ) : pdfUrl ? (
-            <iframe ref={iframeRef} src={pdfUrl} title={title} className="h-[60vh] w-full rounded-md border" />
-          ) : (
-            <p className="text-sm text-muted-foreground">Generando vista previa...</p>
-          )}
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cerrar</DialogClose>
-            <Button onClick={handlePrint} disabled={!thermal && !pdfUrl}>
-              Imprimir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {mounted &&
-        open &&
-        thermal &&
-        createPortal(
-          <div className="print-portal-content">
-            <style>{PAGE_CSS[paperSize]}</style>
-            <div style={{ width: `${getPaperSize(paperSize).widthMm}mm` }}>{children(paperSize)}</div>
-          </div>,
-          document.body
+            </PrintFrame>
+          </div>
         )}
-    </>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>Cerrar</DialogClose>
+          {onDownload && (
+            <Button variant="outline" onClick={() => void onDownload()}>
+              Descargar PDF
+            </Button>
+          )}
+          <Button onClick={() => void frameRef.current?.print()}>
+            <PrinterIcon className="size-4" aria-hidden /> Imprimir
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -3,7 +3,7 @@ import { PAYMENT_METHOD_LABELS, formatDate, formatDateOnly } from "@/lib/format"
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { CashClosingSummary } from "@/lib/actions/cash-closing";
-import { isThermal } from "@/lib/print-paper-sizes";
+import { isThermal, printRootClass } from "@/lib/print-paper-sizes";
 
 // Plain HTML/CSS rendering of a Cierre de Caja for the browser print dialog
 // (see PrintDialog.tsx) — mirrors PrintableSaleDocument.tsx's structure,
@@ -36,7 +36,7 @@ export function PrintableCashClosing({
       : formatCurrencyCents(referenceCurrency, cents);
 
   return (
-    <div className={thermal ? "font-mono text-[11px] leading-snug" : "font-sans text-sm"}>
+    <div className={printRootClass(paperSize)}>
       <div className="mb-2 text-center">
         {company.logoDataUrl && !thermal && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -50,6 +50,12 @@ export function PrintableCashClosing({
       <p className="text-center font-bold">CORTE Z · CIERRE DE CAJA</p>
       <p className="text-center text-xs">Fecha: {formatDateOnly(summary.date)}</p>
       {branchName && <p className="text-center text-xs">Sucursal: {branchName}</p>}
+      {summary.shiftNumber != null && (
+        <p className="text-center text-xs">
+          Turno {summary.shiftNumber}
+          {summary.responsibleName ? ` · Responsable: ${summary.responsibleName}` : ""}
+        </p>
+      )}
       <div className="my-2 border-t border-dashed border-black" />
 
       {summary.closed ? (

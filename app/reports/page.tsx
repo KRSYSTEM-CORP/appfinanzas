@@ -76,7 +76,14 @@ export default async function ReportsPage({
               <ul className="flex flex-col divide-y">
                 {recentClosings.map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-3 py-3 text-sm">
-                    <span className="font-bold tabular-nums">{c.date.split("-").reverse().join("/")}</span>
+                    <span className="flex flex-col">
+                      <span className="font-bold tabular-nums">{c.date.split("-").reverse().join("/")} · Turno {c.shiftNumber}</span>
+                      <span className="text-xs text-muted-foreground">
+                        Responsable: {c.responsibleName ?? "—"}
+                        {c.openedAt ? ` · abrió ${c.openedAt.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit", timeZone: "America/Caracas" })}` : ""}
+                        {` · cerró ${c.closedAt.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit", timeZone: "America/Caracas" })}`}
+                      </span>
+                    </span>
                     <span className="text-muted-foreground">{c.salesCount} ventas</span>
                     <span className="rounded-full bg-success/14 px-2.5 py-0.5 text-xs font-semibold text-success">Cerrado</span>
                     <span className="font-extrabold tabular-nums">{formatCurrencyCents(referenceCurrency, c.totalCents)}</span>
@@ -101,7 +108,7 @@ export default async function ReportsPage({
         </header>
         <CajaChicaCard
           summary={todaySummary}
-          canEdit={canManage && !todaySummary.closed}
+          canEdit={canManage && todaySummary.shiftOpen}
           rate={rate}
           currencyCode={localCurrencyCode}
           exchangeRateEnabled={exchangeRateEnabled}
@@ -136,7 +143,7 @@ export default async function ReportsPage({
             <div>
               <CardTitle className="text-lg font-bold">Estado de la caja</CardTitle>
               <p className="text-sm text-muted-foreground">
-                {!todaySummary.closed && todaySummary.openingCents != null ? "Caja abierta · turno activo" : "Caja cerrada · sin turno activo"}
+                {todaySummary.shiftOpen ? `Caja abierta · turno ${todaySummary.shiftNumber ?? ""} activo${todaySummary.responsibleName ? ` · ${todaySummary.responsibleName}` : ""}` : "Caja cerrada · sin turno activo"}
               </p>
             </div>
             <CashClosingPanel

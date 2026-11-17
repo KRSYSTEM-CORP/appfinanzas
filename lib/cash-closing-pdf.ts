@@ -27,7 +27,11 @@ export async function buildCashClosingPDF(
   const titleBottomY = renderDocumentTitleBlock(
     doc,
     "CORTE Z · CIERRE DE CAJA",
-    [`Fecha: ${formatDateOnly(summary.date)}`, ...(branchName ? [`Sucursal: ${branchName}`] : [])],
+    [
+      `Fecha: ${formatDateOnly(summary.date)}`,
+      ...(branchName ? [`Sucursal: ${branchName}`] : []),
+      ...(summary.shiftNumber != null ? [`Turno ${summary.shiftNumber}${summary.responsibleName ? ` · Responsable: ${summary.responsibleName}` : ""}`] : []),
+    ],
     margin,
     y,
     pageWidth
