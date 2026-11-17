@@ -40,7 +40,7 @@ describe("currency-breakdown", () => {
     ]);
     expect(s).toContain("Bs.");
     expect(s).toContain("1.250,00");
-    expect(s).toContain("$20.00");
+    expect(s).toContain("$20,00");
     expect(s).not.toContain("€");
     expect(formatCurrencyTotals([])).toBe("—");
   });

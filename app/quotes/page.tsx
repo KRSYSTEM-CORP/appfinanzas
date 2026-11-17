@@ -26,7 +26,7 @@ export default async function QuotesPage() {
 
   return (
     <div className="flex flex-col gap-4 px-4 py-5 md:h-full">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 pr-14">
         <div>
           <p className="kr-eyebrow">Cotiza y da seguimiento</p>
           <h1 className="kr-h1">Presupuestos</h1>
