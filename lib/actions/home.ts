@@ -35,6 +35,7 @@ export type LatestSale = {
   customer: string;
   methods: string[];
   totalCents: number;
+  paid: { paymentMethod: string; currencyCode: string | null; amountCurrencyCents: number | null; amountEurCents: number }[];
   onCredit: boolean;
 };
 
@@ -53,7 +54,7 @@ export async function latestSales(limit = 5): Promise<LatestSale[]> {
         customerLastName: true,
         totalCents: true,
         paymentStatus: true,
-        payments: { select: { paymentMethod: true } },
+        payments: { select: { paymentMethod: true, currencyCode: true, amountCurrencyCents: true, amountEurCents: true } },
       },
     })
   );
@@ -63,6 +64,7 @@ export async function latestSales(limit = 5): Promise<LatestSale[]> {
     customer: [s.customerFirstName, s.customerLastName].filter(Boolean).join(" ") || "Cliente general",
     methods: [...new Set(s.payments.map((p) => p.paymentMethod as string))],
     totalCents: s.totalCents,
+    paid: s.payments.map((p) => ({ paymentMethod: p.paymentMethod as string, currencyCode: p.currencyCode, amountCurrencyCents: p.amountCurrencyCents, amountEurCents: p.amountEurCents })),
     onCredit: s.paymentStatus === "CREDIT",
   }));
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { aggregateByCurrency, formatCurrencyTotals } from "@/lib/currency-breakdown";
 import {
   AlertTriangleIcon,
   ArrowRightIcon,
@@ -10,7 +11,7 @@ import { NavIcon } from "@/components/nav/nav-icons";
 import { Button } from "@/components/ui/button";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
-import { receivablesTotals, revenueTotals, topProducts } from "@/lib/actions/reports";
+import { incomeByCurrency, receivablesTotals, revenueTotals, topProducts } from "@/lib/actions/reports";
 import { commissionsTotal } from "@/lib/actions/seller-reports";
 import { costOfGoodsSold, expensesTotal, getProfitGoal } from "@/lib/actions/finance";
 import { getDashboardTasks } from "@/lib/actions/dashboard";
@@ -89,7 +90,7 @@ export default async function BusinessHome({
 }) {
   const session = await requireManager();
   const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
-  const [{ rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, totals, cogsCents, expensesCents, commissionsCents, receivables, bestSellers, tasks, hours, latest, goalCents] =
+  const [{ rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, totals, cogsCents, expensesCents, commissionsCents, receivables, bestSellers, income, tasks, hours, latest, goalCents] =
     await Promise.all([
       getExchangeRateInfo(),
       revenueTotals(range),
@@ -98,6 +99,7 @@ export default async function BusinessHome({
       commissionsTotal(range),
       receivablesTotals(),
       topProducts(range, 5),
+      incomeByCurrency(range),
       getDashboardTasks(),
       salesByHourToday(),
       latestSales(5),
@@ -121,7 +123,7 @@ export default async function BusinessHome({
     actions.push({ tone: "warn", text: `${tasks.lowStock.count} ${tasks.lowStock.count === 1 ? "producto con stock bajo" : "productos con stock bajo"}: ${names}.`, href: "/inventory", cta: "Ver inventario" });
   }
   if (receivables.count > 0) {
-    actions.push({ tone: "warn", text: `${receivables.count} ${receivables.count === 1 ? "venta" : "ventas"} a crédito por cobrar (${money(receivables.totalEurCents)}).`, href: "/accounting/receivables", cta: "Ver cuentas" });
+    actions.push({ tone: "warn", text: `${receivables.count} ${receivables.count === 1 ? "venta" : "ventas"} a crédito por cobrar (${money(receivables.totalEurCents)} de referencia).`, href: "/accounting/receivables", cta: "Ver cuentas" });
   }
   if (tasks.pendingQuotes > 0) {
     actions.push({ tone: "info", text: `${tasks.pendingQuotes} ${tasks.pendingQuotes === 1 ? "presupuesto espera" : "presupuestos esperan"} respuesta del cliente.`, href: "/quotes/history", cta: "Dar seguimiento" });
@@ -163,24 +165,46 @@ export default async function BusinessHome({
           {marginPct} % de margen · {periodLabel(range)}
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Chip label="Ventas" value={money(revenue)} />
+          <Chip label="Ventas (ref.)" value={money(revenue)} />
           <span aria-hidden className="text-muted-foreground">−</span>
-          <Chip label="Costo" value={money(cogsCents)} />
+          <Chip label="Costo (ref.)" value={money(cogsCents)} />
           <span aria-hidden className="text-muted-foreground">−</span>
-          <Chip label="Gastos" value={money(expensesCents)} />
+          <Chip label="Gastos (ref.)" value={money(expensesCents)} />
           <span aria-hidden className="text-muted-foreground">−</span>
           <Chip label="Comisiones" value={money(commissionsCents)} />
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Calculada con los días que ya tienen cierre de caja.</p>
+        <p className="mt-3 text-xs text-muted-foreground">Calculada con los días que ya tienen cierre de caja. Los montos en euros o dólares son referencia a la tasa BCV; lo realmente cobrado está abajo, por moneda.</p>
       </section>
 
       <section aria-label="Accesos rápidos" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <Shortcut href="/pos" icon="pos" module="pos" title="Vender" sub="POS" />
         <Shortcut href="/quotes" icon="book" module="pre" title="Presupuesto" sub="Nuevo" />
-        <Shortcut href="/accounting/receivables" icon="admin" module="adm" title="Cuentas por cobrar" sub={`${money(receivables.totalEurCents)} por cobrar`} />
+        <Shortcut href="/accounting/receivables" icon="admin" module="adm" title="Cuentas por cobrar" sub={`${money(receivables.totalEurCents)} (ref.) por cobrar`} />
         <Shortcut href="/reports" icon="caja" module="caja" title="Caja Chica" sub={tasks.pendingClosingCount > 0 ? `${tasks.pendingClosingCount} por cerrar` : "Al día"} />
         <Shortcut href="/inventory" icon="box" module="inv" title="Inventario" sub={tasks.lowStock.count > 0 ? `${tasks.lowStock.count} ${tasks.lowStock.count === 1 ? "alerta" : "alertas"}` : "Sin alertas"} />
       </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cobrado por moneda</CardTitle>
+          <p className="text-sm text-muted-foreground">Lo que realmente entró, en su moneda · {periodLabel(range)}</p>
+        </CardHeader>
+        <CardContent>
+          {income.length === 0 ? (
+            <p className="py-2 text-sm text-muted-foreground">Aún no hay cobros en este período.</p>
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {income.map((r) => (
+                <li key={r.currencyCode} className="rounded-xl bg-muted/60 p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{r.currencyCode === localCurrencyCode ? "Bolívares" : r.currencyCode === "USD" ? "Dólares" : r.currencyCode === "EUR" ? "Euros" : r.currencyCode}</p>
+                  <p className="text-2xl font-extrabold tabular-nums">{formatCurrencyTotals([{ code: r.currencyCode, cents: r.totalCents }])}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 text-xs text-muted-foreground">Total en referencia ({referenceCurrency}): {money(totals.totalEurCents)}. Es solo una conversión a la tasa BCV.</p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -273,7 +297,7 @@ export default async function BusinessHome({
                 {bestSellers.map((p) => (
                   <li key={`${p.productId ?? p.productName}-${p.category ?? ""}`} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                     <span className="min-w-0 truncate font-medium">{p.productName}</span>
-                    <span className="shrink-0 font-bold tabular-nums">{money(p.revenueCents)}</span>
+                    <span className="shrink-0 font-bold tabular-nums">{money(p.revenueCents)} <span className="text-[11px] font-normal text-muted-foreground">ref.</span></span>
                   </li>
                 ))}
               </ol>
@@ -306,7 +330,10 @@ export default async function BusinessHome({
                         {s.onCredit ? " · a crédito" : ""}
                       </span>
                     </span>
-                    <span className="shrink-0 font-bold tabular-nums">{money(s.totalCents)}</span>
+                    <span className="shrink-0 text-right">
+                      <span className="block font-bold tabular-nums">{s.paid.length ? formatCurrencyTotals(aggregateByCurrency(s.paid as Parameters<typeof aggregateByCurrency>[0], referenceCurrency, localCurrencyCode)) : money(s.totalCents)}</span>
+                      <span className="block text-[11px] text-muted-foreground tabular-nums">ref. {money(s.totalCents)}</span>
+                    </span>
                   </li>
                 ))}
               </ul>

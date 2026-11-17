@@ -113,6 +113,19 @@ export function PrintableCashClosing({
         <span>{money(summary.expectedCashCents)}</span>
       </div>
 
+      {summary.byCurrency.length > 0 && (
+        <>
+          <div className="my-2 border-t border-dashed border-black" />
+          <p className="font-bold">Cobrado por moneda</p>
+          {summary.byCurrency.map((c) => (
+            <div key={c.currencyCode} className="flex justify-between">
+              <span>{c.currencyCode}</span>
+              <span>{formatCurrencyCents(c.currencyCode, c.cents)}</span>
+            </div>
+          ))}
+        </>
+      )}
+
       {summary.byMethod.length > 0 && (
         <>
           <div className="my-2 border-t border-dashed border-black" />
