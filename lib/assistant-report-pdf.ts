@@ -38,7 +38,9 @@ export async function buildAssistantReportPDF(table: ResolvedTable, company: Del
   const emitted = `Emitido: ${formatDate(new Date())}`;
   doc.setTextColor(INK);
   const fiscalEndY = await renderCompanyHeader(doc, company, margin, y0, pageWidth);
-  const titleBottomY = renderDocumentTitleBlock(doc, table.title.toUpperCase(), [table.subtitle, emitted], margin, y0, pageWidth);
+  // El reporte completo lleva el título debajo del encabezado de la empresa (no se montan los textos).
+  const titleY = table.report ? fiscalEndY + 6 : y0;
+  const titleBottomY = renderDocumentTitleBlock(doc, table.title.toUpperCase(), [table.subtitle, emitted], margin, titleY, pageWidth);
   let y = Math.max(titleBottomY + 20, fiscalEndY + 20);
   const ts = tableStyles();
   const lastY = () => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
