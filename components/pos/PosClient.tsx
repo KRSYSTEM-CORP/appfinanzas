@@ -8,7 +8,7 @@ import type { ListedProduct } from "@/lib/product-image";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Chip } from "@/components/ui/chip";
-import { searchCustomers } from "@/lib/actions/customers";
+import { listDirectoryCustomers } from "@/lib/actions/customers";
 import { CustomerForm, type CustomerInfo } from "@/components/pos/CustomerForm";
 import { ProductPicker } from "@/components/pos/ProductPicker";
 import { Cart, type CartLine } from "@/components/pos/Cart";
@@ -143,6 +143,9 @@ const [step, setStep] = useState<Step>("cart");
   const [dialog, setDialog] = useState<null | "register" | "directory">(null);
   const [fromPay, setFromPay] = useState(false);
   const [dirQuery, setDirQuery] = useState("");
+  const [dirLoading, setDirLoading] = useState(false);
+  const [dirHasMore, setDirHasMore] = useState(false);
+  const [dirPage, setDirPage] = useState(0);
   const [dirResults, setDirResults] = useState<{ id: string; firstName: string; lastName: string; phone: string; address: string | null; rif: string | null }[]>([]);
   const [customer, setCustomer] = useState<CustomerInfo | null>(
     initialQuote
@@ -247,15 +250,28 @@ const [step, setStep] = useState<Step>("cart");
     continueFromCustomer({ firstName: "Cliente", lastName: "general", phone: "0000-0000000", address: "Venta sin datos", rif: "" });
   }
 
+  const dirReq = useRef(0);
+  function loadDirectory(q: string, page: number) {
+    const id = ++dirReq.current;
+    setDirLoading(true);
+    listDirectoryCustomers(q, page)
+      .then((r) => {
+        if (id !== dirReq.current) return;
+        setDirResults((prev) => (page === 0 ? r.items : [...prev, ...r.items]));
+        setDirHasMore(r.hasMore);
+        setDirPage(page);
+      })
+      .catch(() => {
+        if (id === dirReq.current && page === 0) setDirResults([]);
+      })
+      .finally(() => {
+        if (id === dirReq.current) setDirLoading(false);
+      });
+  }
+
   function runDirectorySearch(q: string) {
     setDirQuery(q);
-    if (q.trim().length < 2) {
-      setDirResults([]);
-      return;
-    }
-    searchCustomers(q)
-      .then((r) => setDirResults(r.map((c) => ({ id: c.id, firstName: c.firstName, lastName: c.lastName, phone: c.phone, address: c.address, rif: c.rif }))))
-      .catch(() => setDirResults([]));
+    loadDirectory(q, 0);
   }
 
   // Sin cliente no se cobra: se abre «Registrar cliente» con el atajo al Directorio.
@@ -445,7 +461,9 @@ const [step, setStep] = useState<Step>("cart");
     setFromPay(fromPayStep);
     setDirQuery("");
     setDirResults([]);
+    setDirHasMore(false);
     setDialog("directory");
+    loadDirectory("", 0);
   }
 
   // Color del canal elegido, como en la preview.
@@ -703,8 +721,15 @@ const [step, setStep] = useState<Step>("cart");
                 </span>
               </button>
             ))}
-            {dirQuery.trim().length >= 2 && dirResults.length === 0 && (
-              <p className="py-[18px] text-center text-muted-foreground">No hay clientes con ese nombre.</p>
+            {dirHasMore && (
+              <Button type="button" variant="outline" disabled={dirLoading} onClick={() => loadDirectory(dirQuery, dirPage + 1)}>
+                {dirLoading ? "Cargando…" : "Cargar más"}
+              </Button>
+            )}
+            {!dirLoading && dirResults.length === 0 && (
+              <p className="py-[18px] text-center text-muted-foreground">
+                {dirQuery.trim() ? "No hay clientes con esa búsqueda." : "Aún no hay clientes registrados."}
+              </p>
             )}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">

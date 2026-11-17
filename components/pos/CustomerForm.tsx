@@ -46,6 +46,8 @@ export function CustomerForm({
   const [rif, setRif] = useState(initial?.rif ?? "");
   const [birthDate, setBirthDate] = useState(initial?.birthDate ?? "");
   const [email, setEmail] = useState(initial?.email ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Customer[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [, startSearch] = useTransition();
@@ -98,10 +100,24 @@ export function CustomerForm({
     e.preventDefault();
     const info = { firstName, lastName, phone, address, rif, birthDate, email };
     // En línea se guarda en el CRM con nacimiento y correo; sin conexión la venta sigue igual.
-    if (online) {
-      void savePosCustomer({ firstName, lastName, phone, address, rif, birthDate, email }).catch(() => undefined);
+    if (!online) {
+      onContinue(info);
+      return;
     }
-    onContinue(info);
+    setSaveError(null);
+    setSaving(true);
+    savePosCustomer({ firstName, lastName, phone, address, rif, birthDate, email })
+      .then((r) => {
+        if (!r.success) {
+          // Datos inválidos (correo, campos vacíos): se avisa en vez de seguir sin guardar.
+          setSaveError(r.error);
+          return;
+        }
+        onContinue(info);
+      })
+      // Sin conexión a mitad de camino: la venta sigue; la venta también registra al cliente.
+      .catch(() => onContinue(info))
+      .finally(() => setSaving(false));
   }
 
   const fieldInput =
@@ -199,8 +215,9 @@ export function CustomerForm({
       </div>
       <p className="text-[13px] text-muted-foreground">Nombre, apellido, dirección y teléfono son obligatorios.</p>
 
+      {saveError && <p role="alert" className="text-[13px] font-semibold text-destructive">{saveError}</p>}
       <div className="mt-1 flex flex-wrap gap-2">
-        <Button type="submit">{submitLabel}</Button>
+        <Button type="submit" disabled={saving}>{saving ? "Guardando…" : submitLabel}</Button>
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancelar

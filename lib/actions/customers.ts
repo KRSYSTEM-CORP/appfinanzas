@@ -7,6 +7,7 @@ import { CustomerRecordSchema, CustomerCrmSchema } from "@/lib/validations";
 import { upcomingBirthdays } from "@/lib/birthdays";
 import { dayBoundsUtc, todayDateString } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
+import { DIRECTORY_PAGE_SIZE, directorySearchFilter, paginate } from "@/lib/customer-directory";
 
 export async function listCustomers(query?: string) {
   const { companyId } = await requireSectionAccess("customers");
@@ -31,23 +32,34 @@ export async function listCustomers(query?: string) {
   );
 }
 
+// Autocompletado del formulario: también por teléfono/cédula y con una sola letra.
 export async function searchCustomers(query: string) {
   const { companyId } = await requireSession();
   const q = query.trim();
   if (!q) return [];
   return withTenant(companyId, (tx) =>
     tx.customer.findMany({
-      where: {
-        companyId,
-        OR: [
-          { firstName: { contains: q, mode: "insensitive" } },
-          { lastName: { contains: q, mode: "insensitive" } },
-        ],
-      },
+      where: { companyId, ...directorySearchFilter(q) },
       orderBy: { firstName: "asc" },
-      take: 5,
+      take: 8,
     })
   );
+}
+
+// Directorio del POS: TODOS los clientes de la empresa (sin filtrar por sucursal
+// ni exigir texto), con búsqueda y paginación por «Cargar más».
+export async function listDirectoryCustomers(query: string, page = 0) {
+  const { companyId } = await requireSession();
+  const rows = await withTenant(companyId, (tx) =>
+    tx.customer.findMany({
+      where: { companyId, ...directorySearchFilter(query) },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }, { id: "asc" }],
+      skip: Math.max(0, page) * DIRECTORY_PAGE_SIZE,
+      take: DIRECTORY_PAGE_SIZE + 1,
+      select: { id: true, firstName: true, lastName: true, phone: true, address: true, rif: true },
+    })
+  );
+  return paginate(rows);
 }
 
 export async function findCustomerByPhone(phone: string) {
