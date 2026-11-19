@@ -410,6 +410,7 @@ const [step, setStep] = useState<Step>("cart");
         // succeeded. replace() drops the query string too, so the receipt
         // is the only thing on screen.
         router.replace("/pos");
+        router.refresh();
       } catch {
         setCompletedSale(buildReceiptPreview(customer, status, rows));
         setPendingSync(false);
@@ -431,6 +432,8 @@ const [step, setStep] = useState<Step>("cart");
     setChange(null);
     setDocumentKind("delivery");
     setStep("cart");
+    // El catálogo vuelve con las existencias ya descontadas, sin salir del POS.
+    router.refresh();
   }
 
   const isGeneral = customer?.phone === "0000-0000000";

@@ -204,13 +204,28 @@ export function CustomerForm({
       </div>
 
       <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <Label htmlFor="birthDate" className={fieldLabel}>Fecha de nacimiento (opcional)</Label>
-          <Input id="birthDate" className={fieldInput} type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Input
+              id="birthDate"
+              className={`${fieldInput} min-w-0 flex-1 appearance-auto text-left`}
+              type="date"
+              max={new Date().toISOString().slice(0, 10)}
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* el navegador abre el calendario por su cuenta */ } }}
+            />
+            {birthDate && (
+              <Button type="button" variant="outline" className="h-11 shrink-0 px-3 text-[13px]" onClick={() => setBirthDate("")} aria-label="Quitar fecha de nacimiento">
+                Quitar
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <Label htmlFor="email" className={fieldLabel}>Correo (opcional)</Label>
-          <Input id="email" className={fieldInput} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+          <Input id="email" className={`${fieldInput} w-full min-w-0`} type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" autoCapitalize="none" />
         </div>
       </div>
       <p className="text-[13px] text-muted-foreground">Nombre, apellido, dirección y teléfono son obligatorios.</p>
