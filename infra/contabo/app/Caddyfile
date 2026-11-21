@@ -4,6 +4,9 @@ krpos.krsystem-corp.com {
 		health_uri /api/health
 		health_interval 30s
 		health_timeout 5s
+		# Next.js (standalone) arma las redirecciones de rutas API con su direccion interna;
+		# se reescriben a la publica.
+		header_down Location "^https?://0\.0\.0\.0:3000" "https://krpos.krsystem-corp.com"
 	}
 	header {
 		-Server
