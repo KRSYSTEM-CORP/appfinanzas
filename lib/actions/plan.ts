@@ -1,6 +1,7 @@
 "use server";
 
-import { getSession, requireManager } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import {
   getPlan,
@@ -15,6 +16,18 @@ import { getAssistantStatus, listMyCreditRequests } from "@/lib/actions/assistan
 import { getBillingInfo, submitPaymentReport } from "@/lib/actions/billing";
 import { computeDiscountCents, couponLabel, isValidCouponCode, normalizeCouponCode, validateCoupon } from "@/lib/coupons";
 import type { ActionResult } from "@/lib/types";
+
+// «Mi plan» también se muestra en /billing, a donde llega una empresa bloqueada por falta de pago para
+// reportar su pago y desbloquearse. Por eso estas acciones NO usan requireManager()/requireSession()
+// (que mandan a /blocked), igual que lib/actions/billing.ts. Siguen exigiendo gerente y pantalla sin bloqueo de PIN.
+async function requireManagerEvenIfBlocked() {
+  const session = await getSession();
+  if (!session) redirect("/api/auth/clear-session");
+  if (session.locked) redirect("/lock");
+  if (session.role !== "GERENTE" && !session.isSuperAdmin) redirect("/pos");
+  if (session.needsPlanChoice && !session.isSuperAdmin) redirect("/choose-plan");
+  return session;
+}
 
 export type PlanHistoryItem = {
   id: string;
@@ -50,7 +63,7 @@ export type PlanUsage = {
 // Resumen de «Mi plan»: plan actual, uso de los límites, datos para pagar y pagos reportados.
 // Los conteos son los mismos que usa lib/plan-limits.ts para bloquear al llegar al tope.
 export async function getPlanUsage(): Promise<PlanUsage> {
-  const session = await requireManager();
+  const session = await requireManagerEvenIfBlocked();
   const { companyId } = session;
   const [counts, status, billing, creditRequests] = await Promise.all([
     withTenant(companyId, async (tx) => {
@@ -150,7 +163,7 @@ async function checkPlanCoupon(companyId: string, plan: PlanId, rawCode: string,
 
 // Vista previa del cupón en el paso de pago de «Mi plan» (no reserva nada).
 export async function previewPlanCoupon(input: { plan: string; code: string }): Promise<PlanCouponPreview> {
-  const session = await requireManager();
+  const session = await requireManagerEvenIfBlocked();
   if (!(input.plan in PLANS)) return { success: false, error: "Elige un plan válido." };
   const { due } = await planDueCents(session.companyId, input.plan as PlanId);
   const r = await checkPlanCoupon(session.companyId, input.plan as PlanId, input.code, due);
@@ -195,7 +208,7 @@ export async function reportPlanPayment(input: {
   proofImageDataUrl: string;
   coupon?: string;
 }): Promise<ActionResult> {
-  const session = await requireManager();
+  const session = await requireManagerEvenIfBlocked();
   if (!(input.plan in PLANS)) return { success: false, error: "Elige un plan válido." };
   if (input.method !== "CARD" && input.method !== "BINANCE") return { success: false, error: "Elige un método de pago válido." };
   const selected = input.plan as PlanId;
