@@ -5,14 +5,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { withTenant, withSuperAdmin } from "@/lib/tenant-db";
+import { withTenant } from "@/lib/tenant-db";
 import { isCompanyBlocked, PLATFORM_SETTINGS_ID } from "@/lib/billing";
 import { fetchBcvRate } from "@/lib/bcv-rate";
 import { isRateStale } from "@/lib/bcv-parse";
 import { getOrSetCache } from "@/lib/cache";
 import { sendPaymentReportEmail } from "@/lib/email";
 import { PaymentReportSchema } from "@/lib/validations";
-import type { ActionResult } from "@/lib/types";
+import type { ReportResult } from "@/lib/types";
+import { shareInfoFromReport } from "@/lib/payment-share-server";
+import { PAYMENTS_NOTIFY_EMAIL } from "@/lib/legal";
 
 // Bs per 1 USD, used only to price the subscription's Pago Móvil amount —
 // deliberately independent of any one company's own Company.exchangeRate
@@ -179,15 +181,16 @@ export async function listMyPaymentReports() {
 // proof-of-payment image is no longer collected in-app; the billing page
 // tells the company to send it by WhatsApp instead, which is how the super
 // admin actually finds out to go review it (see app/billing/page.tsx).
-export async function submitPaymentReport(input: unknown): Promise<ActionResult> {
+export async function submitPaymentReport(input: unknown): Promise<ReportResult> {
   const { companyId, companyName, userId } = await requireCompanyUser();
   const parsed = PaymentReportSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  await withTenant(companyId, (tx) =>
+  const created = await withTenant(companyId, (tx) =>
     tx.paymentReport.create({
+      include: { lines: true },
       data: {
         companyId,
         reportedById: userId,
@@ -207,30 +210,19 @@ export async function submitPaymentReport(input: unknown): Promise<ActionResult>
     })
   );
 
-  // The report is already saved by the time this runs, so a flaky email
-  // provider (or one super admin's send failing) never surfaces as a broken
-  // "reportar pago" flow — allSettled, errors only logged. This is the
-  // actual automatic notification the super admin gets; the WhatsApp
-  // message /billing also asks for is a second, human-driven channel, not
-  // this one's replacement.
-  const totalUsdCents = parsed.data.lines.reduce((sum, l) => sum + l.amount, 0);
+  // El reporte ya está guardado cuando esto corre: si el proveedor de correo falla, nunca rompe el flujo de
+  // «reportar pago» (solo se registra el error). Va al buzón de pagos con el mismo mensaje predeterminado
+  // que el cliente envía por WhatsApp, el enlace al PDF y el comprobante adjunto.
   try {
-    const admins = await withSuperAdmin((tx) =>
-      tx.user.findMany({ where: { isSuperAdmin: true }, select: { email: true } })
-    );
-    await Promise.allSettled(admins.map((a) =>
-        sendPaymentReportEmail(a.email, companyName, totalUsdCents, {
-          name: parsed.data.reporterName,
-          phone: parsed.data.reporterPhone,
-          email: parsed.data.reporterEmail,
-          references: parsed.data.lines.map((l) => l.reference).filter((r): r is string => !!r),
-          proofImageDataUrl: parsed.data.proofImageDataUrl,
-        })
-      ));
+    await sendPaymentReportEmail(process.env.PAYMENTS_NOTIFY_EMAIL || PAYMENTS_NOTIFY_EMAIL, {
+      share: shareInfoFromReport(created, companyName),
+      reporterEmail: parsed.data.reporterEmail ?? null,
+      proofImageDataUrl: parsed.data.proofImageDataUrl ?? null,
+    });
   } catch (err) {
-    console.error("[billing] failed to notify admins of payment report:", err);
+    console.error("[billing] failed to notify payments inbox of payment report:", err);
   }
 
   revalidatePath("/billing");
-  return { success: true };
+  return { success: true, reportId: created.id };
 }

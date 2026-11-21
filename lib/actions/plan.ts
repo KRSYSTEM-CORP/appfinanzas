@@ -15,7 +15,7 @@ import {
 import { getAssistantStatus, listMyCreditRequests } from "@/lib/actions/assistant";
 import { getBillingInfo, submitPaymentReport } from "@/lib/actions/billing";
 import { computeDiscountCents, couponLabel, isValidCouponCode, normalizeCouponCode, validateCoupon } from "@/lib/coupons";
-import type { ActionResult } from "@/lib/types";
+import type { ReportResult } from "@/lib/types";
 
 // «Mi plan» también se muestra en /billing, a donde llega una empresa bloqueada por falta de pago para
 // reportar su pago y desbloquearse. Por eso estas acciones NO usan requireManager()/requireSession()
@@ -207,7 +207,7 @@ export async function reportPlanPayment(input: {
   email: string;
   proofImageDataUrl: string;
   coupon?: string;
-}): Promise<ActionResult> {
+}): Promise<ReportResult> {
   const session = await requireManagerEvenIfBlocked();
   if (!(input.plan in PLANS)) return { success: false, error: "Elige un plan válido." };
   if (input.method !== "CARD" && input.method !== "BINANCE") return { success: false, error: "Elige un método de pago válido." };

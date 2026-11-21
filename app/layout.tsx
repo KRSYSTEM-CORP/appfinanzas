@@ -7,6 +7,8 @@ import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistratio
 import { KrPosTour } from "@/components/onboarding/KrPosTour";
 import { getSession } from "@/lib/session";
 import { RenewalBanner } from "@/components/nav/RenewalBanner";
+import { PaymentStatusBanner } from "@/components/nav/PaymentStatusBanner";
+import { getPaymentBannerState } from "@/lib/payment-banner";
 import { IdleLock } from "@/components/lock/IdleLock";
 import { renewalNotice } from "@/lib/renewal";
 import { AnnouncementBanners } from "@/components/nav/AnnouncementBanners";
@@ -62,12 +64,15 @@ export default async function RootLayout({
   const canLoadAppChrome = Boolean(session && !session.billingBlocked && !session.locked && !session.needsPlanChoice);
   const renewal =
     canLoadAppChrome && session && !session.isSuperAdmin && session.role === "GERENTE" && (session.roleName == null || session.roleName === "Dueño") ? renewalNotice(session.nextPaymentDueDate, session.isExempt) : null;
-  const [branding, branches, sidebarRate, banners] = await Promise.all([
+  const isOwner = Boolean(canLoadAppChrome && session && !session.isSuperAdmin && session.role === "GERENTE" && (session.roleName == null || session.roleName === "Dueño"));
+  const [branding, branches, sidebarRate, banners, paymentState] = await Promise.all([
     session ? getBranding() : Promise.resolve({ logoDataUrl: null, brandColor: null, brandBackground: null }),
     canManage && canLoadAppChrome ? listBranches() : Promise.resolve([]),
     canLoadAppChrome ? getSidebarRate() : Promise.resolve(null),
     // Avisos de la Plataforma: una falla de lectura nunca debe tumbar la app.
     canLoadAppChrome && session && !session.isSuperAdmin ? getActiveBanners(session).catch(() => []) : Promise.resolve([]),
+    // Estado del pago reportado (pendiente o recién aprobado): una falla de lectura nunca debe tumbar la app.
+    isOwner && session ? getPaymentBannerState(session.companyId).catch(() => null) : Promise.resolve(null),
   ]);
   // The accent (buttons/links) applies in both themes, but the company's
   // chosen background and the surface colors derived from it only make sense
@@ -100,6 +105,7 @@ export default async function RootLayout({
         </Script>
         <ServiceWorkerRegistration />
         {renewal && <RenewalBanner days={renewal.days} text={renewal.text} />}
+        {isOwner && session && <PaymentStatusBanner companyId={session.companyId} state={paymentState} />}
         {canLoadAppChrome && session?.hasPin && <IdleLock role={session.role} minutes={session.lockMinutes} />}
         {canLoadAppChrome && session && (
           <Sidebar
