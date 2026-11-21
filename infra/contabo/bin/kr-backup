@@ -1,0 +1,21 @@
+#!/bin/bash
+# Respaldo cifrado de la base: local siempre; R2 y B2 si hay credenciales en /etc/kr/rclone.conf
+set -uo pipefail
+STAMP=$(date -u +%Y%m%d-%H%M%S); DIR=/opt/kr/backups; mkdir -p $DIR
+PUB=$(cat /etc/kr/age.pub)
+FAIL(){ /usr/local/bin/kr-notify "RESPALDO FALLÓ" "$1"; exit 1; }
+docker exec kr-db-postgres-1 pg_dump -U kr_owner -d kr_pos --format=custom --no-owner > $DIR/bd-$STAMP.dump 2>$DIR/err.log || FAIL "pg_dump falló: $(tail -2 $DIR/err.log)"
+[ -s $DIR/bd-$STAMP.dump ] || FAIL "copia vacía"
+T=$(docker exec -i kr-db-postgres-1 pg_restore --list < $DIR/bd-$STAMP.dump | grep -c " TABLE " || true)
+[ "$T" -ge 35 ] || FAIL "la copia trae solo $T tablas"
+age -r "$PUB" -o $DIR/bd-$STAMP.dump.age $DIR/bd-$STAMP.dump || FAIL "cifrado falló"
+rm -f $DIR/bd-$STAMP.dump
+SZ=$(du -h $DIR/bd-$STAMP.dump.age | cut -f1)
+OK_R2=no; OK_B2=no
+if [ -f /etc/kr/rclone.conf ]; then
+  rclone --config /etc/kr/rclone.conf copyto $DIR/bd-$STAMP.dump.age r2:$(cat /etc/kr/r2.bucket)/bd/bd-$STAMP.dump.age 2>>$DIR/err.log && OK_R2=si
+  [ -f /etc/kr/b2.bucket ] && rclone --config /etc/kr/rclone.conf copyto $DIR/bd-$STAMP.dump.age b2:$(cat /etc/kr/b2.bucket)/bd/bd-$STAMP.dump.age 2>>$DIR/err.log && OK_B2=si
+  [ "$OK_R2" = si ] || /usr/local/bin/kr-notify "RESPALDO: no subió a R2" "Copia local OK ($SZ) pero falló la subida a R2: $(tail -2 $DIR/err.log)"
+fi
+find $DIR -name 'bd-*.age' -mtime +3 -delete
+date -Is > $DIR/ultimo-ok; echo "$STAMP $SZ r2=$OK_R2 b2=$OK_B2" >> $DIR/historial.log
