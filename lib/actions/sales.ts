@@ -21,6 +21,7 @@ import { computeItemDiscountCents } from "@/lib/discount";
 import { resolveTierPrice, tierPriceCents } from "@/lib/pricing";
 import type { ActionResult } from "@/lib/types";
 import { recordStockMovement } from "@/lib/stock-movements";
+import { invalidateProductsCache } from "@/lib/products-cache";
 
 export type CompleteSaleResult =
   | { success: true; saleId: string }
@@ -371,6 +372,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     revalidatePath("/reports");
     revalidatePath("/customers");
     revalidatePath("/quotes/history");
+    await invalidateProductsCache(companyId, branchId); // el inventario del POS debe verse ya descontado
     void notifyLive(posChannel(companyId), "sale");
     return { success: true, saleId };
   } catch (err) {
@@ -431,6 +433,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
   const session = await requireManager();
   if (!hasPermission(session, "void")) return { success: false, error: "No tienes permiso para anular ventas" };
   const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = session;
+  let saleBranchId: string | null = sessionBranchId;
 
   try {
     await withTenant(companyId, async (tx) => {
@@ -444,6 +447,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
         throw new Error("Esta venta tiene factura: anúlala emitiendo una nota de crédito.");
       }
 
+      saleBranchId = sale.branchId;
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
@@ -455,6 +459,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
   revalidatePath("/inventory");
   revalidatePath("/pos");
   revalidatePath("/reports");
+  await invalidateProductsCache(companyId, saleBranchId);
   void notifyLive(posChannel(companyId), "sale");
   return { success: true };
 }
@@ -468,6 +473,7 @@ export async function issueCreditNote(saleId: string, reason: string): Promise<A
   const trimmed = reason.trim();
   if (trimmed.length < 3) return { success: false, error: "Escribe el motivo de la nota de crédito." };
   if (trimmed.length > 300) return { success: false, error: "El motivo es demasiado largo (máximo 300 caracteres)." };
+  let saleBranchId: string | null = sessionBranchId;
 
   try {
     await withTenant(companyId, async (tx) => {
@@ -476,6 +482,7 @@ export async function issueCreditNote(saleId: string, reason: string): Promise<A
         where: { id: saleId, companyId, ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
         include: { creditNote: { select: { id: true } } },
       });
+      saleBranchId = sale?.branchId ?? sessionBranchId;
       if (!sale) throw new Error("Venta no encontrada");
       if (sale.creditNote) throw new Error("Esta venta ya tiene una nota de crédito");
       if (sale.invoiceNumber == null) throw new Error("Solo se emite nota de crédito sobre una venta con factura. Usa Anular.");
@@ -510,6 +517,7 @@ export async function issueCreditNote(saleId: string, reason: string): Promise<A
   revalidatePath("/pos");
   revalidatePath("/reports");
   revalidatePath("/documents");
+  await invalidateProductsCache(companyId, saleBranchId);
   void notifyLive(posChannel(companyId), "sale");
   return { success: true };
 }

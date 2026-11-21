@@ -5,25 +5,18 @@ import { revalidatePath } from "next/cache";
 import { requireManager, requireSectionAccess, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { notifyLive, posChannel } from "@/lib/realtime";
-import { getOrSetCache, invalidateCache } from "@/lib/cache";
+import { getOrSetCache } from "@/lib/cache";
+import { PRODUCTS_CACHE_TTL_SECONDS, productsCacheKey, invalidateProductsCache } from "@/lib/products-cache";
 import { PRODUCT_LIST_LIMIT, type ListedProduct } from "@/lib/product-image";
 import { ProductSchema, ProductUpdateRowSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type TaxCategory } from "@prisma/client";
 import { recordStockMovement } from "@/lib/stock-movements";
 
-// A short TTL rather than relying purely on invalidation: Product.stock also
-// changes from completeSale/restoreStock/recordPurchase/reverseStock (not
-// just the CRUD actions below), and those checkout-critical paths aren't
-// worth touching again just to keep a display cache perfectly fresh —
-// completeSale always re-validates real stock from the database before
-// decrementing it, so a stale cached list can at worst show an outdated
-// count for up to a minute, never cause an actual oversell.
-const PRODUCTS_CACHE_TTL_SECONDS = 60;
-
-function productsCacheKey(scope: "active" | "all", companyId: string, branchId: string | null) {
-  return `products:${scope}:${companyId}:${branchId ?? "all"}`;
-}
+// La lista tiene un TTL corto como red de seguridad, pero NO se confía en él: toda acción que cambie
+// existencias (venta, anulación, nota de crédito, compra, ajuste, transferencia) invalida la caché con
+// invalidateProductsCache (lib/products-cache.ts), para que «Nueva venta» muestre el inventario ya descontado.
+// completeSale además revalida el stock real en la base antes de descontarlo, así que nunca hay sobreventa.
 
 // The lists never carry the base64 photo (Product.imageDataUrl) — with up to
 // PRODUCT_LIST_LIMIT products that would be tens of MB per page load, per
@@ -109,18 +102,6 @@ export async function getInventoryOverview() {
   });
 }
 
-// Invalidates both the branch-scoped and "all branches" cache entries for a
-// company, since a manager viewing "Todas las sucursales" and a cashier
-// pinned to one branch read different cache keys for the same underlying
-// data (see productsCacheKey) — a write from either role must clear both.
-async function invalidateProductsCache(companyId: string, branchId: string | null) {
-  await invalidateCache(
-    productsCacheKey("active", companyId, branchId),
-    productsCacheKey("all", companyId, branchId),
-    productsCacheKey("active", companyId, null),
-    productsCacheKey("all", companyId, null)
-  );
-}
 
 export async function getProduct(id: string) {
   const { companyId, branchId } = await requireSession();

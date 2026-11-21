@@ -1,7 +1,8 @@
-# Instalar en /etc/cron.d/kr-pos (mismos horarios que vercel.json, en UTC).
+# Instalar en /etc/cron.d/kr-pos. El servidor está en hora de Caracas (UTC-4): estos horarios son los de vercel.json
+# (23:00, 04:00 y 08:00 UTC) convertidos a hora local = 19:00, 00:00 y 04:00.
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-0 23 * * * kr /usr/local/bin/kr-cron.sh /api/cron/bcv-rate       >> /var/log/kr-cron.log 2>&1
+0 19 * * * kr /usr/local/bin/kr-cron.sh /api/cron/bcv-rate       >> /var/log/kr-cron.log 2>&1
 # Verificación de medianoche (VE): en el servidor propio sí hay cron extra.
-0 4 * * *  kr /usr/local/bin/kr-cron.sh /api/cron/bcv-rate       >> /var/log/kr-cron.log 2>&1
-0 8 1 * *  kr /usr/local/bin/kr-cron.sh /api/cron/db-size-check   >> /var/log/kr-cron.log 2>&1
+0 0 * * *  kr /usr/local/bin/kr-cron.sh /api/cron/bcv-rate       >> /var/log/kr-cron.log 2>&1
+0 4 1 * *  kr /usr/local/bin/kr-cron.sh /api/cron/db-size-check   >> /var/log/kr-cron.log 2>&1

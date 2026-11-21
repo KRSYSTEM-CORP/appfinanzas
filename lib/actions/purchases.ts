@@ -11,6 +11,7 @@ import { resolveSalePayments, assertPaymentsMatchTotal, toEurCents } from "@/lib
 import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
 import type { ActionResult } from "@/lib/types";
 import { recordStockMovement } from "@/lib/stock-movements";
+import { invalidateProductsCache } from "@/lib/products-cache";
 
 export type CompletePurchaseResult =
   | { success: true; purchaseId: string }
@@ -258,6 +259,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
 
     revalidatePath("/inventory");
     revalidatePath("/purchases");
+    await invalidateProductsCache(companyId, branchId); // la compra sube existencias: el POS debe verlas ya
     return { success: true, purchaseId };
   } catch (err) {
     const message = err instanceof Error ? err.message : "No se pudo registrar la compra";
@@ -326,6 +328,7 @@ export async function markPurchasePaid(purchaseId: string): Promise<ActionResult
 
 export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
   const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
+  let purchaseBranchId: string | null = sessionBranchId;
 
   try {
     await withTenant(companyId, async (tx) => {
@@ -335,6 +338,7 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
       if (!purchase) throw new Error("Compra no encontrada");
       if (purchase.voided) throw new Error("La compra ya está anulada");
 
+      purchaseBranchId = purchase.branchId;
       await reverseStock(tx, purchaseId, companyId, purchase.branchId, actorId, actorName);
       await tx.purchase.update({ where: { id: purchaseId }, data: { voided: true, voidedAt: new Date() } });
     });
@@ -345,6 +349,7 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
 
   revalidatePath("/inventory");
   revalidatePath("/purchases");
+  await invalidateProductsCache(companyId, purchaseBranchId);
   return { success: true };
 }
 
@@ -553,6 +558,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
 
   revalidatePath("/inventory");
   revalidatePath("/purchases");
+  if (created > 0) await invalidateProductsCache(companyId, branchId);
   return { created, failed: failed.sort((a, b) => a.row - b.row) };
 }
 
