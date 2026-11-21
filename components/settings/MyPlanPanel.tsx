@@ -107,7 +107,7 @@ function Packs({ onBuy }: { onBuy: (credits: number, priceCents: number) => void
   );
 }
 
-function Support() {
+export function Support() {
   return (
     <section className="kp-card">
       <header>
