@@ -14,7 +14,7 @@ const STATUS_CLS = { PENDING: "warn", APPROVED: "ok", REJECTED: "bad" } as const
 
 // Información de un pago reportado y cómo hacérselo llegar a soporte. WhatsApp es el método principal:
 // abre el chat con el número de soporte con el mensaje ya escrito (empresa, monto, referencia, código y
-// enlace al PDF con el comprobante) y además descarga el PDF por si se quiere adjuntar.
+// enlace al PDF con el comprobante).
 export function PaymentShareActions({ reportId }: { reportId: string }) {
   const [share, setShare] = useState<PaymentShare | null | undefined>(undefined);
   const [sending, startSend] = useTransition();
@@ -32,16 +32,22 @@ export function PaymentShareActions({ reportId }: { reportId: string }) {
   const s = share;
 
   function sendWhatsApp() {
-    // Se abre primero (dentro del clic) para que el navegador no lo bloquee; luego se descarga el PDF.
-    window.open(s.whatsappUrl, "_blank", "noopener,noreferrer");
-    const a = document.createElement("a");
-    a.href = s.pdfUrl;
-    a.download = `pago-${s.code}.pdf`;
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    toast.success("Se abrió WhatsApp con tu mensaje. Si quieres, adjunta el PDF que se descargó.");
+    // Se intenta abrir la app de WhatsApp (celular o escritorio): KR POS se queda donde está y no hay que
+    // «volver». Si no hay app instalada, la página sigue visible y se abre WhatsApp Web en otra pestaña.
+    const deep = s.whatsappUrl.replace("https://wa.me/", "whatsapp://send?phone=").replace("?text=", "&text=");
+    let left = false;
+    const mark = () => {
+      left = true;
+    };
+    window.addEventListener("blur", mark, { once: true });
+    document.addEventListener("visibilitychange", mark, { once: true });
+    window.location.href = deep;
+    window.setTimeout(() => {
+      window.removeEventListener("blur", mark);
+      document.removeEventListener("visibilitychange", mark);
+      if (!left) window.open(s.whatsappUrl, "_blank", "noopener,noreferrer");
+    }, 1500);
+    toast.success("Abrimos WhatsApp con tu mensaje. Cuando termines, vuelve a KR POS desde aquí.");
   }
 
   async function copy() {
@@ -80,7 +86,7 @@ export function PaymentShareActions({ reportId }: { reportId: string }) {
         <button type="button" className="kp-btn primary" onClick={sendWhatsApp}>
           <WhatsappIcon /> Enviar por WhatsApp
         </button>
-        <a className="kp-btn" href={s.pdfUrl} target="_blank" rel="noopener noreferrer">
+        <a className="kp-btn" href={`/pago/${s.reportId}?t=${new URL(s.pdfUrl).searchParams.get("t") ?? ""}`}>
           <FileTextIcon aria-hidden /> Ver PDF
         </a>
         <button type="button" className="kp-btn" onClick={copy}>
