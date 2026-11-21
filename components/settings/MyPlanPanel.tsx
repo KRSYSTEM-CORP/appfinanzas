@@ -27,6 +27,7 @@ import { CONTACT_EMAIL, WHATSAPP_PHONE } from "@/lib/legal";
 import { formatDate } from "@/lib/format";
 import { previewPlanCoupon, reportPlanPayment, type PlanUsage } from "@/lib/actions/plan";
 import { requestCreditPack } from "@/lib/actions/assistant";
+import { PaymentShareActions } from "@/components/billing/PaymentShareActions";
 
 type View = "home" | "plans" | "pay" | "status" | "hist";
 type Method = "CARD" | "BINANCE";
@@ -147,7 +148,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
   const [okTerms, setOkTerms] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", email: "", ref: "" });
   const [proof, setProof] = useState<{ dataUrl: string; name: string } | null>(null);
-  const [sent, setSent] = useState<{ ref: string; title: string; cents: number } | null>(null);
+  const [sent, setSent] = useState<{ ref: string; title: string; cents: number; reportId?: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   // Tasa bloqueada 30 min en el paso 2 (cuenta regresiva en el cliente).
@@ -285,11 +286,12 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
         toast.error(r.error);
         return;
       }
-      setSent({ ref, title, cents: dueCents });
+      const reportId = (r as { reportId?: string }).reportId;
+      setSent({ ref, title, cents: dueCents, reportId });
       setForm({ name: "", phone: "", email: "", ref: "" });
       setProof(null);
       go("status");
-      toast("Comprobante enviado por WhatsApp y correo al administrador");
+      toast(reportId ? "Pago reportado. Envía el comprobante por WhatsApp para que lo verifiquemos más rápido." : "Comprobante enviado por WhatsApp y correo al administrador");
       router.refresh();
     });
   }
@@ -315,7 +317,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
               <b>Tienes un pago en revisión</b>
               <div className="kp-muted">{pending.title} · ref. {pending.reference || "—"} · {usd(pending.totalUsdCents, 2)}</div>
             </div>
-            <Btn onClick={() => { setSent({ ref: pending.reference, title: pending.title, cents: pending.totalUsdCents }); go("status"); }}>Ver estado</Btn>
+            <Btn onClick={() => { setSent({ ref: pending.reference, title: pending.title, cents: pending.totalUsdCents, reportId: pending.title.startsWith("Recarga") ? undefined : pending.id }); go("status"); }}>Ver estado</Btn>
           </section>
         )}
         <section className={`kp-card kp-hero${active ? " on" : ""}`}>
@@ -644,8 +646,16 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
         <span className="kp-ck kp-bigck"><ClockIcon aria-hidden strokeWidth={3} /></span>
         <h2 style={{ margin: "10px 0 2px", fontSize: 24, fontWeight: 800 }}>Pago reportado</h2>
         <p className="kp-muted" style={{ margin: "0 auto 14px", maxWidth: "44ch" }}>
-          Referencia {sent?.ref || "—"} · {sent ? usd(sent.cents, 2) : ""}. Tu comprobante fue enviado por WhatsApp y al correo del administrador de KR System. Te avisamos cuando esté aprobado.
+          Referencia {sent?.ref || "—"} · {sent ? usd(sent.cents, 2) : ""}.{" "}
+          {sent?.reportId
+            ? "Avisamos por correo a KR System. Para que lo verifiquemos más rápido, envía también el comprobante por WhatsApp. Te avisamos aquí cuando esté aprobado."
+            : "Tu comprobante fue enviado por WhatsApp y al correo del administrador de KR System. Te avisamos cuando esté aprobado."}
         </p>
+        {sent?.reportId && (
+          <div style={{ textAlign: "left", margin: "0 auto 14px", maxWidth: 560 }}>
+            <PaymentShareActions reportId={sent.reportId} />
+          </div>
+        )}
         <div className="kp-tl">
           {ST.map((x, i) => (
             <div key={x[0]} className={`kp-tli${i <= s ? " on" : ""}`}>
@@ -656,7 +666,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
         </div>
         <div className="kp-row" style={{ justifyContent: "center", marginTop: 14 }}>
           <Btn primary onClick={() => go("home")}>Ir a Mi Plan</Btn>
-          <a className="kp-btn" href={`https://wa.me/${WHATSAPP_PHONE}?text=${msg}`} target="_blank" rel="noopener noreferrer"><WhatsappIcon /> Escribir por WhatsApp</a>
+          {!sent?.reportId && <a className="kp-btn" href={`https://wa.me/${WHATSAPP_PHONE}?text=${msg}`} target="_blank" rel="noopener noreferrer"><WhatsappIcon /> Escribir por WhatsApp</a>}
         </div>
       </section>
     );

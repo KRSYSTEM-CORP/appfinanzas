@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { buildPaymentMessage, type PaymentShareInfo } from "@/lib/payment-share";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -84,57 +85,63 @@ export type PaymentReportContact = {
   proofImageDataUrl?: string;
 };
 
-export async function sendPaymentReportEmail(
-  to: string,
-  companyName: string,
-  totalUsdCents: number,
-  contact?: PaymentReportContact,
-): Promise<void> {
-  const amount = (totalUsdCents / 100).toLocaleString("es-VE", {
-    style: "currency",
-    currency: "USD",
-  });
+export type PaymentReportEmailInput = {
+  share: PaymentShareInfo;
+  reporterEmail: string | null;
+  proofImageDataUrl: string | null;
+  isResend?: boolean;
+};
+
+// Aviso de un pago reportado, para el buzón de pagos (PAYMENTS_NOTIFY_EMAIL). Lleva el mismo mensaje
+// predeterminado que el cliente manda por WhatsApp, el enlace al PDF y el comprobante adjunto.
+export async function sendPaymentReportEmail(to: string, input: PaymentReportEmailInput): Promise<void> {
+  const { share, reporterEmail, proofImageDataUrl, isResend } = input;
+  const amount = (share.amountUsdCents / 100).toLocaleString("es-VE", { style: "currency", currency: "USD" });
   const reviewUrl = `${APP_URL}/admin`;
-  const phoneDigits = contact?.phone.replace(/\D/g, "") ?? "";
+  const phoneDigits = share.reporterPhone?.replace(/\D/g, "") ?? "";
   const waUrl = phoneDigits
     ? `https://wa.me/${phoneDigits.replace(/^0/, "58")}?text=${encodeURIComponent(
-        `Hola ${contact?.name ?? ""}, recibimos tu comprobante de pago de la suscripción de ${companyName}.`,
+        `Hola ${share.reporterName ?? ""}, recibimos tu comprobante de pago de la suscripción de ${share.companyName}.`,
       )}`
     : null;
-  const contactHtml = contact
-    ? `
-      <ul style="padding-left: 18px; color: #333;">
-        <li>Nombre: <strong>${escapeHtml(contact.name)}</strong></li>
-        <li>Teléfono: <strong>${escapeHtml(contact.phone)}</strong></li>
-        ${contact.email ? `<li>Correo: <strong>${escapeHtml(contact.email)}</strong></li>` : ""}
-        ${contact.references.length ? `<li>Referencia: <strong>${contact.references.map(escapeHtml).join(", ")}</strong></li>` : ""}
-      </ul>
-      ${waUrl ? `<p><a href="${waUrl}">Escribirle por WhatsApp</a></p>` : ""}`
-    : "";
-  const proof = contact?.proofImageDataUrl?.match(/^data:image\/(png|jpe?g|webp);base64,(.+)$/);
+  const row = (k: string, v: string) =>
+    `<tr><td style="padding:4px 14px 4px 0;color:#666">${k}</td><td style="padding:4px 0"><strong>${escapeHtml(v)}</strong></td></tr>`;
+  const proof = proofImageDataUrl?.match(/^data:image\/(png|jpe?g|webp);base64,(.+)$/);
   const attachments = proof
-    ? [{ filename: `comprobante-${companyName.replace(/[^\w-]+/g, "-")}.${proof[1] === "jpeg" ? "jpg" : proof[1]}`, content: proof[2] }]
+    ? [{ filename: `comprobante-${share.companyName.replace(/[^\w-]+/g, "-")}.${proof[1] === "jpeg" ? "jpg" : proof[1]}`, content: proof[2] }]
     : undefined;
+  const btn = "display:inline-block;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600;margin:4px 6px 4px 0";
   await send(
     to,
-    `Nuevo pago reportado — ${companyName}`,
+    `${isResend ? "Reenvío: pago" : "Nuevo pago"} reportado — ${share.companyName} — ${amount} (${share.code})`,
     `
-      <h2>Nuevo pago reportado</h2>
-      <p><strong>${escapeHtml(companyName)}</strong> reportó un pago de suscripción por <strong>${amount}</strong>.</p>
-      ${contactHtml}
-      <p>
-        <a href="${reviewUrl}" style="display: inline-block; background: #433ddd; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
-          Revisar y aprobar
-        </a>
+      <h2>${isResend ? "Pago reportado (reenviado por la empresa)" : "Nuevo pago reportado"}</h2>
+      <p><strong>${escapeHtml(share.companyName)}</strong> reportó un pago por <strong>${amount}</strong>.</p>
+      <table style="border-collapse:collapse;font-size:14px">
+        ${row("Empresa", share.companyName)}
+        ${row("Concepto", share.concept)}
+        ${row("Monto", amount)}
+        ${row("Método", share.methodLabel)}
+        ${row("Referencia", share.reference?.trim() || "—")}
+        ${row("Fecha del reporte", share.reportedAt.toLocaleString("es-VE", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Caracas" }))}
+        ${row("Reportado por", share.reporterName || "—")}
+        ${row("Teléfono", share.reporterPhone || "—")}
+        ${reporterEmail ? row("Correo", reporterEmail) : ""}
+        ${row("Código", share.code)}
+      </table>
+      <p style="margin-top:18px">
+        <a href="${share.pdfUrl}" style="${btn};background:#433ddd;color:#fff">Ver PDF con el comprobante</a>
+        <a href="${reviewUrl}" style="${btn};background:#f1f1f7;color:#222">Revisar y aprobar</a>
+        ${waUrl ? `<a href="${waUrl}" style="${btn};background:#25d366;color:#fff">Escribirle por WhatsApp</a>` : ""}
       </p>
-      <p>El comprobante va adjunto. El acceso de la empresa se restablece automáticamente en cuanto apruebes el pago.</p>
+      <p style="color:#666;font-size:13px">Mensaje que la empresa envía por WhatsApp:</p>
+      <pre style="white-space:pre-wrap;background:#f6f6fa;padding:12px;border-radius:8px;font-size:13px">${escapeHtml(buildPaymentMessage(share))}</pre>
+      <p style="color:#666;font-size:13px">El comprobante va adjunto. El acceso de la empresa se restablece automáticamente en cuanto apruebes el pago.</p>
     `,
     attachments,
   );
 }
 
-// Aviso al administrador cuando una empresa paga una recarga de créditos del Asistente IA: mismo
-// formato que el de la suscripción (contacto, referencia, comprobante adjunto y botón para aprobar).
 export async function sendCreditRequestEmail(
   to: string,
   companyName: string,

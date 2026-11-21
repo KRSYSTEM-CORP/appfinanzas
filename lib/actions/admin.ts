@@ -23,6 +23,7 @@ import {
   ExchangeRateSchema,
 } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
+import { notifyLive, posChannel } from "@/lib/realtime";
 
 // Todas las acciones de este archivo empiezan con requireSuperAdmin() (lib/platform-guard.ts)
 // y las que cambian algo quedan en el registro de auditoría de la Plataforma.
@@ -448,6 +449,7 @@ export async function approvePaymentReport(reportId: string): Promise<ActionResu
     return { success: false, error: result.error };
   }
   await logPlatformAudit(session.userId, "pago.aprobar", { companyId: result.companyId, detail: `$${(result.totalUsdCents / 100).toFixed(2)}` });
+  void notifyLive(posChannel(result.companyId), "payment"); // la empresa ve «¡Pago registrado!» al instante
   revalidatePath("/admin", "layout");
   revalidatePath("/billing");
   revalidatePath("/settings");
@@ -487,6 +489,7 @@ export async function rejectPaymentReport(reportId: string, input: unknown): Pro
     return { success: false, error: "Reporte no encontrado o ya fue procesado" };
   }
   await logPlatformAudit(session.userId, "pago.rechazar", { companyId, detail: parsed.data.reviewNote });
+  void notifyLive(posChannel(companyId), "payment");
   revalidatePath("/admin", "layout");
   revalidatePath("/billing");
   return { success: true };

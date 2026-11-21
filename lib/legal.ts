@@ -14,6 +14,9 @@ export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURICom
 // Correo de soporte de KR POS (a donde llegan los mensajes de contacto y soporte).
 export const CONTACT_EMAIL = "soportekrpos@gmail.com";
 
+// Buzón al que llega el aviso de cada pago reportado (override: PAYMENTS_NOTIFY_EMAIL).
+export const PAYMENTS_NOTIFY_EMAIL = "contacto@krsystem-corp.com";
+
 // Prefilled with context so support doesn't have to ask what happened first
 // — shown on the account-suspended screen (LoginForm.tsx).
 export const SUSPENDED_WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
