@@ -1,32 +1,45 @@
 "use client";
 
+// Elegir plan al registrarse: misma pantalla de planes que «Mi plan» en Ajustes
+// (components/settings/MyPlanPanel.tsx, vista «Planes»): mismas tarjetas, estilos (my-plan.css),
+// textos y datos (lib/plans.ts). No incluye la recarga de créditos, que solo aplica con plan elegido.
+import "@/components/settings/my-plan.css";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { PLANS, type PlanId } from "@/lib/plans";
-import { formatUSD } from "@/lib/format";
+import { CheckIcon, StarIcon } from "lucide-react";
+import { PLANS, recommendPlan, type PlanId } from "@/lib/plans";
 import { chooseInitialPlan } from "@/lib/actions/plan";
+import { Support } from "@/components/settings/MyPlanPanel";
 
-const ORDER: PlanId[] = ["EMPRENDE", "PYME", "CORPORATIVO"];
+const nf = (n: number, d = 2) => n.toLocaleString("es-VE", { minimumFractionDigits: d, maximumFractionDigits: d });
+const usd = (cents: number, d = 0) => `$${nf(cents / 100, d)}`;
 
 export function ChoosePlan({ trialDays, companyName }: { trialDays: number; companyName: string }) {
   const router = useRouter();
-  const [selected, setSelected] = useState<PlanId>("PYME");
+  const [chosen, setChosen] = useState<PlanId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  function confirm() {
+  // Cliente nuevo: 1 usuario y sin productos; sin pago aprobado, así que aplica el primer mes.
+  const rec = recommendPlan(1, 0);
+  const firstMonth = true;
+  const emprende = PLANS.EMPRENDE;
+
+  function confirm(id: PlanId) {
     setError(null);
+    setChosen(id);
     start(async () => {
-      const r = await chooseInitialPlan(selected);
+      const r = await chooseInitialPlan(id);
       if (r.success) router.replace("/home");
-      else setError(r.error);
+      else {
+        setError(r.error);
+        setChosen(null);
+      }
     });
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col justify-center gap-6 p-5 py-10">
+    <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col justify-center gap-6 p-5 py-10">
       <header className="text-center">
         <p className="kr-eyebrow">Bienvenido a KR POS · {companyName}</p>
         <h1 className="mt-1 kr-h1">Elige tu plan para empezar</h1>
@@ -34,52 +47,57 @@ export function ChoosePlan({ trialDays, companyName }: { trialDays: number; comp
           {trialDays} días gratis. Al terminar, tu plan se renueva y lo pagas a la tasa BCV del día. Los límites se cuentan desde hoy.
         </p>
       </header>
-      <ul className="grid gap-4 md:grid-cols-3" role="radiogroup" aria-label="Planes">
-        {ORDER.map((id) => {
-          const p = PLANS[id];
-          const on = selected === id;
-          return (
-            <li key={id}>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() => setSelected(id)}
-                className={`flex h-full w-full flex-col gap-3 rounded-[20px] bg-card p-5 text-left shadow-(--shadow-card) transition-shadow ${on ? "ring-2 ring-primary" : "ring-1 ring-border"}`}
-              >
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-bold">{p.label}</h2>
-                  {id === "PYME" && <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">Popular</span>}
+      <div className="kp">
+        <div className="kp-card kp-promo">
+          <span className="kp-sico"><StarIcon aria-hidden /></span>
+          <div style={{ flex: 1 }}>
+            <b>Tu bienvenida tiene beneficios</b>
+            <div className="kp-muted">
+              {trialDays} días gratis · el primer mes de {emprende.label} cuesta {usd(emprende.firstMonthUsdCents ?? emprende.priceUsdCents, 2)} · desde el 2.º mes pagas {usd(emprende.priceUsdCents, 2)} al mes.
+            </div>
+          </div>
+        </div>
+        <div className="kp-grid kp-plans">
+          {Object.values(PLANS).map((p) => {
+            const isRec = p.id === rec.id;
+            return (
+              <article key={p.id} className={`kp-card kp-plan2${isRec ? " rec" : ""}`}>
+                {isRec && <span className="kp-ribbon">Recomendado para ti</span>}
+                <h3>{p.label}</h3>
+                <p className="kp-muted" style={{ margin: 0 }}>{p.tagline}</p>
+                <div className="kp-pr">
+                  <b className="kp-mono">
+                    {p.firstMonthUsdCents != null && firstMonth ? (
+                      <>
+                        <s>{usd(p.priceUsdCents, 2)}</s> {usd(p.firstMonthUsdCents, 2)}
+                        <span className="kp-pill ok">Solo el primer mes</span>
+                        <small>Luego pagas {usd(p.priceUsdCents, 2)} al mes</small>
+                      </>
+                    ) : (
+                      usd(p.priceUsdCents, 2)
+                    )}
+                  </b>
+                  <span>/ mes</span>
                 </div>
-                <p className="text-3xl font-bold tabular-nums">
-                  {formatUSD(p.priceUsdCents)}
-                  <span className="text-sm font-normal text-muted-foreground"> /mes</span>
-                </p>
-                {p.firstMonthUsdCents != null && (
-                  <p className="text-xs font-medium text-success">Primer mes a {formatUSD(p.firstMonthUsdCents)}</p>
-                )}
-                <ul className="mt-1 flex flex-col gap-1.5 text-sm">
-                  {[
-                    `${p.maxUsers} ${p.maxUsers === 1 ? "usuario" : "usuarios"}`,
-                    p.maxProducts == null ? "Productos ilimitados" : `Hasta ${p.maxProducts} productos`,
-                    p.aiCredits > 0 ? `${p.aiCredits} créditos de IA al mes` : "Asistente IA con créditos aparte",
-                    p.accounting ? "Contabilidad incluida" : "Sin contabilidad",
-                  ].map((t) => (
-                    <li key={t} className="flex items-center gap-2">
-                      <CheckIcon className="size-4 shrink-0 text-success" aria-hidden /> {t}
-                    </li>
+                <div className="kp-muted" style={{ fontSize: 13 }}>
+                  {p.maxUsers} {p.maxUsers === 1 ? "usuario" : "usuarios"} · {p.maxProducts == null ? "productos ilimitados" : `${nf(p.maxProducts, 0)} productos`}
+                  {p.aiCredits ? ` · ${p.aiCredits} créditos IA` : ""}
+                </div>
+                <ul>
+                  {p.features.map((f) => (
+                    <li key={f}><CheckIcon aria-hidden strokeWidth={3} />{f}</li>
                   ))}
                 </ul>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {error && <p className="text-center text-sm text-destructive">{error}</p>}
-      <div className="flex justify-center">
-        <Button size="lg" disabled={pending} onClick={confirm}>
-          {pending ? "Guardando..." : `Empezar con ${PLANS[selected].label}`}
-        </Button>
+                <button type="button" className={`kp-btn${isRec ? " primary" : ""}`} disabled={pending} onClick={() => confirm(p.id)}>
+                  {pending && chosen === p.id ? "Guardando..." : `Elegir ${p.label}`}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+        {error && <p className="kp-note" role="alert" style={{ textAlign: "center", color: "var(--destructive)" }}>{error}</p>}
+        <p className="kp-note">Los límites de usuarios y productos se cuentan desde el momento en que eliges tu plan.</p>
+        <Support />
       </div>
     </main>
   );
