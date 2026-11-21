@@ -1,37 +1,31 @@
-import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { PaymentHistoryList } from "@/components/billing/PaymentHistoryList";
-import { PaymentReportForm } from "@/components/billing/PaymentReportForm";
-import { getBillingInfo, listMyPaymentReports } from "@/lib/actions/billing";
-import { formatDate, formatUSD, formatUSDT } from "@/lib/format";
-import { formatLocalCurrency } from "@/lib/currencies";
-import { getPlan } from "@/lib/plans";
-import { WHATSAPP_PHONE } from "@/lib/legal";
+import { MyPlanPanel } from "@/components/settings/MyPlanPanel";
+import { getBillingInfo } from "@/lib/actions/billing";
+import { getPlanUsage } from "@/lib/actions/plan";
 
 export const dynamic = "force-dynamic";
 
+// Suscripción: la misma pantalla de «Mi plan» de Ajustes (components/settings/MyPlanPanel.tsx).
+// Es la página a la que llega una empresa bloqueada por pago, por eso sus acciones no redirigen a /blocked.
 export default async function BillingPage({
   searchParams,
 }: {
   searchParams: Promise<{ plan?: string }>;
 }) {
   const { plan: planParam } = await searchParams;
-  const [info, reports] = await Promise.all([getBillingInfo(), listMyPaymentReports()]);
+  const [usage, info] = await Promise.all([getPlanUsage(), getBillingInfo()]);
 
   return (
-    <div className="flex flex-col gap-6 px-4 py-5">
+    <div id="opciones-de-pago" className="flex scroll-mt-6 flex-col gap-4 px-4 py-5">
       <div>
         <h1 className="kr-h1">Suscripción mensual</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Costo mensual de la plataforma, cómo pagarlo y el estado de tus reportes de pago.
+        <p className="mt-1 text-sm text-muted-foreground">
+          Tu plan, cómo pagarlo y el estado de tus reportes de pago.
         </p>
       </div>
 
       {planParam === "contabilidad" && (
         <div role="status" className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
-          La Contabilidad está incluida en los planes <b>Pyme</b> y <b>Corporativo</b>. Escríbenos por WhatsApp para
-          subir de plan.
+          La Contabilidad está incluida en los planes <b>Pyme</b> y <b>Corporativo</b>. Elige uno abajo para subir de plan.
         </div>
       )}
 
@@ -39,204 +33,12 @@ export default async function BillingPage({
         <div role="status" className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
           <span className="font-medium text-destructive">Tu cuenta está bloqueada por suscripción vencida.</span>
           <span className="text-muted-foreground">
-            Revisa aquí los métodos disponibles, reporta el pago y espera la confirmación de KR System para recuperar el acceso.
+            Elige tu plan, reporta el pago y espera la confirmación de KR System para recuperar el acceso.
           </span>
         </div>
       )}
 
-      {info.isExempt ? (
-        <Card className="max-w-md">
-          <CardContent className="pt-6">
-            <Badge variant="outline">Plan sin mensualidades</Badge>
-            <p className="text-sm text-muted-foreground mt-2">
-              Tu empresa no paga mensualidades (exoneración de KR System).
-              No necesitas reportar pagos.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div id="opciones-de-pago" className="grid scroll-mt-6 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 max-w-5xl">
-          <Card>
-            <CardHeader>
-              <CardTitle>Plan {getPlan(info.plan).label}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              {info.amountDueUsdCents != null ? (
-                <>
-                  <span className="text-2xl font-semibold">{formatUSD(info.amountDueUsdCents)}</span>
-                  {info.monthlyFeeUsdCents != null && info.amountDueUsdCents < info.monthlyFeeUsdCents && (
-                    <span className="text-sm text-muted-foreground">
-                      Primer mes del plan Emprende a este precio. Desde el segundo mes,{" "}
-                      {formatUSD(info.monthlyFeeUsdCents)}.
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    El pago de la suscripción se calcula a la tasa dólar BCV del día.
-                  </span>
-                </>
-              ) : (
-                <span className="text-sm text-muted-foreground">
-                  Todavía no tienes un ciclo de cobro configurado.
-                </span>
-              )}
-              {info.nextPaymentDueDate && (
-                <span className="text-sm text-muted-foreground">
-                  Vence el {formatDate(info.nextPaymentDueDate)}
-                </span>
-              )}
-              {info.blocked && (
-                <Badge variant="destructive" className="w-fit">
-                  Cuenta bloqueada por pago
-                </Badge>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Cómo pagar — Binance (USDT)</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {info.amountDueUsdCents != null && (
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Monto a pagar: </span>
-                  <span className="font-medium">{formatUSDT(info.amountDueUsdCents ?? info.monthlyFeeUsdCents)}</span>
-                </p>
-              )}
-              {info.binanceQrDataUrl || info.binanceId ? (
-                <>
-                  {info.binanceQrDataUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={info.binanceQrDataUrl}
-                      alt="QR de Binance Pay"
-                      className="h-40 w-40 rounded-lg border object-cover"
-                    />
-                  )}
-                  {info.binanceId && (
-                    <p className="text-sm">
-                      <span className="text-muted-foreground">ID de Binance: </span>
-                      <span className="font-medium">{info.binanceId}</span>
-                    </p>
-                  )}
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  El super admin todavía no ha configurado los datos de Binance.
-                </p>
-              )}
-              {info.paymentInstructions && (
-                <p className="text-sm text-muted-foreground whitespace-pre-line">{info.paymentInstructions}</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Pago Móvil</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              {info.monthlyFeeLocalAmount != null && (
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Monto a pagar: </span>
-                  <span className="font-medium">
-                    {formatLocalCurrency(info.monthlyFeeLocalAmount, "VES")}
-                  </span>
-                </p>
-              )}
-              {info.pagoMovilBank || info.pagoMovilPhone || info.pagoMovilId ? (
-                <>
-                  {info.pagoMovilBank && (
-                    <p className="text-sm">
-                      <span className="text-muted-foreground">Banco: </span>
-                      <span className="font-medium">{info.pagoMovilBank}</span>
-                    </p>
-                  )}
-                  {info.pagoMovilPhone && (
-                    <p className="text-sm">
-                      <span className="text-muted-foreground">Teléfono: </span>
-                      <span className="font-medium">{info.pagoMovilPhone}</span>
-                    </p>
-                  )}
-                  {info.pagoMovilId && (
-                    <p className="text-sm">
-                      <span className="text-muted-foreground">Cédula/RIF: </span>
-                      <span className="font-medium">{info.pagoMovilId}</span>
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {info.monthlyFeeLocalAmount != null
-                      ? "Este monto se actualiza a diario según la tasa BCV de KR System."
-                      : "Paga el equivalente en bolívares a la tasa del día."}
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  El super admin todavía no ha configurado los datos de Pago Móvil.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {!info.isExempt && (
-        <div className="max-w-3xl">
-          <Card id="reportar-pago" className="scroll-mt-6">
-            <CardHeader>
-              <CardTitle>Reportar pago para reactivar la cuenta</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex flex-col gap-2">
-                <p className="text-sm font-medium">
-                  Pasos obligatorios para activar tu suscripción:
-                </p>
-                <ol className="text-sm text-muted-foreground list-decimal list-inside flex flex-col gap-1">
-                  <li>Paga por Binance (USDT) o Pago Móvil, con los datos de arriba.</li>
-                  <li>Completa el formulario de abajo con los datos del pago.</li>
-                  <li>Envía tu comprobante de pago por WhatsApp (obligatorio) — así te confirmamos más rápido.</li>
-                </ol>
-                <a
-                  href={`https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
-                    `Hola, les envío el comprobante de pago de la suscripción de ${info.companyName}.`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary underline underline-offset-4"
-                >
-                  <WhatsappIcon className="size-4" /> Enviar comprobante por WhatsApp →
-                </a>
-              </div>
-              <PaymentReportForm
-                monthlyFeeUsdCents={info.amountDueUsdCents ?? info.monthlyFeeUsdCents}
-                monthlyFeeLocalAmount={info.monthlyFeeLocalAmount}
-                platformRate={info.platformRate}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Historial de reportes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PaymentHistoryList
-            reports={reports.map((r) => ({
-              id: r.id,
-              createdAt: r.createdAt,
-              status: r.status,
-              reviewNote: r.reviewNote,
-              lines: r.lines.map((l) => ({
-                paymentMethod: l.paymentMethod,
-                amountUsdCents: l.amountUsdCents,
-                reference: l.reference,
-              })),
-            }))}
-          />
-        </CardContent>
-      </Card>
+      <MyPlanPanel usage={usage} />
     </div>
   );
 }

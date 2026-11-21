@@ -69,7 +69,7 @@ export default async function BlockedPage() {
 
           {canManageBilling ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Button size="lg" className="min-h-11 w-full sm:w-auto" render={<Link href="/billing#opciones-de-pago" />}>
+              <Button size="lg" className="min-h-11 w-full sm:w-auto" render={<Link href="/billing?vista=planes" />}>
                 Ver métodos y reportar pago <ArrowRightIcon data-icon="inline-end" />
               </Button>
               <p className="text-xs leading-5 text-muted-foreground">
