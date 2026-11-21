@@ -1,0 +1,25 @@
+#!/bin/bash
+# Configura el envío de alertas (Resend por SMTP). Pide la clave sin mostrarla.
+[ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
+read -rsp "Pega tu clave de Resend (empieza con re_) y Enter: " K; echo
+[ -n "$K" ] || { echo "vacía"; exit 1; }
+mkdir -p /etc/kr
+cat > /etc/kr/msmtprc <<CFG
+defaults
+auth on
+tls on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile /var/log/msmtp.log
+account resend
+host smtp.resend.com
+port 465
+tls_starttls off
+user resend
+password $K
+from alertas@krsystem-corp.com
+account default : resend
+CFG
+chmod 600 /etc/kr/msmtprc
+/usr/local/bin/kr-notify "Prueba de alertas" "Si lees esto, las alertas por correo del servidor funcionan."
+sleep 4; tail -3 /var/log/kr-alertas.log; tail -3 /var/log/msmtp.log 2>/dev/null
+echo "Revisa contacto@krsystem-corp.com (y spam)."

@@ -1,0 +1,3 @@
+17 */4 * * * root /usr/local/bin/kr-backup
+*/5 * * * * root /usr/local/bin/kr-vigia
+0 8 * * 1 root /usr/local/bin/kr-notify "Resumen semanal" "$(df -h / | tail -1); $(free -h | sed -n 2p); último respaldo: $(cat /opt/kr/backups/ultimo-ok 2>/dev/null); $(tail -3 /opt/kr/backups/historial.log 2>/dev/null)"

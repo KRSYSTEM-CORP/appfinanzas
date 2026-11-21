@@ -1,0 +1,14 @@
+#!/bin/bash
+# Configura los respaldos externos (R2 obligatorio, B2 opcional). Pide los datos sin mostrar los secretos.
+[ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
+read -rp "R2 Account ID: " A; read -rp "R2 Access Key ID: " AK; read -rsp "R2 Secret Access Key: " SK; echo; read -rp "R2 nombre del bucket: " RB
+read -rp "B2 keyID (Enter para omitir): " BK
+mkdir -p /etc/kr
+{
+ echo "[r2]"; echo "type = s3"; echo "provider = Cloudflare"; echo "access_key_id = $AK"; echo "secret_access_key = $SK"; echo "endpoint = https://$A.r2.cloudflarestorage.com"; echo "no_check_bucket = true"
+ if [ -n "$BK" ]; then read -rsp "B2 applicationKey: " BS >&2; echo >&2; read -rp "B2 nombre del bucket: " BB >&2; echo "$BB" > /etc/kr/b2.bucket
+   echo "[b2]"; echo "type = b2"; echo "account = $BK"; echo "key = $BS"; fi
+} > /etc/kr/rclone.conf
+echo "$RB" > /etc/kr/r2.bucket; chmod 600 /etc/kr/rclone.conf
+echo "Probando respaldo completo..."; /usr/local/bin/kr-backup; tail -1 /opt/kr/backups/historial.log
+rclone --config /etc/kr/rclone.conf ls r2:$RB/bd | tail -2

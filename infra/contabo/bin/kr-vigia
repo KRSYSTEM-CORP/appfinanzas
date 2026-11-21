@@ -1,0 +1,16 @@
+#!/bin/bash
+# Vigilancia cada 5 min: avisa solo cuando algo está mal (y no repite el mismo aviso por 6 h).
+N=/usr/local/bin/kr-notify; ST=/var/lib/kr-vigia; mkdir -p $ST
+once(){ f=$ST/$1; if [ ! -f $f ] || [ $(( $(date +%s) - $(stat -c %Y $f) )) -gt 21600 ]; then touch $f; $N "$2" "$3"; fi; }
+clear_(){ rm -f $ST/$1; }
+D=$(df / --output=pcent | tail -1 | tr -dc 0-9); [ "$D" -ge 85 ] && once disco "Disco al ${D}%" "El disco del servidor está al ${D}%." || clear_ disco
+M=$(free | awk '/Mem:/{printf "%d",$3*100/$2}'); [ "$M" -ge 92 ] && once mem "Memoria al ${M}%" "Uso de memoria ${M}%." || clear_ mem
+L=$(awk '{print int($1)}' /proc/loadavg); [ "$L" -ge 8 ] && once cpu "Carga alta ($L)" "Carga del servidor: $(cat /proc/loadavg)" || clear_ cpu
+for c in kr-db-postgres-1; do
+  s=$(docker inspect -f '{{.State.Health.Status}}' $c 2>/dev/null || echo ausente); [ "$s" = healthy ] && clear_ c-$c || once c-$c "Contenedor $c: $s" "El contenedor $c está en estado: $s"
+done
+for c in $(docker ps -a --format '{{.Names}}' | grep -E '^kr-(app|caddy|adminapi)'); do
+  r=$(docker inspect -f '{{.State.Running}}' $c); [ "$r" = true ] && clear_ c-$c || once c-$c "Contenedor $c detenido" "El contenedor $c no está corriendo."
+done
+if [ -f /opt/kr/backups/ultimo-ok ]; then A=$(( $(date +%s) - $(stat -c %Y /opt/kr/backups/ultimo-ok) )); [ "$A" -gt 28800 ] && once resp "Sin respaldo hace $((A/3600)) h" "El último respaldo correcto fue hace $((A/3600)) horas." || clear_ resp; fi
+[ -f /var/run/reboot-required ] && once reboot "Reinicio pendiente" "El servidor pide reiniciar por actualizaciones: $(cat /var/run/reboot-required.pkgs 2>/dev/null | tr '\n' ' ')" || clear_ reboot

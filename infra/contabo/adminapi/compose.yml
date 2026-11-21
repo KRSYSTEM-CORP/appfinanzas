@@ -1,0 +1,14 @@
+name: kr-adminapi
+services:
+  adminapi:
+    build: .
+    restart: unless-stopped
+    env_file: ./.env
+    networks: [kr-net]
+    mem_limit: 128m
+    read_only: true
+    cap_drop: [ALL]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+networks:
+  kr-net:
+    external: true

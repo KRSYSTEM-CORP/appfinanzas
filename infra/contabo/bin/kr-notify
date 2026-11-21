@@ -1,0 +1,7 @@
+#!/bin/bash
+# Uso: kr-notify "asunto" "mensaje". Envía correo a contacto@krsystem-corp.com y siempre deja registro.
+SUBJ="$1"; BODY="${2:-}"
+echo "$(date -Is) $SUBJ | $BODY" >> /var/log/kr-alertas.log
+if [ -f /etc/kr/msmtprc ]; then
+  printf "To: contacto@krsystem-corp.com\nFrom: KR POS Servidor <alertas@krsystem-corp.com>\nSubject: [KR POS] %s\nContent-Type: text/plain; charset=UTF-8\n\n%s\n\nServidor: %s\nHora: %s\n" "$SUBJ" "$BODY" "$(hostname)" "$(date)" | msmtp -C /etc/kr/msmtprc contacto@krsystem-corp.com 2>>/var/log/kr-alertas.log || echo "$(date -Is) ERROR enviando correo" >> /var/log/kr-alertas.log
+fi

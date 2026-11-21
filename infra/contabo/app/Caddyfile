@@ -1,0 +1,29 @@
+krpos.krsystem-corp.com {
+	encode zstd gzip
+	reverse_proxy app:3000 {
+		health_uri /api/health
+		health_interval 30s
+		health_timeout 5s
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+	log {
+		output stdout
+	}
+}
+
+adminapi.krsystem-corp.com {
+	@ok path /pos /health
+	handle @ok {
+		reverse_proxy adminapi:8080
+	}
+	handle {
+		respond 404
+	}
+	header -Server
+	log {
+		output stdout
+	}
+}

@@ -1,0 +1,16 @@
+#!/bin/bash
+# Reaplica permisos en la base kr_pos: app_runtime (todas las tablas) y admin_panel_ro (columnas del panel).
+# Ejecutar SIEMPRE despues de migraciones que creen tablas.
+set -e
+PG="docker exec -i kr-db-postgres-1 psql -U kr_owner -d kr_pos -v ON_ERROR_STOP=1"
+$PG < /opt/kr-db/grants.sql | tail -3
+$PG <<'SQL'
+GRANT CONNECT ON DATABASE kr_pos TO admin_panel_ro;
+GRANT USAGE ON SCHEMA public TO admin_panel_ro;
+GRANT SELECT ("id","name","loginCode","createdAt","isExempt","monthlyFeeUsdCents","nextPaymentDueDate") ON "Company" TO admin_panel_ro;
+GRANT SELECT ("id","companyId","email","role","status","isSuperAdmin","createdAt") ON "User" TO admin_panel_ro;
+GRANT SELECT ("id","companyId","amountUsdCents","periodEnd","createdAt") ON "Payment" TO admin_panel_ro;
+GRANT SELECT ("id","companyId","status","isLifetime","createdAt") ON "PaymentReport" TO admin_panel_ro;
+GRANT SELECT ("id","paymentReportId","amountUsdCents") ON "PaymentReportLine" TO admin_panel_ro;
+SQL
+echo "permisos reaplicados"
