@@ -12,6 +12,7 @@ export const AUDIT_ACTIONS = {
   "empresa.funciones": "Cambió las funciones extra",
   "empresa.creditos": "Regaló créditos de IA",
   "empresa.crm": "Editó notas o etiquetas del CRM",
+  "prueba.extender": "Dio días gratis a una empresa",
   "pago.registrar": "Registró un pago",
   "pago.renovar": "Renovó la suscripción",
   "pago.aprobar": "Aprobó un reporte de pago",

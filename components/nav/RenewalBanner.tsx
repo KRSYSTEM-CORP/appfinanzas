@@ -8,7 +8,7 @@ const KEY = "kr-pos-renewal-dismissed";
 
 // Aviso flotante de renovación. Se puede cerrar, pero vuelve al día siguiente
 // (la clave guarda el número de días que faltaban cuando se cerró).
-export function RenewalBanner({ days, text }: { days: number; text: string }) {
+export function RenewalBanner({ days, text, trial = false }: { days: number; text: string; trial?: boolean }) {
   const [hidden, setHidden] = useState(() => {
     try {
       return sessionStorage.getItem(KEY) === String(days);
@@ -27,7 +27,7 @@ export function RenewalBanner({ days, text }: { days: number; text: string }) {
       <div className="min-w-0 flex-1">
         <p className="font-medium">{text}</p>
         <Link href="/settings?tab=plan&vista=planes" className="text-primary underline-offset-2 hover:underline after:absolute after:inset-0 after:rounded-[19px] after:content-['']">
-          Renovar mi suscripción
+          {trial ? "Elegir plan y pagar" : "Renovar mi suscripción"}
         </Link>
       </div>
       <button

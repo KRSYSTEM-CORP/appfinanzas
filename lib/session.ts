@@ -48,6 +48,8 @@ export type Session = {
   monthlyFeeUsdCents: number | null;
   localCurrencyCode: string;
   nextPaymentDueDate: Date | null;
+  // Todavía no ha pagado ninguna suscripción: su fecha de vencimiento es el fin de la prueba gratis.
+  inTrial: boolean;
   role: Role;
   // Display name used to attribute sales/quotes — the employee's own name if
   // they have one, otherwise the owner account's email.
@@ -116,6 +118,7 @@ async function readSession(): Promise<Session | null> {
           enabledFeatures: true,
           plan: true,
           planChosen: true,
+          _count: { select: { payments: true } },
         },
       },
     },
@@ -163,6 +166,7 @@ async function readSession(): Promise<Session | null> {
     monthlyFeeUsdCents: user.company.monthlyFeeUsdCents,
     localCurrencyCode: user.company.localCurrencyCode,
     nextPaymentDueDate,
+    inTrial: !isExempt && user.company._count.payments === 0,
     role: user.role,
     sellerName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email,
     allowedSections: user.allowedSections,
