@@ -30,7 +30,7 @@ export type NewOwner = {
   googleId?: string;
 };
 
-export async function createCompanyWithOwner(companyName: string, owner: NewOwner) {
+export async function createCompanyWithOwner(companyName: string, owner: NewOwner, ownerPhone?: string | null) {
   const trialEnd = new Date();
   trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
 
@@ -48,6 +48,7 @@ export async function createCompanyWithOwner(companyName: string, owner: NewOwne
             planChosen: false,
             monthlyFeeUsdCents: PLANS.EMPRENDE.priceUsdCents,
             nextPaymentDueDate: trialEnd,
+            ownerPhone: ownerPhone ?? null,
           },
         });
         // Every company needs at least one branch to operate (products,

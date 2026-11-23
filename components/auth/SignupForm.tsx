@@ -67,6 +67,9 @@ export function SignupForm({
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  // Teléfono pedido en el paso del código: siempre en el alta con Google; en el de correo solo si faltara (registro empezado antes de pedirlo).
+  const [phone, setPhone] = useState("");
+  const [askPhone, setAskPhone] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [verificationId, setVerificationId] = useState<string | null>(initialVerificationId ?? null);
   const [pendingEmail, setPendingEmail] = useState(initialEmail ?? "");
@@ -112,10 +115,17 @@ export function SignupForm({
       setError("Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.");
       return;
     }
+    if ((viaGoogle || askPhone) && !phone.trim()) {
+      setError("El teléfono es obligatorio.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
-      const result = await confirmSignupCode(verificationId, code, viaGoogle ? acceptedTerms : true);
-      if (!result.success) setError(result.error);
+      const result = await confirmSignupCode(verificationId, code, viaGoogle ? acceptedTerms : true, viaGoogle || askPhone ? phone : undefined);
+      if (!result.success) {
+        if (/tel[eé]fono/i.test(result.error)) setAskPhone(true);
+        setError(result.error);
+      }
     });
   }
 
@@ -166,13 +176,21 @@ export function SignupForm({
           />
         </div>
 
+        {(viaGoogle || askPhone) && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="phone-confirm">Teléfono (WhatsApp)</Label>
+            <Input id="phone-confirm" type="tel" inputMode="tel" autoComplete="tel" placeholder="0412 1234567" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+            <p className="text-xs text-muted-foreground">Lo usamos solo para ayudarte a empezar y contactarte por WhatsApp.</p>
+          </div>
+        )}
+
         {viaGoogle && <TermsCheckbox checked={acceptedTerms} onChange={setAcceptedTerms} />}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button
           type="button"
-          disabled={isPending || code.length !== 6 || (viaGoogle && !acceptedTerms)}
+          disabled={isPending || code.length !== 6 || (viaGoogle && !acceptedTerms) || ((viaGoogle || askPhone) && !phone.trim())}
           size="lg"
           onClick={handleConfirmCode}
         >
@@ -242,6 +260,12 @@ export function SignupForm({
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">Correo</Label>
           <Input id="email" name="email" type="email" required />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="phone">Teléfono (WhatsApp)</Label>
+          <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="0412 1234567" required />
+          <p className="text-xs text-muted-foreground">Lo usamos solo para ayudarte a empezar y contactarte por WhatsApp.</p>
         </div>
 
         <div className="flex flex-col gap-1.5">
