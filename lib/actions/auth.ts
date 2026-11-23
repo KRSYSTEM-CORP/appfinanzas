@@ -1,5 +1,6 @@
 "use server";
 
+import { PHONE_ERROR, normalizeContactPhone } from "@/lib/phone";
 import { randomBytes, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -47,7 +48,7 @@ function hashResetToken(token: string): string {
 
 // passwordHash is set for the email/password path, googleId for a brand-new
 // Google signup (see app/api/auth/google/callback/route.ts) — never both.
-type SignupPayload = { companyName: string; email: string; passwordHash?: string; googleId?: string };
+type SignupPayload = { companyName: string; email: string; passwordHash?: string; googleId?: string; phone?: string };
 
 export type SignupCodeResult =
   | { success: true; verificationId: string; email: string }
@@ -116,6 +117,7 @@ export async function requestSignupCode(formData: FormData): Promise<SignupCodeR
     companyName: formData.get("companyName"),
     email: formData.get("email"),
     password: formData.get("password"),
+    phone: formData.get("phone") ?? "",
   });
 
   if (!parsed.success) {
@@ -126,7 +128,7 @@ export async function requestSignupCode(formData: FormData): Promise<SignupCodeR
     return { success: false, error: TERMS_ERROR };
   }
 
-  const { companyName, email, password } = parsed.data;
+  const { companyName, email, password, phone } = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -134,7 +136,7 @@ export async function requestSignupCode(formData: FormData): Promise<SignupCodeR
   }
 
   const passwordHash = hashPassword(password);
-  const payload: SignupPayload = { companyName, email, passwordHash };
+  const payload: SignupPayload = { companyName, email, passwordHash, phone };
   const { verificationId, code } = await createSignupVerification(email, payload);
 
   await sendSignupCodeEmail(email, code);
@@ -150,7 +152,9 @@ export async function requestSignupCode(formData: FormData): Promise<SignupCodeR
 export async function confirmSignupCode(
   verificationId: string,
   code: string,
-  acceptedTerms: boolean
+  acceptedTerms: boolean,
+  // Solo en el alta con Google: ahí el teléfono se pide en este paso (en el alta por correo ya viaja en la verificación).
+  phoneInput?: string
 ): Promise<ActionResult> {
   if (!acceptedTerms) {
     return { success: false, error: TERMS_ERROR };
@@ -179,7 +183,13 @@ export async function confirmSignupCode(
     return { success: false, error: `Código incorrecto. Te quedan ${remaining} intentos.` };
   }
 
-  const { companyName, email, passwordHash, googleId } = JSON.parse(verification.payload) as SignupPayload;
+  const { companyName, email, passwordHash, googleId, phone: storedPhone } = JSON.parse(verification.payload) as SignupPayload;
+
+  // El teléfono es obligatorio: el del formulario (correo) o el que se pide aquí (Google). Se valida antes de gastar el código.
+  const phone = storedPhone ?? normalizeContactPhone(phoneInput);
+  if (!phone) {
+    return { success: false, error: phoneInput?.trim() ? PHONE_ERROR : "El teléfono es obligatorio" };
+  }
 
   // Re-checked here (not just at request time) in case the address was
   // registered by someone else in the minutes between requesting and
@@ -190,7 +200,7 @@ export async function confirmSignupCode(
     return { success: false, error: "Ese correo ya está registrado" };
   }
 
-  const { company, branch, user } = await createCompanyWithOwner(companyName, { email, passwordHash, googleId });
+  const { company, branch, user } = await createCompanyWithOwner(companyName, { email, passwordHash, googleId }, phone);
   await prisma.signupVerification.delete({ where: { id: verificationId } });
 
   await setSessionCookie({ uid: user.id, cid: company.id, companyName: company.name, bid: branch.id });

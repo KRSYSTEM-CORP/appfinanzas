@@ -181,6 +181,8 @@ model Company {
   // Si está activo, no se puede vender como «Cliente general»: cada venta pide nombre y teléfono.
   requireCustomerOnSale Boolean                    @default(false)
   businessWhatsapp      String?
+  // Teléfono/WhatsApp del dueño que se pide al registrarse (privado: solo lo ve KR System para contactarlo). Formato +584121234567.
+  ownerPhone            String?
   businessInstagram     String?
   // Default paper size for the "Imprimir" browser print view. Editable
   // per-print from the print dialog itself; this is just the preselected

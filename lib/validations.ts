@@ -1,3 +1,4 @@
+import { PHONE_ERROR, normalizeContactPhone } from "@/lib/phone";
 import { z } from "zod";
 import { PaymentMethod, TaxCategory } from "@prisma/client";
 import { CURRENCIES } from "@/lib/currencies";
@@ -365,6 +366,16 @@ export const SignupSchema = z.object({
   companyName: z.string().trim().min(1, "El nombre de la empresa es obligatorio"),
   email: z.string().trim().toLowerCase().email("Correo inválido"),
   password: passwordField("La contraseña"),
+  // Teléfono/WhatsApp del dueño: obligatorio al registrarse, se guarda en formato +584121234567.
+  phone: z
+    .string()
+    .trim()
+    .min(1, "El teléfono es obligatorio")
+    .transform((v, ctx) => {
+      const n = normalizeContactPhone(v);
+      if (!n) ctx.addIssue({ code: "custom", message: PHONE_ERROR });
+      return n ?? "";
+    }),
 });
 
 export const LoginSchema = z.object({
