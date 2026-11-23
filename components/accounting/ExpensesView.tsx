@@ -14,6 +14,8 @@ import { createExpense, deleteExpense } from "@/lib/actions/finance";
 import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
 import { money } from "@/lib/money-display";
 import { todayDateString } from "@/lib/report-types";
+import { AccountSelect, useSourceAccountsReload } from "@/components/purchases/AccountSelect";
+import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
 
 const SERIES = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", "bg-chart-6", "bg-chart-7"];
 const SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -77,6 +79,9 @@ export function AddExpenseButton({
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<"REFERENCE" | "LOCAL">("REFERENCE");
   const [spentAt, setSpentAt] = useState(todayDateString);
+  const { accounts, reload } = useSourceAccountsReload();
+  const [accountId, setAccountId] = useState("");
+  const [funds, setFunds] = useState<FundsError | null>(null);
   const typed = Math.round((Number(amount) || 0) * 100);
   const sym = referenceCurrency === "EUR" ? "€" : "$";
 
@@ -87,10 +92,13 @@ export function AddExpenseButton({
     fd.set("amount", amount);
     fd.set("currency", currency);
     fd.set("spentAt", spentAt);
+    if (accountId) fd.set("paymentAccountId", accountId);
+    setFunds(null);
     start(async () => {
       const r = await createExpense(fd);
       if (!r.success) {
-        toast.error(r.error);
+        if (r.code === "INSUFFICIENT_FUNDS") setFunds(r);
+        else toast.error(r.error);
         return;
       }
       toast.success("Gasto guardado");
@@ -138,6 +146,17 @@ export function AddExpenseButton({
               <input className={FIELD_CONTROL} type="date" value={spentAt} onChange={(e) => setSpentAt(e.target.value)} />
             </Field>
           </FieldPair>
+          <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} label="¿De qué cuenta salió el dinero? (opcional)" />
+          {funds && (
+            <InsufficientFundsNotice
+              failure={funds}
+              accounts={accounts}
+              onFunded={() => {
+                setFunds(null);
+                reload();
+              }}
+            />
+          )}
           <div className="mt-2.5 flex items-center justify-between gap-2.5 border-b py-2.5">
             <span>Total de gastos del mes</span>
             <b className="tabular-nums">{money(referenceCurrency, monthTotalCents + (currency === "REFERENCE" ? typed : 0))}</b>

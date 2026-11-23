@@ -12,10 +12,12 @@ import { DEFAULT_CURRENCY_CODE } from "@/lib/currencies";
 import type { ActionResult } from "@/lib/types";
 import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateProductsCache } from "@/lib/products-cache";
+import { assertAccountFunds, toActionResult } from "@/lib/account-balance";
+import { lineInAccountCurrency } from "@/lib/account-money";
 
 export type CompletePurchaseResult =
   | { success: true; purchaseId: string }
-  | { success: false; error: string };
+  | Extract<ActionResult, { success: false }>;
 
 // Receiving a purchase is the inverse of completeSale: it increases stock
 // (instead of decrementing it) and updates Product.costCents to what was
@@ -183,6 +185,18 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         ? new Set((await tx.paymentAccount.findMany({ where: { id: { in: accountIds }, companyId }, select: { id: true } })).map((a) => a.id))
         : new Set<string>();
       if (accountIds.some((id) => !validAccounts.has(id))) throw new Error("La cuenta elegida no existe. Recarga la página e inténtalo de nuevo.");
+      // El saldo de cada cuenta debe cubrir lo que se paga desde ella.
+      await assertAccountFunds(
+        tx,
+        companyId,
+        resolvedPayments
+          .filter((p) => !!p.paymentAccountId)
+          .map((p) => ({
+            accountId: p.paymentAccountId as string,
+            debit: (cur: string, r: number | null) =>
+              lineInAccountCurrency({ amountCurrencyCents: p.amountCurrencyCents, amountEurCents: p.amountEurCents, currencyCode: p.currencyCode, exchangeRate: exchangeRate }, cur, r),
+          }))
+      );
 
       const controlNumber = await nextDocumentNumber(tx, branchId, "purchase");
 
@@ -262,8 +276,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
     await invalidateProductsCache(companyId, branchId); // la compra sube existencias: el POS debe verlas ya
     return { success: true, purchaseId };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo registrar la compra";
-    return { success: false, error: message };
+    return toActionResult(err, "No se pudo registrar la compra");
   }
 }
 
@@ -653,8 +666,10 @@ export async function registerPurchasePayment(
       const remaining = owed - paid;
       if (amountCents > remaining) throw new Error("El abono es mayor al saldo pendiente");
       if (paymentAccountId) {
-        const acc = await tx.paymentAccount.findFirst({ where: { id: paymentAccountId, companyId }, select: { id: true } });
-        if (!acc) throw new Error("La cuenta elegida no existe");
+        // Un abono en la moneda de referencia: se convierte a la de la cuenta con la tasa del día.
+        await assertAccountFunds(tx, companyId, [
+          { accountId: paymentAccountId, debit: (cur, r) => lineInAccountCurrency({ amountCurrencyCents: null, amountEurCents: amountCents, currencyCode: null, exchangeRate: null }, cur, r) },
+        ]);
       }
       await tx.purchasePayment.create({
         data: {
@@ -670,10 +685,11 @@ export async function registerPurchasePayment(
       }
     });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar el pago" };
+    return toActionResult(err, "No se pudo registrar el pago");
   }
   revalidatePath("/purchases");
   revalidatePath("/purchases/orders");
+  revalidatePath("/accounting/accounts");
   return { success: true };
 }
 

@@ -12,7 +12,8 @@ import { Kpi, KpiGrid } from "@/components/shared/Kpi";
 import { RowMenu } from "@/components/shared/RowMenu";
 import { SectionCard } from "@/components/shared/SectionCard";
 import { registerPurchasePayment, type PaymentOrderRow } from "@/lib/actions/purchases";
-import { AccountSelect, useSourceAccounts } from "@/components/purchases/AccountSelect";
+import { AccountSelect, useSourceAccountsReload } from "@/components/purchases/AccountSelect";
+import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
 import { money } from "@/lib/money-display";
 
 const METHODS: [string, string][] = [
@@ -107,20 +108,28 @@ function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrde
   const [method, setMethod] = useState("TRANSFER");
   const [ref, setRef] = useState("");
   const [accountId, setAccountId] = useState("");
-  const accounts = useSourceAccounts();
+  const { accounts, reload } = useSourceAccountsReload();
+  const [funds, setFunds] = useState<FundsError | null>(null);
   const [pending, start] = useTransition();
   const total = orders.reduce((n, o) => n + o.remainingCents, 0);
   function pay() {
+    setFunds(null);
     start(async () => {
       let ok = 0;
+      let stopped = false;
       for (const o of orders) {
         const r = await registerPurchasePayment(o.id, method, o.remainingCents, ref, accountId || undefined);
         if (r.success) ok++;
-        else toast.error(`${o.supplierName}: ${r.error}`);
+        else if (r.code === "INSUFFICIENT_FUNDS") {
+          // Se detiene: las facturas que faltan se pagan después de agregar fondos.
+          setFunds(r);
+          stopped = true;
+          break;
+        } else toast.error(`${o.supplierName}: ${r.error}`);
       }
-      if (ok) toast.success(`Orden pagada · ${ok} factura(s) por ${money(currency, total)}`);
+      if (ok) toast.success(`Orden pagada · ${ok} factura(s)`);
       router.refresh();
-      onPaid();
+      if (!stopped) onPaid();
     });
   }
   return (
@@ -160,6 +169,16 @@ function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrde
         <Field label="Referencia (opcional)">
           <input className={FIELD_CONTROL} value={ref} onChange={(e) => setRef(e.target.value)} />
         </Field>
+        {funds && (
+          <InsufficientFundsNotice
+            failure={funds}
+            accounts={accounts}
+            onFunded={() => {
+              setFunds(null);
+              reload();
+            }}
+          />
+        )}
         <SheetActions>
           <Button disabled={pending} onClick={pay}>
             Marcar pagada
@@ -180,19 +199,22 @@ export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow
   const [amount, setAmount] = useState((order.remainingCents / 100).toFixed(2));
   const [ref, setRef] = useState("");
   const [accountId, setAccountId] = useState("");
-  const accounts = useSourceAccounts();
+  const { accounts, reload } = useSourceAccountsReload();
+  const [funds, setFunds] = useState<FundsError | null>(null);
   const [pending, start] = useTransition();
   const cents = Math.round((parseFloat(amount.replace(",", ".")) || 0) * 100);
   const left = order.remainingCents - cents;
 
   function save() {
+    setFunds(null);
     start(async () => {
       const r = await registerPurchasePayment(order.id, method, cents, ref, accountId || undefined);
       if (r.success) {
         toast.success("Pago registrado");
         onClose();
         router.refresh();
-      } else toast.error(r.error);
+      } else if (r.code === "INSUFFICIENT_FUNDS") setFunds(r);
+      else toast.error(r.error);
     });
   }
 
@@ -221,6 +243,16 @@ export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow
         <Field label="Referencia (opcional)">
           <input className={FIELD_CONTROL} value={ref} onChange={(e) => setRef(e.target.value)} />
         </Field>
+        {funds && (
+          <InsufficientFundsNotice
+            failure={funds}
+            accounts={accounts}
+            onFunded={() => {
+              setFunds(null);
+              reload();
+            }}
+          />
+        )}
         {cents > 0 && cents <= order.remainingCents && (
           <p className="mt-2 text-sm text-muted-foreground">{left === 0 ? "Con este pago la compra queda pagada." : `Quedará un saldo de ${money(currency, left)}.`}</p>
         )}

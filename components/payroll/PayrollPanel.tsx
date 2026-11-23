@@ -28,7 +28,8 @@ import {
   shiftPeriod,
   type PayrollRates,
 } from "@/lib/payroll";
-import { AccountSelect, useSourceAccounts } from "@/components/purchases/AccountSelect";
+import { AccountSelect, useSourceAccountsReload } from "@/components/purchases/AccountSelect";
+import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
 import { todayDateString } from "@/lib/report-types";
 import { buildPayrollReceiptPDF } from "@/lib/payroll-receipt-pdf";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
@@ -479,7 +480,8 @@ function PayDialog({
   onClose: () => void;
   onPaid: () => void;
 }) {
-  const accounts = useSourceAccounts();
+  const { accounts, reload } = useSourceAccountsReload();
+  const [funds, setFunds] = useState<FundsError | null>(null);
   const [period, setPeriod] = useState(currentPeriod);
   const [paidDate, setPaidDate] = useState(todayDateString());
   const [isAdvance, setIsAdvance] = useState(false);
@@ -522,6 +524,7 @@ function PayDialog({
 
   function pay() {
     setError(null);
+    setFunds(null);
     startTransition(async () => {
       const result = await payPayroll({
         employeeId: employee.id,
@@ -536,6 +539,7 @@ function PayDialog({
         proofDataUrl: proof ?? undefined,
       });
       if (result.success) onPaid();
+      else if (result.code === "INSUFFICIENT_FUNDS") setFunds(result);
       else setError(result.error);
     });
   }
@@ -624,6 +628,16 @@ function PayDialog({
             <p role="alert" className="text-sm text-destructive">
               {error}
             </p>
+          )}
+          {funds && (
+            <InsufficientFundsNotice
+              failure={funds}
+              accounts={accounts}
+              onFunded={() => {
+                setFunds(null);
+                reload();
+              }}
+            />
           )}
         </div>
         <DialogFooter>

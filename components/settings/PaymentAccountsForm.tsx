@@ -1,5 +1,6 @@
 "use client";
 
+import { BANK_SITES } from "@/lib/bank-sites";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -209,6 +210,7 @@ function AccountFields({
   const [accountNumber, setAccountNumber] = useState(account?.accountNumber ?? "");
   const [docId, setDocId] = useState(account?.docId ?? "");
   const [note, setNote] = useState(account?.note ?? "");
+  const [websiteUrl, setWebsiteUrl] = useState(account?.websiteUrl ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -217,7 +219,7 @@ function AccountFields({
     const key = needsBank ? bankKey : defaultBankKey(kind) ?? "";
     startTransition(async () => {
       const result = await savePaymentAccount(
-        { kind, bankKey: key, bankName: bankLabel(key) ?? "", holder, accountNumber, docId, note },
+        { kind, bankKey: key, bankName: bankLabel(key) ?? "", holder, accountNumber, docId, note, websiteUrl },
         account?.id
       );
       if (result.success) {
@@ -254,6 +256,15 @@ function AccountFields({
       </FieldPair>
       <Field label="Nota (opcional)">
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. Solo en horario de oficina" className={FIELD_CONTROL} />
+      </Field>
+      <Field label="Sitio web del banco (opcional)">
+        <input
+          value={websiteUrl}
+          onChange={(e) => setWebsiteUrl(e.target.value)}
+          placeholder={(needsBank ? BANK_SITES[bankKey] : BANK_SITES[defaultBankKey(kind) ?? ""]) ?? "https://www.mibanco.com"}
+          inputMode="url"
+          className={FIELD_CONTROL}
+        />
       </Field>
       {error && (
         <p role="alert" className="mt-2 text-sm text-destructive">

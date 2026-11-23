@@ -22,7 +22,7 @@ export type PaymentSplitRow = {
 };
 
 // Cuenta bancaria o de cobro que puede ser el origen de un pago.
-export type SourceAccount = { id: string; label: string; currency: string };
+export type SourceAccount = { id: string; label: string; currency: string; balanceCents?: number };
 
 export function defaultPaymentSplitRows(
   totalCents: number,
@@ -286,6 +286,7 @@ export function PaymentSplitBuilder({
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.label} · {a.currency === "VES" ? "Bs" : "$"}
+                      {a.balanceCents != null ? ` · saldo ${(a.balanceCents / 100).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}
                     </option>
                   ))}
                 </select>

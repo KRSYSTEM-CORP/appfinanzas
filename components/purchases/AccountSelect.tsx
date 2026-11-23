@@ -3,11 +3,18 @@
 import { useEffect, useState } from "react";
 import { Field, FIELD_CONTROL } from "@/components/shared/Field";
 import { listSourceAccounts, type SourceAccountRow } from "@/lib/actions/payment-accounts";
+import { formatAccountMoney } from "@/components/accounts/AddFundsDialog";
 
 // Carga las cuentas desde las que se puede pagar. Falla en silencio: sin cuentas, el pago
 // sigue saliendo del efectivo de caja como antes.
 export function useSourceAccounts(): SourceAccountRow[] {
+  return useSourceAccountsReload().accounts;
+}
+
+// Igual, pero devuelve también «reload» para actualizar los saldos después de agregar fondos.
+export function useSourceAccountsReload(): { accounts: SourceAccountRow[]; reload: () => void } {
   const [accounts, setAccounts] = useState<SourceAccountRow[]>([]);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let alive = true;
     listSourceAccounts()
@@ -16,8 +23,8 @@ export function useSourceAccounts(): SourceAccountRow[] {
     return () => {
       alive = false;
     };
-  }, []);
-  return accounts;
+  }, [tick]);
+  return { accounts, reload: () => setTick((t) => t + 1) };
 }
 
 // «¿De qué cuenta salió el dinero?»: descuenta el pago del saldo de esa cuenta.
@@ -39,7 +46,7 @@ export function AccountSelect({
         <option value="">Efectivo de caja (no descuenta de una cuenta)</option>
         {accounts.map((a) => (
           <option key={a.id} value={a.id}>
-            {a.label} · {a.currency === "VES" ? "Bs" : "$"}
+            {a.label} · saldo {formatAccountMoney(a.currency, a.balanceCents)}
           </option>
         ))}
       </select>

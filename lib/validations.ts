@@ -442,6 +442,19 @@ export const ExpenseSchema = z.object({
   // Which currency `amount` is typed in: the reference currency (EUR/USD) or
   // the company's local currency (Bs.). Converted server-side at today's rate.
   currency: z.enum(["REFERENCE", "LOCAL"]).default("REFERENCE"),
+  // Cómo se pagó y, si salió de una cuenta (banco, Zelle…), de cuál: la cuenta baja su saldo.
+  paymentMethod: z
+    .enum(["CASH", "CARD", "OTHER", "ZELLE", "BINANCE", "PAYPAL", "POS", "TRANSFER"])
+    .optional()
+    .nullable()
+    .transform((v) => v ?? undefined),
+  paymentAccountId: z
+    .string()
+    .trim()
+    .max(40)
+    .optional()
+    .nullable()
+    .transform((v) => (v ? v : undefined)),
   spentAt: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida")
