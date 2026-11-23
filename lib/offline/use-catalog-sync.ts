@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 import type { ListedProduct } from "@/lib/product-image";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
+import type { PaymentAccountRow } from "@/lib/actions/payment-accounts";
 import { putCatalogSnapshot, type CatalogSnapshot } from "@/lib/offline/db";
 
 // Read synchronously (before any IndexedDB round-trip) by PosOfflineClient
@@ -56,6 +57,7 @@ export function useCatalogSync(params: {
   ivaGeneralRatePercent: number;
   ivaReducedRatePercent: number;
   company: DeliveryNoteCompany;
+  paymentAccounts?: PaymentAccountRow[];
 }) {
   const { branchId, branchName, companyId, companyName, sellerName, products, categories } = params;
   useEffect(() => {
@@ -81,6 +83,7 @@ export function useCatalogSync(params: {
       ivaGeneralRatePercent: params.ivaGeneralRatePercent,
       ivaReducedRatePercent: params.ivaReducedRatePercent,
       company: params.company,
+      paymentAccounts: params.paymentAccounts,
     };
     putCatalogSnapshot(snapshot);
     writeLastBranch({ branchId, branchName, companyName });
@@ -89,5 +92,5 @@ export function useCatalogSync(params: {
     // `products` (same server render), so re-listing every field here would
     // just be noise for the linter without changing behavior.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, branchName, companyId, companyName, sellerName, products, categories]);
+  }, [branchId, branchName, companyId, companyName, sellerName, products, categories, params.paymentAccounts]);
 }

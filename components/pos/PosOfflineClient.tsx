@@ -10,6 +10,7 @@ import { ReceiptView } from "@/components/pos/ReceiptView";
 import { OfflineSyncBanner } from "@/components/pos/OfflineSyncBanner";
 import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { useDefaultPaymentRow } from "@/components/payments/useDefaultPaymentRow";
+import { accountChoiceMessage } from "@/lib/payment-method-accounts";
 import { computeItemDiscountCents } from "@/lib/discount";
 import { queueSale, type PendingSaleInput } from "@/lib/offline/sync";
 import { buildPendingReceipt } from "@/lib/offline/pending-receipt";
@@ -103,6 +104,8 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [completedSale, setCompletedSale] = useState<any>(null);
   const [isPending, startTransition] = useTransition();
+  const [payError, setPayError] = useState<string | null>(null);
+  const accountsForChoice = (snapshot.paymentAccounts ?? []).map((a) => ({ id: a.id, kind: a.kind }));
 
   const rawTotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
   const discountValue = Math.min(100, Math.max(0, Number(discountPercent) || 0));
@@ -126,6 +129,15 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
 
   function checkout() {
     if (!customer) return;
+    setPayError(null);
+    if (!exonerated && paymentStatus === "PAID") {
+      for (const r of paymentRows) {
+        if (accountChoiceMessage(r.paymentMethod, accountsForChoice, r.paymentAccountId)) {
+          setPayError("Elige en qué cuenta se recibió el pago.");
+          return;
+        }
+      }
+    }
     const saleInput: PendingSaleInput = {
       items: lines.map((l) => ({
         productId: l.productId,
@@ -140,6 +152,7 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
               amount: r.amount,
               paidInForeignCurrency: r.paidInForeignCurrency,
               reference: r.reference,
+              paymentAccountId: r.paymentAccountId || undefined,
             }))
           : [],
       discountPercent: discountValue,
@@ -294,7 +307,9 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
           onDiscountPercentChange={setDiscountPercent}
           onCheckout={checkout}
           isPending={isPending}
-          error={null}
+          error={payError}
+          paymentAccounts={snapshot.paymentAccounts ?? []}
+          selectReceivingAccount
         />
       </div>
     </div>

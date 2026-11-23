@@ -1,3 +1,4 @@
+import type { PaymentAccountRow } from "@/lib/actions/payment-accounts";
 import { openDB, type IDBPDatabase } from "idb";
 import type { PaymentMethod, PaymentStatus, PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 import type { ListedProduct } from "@/lib/product-image";
@@ -24,6 +25,8 @@ export type PendingSaleInput = {
     amount: string;
     paidInForeignCurrency: boolean;
     reference: string;
+    // Cuenta donde se recibió el cobro (la elige el cajero aunque no haya internet).
+    paymentAccountId?: string;
   }[];
   discountPercent: number;
   promoCode?: string;
@@ -87,6 +90,8 @@ export type CatalogSnapshot = {
   ivaGeneralRatePercent: number;
   ivaReducedRatePercent: number;
   company: DeliveryNoteCompany;
+  // Cuentas de cobro guardadas para poder elegir en cuál se recibe el pago sin internet (instantáneas anteriores no las traen).
+  paymentAccounts?: PaymentAccountRow[];
 };
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
