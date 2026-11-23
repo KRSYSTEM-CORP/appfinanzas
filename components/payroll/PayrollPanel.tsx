@@ -28,7 +28,9 @@ import {
   shiftPeriod,
   type PayrollRates,
 } from "@/lib/payroll";
-import { AccountSelect, useSourceAccountsReload } from "@/components/purchases/AccountSelect";
+import { useSourceAccountsReload } from "@/components/purchases/AccountSelect";
+import { MethodAndAccount } from "@/components/payments/MethodAndAccount";
+import { accountChoiceMessage } from "@/lib/payment-method-accounts";
 import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
 import { todayDateString } from "@/lib/report-types";
 import { buildPayrollReceiptPDF } from "@/lib/payroll-receipt-pdf";
@@ -44,10 +46,8 @@ import {
   type PayrollLedgerRow,
   type PayrollPaymentRow,
 } from "@/lib/actions/payroll";
-import { methodForAccountKind } from "@/lib/account-money";
 import type { PaymentMethod, ReferenceCurrency } from "@prisma/client";
 
-const METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
 
 export function PayrollPanel({
   employees,
@@ -525,6 +525,11 @@ function PayDialog({
   function pay() {
     setError(null);
     setFunds(null);
+    const missing = accountChoiceMessage(method, accounts, accountId);
+    if (missing) {
+      setError(missing);
+      return;
+    }
     startTransition(async () => {
       const result = await payPayroll({
         employeeId: employee.id,
@@ -589,35 +594,20 @@ function PayDialog({
                   ? `Le pagas ${money(after.advanceCents)} de más: queda como adelanto por descontar.`
                   : "Con este pago la quincena queda saldada."}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field id="pp-method" label="Método de pago">
-              <select
-                id="pp-method"
-                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                value={method}
-                onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-              >
-                {METHODS.map((m) => (
-                  <option key={m} value={m}>
-                    {PAYMENT_METHOD_LABELS[m]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field id="pp-ref" label={method === "CASH" ? "Referencia (opcional)" : "Referencia"}>
-              <Input id="pp-ref" value={reference} onChange={(e) => setReference(e.target.value)} />
-            </Field>
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">Método de pago</span>
+            <MethodAndAccount
+              method={method}
+              onMethod={setMethod}
+              accounts={accounts}
+              accountId={accountId}
+              onAccount={setAccountId}
+              accountLabel="¿De qué cuenta sale la nómina?"
+            />
           </div>
-          <AccountSelect
-            accounts={accounts}
-            value={accountId}
-            onChange={(id) => {
-              setAccountId(id);
-              const acc = accounts.find((a) => a.id === id);
-              if (acc) setMethod(methodForAccountKind(acc.kind));
-            }}
-            label="¿De qué cuenta sale la nómina?"
-          />
+          <Field id="pp-ref" label={method === "CASH" ? "Referencia (opcional)" : "Referencia"}>
+            <Input id="pp-ref" value={reference} onChange={(e) => setReference(e.target.value)} />
+          </Field>
           <Field id="pp-note" label="Nota (opcional)">
             <Input id="pp-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. primer abono, adelanto por emergencia" />
           </Field>

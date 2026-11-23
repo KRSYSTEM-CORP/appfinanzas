@@ -12,14 +12,13 @@ import { Kpi, KpiGrid } from "@/components/shared/Kpi";
 import { RowMenu } from "@/components/shared/RowMenu";
 import { SectionCard } from "@/components/shared/SectionCard";
 import { registerPurchasePayment, type PaymentOrderRow } from "@/lib/actions/purchases";
-import { AccountSelect, useSourceAccountsReload } from "@/components/purchases/AccountSelect";
+import { useSourceAccountsReload } from "@/components/purchases/AccountSelect";
+import { MethodAndAccount } from "@/components/payments/MethodAndAccount";
+import { accountChoiceMessage } from "@/lib/payment-method-accounts";
+import type { PaymentMethod } from "@prisma/client";
 import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
 import { money } from "@/lib/money-display";
 
-const METHODS: [string, string][] = [
-  ["TRANSFER", "Transferencia"], ["CASH", "Efectivo"], ["POS", "Punto de venta"], ["CARD", "Pago Móvil"],
-  ["ZELLE", "Zelle"], ["BINANCE", "Binance"], ["PAYPAL", "PayPal"], ["OTHER", "Otro"],
-];
 const SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 // Compras → Órdenes de pago (preview): cuentas por pagar con casillas para agrupar facturas en una
@@ -105,15 +104,19 @@ export function PaymentOrdersPanel({ orders, currency }: { orders: PaymentOrderR
 // Orden de pago: agrupa las facturas marcadas y las paga todas con un mismo método y referencia.
 function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrderRow[]; currency: string; onClose: () => void; onPaid: () => void }) {
   const router = useRouter();
-  const [method, setMethod] = useState("TRANSFER");
+  const [method, setMethod] = useState<PaymentMethod>("TRANSFER");
   const [ref, setRef] = useState("");
   const [accountId, setAccountId] = useState("");
   const { accounts, reload } = useSourceAccountsReload();
   const [funds, setFunds] = useState<FundsError | null>(null);
   const [pending, start] = useTransition();
   const total = orders.reduce((n, o) => n + o.remainingCents, 0);
+  const [pickError, setPickError] = useState<string | null>(null);
   function pay() {
     setFunds(null);
+    const missing = accountChoiceMessage(method, accounts, accountId);
+    setPickError(missing);
+    if (missing) return;
     start(async () => {
       let ok = 0;
       let stopped = false;
@@ -157,18 +160,16 @@ function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrde
           </div>
         </div>
         <Field label="Método de pago">
-          <select className={FIELD_CONTROL} value={method} onChange={(e) => setMethod(e.target.value)}>
-            {METHODS.map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
+          <MethodAndAccount method={method} onMethod={setMethod} accounts={accounts} accountId={accountId} onAccount={setAccountId} />
         </Field>
-        <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
         <Field label="Referencia (opcional)">
           <input className={FIELD_CONTROL} value={ref} onChange={(e) => setRef(e.target.value)} />
         </Field>
+        {pickError && (
+          <p role="alert" className="text-sm font-semibold text-destructive">
+            {pickError}
+          </p>
+        )}
         {funds && (
           <InsufficientFundsNotice
             failure={funds}
@@ -195,7 +196,7 @@ function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrde
 // «Fraccionar pago»: se puede abonar una parte; cuando se cubre todo, la compra queda pagada.
 export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow; currency: string; onClose: () => void }) {
   const router = useRouter();
-  const [method, setMethod] = useState("TRANSFER");
+  const [method, setMethod] = useState<PaymentMethod>("TRANSFER");
   const [amount, setAmount] = useState((order.remainingCents / 100).toFixed(2));
   const [ref, setRef] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -205,8 +206,12 @@ export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow
   const cents = Math.round((parseFloat(amount.replace(",", ".")) || 0) * 100);
   const left = order.remainingCents - cents;
 
+  const [pickError, setPickError] = useState<string | null>(null);
   function save() {
     setFunds(null);
+    const missing = accountChoiceMessage(method, accounts, accountId);
+    setPickError(missing);
+    if (missing) return;
     start(async () => {
       const r = await registerPurchasePayment(order.id, method, cents, ref, accountId || undefined);
       if (r.success) {
@@ -228,21 +233,19 @@ export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow
           </DialogDescription>
         </DialogHeader>
         <Field label="Método">
-          <select className={FIELD_CONTROL} value={method} onChange={(e) => setMethod(e.target.value)}>
-            {METHODS.map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
+          <MethodAndAccount method={method} onMethod={setMethod} accounts={accounts} accountId={accountId} onAccount={setAccountId} />
         </Field>
         <Field label="Monto a pagar">
           <input className={FIELD_CONTROL} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
-        <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
         <Field label="Referencia (opcional)">
           <input className={FIELD_CONTROL} value={ref} onChange={(e) => setRef(e.target.value)} />
         </Field>
+        {pickError && (
+          <p role="alert" className="text-sm font-semibold text-destructive">
+            {pickError}
+          </p>
+        )}
         {funds && (
           <InsufficientFundsNotice
             failure={funds}
