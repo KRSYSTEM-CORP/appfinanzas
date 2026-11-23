@@ -63,7 +63,7 @@ export default async function RootLayout({
   // Con la pantalla bloqueada no se carga el menú ni el contenido: solo /lock responde.
   const canLoadAppChrome = Boolean(session && !session.billingBlocked && !session.locked && !session.needsPlanChoice);
   const renewal =
-    canLoadAppChrome && session && !session.isSuperAdmin && session.role === "GERENTE" && (session.roleName == null || session.roleName === "Dueño") ? renewalNotice(session.nextPaymentDueDate, session.isExempt) : null;
+    canLoadAppChrome && session && !session.isSuperAdmin && session.role === "GERENTE" && (session.roleName == null || session.roleName === "Dueño") ? renewalNotice(session.nextPaymentDueDate, session.isExempt, new Date(), session.inTrial) : null;
   const isOwner = Boolean(canLoadAppChrome && session && !session.isSuperAdmin && session.role === "GERENTE" && (session.roleName == null || session.roleName === "Dueño"));
   const [branding, branches, sidebarRate, banners, paymentState] = await Promise.all([
     session ? getBranding() : Promise.resolve({ logoDataUrl: null, brandColor: null, brandBackground: null }),
@@ -104,7 +104,7 @@ export default async function RootLayout({
           {`(function(){try{var s=localStorage.getItem('kr-pos-theme');var d=s==='dark';if(d)document.documentElement.classList.add('dark');}catch(e){}})();`}
         </Script>
         <ServiceWorkerRegistration />
-        {renewal && <RenewalBanner days={renewal.days} text={renewal.text} />}
+        {renewal && <RenewalBanner days={renewal.days} text={renewal.text} trial={Boolean(session?.inTrial)} />}
         {isOwner && session && <PaymentStatusBanner companyId={session.companyId} state={paymentState} />}
         {canLoadAppChrome && session?.hasPin && <IdleLock role={session.role} minutes={session.lockMinutes} />}
         {canLoadAppChrome && session && (

@@ -39,3 +39,21 @@ describe("aviso de renovación", () => {
     ]);
   });
 });
+
+describe("aviso de prueba gratis (empresa que aún no ha pagado)", () => {
+  it("avisa cada día de la cuenta regresiva con el texto de la prueba", () => {
+    const texts = [5, 4, 3, 2, 1, 0].map((d) => renewalNotice(new Date(NOW.getTime() + d * 86_400_000), false, NOW, true)?.text);
+    expect(texts).toEqual([
+      "Tu prueba gratis termina en 5 días",
+      "Tu prueba gratis termina en 4 días",
+      "Tu prueba gratis termina en 3 días",
+      "Tu prueba gratis termina en 2 días",
+      "Mañana termina tu prueba gratis",
+      "Tu prueba gratis termina hoy",
+    ]);
+  });
+  it("no avisa antes de los 5 días ni si es exenta", () => {
+    expect(renewalNotice(due("2026-11-16T16:00:00Z"), false, NOW, true)).toBeNull();
+    expect(renewalNotice(due("2026-11-11T16:00:00Z"), true, NOW, true)).toBeNull();
+  });
+});

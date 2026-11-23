@@ -242,6 +242,8 @@ model Company {
   dailyReportEmails     String[]                   @default([])
   monthlyFeeUsdCents    Int?
   nextPaymentDueDate    DateTime?
+  // Días gratis que el administrador de la plataforma le regaló sobre la prueba inicial (suma de todas las ampliaciones).
+  freeDaysGranted       Int                        @default(0)
   payments              Payment[]
   paymentReports        PaymentReport[]
   binancePayOrders      BinancePayOrder[]

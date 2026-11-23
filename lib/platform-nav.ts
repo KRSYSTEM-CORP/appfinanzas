@@ -34,6 +34,7 @@ export const PLATFORM_GROUPS: PlatformGroup[] = [
       { id: "cobranza", label: "Cobranza", href: "/admin/cobranza" },
       { id: "pagos", label: "Pagos de suscripción", href: "/admin/pagos" },
       { id: "cupones", label: "Cupones", href: "/admin/cupones" },
+      { id: "dias-gratis", label: "Días gratis", href: "/admin/dias-gratis" },
     ],
   },
   {
