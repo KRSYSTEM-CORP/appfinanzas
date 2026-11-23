@@ -11,6 +11,8 @@ import {
   defaultBankKey,
 } from "@/lib/payment-accounts";
 import type { PaymentAccountRow } from "@/lib/actions/payment-accounts";
+import { BankSiteButton } from "@/components/accounts/BankSiteButton";
+import { bankSiteUrl } from "@/lib/bank-sites";
 
 // Muestra las cuentas de cobro con su logo, para que el vendedor se las dé al
 // cliente (botón para copiar el texto completo).
@@ -68,6 +70,10 @@ export function PaymentAccountsList({
                 {copied === a.id ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
                 {copied === a.id ? "Copiado" : "Copiar"}
               </Button>
+              {(() => {
+                const url = bankSiteUrl(a, defaultBankKey(a.kind));
+                return url ? <BankSiteButton url={url} bankName={a.bankName ?? ACCOUNT_KIND_LABELS[a.kind]} /> : null;
+              })()}
               {actions?.(a)}
             </div>
           </li>

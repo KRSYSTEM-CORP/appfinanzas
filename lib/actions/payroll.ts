@@ -1,5 +1,6 @@
 "use server";
 
+import { assertAccountFunds, toActionResult } from "@/lib/account-balance";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAccountingPlan } from "@/lib/session";
@@ -325,6 +326,7 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
         const debit = refToAccountCents(d.amountCents, acc.currency, rate);
         if (debit == null) throw new Error("Configura la tasa de cambio para pagar desde una cuenta en bolívares");
         accountDebitCents = debit;
+        await assertAccountFunds(tx, companyId, [{ accountId: acc.id, debit: () => debit }]);
       }
 
       const label = d.isAdvance ? "Adelanto de nómina" : "Nómina";
@@ -363,7 +365,7 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
       });
     });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar el pago" };
+    return toActionResult(err, "No se pudo registrar el pago");
   }
   revalidatePath("/payroll");
   revalidatePath("/finance");

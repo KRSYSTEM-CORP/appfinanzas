@@ -7,6 +7,8 @@ import { withTenant } from "@/lib/tenant-db";
 import type { ActionResult } from "@/lib/types";
 import type { PaymentAccountKind } from "@prisma/client";
 import { defaultCurrencyForKind, lineInAccountCurrency, payrollDebitCents } from "@/lib/account-money";
+import { accountBalance, currentRateOf, expenseDebitCents } from "@/lib/account-balance";
+import { normalizeBankSiteUrl } from "@/lib/bank-sites";
 
 export type PaymentAccountRow = {
   id: string;
@@ -18,6 +20,7 @@ export type PaymentAccountRow = {
   docId: string | null;
   note: string | null;
   active: boolean;
+  websiteUrl: string | null;
 };
 
 const AccountSchema = z.object({
@@ -28,6 +31,7 @@ const AccountSchema = z.object({
   accountNumber: z.string().trim().min(3, "Escribe el dato de la cuenta").max(120),
   docId: z.string().trim().max(40).optional(),
   note: z.string().trim().max(200).optional(),
+  websiteUrl: z.string().trim().max(200).optional(),
 });
 
 // Todos los usuarios de la empresa los ven (el POS los muestra al cobrar).
@@ -39,30 +43,34 @@ export async function listPaymentAccounts(onlyActive = true): Promise<PaymentAcc
       orderBy: [{ active: "desc" }, { createdAt: "asc" }],
       select: {
         id: true, kind: true, bankKey: true, bankName: true, holder: true,
-        accountNumber: true, docId: true, note: true, active: true,
+        accountNumber: true, docId: true, note: true, active: true, websiteUrl: true,
       },
     })
   );
 }
 
-export type SourceAccountRow = { id: string; label: string; currency: string; kind: PaymentAccountKind };
+export type SourceAccountRow = { id: string; label: string; currency: string; kind: PaymentAccountKind; balanceCents: number };
 
-// Cuentas activas que pueden ser el origen de un pago (compras, nómina): su saldo baja al pagar.
+// Cuentas activas que pueden ser el origen de un pago (compras, nómina, gastos): su saldo baja al pagar.
+// Incluye el saldo para mostrarlo al elegir la cuenta y avisar antes de que falten fondos.
 export async function listSourceAccounts(): Promise<SourceAccountRow[]> {
   const { companyId } = await requireManager();
-  const rows = await withTenant(companyId, (tx) =>
-    tx.paymentAccount.findMany({
-      where: { companyId, active: true },
-      orderBy: { createdAt: "asc" },
-      select: { id: true, bankName: true, accountNumber: true, kind: true, currency: true },
-    })
-  );
-  return rows.map((a) => ({
-    id: a.id,
-    label: [a.bankName ?? a.kind, a.accountNumber].filter(Boolean).join(" · "),
-    currency: a.currency,
-    kind: a.kind,
-  }));
+  return withTenant(companyId, async (tx) => {
+    const rate = await currentRateOf(tx, companyId);
+    const rows = await tx.paymentAccount.findMany({ where: { companyId, active: true }, orderBy: { createdAt: "asc" } });
+    const out: SourceAccountRow[] = [];
+    for (const a of rows) {
+      const b = await accountBalance(tx, companyId, a, rate);
+      out.push({
+        id: a.id,
+        label: [a.bankName ?? a.kind, a.accountNumber].filter(Boolean).join(" · "),
+        currency: a.currency,
+        kind: a.kind,
+        balanceCents: b.balanceCents,
+      });
+    }
+    return out;
+  });
 }
 
 export async function savePaymentAccount(input: unknown, id?: string): Promise<ActionResult> {
@@ -78,6 +86,7 @@ export async function savePaymentAccount(input: unknown, id?: string): Promise<A
     accountNumber: d.accountNumber,
     docId: d.docId || null,
     note: d.note || null,
+    websiteUrl: normalizeBankSiteUrl(d.websiteUrl),
   };
   await withTenant(companyId, async (tx) => {
     if (id) await tx.paymentAccount.updateMany({ where: { id, companyId }, data });
@@ -124,56 +133,134 @@ export type AccountBalanceRow = {
   linkedMethod: string | null;
   openingCents: number;
   collectedCents: number;
-  // Lo que salió de la cuenta: pagos de compras y de nómina desde esta cuenta.
+  // Inyecciones de fondos sumadas a mano.
+  fundedCents: number;
+  // Lo que salió de la cuenta: pagos de compras, de nómina y gastos desde esta cuenta.
   paidOutCents: number;
   balanceCents: number;
 };
 
-// Saldo por cuenta = inicial + cobros (no anulados) del método vinculado − pagos hechos desde la
-// cuenta (compras y nómina), todo desde la fecha de inicio.
+// Saldo por cuenta = inicial + cobros (no anulados) del método vinculado + inyecciones − pagos hechos desde la
+// cuenta (compras, nómina y gastos), todo desde la fecha de inicio.
 export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
   const { companyId } = await requireManager();
   return withTenant(companyId, async (tx) => {
     const accounts = await tx.paymentAccount.findMany({ where: { companyId, active: true }, orderBy: { createdAt: "asc" } });
-    const co = await tx.company.findUnique({ where: { id: companyId }, select: { exchangeRate: true, exchangeRateEnabled: true } });
-    const currentRate = co?.exchangeRateEnabled && co.exchangeRate ? Number(co.exchangeRate) : null;
+    const currentRate = await currentRateOf(tx, companyId);
     const rows: AccountBalanceRow[] = [];
     for (const a of accounts) {
-      let collected = 0;
-      if (a.linkedMethod) {
-        const pays = await tx.salePayment.findMany({
-          where: { paymentMethod: a.linkedMethod, sale: { companyId, voided: false }, createdAt: { gte: a.balanceSince } },
-          select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
-        });
-        collected = pays.reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0);
-      }
-      const [purchaseOut, payrollOut] = await Promise.all([
-        tx.purchasePayment.findMany({
-          where: { paymentAccountId: a.id, purchase: { companyId, voided: false }, createdAt: { gte: a.balanceSince } },
-          select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
-        }),
-        tx.payrollPayment.findMany({
-          where: { paymentAccountId: a.id, companyId, createdAt: { gte: a.balanceSince } },
-          select: { accountDebitCents: true, paidCents: true },
-        }),
-      ]);
-      // Lo que sale se expresa en la moneda de la cuenta (Bs o divisa): un pago hecho en otra
-      // moneda se convierte con la tasa de ese pago (o la actual si no quedó registrada).
-      const paidOut =
-        purchaseOut.reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0) +
-        payrollOut.reduce((n, p) => n + payrollDebitCents(p, a.currency, currentRate), 0);
+      const b = await accountBalance(tx, companyId, a, currentRate);
       rows.push({
         id: a.id,
         label: [a.bankName, a.accountNumber].filter(Boolean).join(" · "),
         currency: a.currency,
         linkedMethod: a.linkedMethod,
         openingCents: a.openingCents,
-        collectedCents: collected,
-        paidOutCents: paidOut,
-        balanceCents: a.openingCents + collected - paidOut,
+        collectedCents: b.collectedCents,
+        fundedCents: b.fundedCents,
+        paidOutCents: b.paidOutCents,
+        balanceCents: b.balanceCents,
       });
     }
     return rows;
+  });
+}
+
+const FundSchema = z.object({
+  accountId: z.string().trim().min(1).max(40),
+  // Monto en la moneda de la cuenta, en centavos.
+  amountCents: z.number().int().min(1, "Escribe un monto mayor a 0").max(1_000_000_000),
+  note: z.string().trim().max(200).optional(),
+});
+
+// «Agregar fondos»: inyecta dinero a una cuenta (aporte del dueño, depósito, saldo que faltaba). Suma a su saldo.
+export async function addAccountFunds(input: unknown): Promise<ActionResult> {
+  const { companyId, userId } = await requireManager();
+  const parsed = FundSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  const d = parsed.data;
+  const ok = await withTenant(companyId, async (tx) => {
+    const acc = await tx.paymentAccount.findFirst({ where: { id: d.accountId, companyId }, select: { id: true } });
+    if (!acc) return false;
+    await tx.accountFunding.create({
+      data: { companyId, paymentAccountId: acc.id, amountCents: d.amountCents, note: d.note || null, createdById: userId },
+    });
+    return true;
+  });
+  if (!ok) return { success: false, error: "La cuenta no existe" };
+  revalidatePath("/accounting/accounts");
+  revalidatePath("/purchases");
+  revalidatePath("/payroll");
+  revalidatePath("/accounting/gastos");
+  return { success: true };
+}
+
+export type AccountMovement = {
+  id: string;
+  at: string;
+  kind: "COBRO" | "FONDOS" | "COMPRA" | "NOMINA" | "GASTO";
+  label: string;
+  // Positivo entra a la cuenta, negativo sale; en la moneda de la cuenta.
+  amountCents: number;
+};
+
+// Últimos movimientos de una cuenta (cobros, inyecciones, compras, nómina y gastos), del más reciente al más antiguo.
+export async function getAccountMovements(accountId: string, limit = 40): Promise<AccountMovement[]> {
+  const { companyId } = await requireManager();
+  return withTenant(companyId, async (tx) => {
+    const a = await tx.paymentAccount.findFirst({ where: { id: accountId, companyId } });
+    if (!a) return [];
+    const rate = await currentRateOf(tx, companyId);
+    const since = { gte: a.balanceSince };
+    const [sales, fundings, purchases, payroll, expenses] = await Promise.all([
+      a.linkedMethod
+        ? tx.salePayment.findMany({
+            where: { paymentMethod: a.linkedMethod, sale: { companyId, voided: false }, createdAt: since },
+            select: { id: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true, reference: true },
+            orderBy: { createdAt: "desc" },
+            take: limit,
+          })
+        : Promise.resolve([]),
+      tx.accountFunding.findMany({ where: { paymentAccountId: a.id, createdAt: since }, orderBy: { createdAt: "desc" }, take: limit }),
+      tx.purchasePayment.findMany({
+        where: { paymentAccountId: a.id, purchase: { companyId, voided: false }, createdAt: since },
+        select: { id: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true, reference: true, purchase: { select: { supplierInvoiceNo: true, manualSupplierName: true, supplier: { select: { name: true } } } } },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      }),
+      tx.payrollPayment.findMany({
+        where: { paymentAccountId: a.id, companyId, createdAt: since },
+        select: { id: true, createdAt: true, accountDebitCents: true, paidCents: true, isAdvance: true, employee: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      }),
+      tx.expense.findMany({
+        where: { paymentAccountId: a.id, companyId, createdAt: since },
+        select: { id: true, createdAt: true, description: true, amountCents: true, localAmountCents: true, enteredInLocal: true },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      }),
+    ]);
+    const out: AccountMovement[] = [
+      ...sales.map((p) => ({ id: `s${p.id}`, at: p.createdAt.toISOString(), kind: "COBRO" as const, label: p.reference ? `Cobro de venta · ref. ${p.reference}` : "Cobro de venta", amountCents: lineInAccountCurrency(p, a.currency, rate) })),
+      ...fundings.map((f) => ({ id: `f${f.id}`, at: f.createdAt.toISOString(), kind: "FONDOS" as const, label: f.note ? `Fondos agregados · ${f.note}` : "Fondos agregados", amountCents: f.amountCents })),
+      ...purchases.map((p) => ({
+        id: `p${p.id}`,
+        at: p.createdAt.toISOString(),
+        kind: "COMPRA" as const,
+        label: `Pago de compra · ${p.purchase.supplier?.name ?? p.purchase.manualSupplierName ?? "Proveedor"}`,
+        amountCents: -lineInAccountCurrency(p, a.currency, rate),
+      })),
+      ...payroll.map((p) => ({
+        id: `n${p.id}`,
+        at: p.createdAt.toISOString(),
+        kind: "NOMINA" as const,
+        label: `${p.isAdvance ? "Adelanto" : "Nómina"} · ${p.employee.name}`,
+        amountCents: -payrollDebitCents(p, a.currency, rate),
+      })),
+      ...expenses.map((e) => ({ id: `g${e.id}`, at: e.createdAt.toISOString(), kind: "GASTO" as const, label: `Gasto · ${e.description}`, amountCents: -expenseDebitCents(e, a.currency, rate) })),
+    ];
+    return out.sort((x, y) => (x.at < y.at ? 1 : -1)).slice(0, limit);
   });
 }
 

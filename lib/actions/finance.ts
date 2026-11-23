@@ -9,6 +9,8 @@ import { closedDayWindows } from "@/lib/closed-days";
 import { ExpenseSchema } from "@/lib/validations";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import type { ActionResult } from "@/lib/types";
+import { assertAccountFunds, expenseDebitCents, toActionResult } from "@/lib/account-balance";
+import { methodForAccountKind } from "@/lib/account-money";
 import type { CategoryMargin } from "@/lib/breakeven";
 
 // Same raw-SQL OR-of-windows builder as lib/actions/reports.ts — kept local
@@ -124,6 +126,8 @@ export async function createExpense(formData: FormData): Promise<ActionResult> {
     category: formData.get("category"),
     amount: formData.get("amount"),
     currency: formData.get("currency") ?? undefined,
+    paymentMethod: formData.get("paymentMethod") || undefined,
+    paymentAccountId: formData.get("paymentAccountId") || undefined,
     spentAt: formData.get("spentAt"),
   });
   if (!parsed.success) {
@@ -152,24 +156,43 @@ export async function createExpense(formData: FormData): Promise<ActionResult> {
     localAmountCents = Math.round(amountCents * rate);
   }
 
-  await withTenant(companyId, (tx) =>
-    tx.expense.create({
-      data: {
-        companyId,
-        description: parsed.data.description,
-        category: parsed.data.category,
-        branchId: branchId ?? null,
-        amountCents,
-        enteredInLocal,
-        localAmountCents,
-        exchangeRate: rate,
-        spentAt: parsed.data.spentAt,
-        createdById: userId,
-      },
-    })
-  );
+  try {
+    await withTenant(companyId, async (tx) => {
+      let method = parsed.data.paymentMethod ?? null;
+      let accountId: string | null = null;
+      if (parsed.data.paymentAccountId) {
+        const acc = await tx.paymentAccount.findFirst({ where: { id: parsed.data.paymentAccountId, companyId }, select: { id: true, kind: true } });
+        if (!acc) throw new Error("La cuenta elegida no existe. Recarga la página e inténtalo de nuevo.");
+        accountId = acc.id;
+        // El método sale de la cuenta (pago móvil, transferencia, Zelle…).
+        method = methodForAccountKind(acc.kind);
+        const exp = { amountCents, localAmountCents, enteredInLocal };
+        await assertAccountFunds(tx, companyId, [{ accountId: acc.id, debit: (cur, r) => expenseDebitCents(exp, cur, r) }]);
+      }
+      await tx.expense.create({
+        data: {
+          companyId,
+          description: parsed.data.description,
+          category: parsed.data.category,
+          branchId: branchId ?? null,
+          amountCents,
+          enteredInLocal,
+          localAmountCents,
+          exchangeRate: rate,
+          spentAt: parsed.data.spentAt,
+          createdById: userId,
+          paymentMethod: method,
+          paymentAccountId: accountId,
+        },
+      });
+    });
+  } catch (err) {
+    return toActionResult(err, "No se pudo guardar el gasto");
+  }
 
   revalidatePath("/finance");
+  revalidatePath("/accounting/gastos");
+  revalidatePath("/accounting/accounts");
   return { success: true };
 }
 

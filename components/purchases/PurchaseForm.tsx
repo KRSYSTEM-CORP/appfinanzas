@@ -1,5 +1,6 @@
 "use client";
 
+import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, Supplier, TaxCategory } from "@prisma/client";
@@ -123,6 +124,7 @@ export function PurchaseForm({
   const [invoiceAmount, setInvoiceAmount] = useState("");
   const [invoiceAmountInForeignCurrency, setInvoiceAmountInForeignCurrency] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fundsFailure, setFundsFailure] = useState<FundsError | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const productById = new Map(products.map((p) => [p.id, p]));
@@ -233,6 +235,7 @@ export function PurchaseForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setFundsFailure(null);
     if (useManualSupplier ? !manualSupplierName.trim() : !supplierId) {
       setError(useManualSupplier ? "Escribe el nombre del proveedor" : "Selecciona un proveedor");
       return;
@@ -272,6 +275,8 @@ export function PurchaseForm({
       if (result.success) {
         router.push("/purchases");
         router.refresh();
+      } else if (result.code === "INSUFFICIENT_FUNDS") {
+        setFundsFailure(result);
       } else {
         setError(result.error);
       }
@@ -563,6 +568,16 @@ export function PurchaseForm({
               <p role="alert" className="rounded-[12px] bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
                 {error}
               </p>
+            )}
+            {fundsFailure && (
+              <InsufficientFundsNotice
+                failure={fundsFailure}
+                accounts={sourceAccounts}
+                onFunded={() => {
+                  setFundsFailure(null);
+                  router.refresh();
+                }}
+              />
             )}
             <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
               <Button type="submit" size="lg" className="flex-1" disabled={isPending || (!useManualSupplier && suppliers.length === 0)}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BanknoteIcon, CopyIcon, CreditCardIcon, LandmarkIcon, PlusIcon, SmartphoneIcon, WalletIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -9,7 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Field, FieldPair, FIELD_CONTROL } from "@/components/shared/Field";
 import { SheetActions } from "@/components/shared/ConfirmSheet";
 import { SectionCard } from "@/components/shared/SectionCard";
-import { savePaymentAccount, setAccountBalanceConfig } from "@/lib/actions/payment-accounts";
+import { getAccountMovements, savePaymentAccount, setAccountBalanceConfig, type AccountMovement } from "@/lib/actions/payment-accounts";
+import { AddFundsDialog, formatAccountMoney } from "@/components/accounts/AddFundsDialog";
+import { BankSiteButton } from "@/components/accounts/BankSiteButton";
+import { bankSiteUrl } from "@/lib/bank-sites";
 import { ACCOUNT_KIND_LABELS, ACCOUNT_NUMBER_LABELS, BANKS, accountClipboardText, bankLabel, bankLogoSrc, defaultBankKey, type AccountKind } from "@/lib/payment-accounts";
 import { money } from "@/lib/money-display";
 import { cn } from "@/lib/utils";
@@ -26,6 +29,8 @@ export type BankAccount = {
   linkedMethod: string | null;
   openingCents: number;
   paidOutCents?: number;
+  fundedCents?: number;
+  websiteUrl?: string | null;
   balanceCents: number;
 };
 
@@ -61,6 +66,8 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
   const [pending, start] = useTransition();
   const [adding, setAdding] = useState(false);
   const [detail, setDetail] = useState<BankAccount | null>(null);
+  const [funding, setFunding] = useState<BankAccount | null>(null);
+  const [movements, setMovements] = useState<BankAccount | null>(null);
   const totalRef = accounts.reduce((n, a) => n + (a.currency === "VES" ? (rate ? Math.round(a.balanceCents / rate) : 0) : a.balanceCents), 0);
 
   function link(a: BankAccount, method: string) {
@@ -106,6 +113,23 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
               <small className="mt-1 break-words text-xs text-muted-foreground">
                 {[a.kind === "PAGO_MOVIL" ? `Pago Móvil ${a.accountNumber}` : a.accountNumber, a.docId].filter(Boolean).join(" · ")}
               </small>
+              {(a.fundedCents ?? 0) > 0 && (
+                <small className="text-xs text-muted-foreground">
+                  Fondos agregados: +{money(a.currency === "VES" ? "VES" : referenceCurrency, a.fundedCents ?? 0)}
+                </small>
+              )}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <Button type="button" size="sm" onClick={() => setFunding(a)}>
+                  <PlusIcon aria-hidden className="size-4" /> Agregar fondos
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => setMovements(a)}>
+                  Movimientos
+                </Button>
+                {(() => {
+                  const url = bankSiteUrl(a, defaultBankKey(a.kind));
+                  return url ? <BankSiteButton url={url} bankName={a.bankName ?? ACCOUNT_KIND_LABELS[a.kind]} /> : null;
+                })()}
+              </div>
               <button type="button" onClick={() => setDetail(a)} className="mt-2 self-center rounded-full px-2 py-1.5 text-[13px] font-semibold text-primary hover:bg-muted">
                 Datos para cobrar
               </button>
@@ -149,8 +173,62 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
       )}
 
       {adding && <AddAccountSheet onClose={() => setAdding(false)} onSaved={() => { setAdding(false); router.refresh(); }} />}
+      {funding && (
+        <AddFundsDialog
+          account={{ id: funding.id, label: [funding.bankName ?? ACCOUNT_KIND_LABELS[funding.kind], funding.accountNumber].join(" · "), currency: funding.currency }}
+          onClose={() => setFunding(null)}
+          onDone={() => {
+            setFunding(null);
+            router.refresh();
+          }}
+        />
+      )}
+      {movements && <MovementsDialog a={movements} onClose={() => setMovements(null)} />}
       {detail && <AccountDetailSheet a={detail} onClose={() => setDetail(null)} onSaved={() => { setDetail(null); router.refresh(); }} />}
     </>
+  );
+}
+
+function MovementsDialog({ a, onClose }: { a: BankAccount; onClose: () => void }) {
+  const [rows, setRows] = useState<AccountMovement[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    getAccountMovements(a.id)
+      .then((r) => alive && setRows(r))
+      .catch(() => alive && setRows([]));
+    return () => {
+      alive = false;
+    };
+  }, [a.id]);
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Movimientos · {a.bankName ?? ACCOUNT_KIND_LABELS[a.kind]}</DialogTitle>
+          <DialogDescription>Lo que entró y salió de esta cuenta, del más reciente al más antiguo.</DialogDescription>
+        </DialogHeader>
+        {rows === null ? (
+          <p className="text-sm text-muted-foreground">Cargando…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Todavía no hay movimientos desde que se configuró el saldo.</p>
+        ) : (
+          <ul className="flex flex-col">
+            {rows.map((m) => (
+              <li key={m.id} className="flex items-center justify-between gap-3 border-b py-2.5 text-sm">
+                <span className="min-w-0">
+                  <b className="block truncate">{m.label}</b>
+                  <small className="text-xs text-muted-foreground">{new Date(m.at).toLocaleString("es-VE", { dateStyle: "medium", timeStyle: "short" })}</small>
+                </span>
+                <b className={m.amountCents < 0 ? "tabular-nums text-destructive" : "tabular-nums text-success"}>
+                  {m.amountCents < 0 ? "−" : "+"}
+                  {formatAccountMoney(a.currency, Math.abs(m.amountCents))}
+                </b>
+              </li>
+            ))}
+          </ul>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

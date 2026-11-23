@@ -28,6 +28,8 @@ export default async function AccountsPage() {
             linkedMethod: b.linkedMethod,
             openingCents: b.openingCents,
             paidOutCents: b.paidOutCents,
+            fundedCents: b.fundedCents,
+            websiteUrl: a.websiteUrl,
             balanceCents: b.balanceCents,
           },
         ]

@@ -253,6 +253,7 @@ model Company {
   assistantEntries      AssistantEntry[]
   aiCreditRequests      AiCreditRequest[]
   paymentAccounts       PaymentAccount[]
+  accountFundings       AccountFunding[]
   payrollEmployees      PayrollEmployee[]
   payrollPayments       PayrollPayment[]
   cashOutflows          CashOutflow[]
@@ -1125,9 +1126,9 @@ model PagoMovilOrder {
 // A manually logged business expense (Finanzas), used together with revenue
 // and Product.costCents to estimate net profit for a date range.
 model Expense {
-  id               String   @id @default(cuid())
+  id               String          @id @default(cuid())
   companyId        String
-  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company          Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   description      String
   category         String?
   // Sede a la que se cargó el gasto (la activa al registrarlo); null = general / anterior.
@@ -1137,20 +1138,26 @@ model Expense {
   // at the rate of the moment it was recorded.
   amountCents      Int
   // True when the owner typed the amount in the local currency (Bs.).
-  enteredInLocal   Boolean  @default(false)
+  enteredInLocal   Boolean         @default(false)
   // Local-currency amount in cents: what was typed when enteredInLocal, or
   // the equivalent at `exchangeRate` otherwise. Null on expenses recorded
   // before this existed (or when the company has no exchange rate enabled).
   localAmountCents Int?
   // Snapshot of Company.exchangeRate (local per reference unit) at entry.
-  exchangeRate     Decimal? @db.Decimal(12, 4)
-  spentAt          DateTime @default(now())
+  exchangeRate     Decimal?        @db.Decimal(12, 4)
+  spentAt          DateTime        @default(now())
   createdById      String?
-  createdBy        User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt        DateTime @default(now())
+  createdBy        User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
+  // Cómo se pagó el gasto y, si salió de una cuenta (banco, Zelle, Binance…), de cuál: descuenta de su saldo.
+  // Null = efectivo de caja o gasto anterior a este campo.
+  paymentMethod    PaymentMethod?
+  paymentAccountId String?
+  paymentAccount   PaymentAccount? @relation(fields: [paymentAccountId], references: [id], onDelete: SetNull)
 
   @@index([companyId, spentAt])
   @@index([companyId, branchId])
+  @@index([paymentAccountId])
 }
 
 // A formal end-of-day cash register closing — freezes that business day's
@@ -1160,12 +1167,12 @@ model Expense {
 // a real end-of-day reconciliation would. closingDate is a calendar day in
 // the shop's timezone (America/Caracas, see SHOP_TIME_ZONE), not a instant.
 model CashClosing {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   companyId         String
-  company           Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
   branchId          String
-  branch            Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  closingDate       DateTime @db.Date
+  branch            Branch    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  closingDate       DateTime  @db.Date
   totalCents        Int
   salesCount        Int
   note              String?
@@ -1176,9 +1183,9 @@ model CashClosing {
   expectedCashCents Int?
   differenceCents   Int?
   closedById        String
-  closedAt          DateTime @default(now())
+  closedAt          DateTime  @default(now())
   // Turnos: puede haber varios por día y sede. shiftNumber 1 = turnos/cierres anteriores.
-  shiftNumber       Int      @default(1)
+  shiftNumber       Int       @default(1)
   responsibleName   String?
   openedAt          DateTime?
 
@@ -1423,10 +1430,31 @@ model PaymentAccount {
   openingCents     Int                @default(0)
   linkedMethod     PaymentMethod?
   balanceSince     DateTime           @default(now())
+  // Sitio web del banco (opcional): si queda vacío se usa el oficial del catálogo (lib/bank-sites.ts).
+  websiteUrl       String?
   purchasePayments PurchasePayment[]
   payrollPayments  PayrollPayment[]
+  expenses         Expense[]
+  fundings         AccountFunding[]
 
   @@index([companyId, active])
+}
+
+// Inyección de fondos a una cuenta (aporte del dueño, depósito, saldo que faltaba): suma a su saldo.
+// El monto va en la moneda de la cuenta (Bs o divisa), igual que su saldo.
+model AccountFunding {
+  id               String         @id @default(cuid())
+  companyId        String
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  paymentAccountId String
+  paymentAccount   PaymentAccount @relation(fields: [paymentAccountId], references: [id], onDelete: Cascade)
+  amountCents      Int
+  note             String?
+  createdById      String?
+  createdAt        DateTime       @default(now())
+
+  @@index([paymentAccountId, createdAt])
+  @@index([companyId])
 }
 
 // Traspaso de mercancía entre dos sucursales de la misma empresa: saca stock de
