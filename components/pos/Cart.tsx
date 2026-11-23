@@ -11,6 +11,7 @@ import { Price } from "@/components/money/Price";
 import { QuantityInput } from "@/components/shared/QuantityInput";
 import { PaymentAccountsList } from "@/components/payments/PaymentAccountsList";
 import type { PaymentAccountRow } from "@/lib/actions/payment-accounts";
+import { ACCOUNT_KIND_LABELS } from "@/lib/payment-accounts";
 import { PaymentSplitBuilder, type PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { PAYMENT_STATUS_LABELS, SALE_CHANNEL_LABELS } from "@/lib/format";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
@@ -103,6 +104,7 @@ export function Cart({
   channel,
   onChannelChange,
   paymentAccounts = [],
+  selectReceivingAccount = false,
   discountPercent,
   onDiscountPercentChange,
   onCheckout,
@@ -136,6 +138,8 @@ export function Cart({
   onChannelChange: (channel: SaleChannel) => void;
   // Cuentas de cobro de la empresa, para dárselas al cliente al pagar.
   paymentAccounts?: PaymentAccountRow[];
+  // Sin internet no hay pantalla de cobro: aquí el cajero elige en qué cuenta se recibió el pago.
+  selectReceivingAccount?: boolean;
   discountPercent: string;
   onDiscountPercentChange: (value: string) => void;
   onCheckout: () => void;
@@ -481,6 +485,12 @@ export function Cart({
               exchangeRateEnabled={exchangeRateEnabled}
               referenceCurrency={referenceCurrency}
               idPrefix="checkout"
+              accounts={
+                selectReceivingAccount
+                  ? paymentAccounts.map((a) => ({ id: a.id, label: [a.bankName ?? ACCOUNT_KIND_LABELS[a.kind], a.accountNumber].filter(Boolean).join(" · "), currency: "VES", kind: a.kind }))
+                  : undefined
+              }
+              accountLabel="¿En qué cuenta se recibió el pago?"
             />
           ) : null}
           {paymentStatus === "PAID" && igtfRatePercent != null && (() => {

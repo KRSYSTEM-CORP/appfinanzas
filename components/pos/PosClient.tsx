@@ -119,6 +119,7 @@ function PosSession({
     ivaGeneralRatePercent,
     ivaReducedRatePercent,
     company,
+    paymentAccounts,
   });
   const productById = new Map(products.map((p) => [p.id, p]));
   const initialLines: CartLine[] = (initialQuote?.lines ?? [])
