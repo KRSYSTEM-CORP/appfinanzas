@@ -731,6 +731,12 @@ model SalePayment {
   exchangeRate          Decimal?      @db.Decimal(12, 4)
   createdAt             DateTime      @default(now())
 
+  // Cuenta (banco, Zelle, Binance…) donde se recibió el cobro: suma a su saldo. Null = no se indicó
+  // (cobros anteriores, efectivo, punto de venta): cuentan por el método vinculado de la cuenta.
+  paymentAccountId String?
+  paymentAccount   PaymentAccount? @relation(fields: [paymentAccountId], references: [id], onDelete: SetNull)
+
+  @@index([paymentAccountId])
   @@index([saleId])
 }
 
@@ -1436,6 +1442,7 @@ model PaymentAccount {
   payrollPayments  PayrollPayment[]
   expenses         Expense[]
   fundings         AccountFunding[]
+  salePayments     SalePayment[]
 
   @@index([companyId, active])
 }

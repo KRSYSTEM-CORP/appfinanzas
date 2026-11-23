@@ -22,6 +22,7 @@ import { resolveTierPrice, tierPriceCents } from "@/lib/pricing";
 import type { ActionResult } from "@/lib/types";
 import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateProductsCache } from "@/lib/products-cache";
+import { assertReceivingAccounts } from "@/lib/account-balance";
 
 export type CompleteSaleResult =
   | { success: true; saleId: string }
@@ -218,6 +219,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       if (isPaid) {
         assertPaymentsMatchTotal(resolvedPayments, totalCents, referenceCurrency);
       }
+      await assertReceivingAccounts(tx, companyId, resolvedPayments);
 
       const customer = await tx.customer.upsert({
         where: { companyId_phone: { companyId, phone: customerPhone } },
@@ -290,6 +292,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
                   amountCurrencyCents: p.amountCurrencyCents,
                   paidInForeignCurrency: p.paidInForeignCurrency,
                   reference: p.reference,
+                  paymentAccountId: p.paymentAccountId ?? null,
                   exchangeRate,
                 })),
               }
@@ -637,6 +640,7 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
         referenceCurrency
       );
 
+      await assertReceivingAccounts(tx, companyId, resolvedPayments);
       const alreadyPaidCents = sale.payments.reduce((sum, p) => sum + p.amountEurCents, 0);
       const remainingCents = sale.totalCents - alreadyPaidCents;
       const abonoCents = assertPaymentsWithinRemaining(resolvedPayments, remainingCents, referenceCurrency);
@@ -661,6 +665,7 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
           amountCurrencyCents: p.amountCurrencyCents,
           paidInForeignCurrency: p.paidInForeignCurrency,
           reference: p.reference,
+          paymentAccountId: p.paymentAccountId ?? null,
           exchangeRate: company?.exchangeRate ?? null,
         })),
       });
