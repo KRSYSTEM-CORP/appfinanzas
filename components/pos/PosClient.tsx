@@ -346,6 +346,7 @@ const [step, setStep] = useState<Step>("cart");
               amount: r.amount,
               paidInForeignCurrency: r.paidInForeignCurrency,
               reference: r.reference,
+              paymentAccountId: r.paymentAccountId || undefined,
             }))
           : [],
       discountPercent: discountValue,

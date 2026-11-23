@@ -121,6 +121,7 @@ export function buildPendingReceipt(params: BuildPendingReceiptParams) {
     amountCurrencyCents: p.amountCurrencyCents,
     paidInForeignCurrency: p.paidInForeignCurrency,
     reference: p.reference,
+    paymentAccountId: null,
     // Prisma's Decimal type can't be constructed client-side without
     // importing the runtime class just for this optimistic preview object
     // (never persisted) — null is a valid value and nothing reads it here.

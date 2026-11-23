@@ -153,8 +153,11 @@ export function PaymentSplitBuilder({
   // amount — an abono toward a credit sale, which can be paid off gradually.
   mode = "exact",
   accounts,
+  accountLabel = "¿De qué cuenta salió el dinero?",
 }: {
   accounts?: SourceAccount[];
+  // «¿De qué cuenta salió el dinero?» al pagar; «¿En qué cuenta se recibió el pago?» al cobrar.
+  accountLabel?: string;
   rows: PaymentSplitRow[];
   onChange: (rows: PaymentSplitRow[]) => void;
   totalCents: number;
@@ -276,7 +279,7 @@ export function PaymentSplitBuilder({
 
             {accounts && accountsForMethod(row.paymentMethod, accounts).length > 0 && (
               <div className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold">¿De qué cuenta salió el dinero?</span>
+                <span className="text-[13px] font-semibold">{accountLabel}</span>
                 {accountsForMethod(row.paymentMethod, accounts).map((a) => {
                   const on = row.paymentAccountId === a.id;
                   return (

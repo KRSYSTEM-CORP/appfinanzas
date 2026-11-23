@@ -7,7 +7,7 @@ import { withTenant } from "@/lib/tenant-db";
 import type { ActionResult } from "@/lib/types";
 import type { PaymentAccountKind } from "@prisma/client";
 import { defaultCurrencyForKind, lineInAccountCurrency, payrollDebitCents } from "@/lib/account-money";
-import { accountBalance, currentRateOf, expenseDebitCents } from "@/lib/account-balance";
+import { accountBalance, collectedWhere, currentRateOf, expenseDebitCents } from "@/lib/account-balance";
 import { normalizeBankSiteUrl } from "@/lib/bank-sites";
 
 export type PaymentAccountRow = {
@@ -213,14 +213,12 @@ export async function getAccountMovements(accountId: string, limit = 40): Promis
     const rate = await currentRateOf(tx, companyId);
     const since = { gte: a.balanceSince };
     const [sales, fundings, purchases, payroll, expenses] = await Promise.all([
-      a.linkedMethod
-        ? tx.salePayment.findMany({
-            where: { paymentMethod: a.linkedMethod, sale: { companyId, voided: false }, createdAt: since },
-            select: { id: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true, reference: true },
-            orderBy: { createdAt: "desc" },
-            take: limit,
-          })
-        : Promise.resolve([]),
+      tx.salePayment.findMany({
+        where: { ...collectedWhere(companyId, a), createdAt: since },
+        select: { id: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true, reference: true },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      }),
       tx.accountFunding.findMany({ where: { paymentAccountId: a.id, createdAt: since }, orderBy: { createdAt: "desc" }, take: limit }),
       tx.purchasePayment.findMany({
         where: { paymentAccountId: a.id, purchase: { companyId, voided: false }, createdAt: since },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { voidSale, registerPayment, issueCreditNote, issueDebitNote } from "@/lib/actions/sales";
+import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
+import { accountChoiceMessage } from "@/lib/payment-method-accounts";
+import { ACCOUNT_KIND_LABELS } from "@/lib/payment-accounts";
 import {
   PaymentSplitBuilder,
   defaultPaymentSplitRows,
@@ -61,6 +64,18 @@ export function SaleActions({
     defaultPaymentSplitRows(remainingCents, currentRate, exchangeRateEnabled)
   );
   const [payError, setPayError] = useState<string | null>(null);
+  // Cuentas donde se puede recibir el abono (se cargan al abrir el diálogo).
+  const [receivingAccounts, setReceivingAccounts] = useState<{ id: string; label: string; currency: string; kind: string }[]>([]);
+  useEffect(() => {
+    if (!payOpen) return;
+    let alive = true;
+    listPaymentAccounts()
+      .then((rows) => alive && setReceivingAccounts(rows.map((a) => ({ id: a.id, label: [a.bankName ?? ACCOUNT_KIND_LABELS[a.kind], a.accountNumber].filter(Boolean).join(" · "), currency: "VES", kind: a.kind }))))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [payOpen]);
   const router = useRouter();
   const [creditOpen, setCreditOpen] = useState(false);
   const [creditReason, setCreditReason] = useState("");
@@ -124,6 +139,13 @@ export function SaleActions({
   function handleRegisterPayment(e: React.MouseEvent) {
     e.preventDefault();
     setPayError(null);
+    for (const r of paymentRows) {
+      const missing = accountChoiceMessage(r.paymentMethod, receivingAccounts, r.paymentAccountId);
+      if (missing) {
+        setPayError("Elige en qué cuenta se recibió el pago.");
+        return;
+      }
+    }
     startTransition(async () => {
       const result = await registerPayment(saleId, {
         payments: paymentRows.map((r) => ({
@@ -131,6 +153,7 @@ export function SaleActions({
           amount: r.amount,
           paidInForeignCurrency: r.paidInForeignCurrency,
           reference: r.reference,
+          paymentAccountId: r.paymentAccountId || undefined,
         })),
       });
       if (!result.success) {
@@ -212,6 +235,8 @@ export function SaleActions({
                 referenceCurrency={referenceCurrency}
                 idPrefix={`pay-${saleId}`}
                 mode="upTo"
+                accounts={receivingAccounts}
+                accountLabel="¿En qué cuenta se recibió el pago?"
               />
               {payError && <p className="text-sm text-destructive">{payError}</p>}
             </div>

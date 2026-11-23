@@ -31,3 +31,13 @@ describe("saldo de cuentas", () => {
     expect(toActionResult("raro", "No se pudo")).toEqual({ success: false, error: "No se pudo" });
   });
 });
+
+import { collectedWhere } from "@/lib/account-balance";
+
+describe("cobros que entran a una cuenta", () => {
+  it("suma los cobros recibidos EN la cuenta y, solo si tiene método vinculado, los anteriores sin cuenta de ese método", () => {
+    const w = collectedWhere("c1", { id: "a1", linkedMethod: "CARD" });
+    expect(w.OR).toEqual([{ paymentAccountId: "a1" }, { paymentAccountId: null, paymentMethod: "CARD" }]);
+    expect(collectedWhere("c1", { id: "a1", linkedMethod: null }).OR).toEqual([{ paymentAccountId: "a1" }]);
+  });
+});

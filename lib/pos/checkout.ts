@@ -121,6 +121,7 @@ export type PayLine = {
   amount: number; // en la moneda del método
   refCents: number;
   reference: string;
+  accountId?: string;
 };
 
 export type PayMode = "full" | "split" | "debt";
@@ -185,7 +186,7 @@ export function igtfCents(
 export function toPaymentRows(lines: PayLine[]) {
   return lines.map((l) => {
     const m = posMethod(l.id);
-    return { paymentMethod: m.method, amount: l.amount.toFixed(2), paidInForeignCurrency: m.foreign, reference: l.reference };
+    return { paymentMethod: m.method, amount: l.amount.toFixed(2), paidInForeignCurrency: m.foreign, reference: l.reference, ...(l.accountId ? { paymentAccountId: l.accountId } : {}) };
   });
 }
 

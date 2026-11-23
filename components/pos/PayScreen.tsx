@@ -192,6 +192,7 @@ export function PayScreen({
   const [discText, setDiscText] = useState("");
   const [reason, setReason] = useState("");
   const [beforeExo, setBeforeExo] = useState("0");
+  const [accId, setAccId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [couponText, setCouponText] = useState("");
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -252,8 +253,18 @@ export function PayScreen({
     setAmt("");
     setRecv("");
     setRef("");
+    setAccId(null);
     setLocalError(null);
     if (mode === "full") setLines([]);
+  }
+
+  function accountFor(id: PosMethodId): { needs: boolean; id?: string } {
+    const kind = posMethod(id).accountKind;
+    const list = kind ? paymentAccounts.filter((a) => a.kind === kind) : [];
+    if (list.length === 0) return { needs: false };
+    if (list.length === 1) return { needs: true, id: list[0].id };
+    const chosen = list.find((a) => a.id === accId);
+    return { needs: true, id: chosen?.id };
   }
 
   function addLine() {
@@ -262,11 +273,17 @@ export function PayScreen({
       setLocalError("El número de referencia es obligatorio para este método de pago");
       return;
     }
+    const acct = accountFor(sel);
+    if (acct.needs && !acct.id) {
+      setLocalError("Elige en qué cuenta se recibió el pago");
+      return;
+    }
     const line = buildLine(sel, amt, ref, sum.remainingCents, ctx);
     if (!line) {
       setLocalError("Escribe un monto");
       return;
     }
+    if (acct.id) line.accountId = acct.id;
     setLines([...lines, line]);
     setSel(null);
     setAmt("");
@@ -333,11 +350,17 @@ export function PayScreen({
         setLocalError("El número de referencia es obligatorio para este método de pago");
         return;
       }
+      const acct = accountFor(sel);
+      if (acct.needs && !acct.id) {
+        setLocalError("Elige en qué cuenta se recibió el pago");
+        return;
+      }
       const line = buildLine(sel, amt, ref, total, ctx);
       if (!line) {
         setLocalError("Escribe un monto");
         return;
       }
+      if (acct.id) line.accountId = acct.id;
       all = [line];
       if (isCashMethod(sel) && recv.trim() && selCur) {
         const v = changeDue(line.amount, parseAmount(recv));
@@ -366,6 +389,7 @@ export function PayScreen({
   const cta = exo ? "Registrar exonerada" : debt ? `Vender a crédito · ${fmtRef(sum.saldoCents || total)}` : `Cobrar ${fmtRef(total + igtf)}`;
   const ctaDisabled = isPending || (exo ? false : debt ? isGeneralCustomer : !sum.done);
   const accounts = selM?.accountKind ? paymentAccounts.filter((a) => a.kind === selM.accountKind) : [];
+  const chosenAccId = accounts.length === 1 ? accounts[0].id : accId;
   const vuelto = (() => {
     if (!selCur) return null;
     const rc = parseAmount(recv);
@@ -504,7 +528,10 @@ export function PayScreen({
                               ? [["ID", a.accountNumber], ["Titular", a.holder]]
                               : [["Correo", a.accountNumber], ["Titular", a.holder]];
                       return (
-                        <div key={a.id} className="rounded-2xl bg-muted p-3">
+                        <div
+                          key={a.id}
+                          className={`rounded-2xl bg-muted p-3 ${chosenAccId === a.id ? "ring-2 ring-primary" : ""}`}
+                        >
                           <div className="mb-1.5 flex items-center gap-2.5">
                             <span className="grid h-10 w-14 place-items-center overflow-hidden rounded-[12px] bg-white px-1.5 py-1 shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--foreground)_10%,transparent)]">
                               {logo ? (
@@ -525,6 +552,17 @@ export function PayScreen({
                               </div>
                             ))}
                           <div className="mt-2 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant={chosenAccId === a.id ? "default" : "outline"}
+                              aria-pressed={chosenAccId === a.id}
+                              onClick={() => {
+                                setAccId(a.id);
+                                setLocalError(null);
+                              }}
+                            >
+                              <CheckIcon className="size-4" /> {chosenAccId === a.id ? "Se recibió aquí" : "Recibido aquí"}
+                            </Button>
                             <Button type="button" variant="outline" onClick={() => copyAccount(a)}>
                               {copiedId === a.id ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
                               {copiedId === a.id ? "Datos copiados" : "Copiar datos"}

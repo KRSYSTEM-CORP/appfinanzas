@@ -40,15 +40,30 @@ export function expenseDebitCents(
 
 // Saldo = inicial + cobros del método vinculado + inyecciones − pagos hechos desde la cuenta
 // (compras, nómina y gastos), todo desde la fecha de inicio.
+// Qué cobros de ventas entran a una cuenta: los que llevan su id y, para los que no indican cuenta (anteriores,
+// efectivo, punto de venta), los del método vinculado.
+export function collectedWhere(companyId: string, a: Pick<PaymentAccount, "id" | "linkedMethod">): Prisma.SalePaymentWhereInput {
+  return {
+    sale: { companyId, voided: false },
+    OR: [{ paymentAccountId: a.id }, ...(a.linkedMethod ? [{ paymentAccountId: null, paymentMethod: a.linkedMethod }] : [])],
+  };
+}
+
+// Las cuentas donde se recibe un cobro deben ser de la empresa (se rechaza un id ajeno).
+export async function assertReceivingAccounts(tx: Tx, companyId: string, payments: { paymentAccountId?: string | null }[]): Promise<void> {
+  const ids = [...new Set(payments.map((p) => p.paymentAccountId).filter((x): x is string => !!x))];
+  if (ids.length === 0) return;
+  const found = await tx.paymentAccount.count({ where: { id: { in: ids }, companyId } });
+  if (found !== ids.length) throw new Error("La cuenta elegida no existe. Recarga la página e inténtalo de nuevo.");
+}
+
 export async function accountBalance(tx: Tx, companyId: string, a: AccountForBalance, currentRate: number | null): Promise<AccountBalance> {
-  let collected = 0;
-  if (a.linkedMethod) {
-    const pays = await tx.salePayment.findMany({
-      where: { paymentMethod: a.linkedMethod, sale: { companyId, voided: false }, createdAt: { gte: a.balanceSince } },
-      select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
-    });
-    collected = pays.reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0);
-  }
+  // Cobros: los que se recibieron EN esta cuenta + los anteriores sin cuenta del método vinculado.
+  const pays = await tx.salePayment.findMany({
+    where: { ...collectedWhere(companyId, a), createdAt: { gte: a.balanceSince } },
+    select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
+  });
+  const collected = pays.reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0);
   const [fundings, purchaseOut, payrollOut, expenseOut] = await Promise.all([
     tx.accountFunding.aggregate({ where: { paymentAccountId: a.id, createdAt: { gte: a.balanceSince } }, _sum: { amountCents: true } }),
     tx.purchasePayment.findMany({
