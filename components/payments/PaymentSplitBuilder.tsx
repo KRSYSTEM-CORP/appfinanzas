@@ -3,8 +3,11 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MethodTiles } from "@/components/payments/MethodAndAccount";
+import { formatAccountMoney } from "@/components/accounts/AddFundsDialog";
+import { accountsForMethod } from "@/lib/payment-method-accounts";
+import { cn } from "@/lib/utils";
 import {
-  PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS_REQUIRING_REFERENCE,
   USD_DENOMINATED_METHODS,
 } from "@/lib/format";
@@ -22,7 +25,7 @@ export type PaymentSplitRow = {
 };
 
 // Cuenta bancaria o de cobro que puede ser el origen de un pago.
-export type SourceAccount = { id: string; label: string; currency: string; balanceCents?: number };
+export type SourceAccount = { id: string; label: string; currency: string; kind?: string; balanceCents?: number };
 
 export function defaultPaymentSplitRows(
   totalCents: number,
@@ -213,20 +216,18 @@ export function PaymentSplitBuilder({
           leftoverRefCents > 0 ? refCentsToRowAmount(leftoverRefCents, rowCurrencyCode, rate, referenceCurrency) : null;
         return (
           <div key={i} className="flex flex-col gap-2.5 rounded-[16px] bg-muted/60 p-3.5">
-            <div className="flex gap-2 flex-wrap">
-              {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((method) => (
-                <button
-                  key={method}
-                  type="button"
-                  aria-pressed={row.paymentMethod === method}
-                  onClick={() => updateRow(i, { paymentMethod: method })}
-                  className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold transition-colors ${row.paymentMethod === method ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)] hover:bg-accent"}`}
-                >
-                  {PAYMENT_METHOD_LABELS[method]}
-                </button>
-              ))}
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <MethodTiles
+                  value={row.paymentMethod}
+                  onChange={(method) => {
+                    const next = accounts ? accountsForMethod(method, accounts) : [];
+                    updateRow(i, { paymentMethod: method, paymentAccountId: next.length === 1 ? next[0].id : "" });
+                  }}
+                />
+              </div>
               {rows.length > 1 && (
-                <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={() => removeRow(i)}>
+                <Button type="button" size="sm" variant="ghost" onClick={() => removeRow(i)}>
                   ✕
                 </Button>
               )}
@@ -273,24 +274,31 @@ export function PaymentSplitBuilder({
               )}
             </div>
 
-            {accounts && accounts.length > 0 && (
+            {accounts && accountsForMethod(row.paymentMethod, accounts).length > 0 && (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor={`${idPrefix}-account-${i}`}>¿De qué cuenta salió el dinero?</Label>
-                <select
-                  id={`${idPrefix}-account-${i}`}
-                  className="min-h-11 w-full rounded-[12px] border border-border bg-background px-3 text-sm"
-                  value={row.paymentAccountId ?? ""}
-                  onChange={(e) => updateRow(i, { paymentAccountId: e.target.value })}
-                >
-                  <option value="">Efectivo de caja (no descuenta de una cuenta)</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.label} · {a.currency === "VES" ? "Bs" : "$"}
-                      {a.balanceCents != null ? ` · saldo ${(a.balanceCents / 100).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground">El monto se descuenta del saldo de la cuenta elegida.</p>
+                <span className="text-[13px] font-semibold">¿De qué cuenta salió el dinero?</span>
+                {accountsForMethod(row.paymentMethod, accounts).map((a) => {
+                  const on = row.paymentAccountId === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => updateRow(i, { paymentAccountId: a.id })}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-[14px] border-2 px-3 py-2.5 text-left text-sm transition-colors",
+                        on ? "border-primary bg-primary/12" : "border-transparent bg-muted"
+                      )}
+                    >
+                      <span className="min-w-0 truncate font-semibold">{a.label}</span>
+                      {a.balanceCents != null && (
+                        <span className={cn("shrink-0 text-xs tabular-nums", a.balanceCents <= 0 ? "font-bold text-destructive" : "text-muted-foreground")}>
+                          Saldo {formatAccountMoney(a.currency, a.balanceCents)}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
 

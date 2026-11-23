@@ -1,5 +1,6 @@
 "use client";
 
+import { accountChoiceMessage } from "@/lib/payment-method-accounts";
 import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -236,6 +237,15 @@ export function PurchaseForm({
     e.preventDefault();
     setError(null);
     setFundsFailure(null);
+    if (paymentStatus === "PAID") {
+      for (const r of paymentRows) {
+        const missing = accountChoiceMessage(r.paymentMethod, sourceAccounts, r.paymentAccountId);
+        if (missing) {
+          setError(missing);
+          return;
+        }
+      }
+    }
     if (useManualSupplier ? !manualSupplierName.trim() : !supplierId) {
       setError(useManualSupplier ? "Escribe el nombre del proveedor" : "Selecciona un proveedor");
       return;

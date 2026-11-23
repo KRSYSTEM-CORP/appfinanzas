@@ -14,7 +14,10 @@ import { createExpense, deleteExpense } from "@/lib/actions/finance";
 import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
 import { money } from "@/lib/money-display";
 import { todayDateString } from "@/lib/report-types";
-import { AccountSelect, useSourceAccountsReload } from "@/components/purchases/AccountSelect";
+import { useSourceAccountsReload } from "@/components/purchases/AccountSelect";
+import { MethodAndAccount } from "@/components/payments/MethodAndAccount";
+import { accountChoiceMessage } from "@/lib/payment-method-accounts";
+import type { PaymentMethod } from "@prisma/client";
 import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
 
 const SERIES = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", "bg-chart-6", "bg-chart-7"];
@@ -81,6 +84,7 @@ export function AddExpenseButton({
   const [spentAt, setSpentAt] = useState(todayDateString);
   const { accounts, reload } = useSourceAccountsReload();
   const [accountId, setAccountId] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("CASH");
   const [funds, setFunds] = useState<FundsError | null>(null);
   const typed = Math.round((Number(amount) || 0) * 100);
   const sym = referenceCurrency === "EUR" ? "€" : "$";
@@ -92,6 +96,12 @@ export function AddExpenseButton({
     fd.set("amount", amount);
     fd.set("currency", currency);
     fd.set("spentAt", spentAt);
+    const missing = accountChoiceMessage(method, accounts, accountId);
+    if (missing) {
+      toast.error(missing);
+      return;
+    }
+    fd.set("paymentMethod", method);
     if (accountId) fd.set("paymentAccountId", accountId);
     setFunds(null);
     start(async () => {
@@ -146,7 +156,9 @@ export function AddExpenseButton({
               <input className={FIELD_CONTROL} type="date" value={spentAt} onChange={(e) => setSpentAt(e.target.value)} />
             </Field>
           </FieldPair>
-          <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} label="¿De qué cuenta salió el dinero? (opcional)" />
+          <Field label="¿Cómo se pagó?">
+            <MethodAndAccount method={method} onMethod={setMethod} accounts={accounts} accountId={accountId} onAccount={setAccountId} />
+          </Field>
           {funds && (
             <InsufficientFundsNotice
               failure={funds}
