@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { userErrorMessage } from "@/lib/user-error";
 import { z } from "zod";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
@@ -162,7 +163,7 @@ export async function createTransfer(input: unknown): Promise<ActionResult> {
       });
     });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar el traspaso" };
+    return { success: false, error: userErrorMessage(err, "No se pudo registrar el traspaso") };
   }
 
   // Mismas claves que lib/actions/products.ts (por sucursal y "todas").

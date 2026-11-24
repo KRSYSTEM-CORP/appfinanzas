@@ -1,6 +1,7 @@
 "use server";
 
 import { productLimitError } from "@/lib/plan-limits";
+import { userErrorMessage } from "@/lib/user-error";
 import { revalidatePath } from "next/cache";
 import { requireManager, requireSectionAccess, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
@@ -683,7 +684,7 @@ export async function registerInternalUse(
       });
     });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar el consumo" };
+    return { success: false, error: userErrorMessage(err, "No se pudo registrar el consumo") };
   }
 
   await invalidateProductsCache(companyId, branchId);
@@ -755,7 +756,7 @@ export async function deleteInternalUse(movementId: string): Promise<ActionResul
       await tx.stockMovement.delete({ where: { id: m.id } });
     });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo eliminar" };
+    return { success: false, error: userErrorMessage(err, "No se pudo eliminar") };
   }
   revalidatePath("/accounting/consumption");
   revalidatePath("/inventory");
@@ -796,7 +797,7 @@ export async function adjustStock(
       });
     });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo ajustar" };
+    return { success: false, error: userErrorMessage(err, "No se pudo ajustar") };
   }
   await invalidateProductsCache(companyId, branchId);
   revalidatePath("/inventory");

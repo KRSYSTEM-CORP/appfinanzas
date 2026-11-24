@@ -1,6 +1,7 @@
 "use server";
 
 import { nextDocumentNumber } from "@/lib/document-sequence";
+import { userErrorMessage } from "@/lib/user-error";
 import { revalidatePath } from "next/cache";
 import type { PaymentMethod, Prisma, TaxCategory } from "@prisma/client";
 import { requireAccountingPlan } from "@/lib/session";
@@ -356,7 +357,7 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
       await reverseStock(tx, purchaseId, companyId, purchase.branchId, actorId, actorName);
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo anular la compra";
+    const message = userErrorMessage(err, "No se pudo anular la compra");
     return { success: false, error: message };
   }
 
@@ -564,7 +565,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
 
         created++;
       } catch (err) {
-        const message = err instanceof Error ? err.message : "No se pudo crear la compra";
+        const message = userErrorMessage(err, "No se pudo crear la compra");
         for (const entry of entries) {
           failed.push({ row: entry.row, error: message });
         }

@@ -1,6 +1,7 @@
 "use server";
 
 import { rangeToDates } from "@/lib/report-types";
+import { userErrorMessage } from "@/lib/user-error";
 import { computeIgtfCents } from "@/lib/igtf";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
@@ -477,7 +478,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo anular la venta";
+    const message = userErrorMessage(err, "No se pudo anular la venta");
     return { success: false, error: message };
   }
 
@@ -536,7 +537,7 @@ export async function issueCreditNote(saleId: string, reason: string): Promise<A
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo emitir la nota de crédito";
+    const message = userErrorMessage(err, "No se pudo emitir la nota de crédito");
     return { success: false, error: message };
   }
 
@@ -592,7 +593,7 @@ export async function issueDebitNote(saleId: string, reason: string, amount: num
       });
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo emitir la nota de débito";
+    const message = userErrorMessage(err, "No se pudo emitir la nota de débito");
     return { success: false, error: message };
   }
 
@@ -731,7 +732,7 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
       });
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo registrar el pago";
+    const message = userErrorMessage(err, "No se pudo registrar el pago");
     return { success: false, error: message };
   }
 
