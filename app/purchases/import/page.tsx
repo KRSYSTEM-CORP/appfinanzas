@@ -1,9 +1,9 @@
 import { AdminShell } from "@/components/accounting/AdminShell";
-import { requireAccountingPlan } from "@/lib/session";
+import { requirePurchasesAccess } from "@/lib/session";
 import { ImportPurchasesForm } from "@/components/purchases/ImportPurchasesForm";
 
 export default async function ImportPurchasesPage() {
-  await requireAccountingPlan();
+  await requirePurchasesAccess();
   return (
     <AdminShell group="compras" sub="registro">
       <div>

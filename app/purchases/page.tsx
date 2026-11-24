@@ -1,5 +1,5 @@
 import { LandmarkIcon, ShoppingCartIcon, TrendingDownIcon } from "lucide-react";
-import { requireAccountingPlan } from "@/lib/session";
+import { requirePurchasesAccess } from "@/lib/session";
 import { AdminShell } from "@/components/accounting/AdminShell";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { PeriodBar } from "@/components/shared/PeriodBar";
@@ -23,7 +23,7 @@ export default async function PurchasesPage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string; from?: string; to?: string }>;
 }) {
-  await requireAccountingPlan();
+  await requirePurchasesAccess();
   const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
   const [purchases, orders, restock, rateInfo] = await Promise.all([
     listRecentPurchases(500, selectionToWindows(range)),

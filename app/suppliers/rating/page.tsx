@@ -1,4 +1,4 @@
-import { requireAccountingPlan } from "@/lib/session";
+import { requirePurchasesAccess } from "@/lib/session";
 import { AdminShell } from "@/components/accounting/AdminShell";
 import { SupplierRating } from "@/components/suppliers/SupplierCards";
 import { listSuppliers } from "@/lib/actions/suppliers";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 // Administración → Compras → Calificación.
 export default async function SupplierRatingPage() {
-  await requireAccountingPlan();
+  await requirePurchasesAccess();
   const [suppliers, stats] = await Promise.all([listSuppliers(true), supplierStats()]);
   return (
     <AdminShell group="compras" sub="calif">
