@@ -36,6 +36,7 @@ export const ACCOUNT_KIND_LABELS = {
   ZELLE: "Zelle",
   BINANCE: "Binance",
   PAYPAL: "PayPal",
+  PUNTO_DE_VENTA: "Punto de venta",
 } as const;
 
 export type AccountKind = keyof typeof ACCOUNT_KIND_LABELS;
@@ -47,6 +48,7 @@ export const ACCOUNT_NUMBER_LABELS: Record<AccountKind, string> = {
   ZELLE: "Correo de Zelle",
   BINANCE: "Binance ID",
   PAYPAL: "Correo de PayPal",
+  PUNTO_DE_VENTA: "Nº de terminal o afiliación",
 };
 
 const KNOWN = new Set([...BANKS, ...SERVICES].map((b) => b.key));
@@ -91,7 +93,7 @@ export const SETTINGS_METHODS: SettingsMethod[] = [
   { id: "ebs", label: "Efectivo Bs", foreign: false, icon: "cash", kind: null },
   { id: "ed", label: "Efectivo $", foreign: true, icon: "cash", kind: null },
   { id: "pm", label: "Pago Móvil", foreign: false, icon: "phone", kind: "PAGO_MOVIL" },
-  { id: "pv", label: "Punto de venta", foreign: false, icon: "card", kind: null },
+  { id: "pv", label: "Punto de venta", foreign: false, icon: "card", kind: "PUNTO_DE_VENTA" },
   { id: "zl", label: "Zelle", foreign: true, icon: "zelle", kind: "ZELLE" },
   { id: "bn", label: "Binance", foreign: true, icon: "binance", kind: "BINANCE" },
   { id: "pp", label: "PayPal", foreign: true, icon: "paypal", kind: "PAYPAL" },
@@ -107,5 +109,6 @@ export function settingsMethods(exchangeRateEnabled: boolean): SettingsMethod[] 
 // Métodos activos hoy: los que no necesitan datos cuentan siempre; los demás, si tienen al
 // menos una cuenta visible en el POS.
 export function activeMethodCount(accounts: { kind: AccountKind; active: boolean }[], exchangeRateEnabled: boolean): number {
-  return settingsMethods(exchangeRateEnabled).filter((m) => m.kind === null || accounts.some((a) => a.kind === m.kind && a.active)).length;
+  // El punto de venta, como el efectivo, siempre se puede cobrar aunque no se hayan registrado terminales.
+  return settingsMethods(exchangeRateEnabled).filter((m) => m.kind === null || m.kind === "PUNTO_DE_VENTA" || accounts.some((a) => a.kind === m.kind && a.active)).length;
 }

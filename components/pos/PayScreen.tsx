@@ -509,7 +509,51 @@ export function PayScreen({
                 </div>
               </section>
 
-              {selM && selCur && accounts.length > 0 && (
+              {selM && selCur && accounts.length > 0 && selM.accountKind === "PUNTO_DE_VENTA" && (
+                <section className={CARD}>
+                  <CardHeader
+                    title="¿En qué punto de venta se pasó la tarjeta?"
+                    subtitle={accounts.length > 1 ? "Elige la terminal donde se cobró" : "Terminal donde se cobró"}
+                  />
+                  <div className="flex flex-col gap-3">
+                    {accounts.map((a) => {
+                      const name = a.bankName ?? bankLabel(a.bankKey) ?? ACCOUNT_KIND_LABELS[a.kind];
+                      const logo = bankLogoSrc(a.bankKey ?? defaultBankKey(a.kind));
+                      const chosen = chosenAccId === a.id;
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          aria-pressed={chosen}
+                          onClick={() => {
+                            setAccId(a.id);
+                            setLocalError(null);
+                          }}
+                          className={`flex items-center gap-2.5 rounded-2xl bg-muted p-3 text-left ${chosen ? "ring-2 ring-primary" : ""}`}
+                        >
+                          <span className="grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-[12px] bg-white px-1.5 py-1 shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--foreground)_10%,transparent)]">
+                            {logo ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={logo} alt={name} className="size-full object-contain" />
+                            ) : (
+                              <span className="text-[13px] font-extrabold text-primary">{name.slice(0, 3).toUpperCase()}</span>
+                            )}
+                          </span>
+                          <span className="flex min-w-0 flex-1 flex-col">
+                            <b className="font-bold">{name}</b>
+                            {a.accountNumber && <span className="text-muted-foreground tabular-nums">Terminal {a.accountNumber}</span>}
+                          </span>
+                          <span className={`flex items-center gap-1 text-sm font-semibold ${chosen ? "text-primary" : "text-muted-foreground"}`}>
+                            <CheckIcon className="size-4" /> {chosen ? "Se recibió aquí" : "Recibido aquí"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {selM && selCur && accounts.length > 0 && selM.accountKind !== "PUNTO_DE_VENTA" && (
                 <section className={CARD}>
                   <CardHeader
                     title="Datos para cobrar"

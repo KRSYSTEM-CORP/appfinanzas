@@ -1415,6 +1415,8 @@ enum PaymentAccountKind {
   ZELLE
   BINANCE
   PAYPAL
+  // Terminal de punto de venta (de un banco): el cobro con tarjeta entra a su cuenta; no se paga desde ella.
+  PUNTO_DE_VENTA
 }
 
 // Datos que el cliente necesita para pagarle a la empresa (varios pagos móviles,

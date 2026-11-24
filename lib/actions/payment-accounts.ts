@@ -24,7 +24,7 @@ export type PaymentAccountRow = {
 };
 
 const AccountSchema = z.object({
-  kind: z.enum(["PAGO_MOVIL", "TRANSFER", "ZELLE", "BINANCE", "PAYPAL"]),
+  kind: z.enum(["PAGO_MOVIL", "TRANSFER", "ZELLE", "BINANCE", "PAYPAL", "PUNTO_DE_VENTA"]),
   bankKey: z.string().trim().max(40).optional(),
   bankName: z.string().trim().max(80).optional(),
   holder: z.string().trim().max(120).optional(),
@@ -57,7 +57,7 @@ export async function listSourceAccounts(): Promise<SourceAccountRow[]> {
   const { companyId } = await requireManager();
   return withTenant(companyId, async (tx) => {
     const rate = await currentRateOf(tx, companyId);
-    const rows = await tx.paymentAccount.findMany({ where: { companyId, active: true }, orderBy: { createdAt: "asc" } });
+    const rows = await tx.paymentAccount.findMany({ where: { companyId, active: true, kind: { not: "PUNTO_DE_VENTA" } }, orderBy: { createdAt: "asc" } });
     const out: SourceAccountRow[] = [];
     for (const a of rows) {
       const b = await accountBalance(tx, companyId, a, rate);

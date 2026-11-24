@@ -19,7 +19,7 @@ export function CustomerDisplay({
   currencyCode,
   exchangeRateEnabled,
   referenceCurrency,
-  accounts,
+  accounts: allAccounts,
 }: {
   totalCents: number;
   rate: number | null;
@@ -30,6 +30,7 @@ export function CustomerDisplay({
 }) {
   const [open, setOpen] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
+  const accounts = allAccounts.filter((a) => a.kind !== "PUNTO_DE_VENTA");
   const qrText = accounts.map((a) => accountClipboardText(a)).join("\n\n");
   const kinds = Array.from(new Set(accounts.map((a) => ACCOUNT_KIND_LABELS[a.kind])));
 

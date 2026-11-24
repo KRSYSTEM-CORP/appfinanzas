@@ -204,7 +204,7 @@ function AccountFields({
   onCancel: () => void;
   onSaved: () => void;
 }) {
-  const needsBank = kind === "PAGO_MOVIL" || kind === "TRANSFER";
+  const needsBank = kind === "PAGO_MOVIL" || kind === "TRANSFER" || kind === "PUNTO_DE_VENTA";
   const [bankKey, setBankKey] = useState(account?.bankKey ?? "");
   const [holder, setHolder] = useState(account?.holder ?? "");
   const [accountNumber, setAccountNumber] = useState(account?.accountNumber ?? "");

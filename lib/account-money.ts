@@ -3,7 +3,7 @@ import type { PaymentAccountKind, PaymentMethod } from "@prisma/client";
 // Moneda con la que nace una cuenta: pago móvil y transferencia se mueven en bolívares; Zelle,
 // Binance y PayPal, en divisa. Antes todas nacían en divisa y un pago móvil figuraba como «Divisa».
 export function defaultCurrencyForKind(kind: PaymentAccountKind): "VES" | "USD" {
-  return kind === "PAGO_MOVIL" || kind === "TRANSFER" ? "VES" : "USD";
+  return kind === "PAGO_MOVIL" || kind === "TRANSFER" || kind === "PUNTO_DE_VENTA" ? "VES" : "USD";
 }
 
 // Método de pago que corresponde a una cuenta de origen (el de nómina o compras sale de ella).
@@ -19,6 +19,8 @@ export function methodForAccountKind(kind: PaymentAccountKind): PaymentMethod {
       return "BINANCE";
     case "PAYPAL":
       return "PAYPAL";
+    case "PUNTO_DE_VENTA":
+      return "POS";
   }
 }
 

@@ -8,6 +8,7 @@ export const KIND_BY_METHOD: Partial<Record<PaymentMethod, PaymentAccountKind>> 
   ZELLE: "ZELLE",
   BINANCE: "BINANCE",
   PAYPAL: "PAYPAL",
+  POS: "PUNTO_DE_VENTA",
 };
 
 export function accountsForMethod<T extends { kind?: PaymentAccountKind | string }>(method: PaymentMethod, accounts: T[]): T[] {
