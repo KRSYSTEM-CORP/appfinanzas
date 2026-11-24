@@ -1,6 +1,7 @@
 "use server";
 
 import { aiConfigured, askModel } from "@/lib/ai-provider";
+import { userErrorMessage } from "@/lib/user-error";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/session";
@@ -357,7 +358,7 @@ export async function applyProposal(input: unknown, entryId?: string | null): Pr
     revalidatePath("/pos");
     return { success: true, summary };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo aplicar la propuesta" };
+    return { success: false, error: userErrorMessage(err, "No se pudo aplicar la propuesta") };
   }
 }
 
@@ -389,7 +390,7 @@ async function applySale(
     revalidatePath("/finance");
     return { success: true, summary: `Venta registrada por ${prep.sp.preview.total} a ${prep.sp.preview.customer}. La encuentras en Caja Chica.` };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo crear la venta" };
+    return { success: false, error: userErrorMessage(err, "No se pudo crear la venta") };
   }
 }
 
@@ -504,6 +505,6 @@ export async function undoProposal(entryId: string): Promise<ActionResult & { su
     revalidatePath("/pos");
     return { success: true, summary };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo deshacer" };
+    return { success: false, error: userErrorMessage(err, "No se pudo deshacer") };
   }
 }

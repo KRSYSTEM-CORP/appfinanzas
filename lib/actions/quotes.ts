@@ -1,6 +1,7 @@
 "use server";
 
 import { QUOTE_LOST_REASONS, QUOTE_LOST_REASONS_LEGACY, type FollowUpKind } from "@/lib/quote-follow-up";
+import { userErrorMessage } from "@/lib/user-error";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
 import { requireSectionAccess, requireSession } from "@/lib/session";
@@ -116,7 +117,7 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
 
     return { success: true, quoteId };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo generar el presupuesto";
+    const message = userErrorMessage(err, "No se pudo generar el presupuesto");
     return { success: false, error: message };
   }
 }
