@@ -23,6 +23,7 @@ import type { ActionResult } from "@/lib/types";
 import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateProductsCache } from "@/lib/products-cache";
 import { assertReceivingAccounts } from "@/lib/account-balance";
+import { assertDayNotClosed } from "@/lib/closed-days";
 import { discountPolicyError, isOfflineRateAcceptable, sanitizeQueuedAt } from "@/lib/sale-policy";
 
 export type CompleteSaleResult =
@@ -470,6 +471,8 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       }
 
       saleBranchId = sale.branchId;
+      // Una venta de un día cuya caja ya se cerró no se anula: cambiaría el Corte Z ya emitido (ver CashClosing).
+      await assertDayNotClosed(tx, companyId, sale.branchId, sale.createdAt);
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
