@@ -6,7 +6,8 @@ import { MonitorIcon, QrCodeIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { accountClipboardText, ACCOUNT_KIND_LABELS } from "@/lib/payment-accounts";
-import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { dualForMethod } from "@/lib/money-primary";
+import type { PosMethod } from "@/lib/pos/checkout";
 import { formatAmount } from "@/lib/pos/checkout";
 import type { PaymentAccountRow } from "@/lib/actions/payment-accounts";
 import type { ReferenceCurrency } from "@prisma/client";
@@ -15,6 +16,7 @@ import type { ReferenceCurrency } from "@prisma/client";
 // y un QR con los datos de pago (todas las cuentas de cobro activas).
 export function CustomerDisplay({
   totalCents,
+  method = null,
   rate,
   currencyCode,
   exchangeRateEnabled,
@@ -22,6 +24,7 @@ export function CustomerDisplay({
   accounts: allAccounts,
 }: {
   totalCents: number;
+  method?: PosMethod | null;
   rate: number | null;
   currencyCode: string;
   exchangeRateEnabled: boolean;
@@ -45,7 +48,8 @@ export function CustomerDisplay({
     };
   }, [open, qrText]);
 
-  const local = exchangeRateEnabled && rate != null ? formatLocalCurrency(eurCentsToLocal(totalCents, rate), currencyCode) : null;
+  const dual = dualForMethod(totalCents, method, { rate, localCurrencyCode: currencyCode, referenceCurrency, exchangeRateEnabled });
+  const local = dual.secondary;
 
   return (
     <>
@@ -58,7 +62,7 @@ export function CustomerDisplay({
           <div className="flex flex-col items-center gap-2.5 py-2.5 text-center">
             <p className="kr-eyebrow">Pantalla para el cliente</p>
             <div className="text-[54px] leading-[1.05] font-extrabold tracking-[-0.04em] tabular-nums">
-              {formatCurrencyCents(referenceCurrency, totalCents)}
+              {dual.primary}
             </div>
             {local && <div className="text-[22px] tabular-nums">{local}</div>}
             <div className="flex max-w-[260px] flex-col items-center gap-1.5 rounded-[18px] bg-white p-4 text-black">

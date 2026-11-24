@@ -423,6 +423,7 @@ export function PayScreen({
         <span className="flex-1" />
         <CustomerDisplay
           totalCents={total}
+          method={selM}
           rate={rate}
           currencyCode={currencyCode}
           exchangeRateEnabled={exchangeRateEnabled}

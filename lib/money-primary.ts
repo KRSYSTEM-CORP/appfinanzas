@@ -49,6 +49,15 @@ export function dualForMethod(refCents: number, method: { method: PaymentMethod;
   return dualAmount(refCents, ctx, local);
 }
 
+// Total de una venta ya cobrada: si todos los pagos se hicieron en la misma moneda, esa moneda va primero; si hay mezcla
+// (o ningún pago) queda la referencia habitual.
+export function dualForPayments(refCents: number, payments: { currencyCode: string | null }[], ctx: MoneyCtx): DualAmount {
+  const codes = new Set(payments.map((p) => p.currencyCode));
+  const only = codes.size === 1 ? [...codes][0] : null;
+  const local = only != null && only === ctx.localCurrencyCode && only !== ctx.referenceCurrency;
+  return dualAmount(refCents, ctx, local);
+}
+
 // «Bs 1.000,00 · $10,00» en una sola línea (botones, mensajes de error, textos de una línea).
 export function dualInline(d: DualAmount): string {
   return d.secondary ? `${d.primary} · ${d.secondary}` : d.primary;

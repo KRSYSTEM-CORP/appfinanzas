@@ -5,7 +5,8 @@ import { CheckIcon, PlusIcon, PrinterIcon, StampIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Confetti } from "@/components/pos/Confetti";
 import { PosDocumentSheet } from "@/components/pos/PosDocumentSheet";
-import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { dualForPayments } from "@/lib/money-primary";
+import { legacyCurrencyForPayment } from "@/lib/payment-currency";
 import { controlNumberLabel, type DeliveryNoteCompany } from "@/lib/delivery-note";
 import type {
   PaymentMethod,
@@ -84,11 +85,14 @@ export function ReceiptView({
   const docName = documentKind === "ticket" ? "Ticket de caja" : "Nota de entrega";
   const number = pendingSync ? "pendiente" : controlNumberLabel(sale);
   const customer = `${sale.customerFirstName ?? ""} ${sale.customerLastName ?? ""}`.trim() || "Mostrador";
-  const total = formatCurrencyCents(referenceCurrency, sale.totalCents);
-  const local =
-    exchangeRateEnabled && effectiveRate != null
-      ? formatLocalCurrency(eurCentsToLocal(sale.totalCents, effectiveRate), currencyCode)
-      : null;
+  // La moneda con la que se cobró va primero (mezcla o sin pagos: la referencia habitual).
+  const dual = dualForPayments(
+    sale.totalCents,
+    sale.payments.map((p) => ({ currencyCode: p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency) })),
+    { rate: effectiveRate, localCurrencyCode: currencyCode, referenceCurrency, exchangeRateEnabled }
+  );
+  const total = dual.primary;
+  const local = dual.secondary;
   const message = `Hola ${customer.split(" ")[0]}, te comparto tu ${docName.toLowerCase()} N.º ${number} por ${total}${local ? ` (${local})` : ""}. Gracias por tu compra en ${company.name}.`;
   const Icon = credit ? StampIcon : CheckIcon;
 
