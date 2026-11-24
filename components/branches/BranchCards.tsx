@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { IconTile } from "@/components/ui/icon-tile";
 import { EnterBranchDialog } from "@/components/branches/EnterBranchDialog";
 import { formatCurrencyCents } from "@/lib/currencies";
+import { pct } from "@/lib/money-display";
 import { setBranchGoal, setBranchKey, type BranchSummary } from "@/lib/actions/branches";
 
 function KeyEditor({ branchId }: { branchId: string }) {
@@ -126,7 +127,7 @@ export function BranchCards({
   const bestMonth = active.reduce<BranchSummary | null>((b, x) => (b == null || x.salesMonthCents > b.salesMonthCents ? x : b), null);
   const kpis = [
     { label: "Ventas de la red", value: formatCurrencyCents(currency, monthSales), sub: "Mes en curso · sedes activas", Icon: BanknoteIcon, chip: "bg-primary/12 text-primary" },
-    { label: "Ganancia neta estimada", value: formatCurrencyCents(currency, monthProfit), sub: monthSales > 0 ? `${Math.round((monthProfit / monthSales) * 1000) / 10} % de margen` : "Sin ventas este mes", Icon: TrendingUpIcon, chip: "bg-success/14 text-success" },
+    { label: "Ganancia neta estimada", value: formatCurrencyCents(currency, monthProfit), sub: monthSales > 0 ? `${pct(monthProfit, monthSales)} de margen` : "Sin ventas este mes", Icon: TrendingUpIcon, chip: "bg-success/14 text-success" },
     { label: "Pedidos", value: String(monthOrders), sub: `${active.length} ${active.length === 1 ? "sede activa" : "sedes activas"}`, Icon: ShoppingCartIcon, chip: "bg-warning/18 text-warning" },
     { label: "Mejor sede", value: bestMonth && bestMonth.salesMonthCents > 0 ? bestMonth.name : "—", sub: bestMonth && bestMonth.salesMonthCents > 0 ? formatCurrencyCents(currency, bestMonth.salesMonthCents) : "Aún sin ventas", Icon: StarIcon, chip: "bg-primary/12 text-primary" },
   ];
@@ -146,7 +147,7 @@ export function BranchCards({
           <LockIcon className="size-[22px]" aria-hidden />
         </IconTile>
         <div className="min-w-[200px] flex-1">
-          <b>Has entrado a {entered} de {summaries.length} {summaries.length === 1 ? "sede" : "sedes"}</b>
+          <b>Has entrado a {entered} de {active.length} {active.length === 1 ? "sede" : "sedes"}</b>
           <p className="text-[13px] text-muted-foreground">
             Ves el resumen de toda la red. Para entrar a una sede, abrir su caja o ver su ficha necesitas la clave de su administrador.
           </p>

@@ -70,7 +70,7 @@ export default async function TaxBookPage({
       {libro === "ventas" ? (
         <KpiGrid>
           <Kpi tone="info" icon={<ReceiptTextIcon />} label="Ventas del libro" value={m(salesTotals.total)} hint={`${sales.length} documentos vigentes`} />
-          <Kpi tone="ok" icon={<BookOpenIcon />} label="Base imponible" value={m(salesTotals.base)} hint="Sin IVA" />
+          <Kpi tone="ok" icon={<BookOpenIcon />} label="Base imponible" value={m(ivaEnabled ? salesTotals.base : salesTotals.total)} hint="Sin IVA" />
           {ivaEnabled && <Kpi tone="warn" icon={<PercentIcon />} label="IVA 16 % (débito)" value={m(salesTotals.tax)} hint={`Solo documentos fiscales · ${fiscalSales}`} />}
         </KpiGrid>
       ) : (

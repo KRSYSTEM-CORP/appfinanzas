@@ -175,7 +175,7 @@ export default async function BusinessHome({
           <span aria-hidden className="text-muted-foreground">−</span>
           <Chip label="Comisiones" value={money(commissionsCents)} />
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Calculada con los días que ya tienen cierre de caja. Los montos en euros o dólares son referencia a la tasa BCV; lo realmente cobrado está abajo, por moneda.</p>
+        <p className="mt-3 text-xs text-muted-foreground">Las ventas de días sin cierre de caja no se cuentan aquí{tasks.pendingClosingCount > 0 ? ` (${tasks.pendingClosingCount} ${tasks.pendingClosingCount === 1 ? "día pendiente" : "días pendientes"})` : ""}. Los montos en euros o dólares son referencia a la tasa BCV; lo realmente cobrado está abajo, por moneda.</p>
       </section>
 
       <section aria-label="Accesos rápidos" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
