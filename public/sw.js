@@ -31,7 +31,7 @@
 // itself, so every open tab falls back to the old plain network-passthrough
 // behavior on its next load without anyone needing to clear site data by
 // hand.
-const CACHE_VERSION = "v6";
+const CACHE_VERSION = "v7";
 const CACHE_NAME = `kr-pos-shell-${CACHE_VERSION}`;
 const OFFLINE_SHELL_PATH = "/pos/offline";
 // Any failed navigation to one of these paths is redirected to the offline
@@ -109,6 +109,11 @@ async function warmShellCache() {
     const cache = await caches.open(CACHE_NAME);
     const res = await fetch(OFFLINE_SHELL_PATH, { credentials: "same-origin" });
     if (!res.ok) return;
+    // Without a session the proxy redirects /pos/offline to /login and fetch()
+    // follows it, so "ok" here would be the LOGIN page; caching that as the
+    // offline shell leaves the cashier on a login form when the network drops.
+    // Skip it; the page asks again (message "warm-shell") once signed in.
+    if (res.redirected || new URL(res.url).pathname !== OFFLINE_SHELL_PATH) return;
     const html = await res.clone().text();
     await cachePut(cache, OFFLINE_SHELL_PATH, res);
     const assetUrls = new Set();
@@ -133,6 +138,11 @@ async function warmShellCache() {
     console.error("[sw] warmShellCache failed:", err && err.stack ? err.stack : err);
   }
 }
+
+self.addEventListener("message", (event) => {
+  if (CACHE_VERSION === "disabled") return;
+  if (event.data && event.data.type === "warm-shell") event.waitUntil(warmShellCache());
+});
 
 self.addEventListener("fetch", (event) => {
   if (CACHE_VERSION === "disabled") return;

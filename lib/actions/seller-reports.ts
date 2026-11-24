@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { closedDayWindows } from "@/lib/closed-days";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
 
@@ -26,11 +27,17 @@ function sellerDisplayName(u: { firstName: string | null; lastName: string | nul
 // Voided sales are excluded everywhere in this report, same as
 // revenueTotals() in lib/actions/reports.ts — a voided sale shouldn't count
 // toward anyone's commission.
-export async function sellersSalesOverview(range: DateRangeSelection): Promise<SellerSalesOverviewRow[]> {
+export async function sellersSalesOverview(range: DateRangeSelection, opts: { closedOnly?: boolean } = {}): Promise<SellerSalesOverviewRow[]> {
   const { companyId, branchId } = await requireManager();
-  const windows = selectionToWindows(range);
+  const requestedWindows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
+    // closedOnly (usado por commissionsTotal): igual que ventas y costo en
+    // Inicio/Estadísticas, solo días con cierre de caja. Sin esto la comisión
+    // se restaba de una utilidad con ventas en $0.
+    const windows = opts.closedOnly
+      ? await closedDayWindows(tx, companyId, branchId, requestedWindows)
+      : requestedWindows;
     const [employees, grouped] = await Promise.all([
       tx.user.findMany({ where: { companyId }, orderBy: [{ role: "asc" }, { createdAt: "asc" }] }),
       tx.sale.groupBy({
@@ -143,6 +150,6 @@ export async function updateSellerCommission(userId: string, percent: number | n
 // Comisiones de los vendedores en el período (se restan de la ganancia neta,
 // como en la preview v15).
 export async function commissionsTotal(range: DateRangeSelection): Promise<number> {
-  const rows = await sellersSalesOverview(range);
+  const rows = await sellersSalesOverview(range, { closedOnly: true });
   return rows.reduce((a, r) => a + r.commissionCents, 0);
 }

@@ -4,7 +4,7 @@ import { nextDocumentNumber } from "@/lib/document-sequence";
 import { userErrorMessage } from "@/lib/user-error";
 import { revalidatePath } from "next/cache";
 import type { PaymentMethod, Prisma, TaxCategory } from "@prisma/client";
-import { requireAccountingPlan } from "@/lib/session";
+import { requirePurchasesAccess } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { BulkPurchaseRowSchema, PurchaseSchema } from "@/lib/validations";
 import { decomposeTax, effectiveIvaRates, rateForCategory } from "@/lib/tax";
@@ -29,7 +29,7 @@ export type CompletePurchaseResult =
 // actually just paid for it — the shop's own cost basis should reflect the
 // latest purchase, same way a real inventory system would.
 export async function createPurchase(input: unknown): Promise<CompletePurchaseResult> {
-  const session = await requireAccountingPlan();
+  const session = await requirePurchasesAccess();
   const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return {
@@ -378,7 +378,7 @@ async function restorePreviousCost(tx: Prisma.TransactionClient, purchaseId: str
 }
 
 export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireAccountingPlan();
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requirePurchasesAccess();
   let purchaseBranchId: string | null = sessionBranchId;
 
   try {
@@ -416,7 +416,7 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
 // (voided) keeps it in the history and reverses its effect on stock. Kept
 // as an action so an old client calling it gets a clear answer.
 export async function deletePurchase(): Promise<ActionResult> {
-  await requireAccountingPlan();
+  await requirePurchasesAccess();
   return {
     success: false,
     error: "Las compras no se eliminan porque son documentos fiscales. Usa Anular: queda en el historial y se revierte el stock.",
@@ -449,7 +449,7 @@ export type BulkPurchaseResult = {
 // and stock/cost-bump logic as createPurchase, just driven by rows parsed
 // from a spreadsheet instead of a single form submission.
 export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<BulkPurchaseResult> {
-  const session = await requireAccountingPlan();
+  const session = await requirePurchasesAccess();
   const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return {
@@ -638,7 +638,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
 }
 
 export async function listRecentPurchases(limit = 100, windows?: { start: Date; end: Date }[]) {
-  const { companyId, branchId } = await requireAccountingPlan();
+  const { companyId, branchId } = await requirePurchasesAccess();
   const purchases = await withTenant(companyId, (tx) =>
     tx.purchase.findMany({
       where: {
@@ -698,7 +698,7 @@ export type PaymentOrderRow = {
 
 // Órdenes de pago: compras a crédito con saldo pendiente, de la más antigua a la más reciente.
 export async function listPaymentOrders(): Promise<PaymentOrderRow[]> {
-  const { companyId, branchId } = await requireAccountingPlan();
+  const { companyId, branchId } = await requirePurchasesAccess();
   const rows = await withTenant(companyId, (tx) =>
     tx.purchase.findMany({
       where: { companyId, ...(branchId ? { branchId } : {}), voided: false, paymentStatus: "PENDING" },
@@ -746,7 +746,7 @@ export async function registerPurchasePayment(
   reference?: string,
   paymentAccountId?: string
 ): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireAccountingPlan();
+  const { companyId, branchId: sessionBranchId } = await requirePurchasesAccess();
   if (!(PAY_METHODS as readonly string[]).includes(method)) return { success: false, error: "Elige un método de pago" };
   if (!Number.isInteger(amountCents) || amountCents <= 0) return { success: false, error: "El monto debe ser mayor a 0" };
   try {
@@ -816,7 +816,7 @@ export type CostComparisonRow = { productName: string; offers: CostOffer[]; best
 // Comparativa de último costo: por producto, lo último que se pagó a cada proveedor. Solo productos
 // comprados a 2 o más proveedores; el más barato va primero.
 export async function costComparison(): Promise<CostComparisonRow[]> {
-  const { companyId, branchId } = await requireAccountingPlan();
+  const { companyId, branchId } = await requirePurchasesAccess();
   const items = await withTenant(companyId, (tx) =>
     tx.purchaseItem.findMany({
       where: { productId: { not: null }, purchase: { companyId, voided: false, ...(branchId ? { branchId } : {}) } },

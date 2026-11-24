@@ -1,5 +1,5 @@
 import { AdminShell } from "@/components/accounting/AdminShell";
-import { requireAccountingPlan } from "@/lib/session";
+import { requirePurchasesAccess } from "@/lib/session";
 import { effectiveIvaRates } from "@/lib/tax";
 import { PurchaseForm } from "@/components/purchases/PurchaseForm";
 import { listSuppliers } from "@/lib/actions/suppliers";
@@ -10,7 +10,7 @@ import { listSourceAccounts } from "@/lib/actions/payment-accounts";
 export const dynamic = "force-dynamic";
 
 export default async function NewPurchasePage() {
-  await requireAccountingPlan();
+  await requirePurchasesAccess();
   const [suppliers, products, categories, { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, ivaSettings, sourceAccounts] =
     await Promise.all([
       listSuppliers(true),

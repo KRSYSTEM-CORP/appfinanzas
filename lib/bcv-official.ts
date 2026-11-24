@@ -2,6 +2,7 @@ import "server-only";
 import https from "node:https";
 import tls from "node:tls";
 import { SECTIGO_DV_R36_PEM } from "@/lib/certs/sectigo-dv-r36";
+import { SECTIGO_OV_R36_PEM } from "@/lib/certs/sectigo-ov-r36";
 import { parseBcvHome, type BcvHome } from "@/lib/bcv-parse";
 
 // Descarga la página principal del BCV. Si esta lectura falla (red, cambio de la
@@ -11,7 +12,7 @@ function getHtml(url: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const req = https.get(
       url,
-      { ca: [...tls.rootCertificates, SECTIGO_DV_R36_PEM], timeout: timeoutMs, headers: { "user-agent": "KR-POS/1.0" } },
+      { ca: [...tls.rootCertificates, SECTIGO_DV_R36_PEM, SECTIGO_OV_R36_PEM], timeout: timeoutMs, headers: { "user-agent": "KR-POS/1.0" } },
       (res) => {
         if (res.statusCode !== 200) {
           res.resume();
