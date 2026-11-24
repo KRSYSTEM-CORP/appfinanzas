@@ -239,7 +239,7 @@ function AddAccountSheet({ onClose, onSaved }: { onClose: () => void; onSaved: (
   const [accountNumber, setAccountNumber] = useState("");
   const [docId, setDocId] = useState("");
   const [pending, start] = useTransition();
-  const needsBank = kind === "PAGO_MOVIL" || kind === "TRANSFER";
+  const needsBank = kind === "PAGO_MOVIL" || kind === "TRANSFER" || kind === "PUNTO_DE_VENTA";
   function save() {
     const key = needsBank ? bankKey : defaultBankKey(kind) ?? "";
     start(async () => {

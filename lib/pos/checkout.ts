@@ -21,7 +21,7 @@ export type PosMethod = {
 // Mismo orden y nombres que la preview.
 export const POS_METHODS: PosMethod[] = [
   { id: "pm", label: "Pago Móvil", method: "CARD", foreign: false, accountKind: "PAGO_MOVIL" },
-  { id: "pv", label: "Punto de venta", method: "POS", foreign: false, accountKind: null },
+  { id: "pv", label: "Punto de venta", method: "POS", foreign: false, accountKind: "PUNTO_DE_VENTA" },
   { id: "tr", label: "Transferencia", method: "TRANSFER", foreign: false, accountKind: "TRANSFER" },
   { id: "ebs", label: "Efectivo Bs", method: "CASH", foreign: false, accountKind: null },
   { id: "ed", label: "Efectivo $", method: "CASH", foreign: true, accountKind: null },
