@@ -21,3 +21,18 @@
 - CDN/caché en el proxy para `/_next/static` e imágenes de producto.
 - Auditoría de consultas Prisma en serie por pantalla (no se tocaron en esta pasada para no arriesgar RLS).
 - `public/sw.js` no se cambió (CACHE_VERSION v5): la estrategia actual ya cachea el shell `/pos/offline` y sus chunks.
+
+## Fluidez en el teléfono (bloqueo al deslizar)
+
+Causas probables corregidas (sin dispositivo no se pudo reproducir):
+
+1. **Un websocket y un `router.refresh()` por cada `useLiveRefresh`.** PosClient abría 2 clientes Realtime, ProductTable 2 y el aviso de pagos 1; cada uno refrescaba por su cuenta y al volver de segundo plano reconectaban en cascada. Ahora `lib/useLiveRefresh.ts` usa un cliente compartido, un canal por nombre y un refresco por router vía `lib/refresh-gate.ts` (agrupa 400 ms, hueco mínimo 1,5 s, en pausa si la app está oculta y un solo refresco al volver).
+2. **Cuadrícula del POS sin límite.** `ProductPicker` pintaba todo el catálogo en cada tecla. Ahora 90 por página + "Mostrar más", `useDeferredValue` en la búsqueda y `content-visibility: auto` por tarjeta.
+3. **`backdrop-filter` en barra fija sobre la lista** (`.glass-bar`, barra del carrito): en pantallas táctiles ahora es fondo sólido; se quitó la transición de `backdrop-filter` del velo de sedes.
+4. **Service worker:** las navegaciones no tenían límite de espera; con señal colgada quedaba en blanco. Ahora 25 s y cae al shell offline (rutas POS) o al error del navegador. `CACHE_VERSION` v6 (limpia cachés previos).
+5. **OfflineSyncBanner** reemplazaba su estado cada 5 s sin cambios (re-render continuo); ahora solo si cambia.
+6. `loading.tsx` (esqueleto) en pos, inventory, reports, purchases, customers, quotes, suppliers, accounting, payroll, employees.
+
+Verificar en dispositivo: Web Inspector/Chrome remoto con perfil Performance al deslizar el POS con más de 300 productos; en Red, una venta = un refresh RSC y un solo websocket realtime; app en segundo plano 2 min y volver = un refresh. Pruebas: `tests/refresh-gate.test.ts`.
+
+No verificado: que el bloqueo reportado desaparezca; no se paginaron las listas de inventario/ventas/compras; capacitor.config.ts sin cambios.

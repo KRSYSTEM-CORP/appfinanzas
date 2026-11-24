@@ -34,7 +34,14 @@ export function OfflineSyncBanner({ canManage = false }: { canManage?: boolean }
 
   useEffect(() => {
     // Load from the local queue; state is only set from the promise callback.
-    const load = () => listPendingSales().then(setPending);
+    const load = () =>
+      listPendingSales().then((next) =>
+        setPending((prev) =>
+          prev.length === next.length && prev.every((p, i) => p.lastError === next[i].lastError && p.localId === next[i].localId)
+            ? prev
+            : next
+        )
+      );
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);

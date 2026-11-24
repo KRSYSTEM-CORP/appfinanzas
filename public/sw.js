@@ -31,7 +31,7 @@
 // itself, so every open tab falls back to the old plain network-passthrough
 // behavior on its next load without anyone needing to clear site data by
 // hand.
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const CACHE_NAME = `kr-pos-shell-${CACHE_VERSION}`;
 const OFFLINE_SHELL_PATH = "/pos/offline";
 // Any failed navigation to one of these paths is redirected to the offline
@@ -40,6 +40,17 @@ const OFFLINE_SHELL_PATH = "/pos/offline";
 // offline page instead of silently landing on a POS screen that has nothing
 // to do with what was asked for.
 const OFFLINE_FALLBACK_PATHS = new Set(["/", "/pos", OFFLINE_SHELL_PATH]);
+
+// Una red "colgada" (señal débil del teléfono) nunca responde ni falla: sin
+// límite, la navegación queda pegada en blanco. Tras este tiempo se trata como
+// sin conexión (fallback al shell offline en rutas del POS, error del navegador
+// en las demás, desde donde el usuario puede reintentar).
+const NAVIGATION_TIMEOUT_MS = 25000;
+function fetchWithTimeout(request, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(request, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -167,7 +178,7 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(async () => {
+      fetchWithTimeout(request, NAVIGATION_TIMEOUT_MS).catch(async () => {
         if (!OFFLINE_FALLBACK_PATHS.has(url.pathname)) {
           // Not a path this worker knows how to help with while offline —
           // let the browser show its own default offline page rather than

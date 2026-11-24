@@ -411,7 +411,9 @@
 .glass-sidebar {
   --glass-base: var(--sidebar);
 }
-@media (prefers-reduced-transparency: reduce) {
+/* En pantallas táctiles el desenfoque sobre listas largas congela WebViews
+   modestos al deslizar: fondo sólido. */
+@media (hover: none) and (pointer: coarse), (prefers-reduced-transparency: reduce) {
   .glass-bar {
     background: var(--glass-base, var(--card));
     -webkit-backdrop-filter: none;
@@ -595,7 +597,7 @@
   border-radius: inherit;
   background: color-mix(in srgb, var(--card) 55%, transparent);
   pointer-events: none;
-  transition: opacity 0.25s var(--ease-out, ease), backdrop-filter 0.25s;
+  transition: opacity 0.25s var(--ease-out, ease);
 }
 .sede-lock-veil > span {
   display: inline-flex;
