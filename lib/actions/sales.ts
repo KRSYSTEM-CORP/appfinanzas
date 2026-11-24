@@ -127,11 +127,18 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       // Regla del dueño: sin caja abierta no se vende (las ventas encoladas sin internet ya ocurrieron y no se rechazan).
       if (mustCheckShift({ queued: !!queuedDate, alreadyRegistered: false })) {
         const day = closingDateFromString(todayDateString());
+        // También cuenta el turno de ayer que sigue abierto (turno nocturno que cruza la medianoche).
+        const yesterday = new Date(day.getTime() - 24 * 60 * 60 * 1000);
         const [openings, closings] = await Promise.all([
-          tx.cashOpening.findMany({ where: { branchId, date: day }, select: { shiftNumber: true } }),
-          tx.cashClosing.findMany({ where: { branchId, closingDate: day }, select: { shiftNumber: true, closedAt: true } }),
+          tx.cashOpening.findMany({ where: { branchId, date: { in: [day, yesterday] } }, select: { shiftNumber: true, date: true } }),
+          tx.cashClosing.findMany({ where: { branchId, closingDate: { in: [day, yesterday] } }, select: { shiftNumber: true, closedAt: true, closingDate: true } }),
         ]);
-        const gate = cashGateError(activeShiftNumber(openings, closings) != null);
+        const isOpen = (d: Date) =>
+          activeShiftNumber(
+            openings.filter((o) => o.date.getTime() === d.getTime()),
+            closings.filter((c) => c.closingDate.getTime() === d.getTime())
+          ) != null;
+        const gate = cashGateError(isOpen(day) || isOpen(yesterday));
         if (gate) throw new Error(gate);
       }
 
