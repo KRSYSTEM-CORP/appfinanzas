@@ -61,4 +61,31 @@ export function dualForPayments(refCents: number, payments: { currencyCode: stri
 // «Bs 1.000,00 · $10,00» en una sola línea (botones, mensajes de error, textos de una línea).
 export function dualInline(d: DualAmount): string {
   return d.secondary ? `${d.primary} · ${d.secondary}` : d.primary;
+
+// Una línea de pago de compra ya registrada, con su moneda primero. Si quedó guardada la moneda real, se usa; en registros
+// antiguos (sin moneda de línea) se decide por el método.
+export type PaymentLineInput = {
+  paymentMethod: PaymentMethod;
+  paidInForeignCurrency: boolean;
+  amountEurCents: number;
+  amountCurrencyCents: number | null;
+  currencyCode: string | null;
+};
+export function paymentLineAmount(line: PaymentLineInput, ctx: MoneyCtx): { primary: string; secondary: string | null } {
+  if (line.amountCurrencyCents != null && line.currencyCode) return paidAmount(line, ctx.referenceCurrency);
+  const d = dualAmount(line.amountEurCents, ctx, isLocalMethod(line.paymentMethod, line.paidInForeignCurrency, ctx));
+  return { primary: d.primary, secondary: d.secondary };
+}
+
+// Una compra con pagos va en bolívares primero solo si TODOS sus pagos fueron en bolívares; a crédito o con alguna divisa,
+// la referencia primero.
+export function paymentsPrimaryLocal(payments: { paymentMethod: PaymentMethod; paidInForeignCurrency: boolean }[], ctx: MoneyCtx): boolean {
+  return payments.length > 0 && payments.every((p) => isLocalMethod(p.paymentMethod, p.paidInForeignCurrency, ctx));
+}
+
+export type PurchaseStatus = "VOIDED" | "PAID" | "PARTIAL" | "CREDIT";
+export function purchaseStatus(p: { voided: boolean; paymentStatus: "PAID" | "PENDING"; paidCents: number }): PurchaseStatus {
+  if (p.voided) return "VOIDED";
+  if (p.paymentStatus === "PAID") return "PAID";
+  return p.paidCents > 0 ? "PARTIAL" : "CREDIT";
 }
