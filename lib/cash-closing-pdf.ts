@@ -5,6 +5,7 @@ import { PAYMENT_METHOD_LABELS, formatDate, formatDateOnly } from "@/lib/format"
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, referenceNote } from "@/lib/currencies";
 import { renderCompanyHeader, renderDocumentTitleBlock, type DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { CashClosingSummary } from "@/lib/actions/cash-closing";
+import { OUTFLOW_METHOD_LABEL } from "@/lib/cash-outflow";
 import { countedDifference, differenceLabel, expectedCashByCurrency } from "@/lib/cash-closing";
 import { SHOP_TIME_ZONE } from "@/lib/report-types";
 import { grandTotals, groupIncomeByMethod } from "@/lib/income-by-method";
@@ -116,7 +117,9 @@ export async function buildCashClosingPDF(
     openingRefCents: summary.openingRefCents,
     openingLocalCents: summary.openingLocalCents,
     incomeRows: summary.byAccount ?? [],
-    outflowsCents: summary.outflowsCents,
+    outflows: summary.outflows,
+    refundedCash: summary.refundedCash,
+    rate,
     referenceCurrency,
     localCurrency: currencyCode,
   });
@@ -124,7 +127,10 @@ export async function buildCashClosingPDF(
   section("Caja Chica (efectivo)");
   row("Apertura", money(summary.openingCents ?? 0));
   row("Ventas en efectivo", money(summary.cashSalesCents));
-  row("Salidas", `-${money(summary.outflowsCents)}`, { gap: 20 });
+  row("Salidas en efectivo", `-${money(summary.cashOutflowsCents)}`, { gap: summary.outflowsCents > summary.cashOutflowsCents ? 4 : 20 });
+  if (summary.outflowsCents > summary.cashOutflowsCents) {
+    row("Salidas pagadas desde cuentas (no tocan la caja)", money(summary.outflowsCents - summary.cashOutflowsCents), { color: [110, 110, 110], gap: 20 });
+  }
   row(`Efectivo esperado en ${referenceCurrency === "EUR" ? "euros" : "dólares"}`, refMoney(expected.refCents), { bold: true });
   if (showBs) row("Efectivo esperado en bolívares", localMoney(expected.localCents), { bold: true });
   if (showLocal) row("Total equivalente (a la tasa del día, solo referencia)", money(summary.expectedCashCents), { color: [110, 110, 110], gap: 20 });
@@ -151,12 +157,17 @@ export async function buildCashClosingPDF(
     autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },
-      head: [["Hora", "Salida de Caja Chica", "Monto"]],
-      body: summary.outflows.map((o) => [formatTime(o.createdAt), o.concept, money(o.amountCents)]),
+      head: [["Hora", "Salida de Caja Chica", "Sale de", "Monto"]],
+      body: summary.outflows.map((o) => [
+        formatTime(o.createdAt),
+        o.concept,
+        [o.paymentMethod ? OUTFLOW_METHOD_LABEL[o.paymentMethod] : "Efectivo", o.accountLabel].filter(Boolean).join(" · "),
+        o.currencyCode && o.amountCurrencyCents != null && o.currencyCode !== referenceCurrency ? `${formatCurrencyCents(o.currencyCode, o.amountCurrencyCents)} (${money(o.amountCents)})` : money(o.amountCents),
+      ]),
       theme: "grid",
       headStyles: { fillColor: [30, 41, 59] },
       styles: { fontSize: 10, cellPadding: 6 },
-      columnStyles: { 0: { cellWidth: 60 }, 2: { halign: "right" } },
+      columnStyles: { 0: { cellWidth: 60 }, 3: { halign: "right" } },
     });
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 20;
   } else {

@@ -1,6 +1,7 @@
 import "server-only";
 import type { PaymentAccount, Prisma } from "@prisma/client";
 import { lineInAccountCurrency, payrollDebitCents, refToAccountCents } from "@/lib/account-money";
+import { outflowDebitCents } from "@/lib/cash-outflow";
 import type { ActionResult } from "@/lib/types";
 
 type Tx = Prisma.TransactionClient;
@@ -12,6 +13,8 @@ export type AccountBalance = {
   purchasesOutCents: number;
   payrollOutCents: number;
   expensesOutCents: number;
+  // Salidas de Caja Chica y devoluciones por anulación pagadas desde la cuenta.
+  outflowsOutCents: number;
   // Todo lo que salió de la cuenta (compras, nómina y gastos).
   paidOutCents: number;
   balanceCents: number;
@@ -44,7 +47,8 @@ export function expenseDebitCents(
 // efectivo, punto de venta), los del método vinculado.
 export function collectedWhere(companyId: string, a: Pick<PaymentAccount, "id" | "linkedMethod">): Prisma.SalePaymentWhereInput {
   return {
-    sale: { companyId, voided: false },
+    // Una venta anulada cuenta mientras tenga devolución registrada: lo cobrado sigue en la cuenta hasta que la devolución sale.
+    sale: { companyId, OR: [{ voided: false }, { voided: true, cashOutflows: { some: {} } }] },
     OR: [{ paymentAccountId: a.id }, ...(a.linkedMethod ? [{ paymentAccountId: null, paymentMethod: a.linkedMethod }] : [])],
   };
 }
@@ -64,7 +68,7 @@ export async function accountBalance(tx: Tx, companyId: string, a: AccountForBal
     select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
   });
   const collected = pays.reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0);
-  const [fundings, purchaseOut, payrollOut, expenseOut] = await Promise.all([
+  const [fundings, purchaseOut, payrollOut, expenseOut, outflowOut] = await Promise.all([
     tx.accountFunding.aggregate({ where: { paymentAccountId: a.id, createdAt: { gte: a.balanceSince } }, _sum: { amountCents: true } }),
     tx.purchasePayment.findMany({
       where: { paymentAccountId: a.id, purchase: { companyId, voided: false }, createdAt: { gte: a.balanceSince } },
@@ -78,18 +82,24 @@ export async function accountBalance(tx: Tx, companyId: string, a: AccountForBal
       where: { paymentAccountId: a.id, companyId, createdAt: { gte: a.balanceSince } },
       select: { amountCents: true, localAmountCents: true, enteredInLocal: true },
     }),
+    tx.cashOutflow.findMany({
+      where: { paymentAccountId: a.id, companyId, createdAt: { gte: a.balanceSince } },
+      select: { amountCents: true, amountCurrencyCents: true, currencyCode: true, exchangeRate: true },
+    }),
   ]);
   const funded = fundings._sum.amountCents ?? 0;
   const purchases = purchaseOut.reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0);
   const payroll = payrollOut.reduce((n, p) => n + payrollDebitCents(p, a.currency, currentRate), 0);
   const expenses = expenseOut.reduce((n, e) => n + expenseDebitCents(e, a.currency, currentRate), 0);
-  const paidOut = purchases + payroll + expenses;
+  const outflows = outflowOut.reduce((n, o) => n + outflowDebitCents(o, a.currency, currentRate), 0);
+  const paidOut = purchases + payroll + expenses + outflows;
   return {
     collectedCents: collected,
     fundedCents: funded,
     purchasesOutCents: purchases,
     payrollOutCents: payroll,
     expensesOutCents: expenses,
+    outflowsOutCents: outflows,
     paidOutCents: paidOut,
     balanceCents: a.openingCents + collected + funded - paidOut,
   };

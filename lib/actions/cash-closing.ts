@@ -9,8 +9,23 @@ import { closingDateFromString, openDayList } from "@/lib/closed-days";
 import { activeShiftNumber, isDayClosed, nextShiftNumber, shiftWindow } from "@/lib/cash-shifts";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type PaymentMethod } from "@prisma/client";
+import { isCashOutflow, type OutflowSource } from "@/lib/cash-outflow";
+import { createOutflows } from "@/lib/cash-outflow-server";
+import { InsufficientFundsError, toActionResult } from "@/lib/account-balance";
 
-export type CashOutflowRow = { id: string; concept: string; amountCents: number; createdAt: Date };
+export type CashOutflowRow = {
+  id: string;
+  concept: string;
+  amountCents: number;
+  createdAt: Date;
+  // De dónde salió: método y cuenta (null = efectivo, salidas anteriores), y el monto en su moneda.
+  paymentMethod: PaymentMethod | null;
+  accountLabel: string | null;
+  currencyCode: string | null;
+  amountCurrencyCents: number | null;
+  exchangeRate: number | null;
+  saleId: string | null;
+};
 
 export type CashShiftRow = {
   shiftNumber: number;
@@ -49,7 +64,11 @@ export type CashClosingSummary = {
   openingCents: number | null;
   cashSalesCents: number;
   outflows: CashOutflowRow[];
+  // Todas las salidas (en referencia) y las que salieron del efectivo de la caja (las demás salen de una cuenta).
   outflowsCents: number;
+  cashOutflowsCents: number;
+  // Efectivo cobrado en ventas luego anuladas con devolución: sigue en la gaveta hasta que la devolución en efectivo sale.
+  refundedCash: { currencyCode: string; cents: number; refCents: number }[];
   expectedCashCents: number;
   // Apertura desglosada por moneda (nulo en aperturas antiguas) y conteo físico guardado al cerrar el turno.
   openingRefCents: number | null;
@@ -186,14 +205,19 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
           ...(viewShift != null ? { shiftNumber: viewShift } : {}),
         },
         orderBy: { createdAt: "asc" },
-        select: { id: true, concept: true, amountCents: true, createdAt: true },
+        select: {
+          id: true, concept: true, amountCents: true, createdAt: true, paymentMethod: true, currencyCode: true,
+          amountCurrencyCents: true, exchangeRate: true, saleId: true,
+          paymentAccount: { select: { bankName: true, kind: true, accountNumber: true } },
+        },
       }),
     ]);
     const openingCents = viewOpenings.length > 0 ? viewOpenings.reduce((a, o) => a + o.amountCents, 0) : null;
     // El efectivo de una venta anulada con devolución registrada sigue en la gaveta hasta que sale por la
     // devolución (salida de Caja Chica): se cuenta aquí para que la salida no reste dos veces.
-    const refundedCashRows = await tx.$queryRaw<{ total_cents: bigint | null }[]>`
-      SELECT SUM(sp."amountEurCents")::bigint AS total_cents
+    const refundedCashRows = await tx.$queryRaw<{ currency: string; cents: bigint; ref: bigint }[]>`
+      SELECT COALESCE(sp."currencyCode", 'USD') AS currency,
+             SUM(COALESCE(sp."amountCurrencyCents", sp."amountEurCents"))::bigint AS cents, SUM(sp."amountEurCents")::bigint AS ref
       FROM "SalePayment" sp
       JOIN "Sale" s ON s.id = sp."saleId"
       WHERE s."companyId" = ${companyId}
@@ -201,10 +225,24 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
         AND sp."createdAt" >= ${window.start} AND sp."createdAt" < ${window.end}
         AND s."voided" = true AND sp."paymentMethod"::text = 'CASH'
         AND EXISTS (SELECT 1 FROM "CashOutflow" co WHERE co."saleId" = s.id)
+      GROUP BY 1
     `;
     const cashSalesCents =
-      Number(byMethodRows.find((r) => r.paymentMethod === "CASH")?.total_cents ?? 0) + Number(refundedCashRows[0]?.total_cents ?? 0);
-    const outflowsCents = outflows.reduce((a, o) => a + o.amountCents, 0);
+      Number(byMethodRows.find((r) => r.paymentMethod === "CASH")?.total_cents ?? 0) + refundedCashRows.reduce((a, r) => a + Number(r.ref), 0);
+    const outflowRows: CashOutflowRow[] = outflows.map((o) => ({
+      id: o.id,
+      concept: o.concept,
+      amountCents: o.amountCents,
+      createdAt: o.createdAt,
+      paymentMethod: o.paymentMethod,
+      accountLabel: o.paymentAccount ? [o.paymentAccount.bankName ?? o.paymentAccount.kind, o.paymentAccount.accountNumber].filter(Boolean).join(" · ") : null,
+      currencyCode: o.currencyCode,
+      amountCurrencyCents: o.amountCurrencyCents,
+      exchangeRate: o.exchangeRate != null ? Number(o.exchangeRate) : null,
+      saleId: o.saleId,
+    }));
+    const outflowsCents = outflowRows.reduce((a, o) => a + o.amountCents, 0);
+    const cashOutflowsCents = outflowRows.filter(isCashOutflow).reduce((a, o) => a + o.amountCents, 0);
 
     // En la vista consolidada el día solo cuenta como «cerrado» cuando TODAS las
     // sedes activas lo cerraron (y ninguna tiene un turno abierto).
@@ -253,9 +291,11 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
       shifts,
       openingCents,
       cashSalesCents,
-      outflows,
+      outflows: outflowRows,
       outflowsCents,
-      expectedCashCents: (openingCents ?? 0) + cashSalesCents - outflowsCents,
+      cashOutflowsCents,
+      refundedCash: refundedCashRows.map((r) => ({ currencyCode: r.currency, cents: Number(r.cents), refCents: Number(r.ref) })),
+      expectedCashCents: (openingCents ?? 0) + cashSalesCents - cashOutflowsCents,
       openingRefCents: hasOpeningSplit ? viewOpenings.reduce((a, o) => a + (o.openingUsdCents ?? 0), 0) : null,
       openingLocalCents: hasOpeningSplit ? viewOpenings.reduce((a, o) => a + (o.openingBsCents ?? 0), 0) : null,
       counted:
@@ -534,34 +574,30 @@ async function activeShiftForOutflow(
   return 1;
 }
 
-export async function addCashOutflow(dateStr: string, concept: string, amountCents: number): Promise<ActionResult> {
+export async function addCashOutflow(dateStr: string, concept: string, source: OutflowSource, requestKey?: string): Promise<ActionResult> {
   const ctx = await requireBranchDay(dateStr);
   if (!ctx.ok) return { success: false, error: ctx.error };
   const text = concept.trim();
   if (!text) return { success: false, error: "Escribe el concepto de la salida" };
-  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+  if (!Number.isInteger(source.amountCents) || source.amountCents <= 0) {
     return { success: false, error: "El monto debe ser mayor a 0" };
   }
+  const key = requestKey ? `out:${requestKey.slice(0, 60)}` : null;
   const { session, branchId, closingDate } = ctx;
   try {
     await withTenant(session.companyId, async (tx) => {
+      if (key && (await tx.cashOutflow.findFirst({ where: { companyId: session.companyId, requestKey: `${key}:0` }, select: { id: true } }))) return;
       const shiftNumber = await activeShiftForOutflow(tx, branchId, closingDate);
-      await tx.cashOutflow.create({
-        data: {
-          companyId: session.companyId,
-          branchId,
-          date: closingDate,
-          shiftNumber,
-          concept: text,
-          amountCents,
-          createdById: session.userId,
-        },
-      });
+      await createOutflows(tx, { companyId: session.companyId, branchId, date: closingDate, shiftNumber, concept: text, createdById: session.userId }, [source], key);
     });
   } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return { success: true };
+    if (err instanceof InsufficientFundsError) return toActionResult(err, "");
     return { success: false, error: userErrorMessage(err, "No se pudo registrar la salida") };
   }
   revalidatePath("/reports");
+  revalidatePath("/accounting/accounts");
+  revalidatePath("/accounting/salidas");
   return { success: true };
 }
 
@@ -578,6 +614,8 @@ export async function deleteCashOutflow(dateStr: string, id: string): Promise<Ac
     return { success: false, error: userErrorMessage(err, "No se pudo eliminar la salida") };
   }
   revalidatePath("/reports");
+  revalidatePath("/accounting/accounts");
+  revalidatePath("/accounting/salidas");
   return { success: true };
 }
 

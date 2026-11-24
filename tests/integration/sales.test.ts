@@ -133,12 +133,14 @@ describe("anular con efectivo cobrado", () => {
     expect(await owner.cashOutflow.count({ where: { saleId: sale.id } })).toBe(1);
   });
 
-  it("un cobro que no es efectivo no genera salida", async () => {
+  it("un cobro que no es efectivo también se devuelve (sin cuenta, no resta de la caja)", async () => {
     const sale = await sell(1);
     await owner.salePayment.deleteMany({ where: { saleId: sale.id } });
     await owner.salePayment.create({ data: { saleId: sale.id, paymentMethod: "ZELLE", amountEurCents: 700 } });
     expect((await voidSale(sale.id)).success).toBe(true);
-    expect(await owner.cashOutflow.count({ where: { saleId: sale.id } })).toBe(0);
+    const rows = await owner.cashOutflow.findMany({ where: { saleId: sale.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ paymentMethod: "ZELLE", amountCents: 700, paymentAccountId: null });
   });
 });
 

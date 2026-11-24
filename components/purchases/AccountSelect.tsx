@@ -12,18 +12,19 @@ export function useSourceAccounts(): SourceAccountRow[] {
 }
 
 // Igual, pero devuelve también «reload» para actualizar los saldos después de agregar fondos.
-export function useSourceAccountsReload(): { accounts: SourceAccountRow[]; reload: () => void } {
+export function useSourceAccountsReload(includePos = false, enabled = true): { accounts: SourceAccountRow[]; reload: () => void } {
   const [accounts, setAccounts] = useState<SourceAccountRow[]>([]);
   const [tick, setTick] = useState(0);
   useEffect(() => {
+    if (!enabled) return;
     let alive = true;
-    listSourceAccounts()
+    listSourceAccounts(includePos)
       .then((a) => alive && setAccounts(a))
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [tick]);
+  }, [tick, includePos, enabled]);
   return { accounts, reload: () => setTick((t) => t + 1) };
 }
 

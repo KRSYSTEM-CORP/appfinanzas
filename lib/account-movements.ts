@@ -1,6 +1,7 @@
 import "server-only";
 import type { PaymentAccount, Prisma } from "@prisma/client";
 import { lineInAccountCurrency, payrollDebitCents } from "@/lib/account-money";
+import { outflowDebitCents } from "@/lib/cash-outflow";
 import { collectedWhere, expenseDebitCents } from "@/lib/account-balance";
 
 type Tx = Prisma.TransactionClient;
@@ -8,7 +9,7 @@ type Tx = Prisma.TransactionClient;
 export type AccountMovement = {
   id: string;
   at: string;
-  kind: "COBRO" | "FONDOS" | "COMPRA" | "NOMINA" | "GASTO";
+  kind: "COBRO" | "FONDOS" | "COMPRA" | "NOMINA" | "GASTO" | "SALIDA";
   label: string;
   // Positivo entra a la cuenta, negativo sale; en la moneda de la cuenta.
   amountCents: number;
@@ -29,7 +30,7 @@ export async function accountMovementsList(
   const since = { gte: a.balanceSince };
   const extra: { AND?: { OR: { createdAt: { gte: Date; lt: Date } }[] }[] } = windows ? { AND: [{ OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })) }] } : {};
   const take = { take: limit ?? undefined };
-  const [sales, fundings, purchases, payroll, expenses] = await Promise.all([
+  const [sales, fundings, purchases, payroll, expenses, outflows] = await Promise.all([
     tx.salePayment.findMany({
       where: { ...collectedWhere(companyId, a), createdAt: since, ...extra },
       select: { id: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true, reference: true },
@@ -55,6 +56,12 @@ export async function accountMovementsList(
       orderBy: { createdAt: "desc" },
       ...take,
     }),
+    tx.cashOutflow.findMany({
+      where: { paymentAccountId: a.id, companyId, createdAt: since, ...extra },
+      select: { id: true, createdAt: true, concept: true, amountCents: true, amountCurrencyCents: true, currencyCode: true, exchangeRate: true, saleId: true },
+      orderBy: { createdAt: "desc" },
+      ...take,
+    }),
   ]);
   const out: AccountMovement[] = [
     ...sales.map((p) => ({ id: `s${p.id}`, at: p.createdAt.toISOString(), kind: "COBRO" as const, label: p.reference ? `Cobro de venta · ref. ${p.reference}` : "Cobro de venta", amountCents: lineInAccountCurrency(p, a.currency, rate) })),
@@ -74,6 +81,7 @@ export async function accountMovementsList(
       amountCents: -payrollDebitCents(p, a.currency, rate),
     })),
     ...expenses.map((e) => ({ id: `g${e.id}`, at: e.createdAt.toISOString(), kind: "GASTO" as const, label: `Gasto · ${e.description}`, amountCents: -expenseDebitCents(e, a.currency, rate) })),
+    ...outflows.map((o) => ({ id: `o${o.id}`, at: o.createdAt.toISOString(), kind: "SALIDA" as const, label: `${o.saleId ? "Devolución" : "Salida de caja"} · ${o.concept}`, amountCents: -outflowDebitCents(o, a.currency, rate) })),
   ];
   const sorted = out.sort((x, y) => (x.at < y.at ? 1 : -1));
   return limit != null ? sorted.slice(0, limit) : sorted;

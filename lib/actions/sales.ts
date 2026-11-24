@@ -5,7 +5,7 @@ import { userErrorMessage } from "@/lib/user-error";
 import { computeIgtfCents } from "@/lib/igtf";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
-import { Prisma, type PaymentStatus } from "@prisma/client";
+import { Prisma, type PaymentMethod, type PaymentStatus } from "@prisma/client";
 import { hasPermission, requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { resolveCoupon } from "@/lib/coupon-server";
@@ -23,11 +23,13 @@ import { resolveTierPrice, tierPriceCents } from "@/lib/pricing";
 import type { ActionResult } from "@/lib/types";
 import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateProductsCache } from "@/lib/products-cache";
-import { assertReceivingAccounts } from "@/lib/account-balance";
+import { InsufficientFundsError, assertReceivingAccounts, toActionResult } from "@/lib/account-balance";
+import { defaultRefundLines, maxRefundRefCents, type OutflowSource } from "@/lib/cash-outflow";
+import { createOutflows, outflowMoneyCtx } from "@/lib/cash-outflow-server";
 import { assertDayNotClosed, closingDateFromString } from "@/lib/closed-days";
 import { activeShiftNumber, nextShiftNumber } from "@/lib/cash-shifts";
 import { FISCAL_NOTES_ENABLED, FISCAL_NOTES_COMING_SOON_MESSAGE } from "@/lib/fiscal-notes";
-import { cashRefundCents, refundConcept } from "@/lib/sale-refund";
+import { refundConcept } from "@/lib/sale-refund";
 import { SHOP_TIME_ZONE, zonedDateParts } from "@/lib/report-types";
 import { cashGateError, mustCheckShift } from "@/lib/cash-gate";
 import { discountPolicyError, isOfflineRateAcceptable, sanitizeQueuedAt } from "@/lib/sale-policy";
@@ -483,20 +485,38 @@ async function releaseSaleLinks(tx: Prisma.TransactionClient, saleId: string, co
   if (quoteId) await tx.quote.updateMany({ where: { id: quoteId, companyId, status: "CONVERTED" }, data: { status: "PENDING" } });
 }
 
-// Al anular una venta con efectivo cobrado queda una salida de Caja Chica «Devolución por anulación…»,
-// atada a la venta (saleId único: reintentar no la duplica). Cae en el turno abierto de hoy; sin turno
-// abierto, en el día de hoy sin exigir turno (se cuenta en el próximo que se abra). Los cobros que no
-// son efectivo no salen de la caja física y no se registran aquí.
+// Al anular una venta con cobros se registra la devolución: una o varias salidas (CashOutflow) atadas a la venta,
+// cada una con el método, la cuenta y la moneda de donde sale el dinero (por defecto, como se cobró). Lo que sale en
+// efectivo resta de la caja; lo que sale de una cuenta baja su saldo (con aviso de fondos insuficientes). Cada
+// salida lleva una clave `void:<venta>:<n>` única, así que reintentar no duplica. Cae en el turno abierto de hoy;
+// sin turno abierto, en el día de hoy sin exigir turno (se cuenta en el próximo que se abra).
 async function recordVoidRefund(
   tx: Prisma.TransactionClient,
   sale: { id: string; companyId: string; branchId: string | null; controlNumber: number | null },
-  actorId: string
+  actorId: string,
+  refunds: OutflowSource[] | undefined
 ) {
   if (!sale.branchId) return;
-  const payments = await tx.salePayment.findMany({ where: { saleId: sale.id }, select: { paymentMethod: true, amountEurCents: true } });
-  const amountCents = cashRefundCents(payments);
-  if (amountCents <= 0) return;
+  const payments = await tx.salePayment.findMany({
+    where: { saleId: sale.id },
+    select: { paymentMethod: true, paymentAccountId: true, currencyCode: true, amountCurrencyCents: true, amountEurCents: true },
+  });
+  if (payments.length === 0) return;
+  const ctx = await outflowMoneyCtx(tx, sale.companyId);
+  const lines: OutflowSource[] = refunds ?? defaultRefundLines(payments, ctx.localCurrencyCode, ctx.referenceCurrency);
+  if (lines.length === 0) throw new Error("Indica cómo se devuelve el dinero al cliente.");
   if (await tx.cashOutflow.findFirst({ where: { saleId: sale.id }, select: { id: true } })) return;
+  let totalRef = 0;
+  for (const l of lines) {
+    if (!Number.isInteger(l.amountCents) || l.amountCents <= 0) throw new Error("Cada devolución debe tener un monto mayor a 0.");
+    if (l.currency === "LOCAL") {
+      if (!ctx.rate) throw new Error("No hay una tasa de cambio activa para devolver en bolívares.");
+      totalRef += Math.round(l.amountCents / ctx.rate);
+    } else totalRef += l.amountCents;
+  }
+  if (totalRef > maxRefundRefCents(payments, ctx.localCurrencyCode, ctx.referenceCurrency, ctx.rate)) {
+    throw new Error("La devolución es mayor a lo que el cliente pagó en esta venta.");
+  }
   const { year, month, day } = zonedDateParts(new Date(), SHOP_TIME_ZONE);
   const date = closingDateFromString(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
   const [openings, closings] = await Promise.all([
@@ -504,21 +524,39 @@ async function recordVoidRefund(
     tx.cashClosing.findMany({ where: { branchId: sale.branchId, closingDate: date }, select: { shiftNumber: true, closedAt: true } }),
   ]);
   const shiftNumber = activeShiftNumber(openings, closings) ?? nextShiftNumber(openings, closings);
-  await tx.cashOutflow.create({
-    data: {
-      companyId: sale.companyId,
-      branchId: sale.branchId,
-      date,
-      shiftNumber,
-      concept: refundConcept(sale.controlNumber ?? sale.id.slice(-6)),
-      amountCents,
-      createdById: actorId,
-      saleId: sale.id,
-    },
+  await createOutflows(
+    tx,
+    { companyId: sale.companyId, branchId: sale.branchId, date, shiftNumber, concept: refundConcept(sale.controlNumber ?? sale.id.slice(-6)), createdById: actorId, saleId: sale.id },
+    lines,
+    `void:${sale.id}`
+  );
+}
+
+export type VoidRefundPlan = {
+  lines: { paymentMethod: PaymentMethod; paymentAccountId: string | null; currency: "LOCAL" | "REFERENCE"; amountCents: number }[];
+  paidRefCents: number;
+};
+
+// Cómo se cobró la venta, para prellenar el diálogo de anular («¿cómo se devuelve el dinero?»).
+export async function getVoidRefundPlan(saleId: string): Promise<VoidRefundPlan> {
+  const { companyId, branchId } = await requireManager();
+  return withTenant(companyId, async (tx) => {
+    const sale = await tx.sale.findFirst({ where: { id: saleId, companyId, ...(branchId ? { branchId } : {}) }, select: { id: true } });
+    if (!sale) return { lines: [], paidRefCents: 0 };
+    const payments = await tx.salePayment.findMany({
+      where: { saleId },
+      select: { paymentMethod: true, paymentAccountId: true, currencyCode: true, amountCurrencyCents: true, amountEurCents: true },
+    });
+    const ctx = await outflowMoneyCtx(tx, companyId);
+    return {
+      lines: defaultRefundLines(payments, ctx.localCurrencyCode, ctx.referenceCurrency),
+      paidRefCents: payments.reduce((n, p) => n + p.amountEurCents, 0),
+    };
   });
 }
 
-export async function voidSale(saleId: string): Promise<ActionResult> {
+// `refunds`: cómo se devuelve el dinero (método, cuenta, moneda y monto de cada salida); sin él se devuelve como se cobró.
+export async function voidSale(saleId: string, refunds?: OutflowSource[]): Promise<ActionResult> {
   const session = await requireManager();
   if (!hasPermission(session, "void")) return { success: false, error: "No tienes permiso para anular ventas" };
   const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = session;
@@ -542,9 +580,10 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
       await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
-      await recordVoidRefund(tx, sale, actorId);
+      await recordVoidRefund(tx, sale, actorId, refunds);
     });
   } catch (err) {
+    if (err instanceof InsufficientFundsError) return toActionResult(err, "");
     const message = userErrorMessage(err, "No se pudo anular la venta");
     return { success: false, error: message };
   }
@@ -552,6 +591,8 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
   revalidatePath("/inventory");
   revalidatePath("/pos");
   revalidatePath("/reports");
+  revalidatePath("/accounting/accounts");
+  revalidatePath("/accounting/salidas");
   await invalidateProductsCache(companyId, saleBranchId);
   void notifyLive(posChannel(companyId), "sale");
   return { success: true };

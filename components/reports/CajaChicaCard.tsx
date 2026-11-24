@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { Price } from "@/components/money/Price";
 import { addCashOutflow, deleteCashOutflow, type CashClosingSummary } from "@/lib/actions/cash-closing";
+import { OutflowLineFields } from "@/components/payments/OutflowLineFields";
+import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
+import { useSourceAccountsReload } from "@/components/purchases/AccountSelect";
+import { accountChoiceMessage } from "@/lib/payment-method-accounts";
+import { expectedCashByCurrency } from "@/lib/cash-closing";
+import { OUTFLOW_METHOD_LABEL, defaultOutflowCurrency, lineToSource, type OutflowLine } from "@/lib/cash-outflow";
 import type { ReferenceCurrency } from "@prisma/client";
 import { IncomeByMethodDialog } from "@/components/reports/IncomeByMethodDialog";
 
@@ -32,18 +38,37 @@ export function CajaChicaCard({
 }) {
   const router = useRouter();
   const [concept, setConcept] = useState("");
-  const [amount, setAmount] = useState("");
+  const { accounts, reload } = useSourceAccountsReload(true);
+  const [line, setLine] = useState<OutflowLine>({ method: "CASH", accountId: "", currency: defaultOutflowCurrency("CASH", exchangeRateEnabled), amount: "" });
+  // Una clave por salida: si se reintenta (red lenta, doble toque) no se duplica.
+  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
+  const [funds, setFunds] = useState<FundsError | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const moneyView = useMemo(() => ({ rate, exchangeRateEnabled, localCurrencyCode: currencyCode, referenceCurrency }), [rate, exchangeRateEnabled, currencyCode, referenceCurrency]);
   const [isPending, startTransition] = useTransition();
+  const byCur = expectedCashByCurrency({
+    openingCents: summary.openingCents,
+    openingRefCents: summary.openingRefCents,
+    openingLocalCents: summary.openingLocalCents,
+    incomeRows: summary.byAccount ?? [],
+    outflows: summary.outflows,
+    refundedCash: summary.refundedCash,
+    rate,
+    referenceCurrency,
+    localCurrency: currencyCode,
+  });
   const priceProps = { rate, currencyCode, exchangeRateEnabled, referenceCurrency };
 
-  function run(action: () => Promise<{ success: boolean; error?: string }>, after?: () => void) {
+  function run(action: () => Promise<{ success: boolean; error?: string; code?: string }>, after?: () => void) {
     setError(null);
+    setFunds(null);
     startTransition(async () => {
       const result = await action();
       if (result.success) {
         after?.();
         router.refresh();
+      } else if (result.code === "INSUFFICIENT_FUNDS") {
+        setFunds(result as FundsError);
       } else {
         setError(result.error ?? "No se pudo guardar");
       }
@@ -59,28 +84,34 @@ export function CajaChicaCard({
         <Card>
           <CardContent>
             <form
-              className="flex flex-wrap items-end gap-2"
+              className="flex flex-col gap-3"
               onSubmit={(e) => {
                 e.preventDefault();
-                const cents = Math.round(Number(amount) * 100);
+                const missing = accountChoiceMessage(line.method, accounts, line.accountId);
+                if (missing) {
+                  setError(missing);
+                  return;
+                }
+                const source = lineToSource(line, accounts, exchangeRateEnabled);
                 run(
-                  () => addCashOutflow(summary.date, concept, cents),
+                  () => addCashOutflow(summary.date, concept, source, requestKey),
                   () => {
                     setConcept("");
-                    setAmount("");
+                    setLine((l) => ({ ...l, amount: "" }));
+                    setRequestKey(crypto.randomUUID());
                   }
                 );
               }}
             >
-              <div className="flex min-w-40 flex-1 flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5">
                 <Label htmlFor="cc-concept">Registrar salida</Label>
                 <Input id="cc-concept" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder="Concepto (ej. Compra de bolsas)" required />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="cc-amount">Monto</Label>
-                <Input id="cc-amount" type="number" min="0.01" step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-28" required />
+              <OutflowLineFields line={line} onChange={setLine} accounts={accounts} money={moneyView} />
+              {funds && <InsufficientFundsNotice failure={funds} accounts={accounts} onFunded={() => { setFunds(null); reload(); }} />}
+              <div>
+                <Button type="submit" disabled={isPending || !(Number(line.amount.replace(",", ".")) > 0)}>Registrar salida</Button>
               </div>
-              <Button type="submit" disabled={isPending}>Registrar salida</Button>
             </form>
             {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
           </CardContent>
@@ -116,9 +147,18 @@ export function CajaChicaCard({
           </div>
           {summary.outflows.map((o) => (
             <div key={o.id} className="flex items-center justify-between gap-3 py-3 text-sm">
-              <span className="min-w-0 truncate font-bold">{o.concept}</span>
+              <span className="min-w-0">
+                <span className="block truncate font-bold">{o.concept}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {OUTFLOW_METHOD_LABEL[o.paymentMethod ?? "CASH"]}
+                  {o.accountLabel ? ` · ${o.accountLabel}` : ""}
+                  {o.paymentMethod && o.paymentMethod !== "CASH" ? " · no sale de la caja" : ""}
+                </span>
+              </span>
               <span className="flex items-center gap-2">
-                <span className="font-extrabold tabular-nums text-destructive">−<Price eurCents={o.amountCents} {...priceProps} /></span>
+                <span className="font-extrabold tabular-nums text-destructive">
+                  −{o.currencyCode && o.amountCurrencyCents != null && o.currencyCode !== referenceCurrency ? formatCurrencyCents(o.currencyCode, o.amountCurrencyCents) : <Price eurCents={o.amountCents} {...priceProps} />}
+                </span>
                 {canEdit && (
                   <Button type="button" size="xs" variant="ghost" disabled={isPending} aria-label={`Quitar salida ${o.concept}`} onClick={() => run(() => deleteCashOutflow(summary.date, o.id))}>
                     Quitar
@@ -129,7 +169,14 @@ export function CajaChicaCard({
           ))}
           <div className="flex items-center justify-between gap-3 py-3 text-sm">
             <span className="font-bold">Efectivo esperado</span>
-            <span className="font-extrabold tabular-nums"><Price eurCents={summary.expectedCashCents} {...priceProps} /></span>
+            <span className="text-right font-extrabold tabular-nums">
+              <Price eurCents={summary.expectedCashCents} {...priceProps} />
+              {exchangeRateEnabled && currencyCode !== referenceCurrency && (
+                <span className="block text-xs font-semibold text-muted-foreground">
+                  En caja: {formatCurrencyCents(referenceCurrency, byCur.refCents)} · {formatCurrencyCents(currencyCode, byCur.localCents)}
+                </span>
+              )}
+            </span>
           </div>
         </CardContent>
       </Card>

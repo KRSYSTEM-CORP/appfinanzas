@@ -7,7 +7,7 @@ const company = { name: "Comercial Pruebas" } as never;
 function summary(byAccount: CashClosingSummary["byAccount"]): CashClosingSummary {
   return {
     date: "2026-11-23", shiftNumber: 1, responsibleName: "Ana", openedAt: null, shiftOpen: false, shifts: [],
-    openingCents: 0, cashSalesCents: 0, outflows: [], outflowsCents: 0, expectedCashCents: 0, openingRefCents: null, openingLocalCents: null, counted: null, voidedCount: 0, voidedCents: 0, totalCents: 1000, salesCount: 1,
+    openingCents: 0, cashSalesCents: 0, outflows: [], outflowsCents: 0, cashOutflowsCents: 0, refundedCash: [], expectedCashCents: 0, openingRefCents: null, openingLocalCents: null, counted: null, voidedCount: 0, voidedCents: 0, totalCents: 1000, salesCount: 1,
     paidCents: 1000, paidCount: 1, creditCents: 0, creditCount: 0, byMethod: [], byCurrency: [], byAccount, closed: null,
   };
 }
