@@ -3,6 +3,7 @@ import { z } from "zod";
 import { PaymentMethod, TaxCategory } from "@prisma/client";
 import { CURRENCIES } from "@/lib/currencies";
 import { zonedDateStringToUtc } from "@/lib/report-types";
+import { isSafeImageDataUrl } from "@/lib/image-validation";
 
 const toCents = (v: number) => Math.round(v * 100);
 
@@ -182,8 +183,7 @@ export const ProductSchema = z
       .trim()
       .optional()
       .transform((v) => (v === "" ? undefined : v))
-      .refine((v) => v == null || v.startsWith("data:image/"), "Imagen inválida")
-      .refine((v) => v == null || v.length < 700_000, "La imagen es demasiado grande"),
+      .refine((v) => v == null || isSafeImageDataUrl(v, 700_000), "Imagen inválida o demasiado grande (usa PNG, JPG o WebP)"),
     // Quantity-based pricing — off by default; each tier (mayor/gran mayor)
     // is only meaningful once both its price and minimum quantity are set
     // together. See lib/pricing.ts's resolveTierPrice for how these combine
@@ -566,8 +566,8 @@ export const PaymentReportSchema = z
     // Proof-of-payment image (data URL), required — kept small client-side.
     proofImageDataUrl: z
       .string()
-      .regex(/^data:image\/(png|jpe?g|webp);base64,/, "Adjunta el comprobante del pago (imagen)")
-      .max(2_500_000, "La imagen es muy pesada (máx. 2 MB)"),
+      .refine((v) => /^data:image\/(png|jpe?g|webp);base64,/.test(v), "Adjunta el comprobante del pago (imagen)")
+      .refine((v) => isSafeImageDataUrl(v, 2_500_000), "La imagen no es válida o es muy pesada (máx. 2 MB)"),
     // No longer collected in-app — the comprobante is sent by WhatsApp
     // instead (see app/billing/page.tsx). Kept optional, not removed, so
     // PaymentReport.proofImageDataUrl still displays for reports submitted
@@ -619,7 +619,8 @@ export const PlatformSettingsSchema = z.object({
     .string()
     .trim()
     .optional()
-    .transform((v) => (v === "" ? undefined : v)),
+    .transform((v) => (v === "" ? undefined : v))
+    .refine((v) => v == null || isSafeImageDataUrl(v, 700_000), "El QR debe ser una imagen PNG, JPG o WebP más liviana"),
   binanceId: z
     .string()
     .trim()
@@ -671,8 +672,7 @@ export const BrandingSchema = z.object({
     .trim()
     .optional()
     .transform((v) => (v === "" ? undefined : v))
-    .refine((v) => v == null || v.startsWith("data:image/"), "Logo inválido")
-    .refine((v) => v == null || v.length < 400_000, "El logo es demasiado grande"),
+    .refine((v) => v == null || isSafeImageDataUrl(v, 400_000), "Logo inválido o demasiado grande (usa PNG, JPG o WebP)"),
   brandColor: z
     .string()
     .trim()

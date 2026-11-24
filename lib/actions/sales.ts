@@ -1,6 +1,7 @@
 "use server";
 
 import { rangeToDates } from "@/lib/report-types";
+import { userErrorMessage } from "@/lib/user-error";
 import { computeIgtfCents } from "@/lib/igtf";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
@@ -248,7 +249,8 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           address: customerAddress,
           rif: customerRif ?? null,
         },
-        update: {
+        // «Cliente general» es una ficha compartida: nunca se reescribe con los datos de una venta.
+        update: customerPhone === "0000-0000000" ? {} : {
           firstName: customerFirstName,
           lastName: customerLastName,
           address: customerAddress,
@@ -452,6 +454,12 @@ async function restoreStock(tx: Prisma.TransactionClient, saleId: string, compan
   );
 }
 
+// Al anular, el cupón canjeado en la venta queda libre y el presupuesto del que salió vuelve a estar abierto.
+async function releaseSaleLinks(tx: Prisma.TransactionClient, saleId: string, companyId: string, quoteId: string | null) {
+  await tx.promotionRedemption.deleteMany({ where: { saleId, companyId } });
+  if (quoteId) await tx.quote.updateMany({ where: { id: quoteId, companyId, status: "CONVERTED" }, data: { status: "PENDING" } });
+}
+
 export async function voidSale(saleId: string): Promise<ActionResult> {
   const session = await requireManager();
   if (!hasPermission(session, "void")) return { success: false, error: "No tienes permiso para anular ventas" };
@@ -474,10 +482,11 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       // Una venta de un día cuya caja ya se cerró no se anula: cambiaría el Corte Z ya emitido (ver CashClosing).
       await assertDayNotClosed(tx, companyId, sale.branchId, sale.createdAt);
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
+      await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo anular la venta";
+    const message = userErrorMessage(err, "No se pudo anular la venta");
     return { success: false, error: message };
   }
 
@@ -533,10 +542,12 @@ export async function issueCreditNote(saleId: string, reason: string): Promise<A
         },
       });
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
+      await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
+      await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo emitir la nota de crédito";
+    const message = userErrorMessage(err, "No se pudo emitir la nota de crédito");
     return { success: false, error: message };
   }
 
@@ -592,7 +603,7 @@ export async function issueDebitNote(saleId: string, reason: string, amount: num
       });
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo emitir la nota de débito";
+    const message = userErrorMessage(err, "No se pudo emitir la nota de débito");
     return { success: false, error: message };
   }
 
@@ -731,7 +742,7 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
       });
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo registrar el pago";
+    const message = userErrorMessage(err, "No se pudo registrar el pago");
     return { success: false, error: message };
   }
 

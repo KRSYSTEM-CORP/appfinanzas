@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { userErrorMessage } from "@/lib/user-error";
 import { requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { SHOP_TIME_ZONE, dayBoundsUtc, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
@@ -335,7 +336,7 @@ export async function closeCashRegister(
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return { success: false, error: "Ese turno ya fue cerrado." };
     }
-    const message = err instanceof Error ? err.message : "No se pudo cerrar la caja";
+    const message = userErrorMessage(err, "No se pudo cerrar la caja");
     return { success: false, error: message };
   }
 
@@ -471,7 +472,7 @@ export async function setCashOpening(
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return { success: false, error: "Ya hay un turno abierto en esta sede. Actualiza la pantalla." };
     }
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo abrir la caja" };
+    return { success: false, error: userErrorMessage(err, "No se pudo abrir la caja") };
   }
   revalidatePath("/reports");
   revalidatePath("/pos");
@@ -519,7 +520,7 @@ export async function addCashOutflow(dateStr: string, concept: string, amountCen
       });
     });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo registrar la salida" };
+    return { success: false, error: userErrorMessage(err, "No se pudo registrar la salida") };
   }
   revalidatePath("/reports");
   return { success: true };
@@ -535,7 +536,7 @@ export async function deleteCashOutflow(dateStr: string, id: string): Promise<Ac
       await tx.cashOutflow.deleteMany({ where: { id, companyId: session.companyId, branchId, date: closingDate, shiftNumber } });
     });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "No se pudo eliminar la salida" };
+    return { success: false, error: userErrorMessage(err, "No se pudo eliminar la salida") };
   }
   revalidatePath("/reports");
   return { success: true };

@@ -37,6 +37,7 @@ import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import {
   getPayrollProof,
   payPayroll,
+  voidPayrollPayment,
   savePayrollEmployee,
   savePayrollRates,
   type PayrollSeller,
@@ -100,6 +101,16 @@ export function PayrollPanel({
     startTransition(async () => {
       const doc = await (await import("@/lib/payroll-receipt-pdf")).buildPayrollReceiptPDF(p, company, referenceCurrency);
       doc.save(`recibo-nomina-${p.employeeName.replace(/\s+/g, "-").toLowerCase()}-${p.period}.pdf`);
+    });
+  }
+
+  function voidPayment(p: PayrollPaymentRow) {
+    if (!window.confirm(`¿Anular el pago de ${money(p.paidCents)} a ${p.employeeName}? Se borra el pago y su gasto de nómina, y el dinero vuelve a la cuenta.`)) return;
+    setError(null);
+    startTransition(async () => {
+      const r = await voidPayrollPayment(p.id);
+      if (!r.success) setError(r.error);
+      else router.refresh();
     });
   }
 
@@ -302,6 +313,9 @@ export function PayrollPanel({
                             Ver comprobante
                           </Button>
                         )}
+                        <Button size="xs" variant="link" className="text-destructive" disabled={isPending} onClick={() => voidPayment(p)}>
+                          Anular pago
+                        </Button>
                       </td>
                     </tr>
                   ))}

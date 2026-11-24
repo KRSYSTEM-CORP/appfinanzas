@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { decomposeTax, rateForCategory } from "@/lib/tax";
+import { decomposeTax, netSalesTax, rateForCategory } from "@/lib/tax";
+import { caracasDateString, caracasDateTimeString } from "@/lib/report-types";
+import { csvCell } from "@/lib/accounts-segmentation";
+
+describe("netSalesTax", () => {
+  it("suma facturas y notas de débito y resta notas de crédito", () => {
+    const r = netSalesTax(
+      [{ baseImponibleCents: 10000, taxCents: 1600 }, { baseImponibleCents: 5000, taxCents: 800 }],
+      [{ baseImponibleCents: 5000, taxCents: 800 }],
+      [{ baseImponibleCents: 1000, taxCents: 160 }]
+    );
+    expect(r).toEqual({ base: 11000, tax: 1760 });
+  });
+});
+
+describe("fechas en hora de Venezuela", () => {
+  it("una venta a las 9 p. m. de Caracas sigue en su día", () => {
+    const d = new Date("2026-11-24T01:30:00Z");
+    expect(caracasDateString(d)).toBe("2026-11-23");
+    expect(caracasDateTimeString(d)).toBe("2026-11-23 21:30");
+  });
+});
+
+describe("csvCell", () => {
+  it("neutraliza fórmulas", () => {
+    expect(csvCell("+1")).toBe("'+1");
+    expect(csvCell("normal")).toBe("normal");
+  });
+});
 
 describe("decomposeTax", () => {
   it("separa base e IVA general (16%) de un precio con IVA incluido", () => {

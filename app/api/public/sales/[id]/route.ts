@@ -36,6 +36,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!sale) {
     return new NextResponse("Documento no encontrado", { status: 404 });
   }
+  if (sale.voided && sale.invoiceNumber == null) {
+    // Una venta anulada sin factura ya no es un documento válido: no se sirve.
+    return new NextResponse("Este documento fue anulado", { status: 404 });
+  }
   if (docType === "receipt" && sale.paidExchangeRate == null) {
     // Matches SaleDocumentButtons.tsx's own gate for showing "Recibo de
     // pago" — only set once a CREDIT sale is actually collected via

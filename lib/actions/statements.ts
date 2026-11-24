@@ -2,11 +2,12 @@
 
 import { requireAccountingPlan } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
+import { netSalesTax } from "@/lib/tax";
+import { caracasDateString, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { revenueTotals, receivablesTotals } from "@/lib/actions/reports";
 import { costOfGoodsSold, expensesTotal } from "@/lib/actions/finance";
 import { commissionsTotal } from "@/lib/actions/seller-reports";
-import { getSalesTaxBook, getPurchasesTaxBook } from "@/lib/actions/tax-book";
+import { getSalesTaxBook, getPurchasesTaxBook, getCreditNotesTaxBook, getDebitNotesTaxBook } from "@/lib/actions/tax-book";
 import { getAccountBalances } from "@/lib/actions/payment-accounts";
 
 export type Statements = {
@@ -45,7 +46,7 @@ export async function getStatements(range: DateRangeSelection, islrPercent: numb
   const windows = selectionToWindows(range);
   const rate = Math.min(Math.max(islrPercent, 0), 60) / 100;
 
-  const [rev, cogs, expenses, commissions, recv, salesBook, purchasesBook, accounts] = await Promise.all([
+  const [rev, cogs, expenses, commissions, recv, salesBook, purchasesBook, creditNotes, debitNotes, accounts] = await Promise.all([
     revenueTotals(range),
     costOfGoodsSold(range),
     expensesTotal(range),
@@ -53,6 +54,8 @@ export async function getStatements(range: DateRangeSelection, islrPercent: numb
     receivablesTotals(),
     getSalesTaxBook(range),
     getPurchasesTaxBook(range),
+    getCreditNotesTaxBook(range),
+    getDebitNotesTaxBook(range),
     getAccountBalances().catch(() => []),
   ]);
 
@@ -87,7 +90,8 @@ export async function getStatements(range: DateRangeSelection, islrPercent: numb
   const operating = gross - commissions - expenses;
   const islr = operating > 0 ? Math.round(operating * rate) : 0;
 
-  const ivaDebit = salesBook.reduce((n, s) => n + s.taxCents, 0);
+  const salesNet = netSalesTax(salesBook, creditNotes, debitNotes);
+  const ivaDebit = salesNet.tax;
   const ivaCredit = purchasesBook.reduce((n, p) => n + p.taxCents, 0);
   const ivaBalance = ivaDebit - ivaCredit;
 
@@ -119,7 +123,7 @@ export async function getStatements(range: DateRangeSelection, islrPercent: numb
     ivaDebit,
     ivaCredit,
     ivaBalance,
-    salesBase: salesBook.reduce((n, s) => n + s.baseImponibleCents, 0),
+    salesBase: salesNet.base,
     purchasesBase: purchasesBook.reduce((n, p) => n + p.baseImponibleCents, 0),
   };
 }
@@ -145,14 +149,14 @@ export async function listMovements(range: DateRangeSelection): Promise<Movement
     ]);
     const perDay = new Map<string, number>();
     for (const s of sales) {
-      const d = s.createdAt.toISOString().slice(0, 10);
+      const d = caracasDateString(s.createdAt);
       perDay.set(d, (perDay.get(d) ?? 0) + s.totalCents);
     }
     const rows: MovementRow[] = [
       ...[...perDay.entries()].map(([d, c]) => ({ date: d, kind: "Ingreso" as const, label: "Ventas del día", category: "Ventas", auto: true, amountCents: c })),
-      ...expenses.map((e) => ({ date: e.spentAt.toISOString().slice(0, 10), kind: "Egreso" as const, label: e.description, category: e.category ?? "Otros", auto: true, amountCents: e.amountCents })),
+      ...expenses.map((e) => ({ date: caracasDateString(e.spentAt), kind: "Egreso" as const, label: e.description, category: e.category ?? "Otros", auto: true, amountCents: e.amountCents })),
       ...purchases.map((p) => ({
-        date: p.createdAt.toISOString().slice(0, 10),
+        date: caracasDateString(p.createdAt),
         kind: "Egreso" as const,
         label: `Compra a ${p.supplier?.name ?? p.manualSupplierName ?? "Proveedor"}`,
         category: "Compras",

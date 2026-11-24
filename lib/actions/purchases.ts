@@ -1,6 +1,7 @@
 "use server";
 
 import { nextDocumentNumber } from "@/lib/document-sequence";
+import { userErrorMessage } from "@/lib/user-error";
 import { revalidatePath } from "next/cache";
 import type { PaymentMethod, Prisma, TaxCategory } from "@prisma/client";
 import { requireAccountingPlan } from "@/lib/session";
@@ -16,6 +17,7 @@ import { assertAccountFunds, toActionResult } from "@/lib/account-balance";
 import { lineInAccountCurrency } from "@/lib/account-money";
 import { paymentsPrimaryLocal } from "@/lib/money-primary";
 import { buildPurchasePaymentLine, stockShortfalls } from "@/lib/purchase-payment";
+import { scaleLinesToTotal, scaleLooksWrong, baseUnitCost } from "@/lib/purchase-math";
 import { paymentSettlesPurchase, purchaseRemaining } from "@/lib/purchase-payment";
 
 export type CompletePurchaseResult =
@@ -147,20 +149,28 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         referenceCurrency
       );
       const scale = estimatedTotalCents > 0 ? totalCents / estimatedTotalCents : 1;
-      const itemsData = estimatedItems.map((item) => ({
-        ...item,
-        unitCostCents: item.quantity > 0 ? Math.round((item.subtotalCents * scale) / item.quantity) : item.unitCostCents,
-        subtotalCents: Math.round(item.subtotalCents * scale),
-        baseCents: Math.round(item.baseCents * scale),
-        taxCents: Math.round(item.taxCents * scale),
-      }));
-      let baseImponibleCents = itemsData.reduce((sum, item) => sum + item.baseCents, 0);
-      // Absorb any rounding drift from the scaling above into the tax total
-      // rather than the base — the stored total must equal exactly what was
-      // typed in, and base + tax must equal that total.
-      const taxTotalCents =
-        estimatedTotalCents > 0 ? totalCents - baseImponibleCents : estimatedTaxCents;
-      if (estimatedTotalCents === 0) baseImponibleCents = estimatedBaseCents;
+      if (estimatedTotalCents > 0 && scaleLooksWrong(scale)) {
+        throw new Error(
+          "El monto de la factura no coincide con los costos de las líneas (diferencia enorme). Revisa la moneda (Bs/divisa) y los montos."
+        );
+      }
+      let itemsData: typeof estimatedItems;
+      let baseImponibleCents: number;
+      let taxTotalCents: number;
+      if (estimatedTotalCents > 0) {
+        // Tras el reescalado, el IVA por línea suma exactamente el IVA total (la última línea absorbe el redondeo).
+        const r = scaleLinesToTotal(estimatedItems, scale, totalCents);
+        itemsData = r.lines.map((l) => ({
+          ...l,
+          unitCostCents: l.quantity > 0 ? Math.round(l.subtotalCents / l.quantity) : l.unitCostCents,
+        }));
+        baseImponibleCents = r.baseTotalCents;
+        taxTotalCents = r.taxTotalCents;
+      } else {
+        itemsData = estimatedItems;
+        baseImponibleCents = estimatedBaseCents;
+        taxTotalCents = estimatedTaxCents;
+      }
 
       // "Contribuyente especial" companies withhold a percentage of the IVA
       // from the supplier and remit it to SENIAT directly instead — see
@@ -200,6 +210,18 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
               lineInAccountCurrency({ amountCurrencyCents: p.amountCurrencyCents, amountEurCents: p.amountEurCents, currencyCode: p.currencyCode, exchangeRate: exchangeRate }, cur, r),
           }))
       );
+
+      if (supplierInvoiceNo) {
+        const dup = await tx.purchase.findFirst({
+          where: {
+            companyId, voided: false,
+            supplierInvoiceNo: { equals: supplierInvoiceNo, mode: "insensitive" },
+            ...(supplierId ? { supplierId } : { supplierId: null, manualSupplierName: { equals: manualSupplierName ?? "", mode: "insensitive" } }),
+          },
+          select: { controlNumber: true },
+        });
+        if (dup) throw new Error(`Ya hay una compra registrada con la factura ${supplierInvoiceNo} de este proveedor${dup.controlNumber ? ` (compra N.º ${dup.controlNumber})` : ""}. Si es un error, anúlala primero.`);
+      }
 
       const controlNumber = await nextDocumentNumber(tx, branchId, "purchase");
 
@@ -248,7 +270,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         const existing = stockUpdateByProductId.get(item.productId);
         stockUpdateByProductId.set(item.productId, {
           quantity: (existing?.quantity ?? 0) + item.quantity,
-          unitCostCents: item.unitCostCents,
+          unitCostCents: baseUnitCost(item.baseCents, item.quantity),
         });
       }
       await Promise.all(
@@ -257,7 +279,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
           const rows = await tx.$queryRaw<{ stock: number }[]>`
             UPDATE "Product"
             SET "stock" = "stock" + ${quantity},
-                "costCents" = ${unitCostCents},
+                "costCents" = CASE WHEN ${unitCostCents} > 0 THEN ${unitCostCents} ELSE "costCents" END,
                 "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${quantity} > 0 THEN true ELSE "isActive" END
             WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
             RETURNING "stock"
@@ -335,6 +357,26 @@ async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, co
   }
 }
 
+// Al anular, el costo de cada producto vuelve al de la última compra no anulada (costo base, sin IVA), siempre que la
+// anulada fuera la más reciente de ese producto; si no queda ninguna otra compra, el costo se deja como está.
+async function restorePreviousCost(tx: Prisma.TransactionClient, purchaseId: string, voidedCreatedAt: Date, companyId: string, branchId: string) {
+  const items = await tx.purchaseItem.findMany({ where: { purchaseId, affectsStock: true, productId: { not: null } }, select: { productId: true } });
+  for (const productId of new Set(items.map((i) => i.productId as string))) {
+    const newer = await tx.purchaseItem.findFirst({
+      where: { productId, affectsStock: true, purchase: { companyId, branchId, voided: false, createdAt: { gt: voidedCreatedAt } } },
+      select: { id: true },
+    });
+    if (newer) continue;
+    const prev = await tx.purchaseItem.findFirst({
+      where: { productId, affectsStock: true, purchase: { companyId, branchId, voided: false } },
+      orderBy: { purchase: { createdAt: "desc" } },
+      select: { baseCents: true, quantity: true },
+    });
+    const cost = prev ? baseUnitCost(prev.baseCents, prev.quantity) : 0;
+    if (cost > 0) await tx.product.updateMany({ where: { id: productId, companyId, branchId }, data: { costCents: cost } });
+  }
+}
+
 export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
   const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireAccountingPlan();
   let purchaseBranchId: string | null = sessionBranchId;
@@ -354,9 +396,10 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
       // Sus pagos dejan de contar en el saldo de las cuentas (accountBalance excluye compras anuladas) y la compra sale de
       // las órdenes de pago (listPaymentOrders solo toma voided=false).
       await reverseStock(tx, purchaseId, companyId, purchase.branchId, actorId, actorName);
+      await restorePreviousCost(tx, purchaseId, purchase.createdAt, companyId, purchase.branchId);
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo anular la compra";
+    const message = userErrorMessage(err, "No se pudo anular la compra");
     return { success: false, error: message };
   }
 
@@ -441,8 +484,8 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
 
   let created = 0;
 
-  await withTenant(companyId, async (tx) => {
-    const company = await tx.company.findUnique({
+  const company = await withTenant(companyId, (tx) =>
+    tx.company.findUnique({
       where: { id: companyId },
       select: {
         ivaEnabled: true,
@@ -451,7 +494,9 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
         isIvaWithholdingAgent: true,
         ivaWithholdingPercent: true,
       },
-    });
+    })
+  );
+  {
     const { general: ivaGeneralRatePercent, reduced: ivaReducedRatePercent } = effectiveIvaRates(
       company?.ivaEnabled ?? true,
       company?.ivaGeneralRatePercent ?? 16,
@@ -460,11 +505,24 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
 
     for (const entries of groups.values()) {
       try {
+        // Una transacción por factura: un error en una no arrastra a las demás.
+        await withTenant(companyId, async (tx) => {
         const supplierName = entries[0].data.supplierName;
-        const supplier = await tx.supplier.findFirst({
+        const suppliers = await tx.supplier.findMany({
           where: { companyId, name: { equals: supplierName, mode: "insensitive" } },
+          take: 2,
         });
-        if (!supplier) throw new Error(`Proveedor "${supplierName}" no encontrado`);
+        if (suppliers.length === 0) throw new Error(`Proveedor "${supplierName}" no encontrado`);
+        if (suppliers.length > 1) throw new Error(`Hay varios proveedores llamados "${supplierName}": déjalos con nombres distintos antes de importar`);
+        const supplier = suppliers[0];
+        const invoiceNo = entries[0].data.supplierInvoiceNo;
+        if (invoiceNo) {
+          const dup = await tx.purchase.findFirst({
+            where: { companyId, supplierId: supplier.id, voided: false, supplierInvoiceNo: { equals: invoiceNo, mode: "insensitive" } },
+            select: { id: true },
+          });
+          if (dup) throw new Error(`La factura ${invoiceNo} de "${supplierName}" ya está registrada`);
+        }
 
         type ItemRow = {
           productId: string;
@@ -485,11 +543,11 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
 
         for (const entry of entries) {
           const { productSku, productName, quantity, unitCost, taxCategory, affectsStock } = entry.data;
-          const product = productSku
-            ? await tx.product.findFirst({ where: { branchId, sku: productSku } })
-            : await tx.product.findFirst({
-                where: { branchId, name: { equals: productName, mode: "insensitive" } },
-              });
+          const matches = productSku
+            ? await tx.product.findMany({ where: { branchId, sku: productSku }, take: 2 })
+            : await tx.product.findMany({ where: { branchId, name: { equals: productName, mode: "insensitive" } }, take: 2 });
+          if (matches.length > 1) throw new Error(`Hay varios productos "${productSku || productName}": usa el SKU`);
+          const product = matches[0];
           if (!product) {
             throw new Error(`Producto "${productSku || productName}" no encontrado en esta sucursal`);
           }
@@ -549,7 +607,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           const stockRows = await tx.$queryRaw<{ stock: number }[]>`
             UPDATE "Product"
             SET "stock" = "stock" + ${item.quantity},
-                "costCents" = ${item.unitCostCents},
+                "costCents" = CASE WHEN ${baseUnitCost(item.baseCents, item.quantity)} > 0 THEN ${baseUnitCost(item.baseCents, item.quantity)} ELSE "costCents" END,
                 "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${item.quantity} > 0 THEN true ELSE "isActive" END
             WHERE "id" = ${product.id} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
             RETURNING "stock"
@@ -563,14 +621,15 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
         }
 
         created++;
+        });
       } catch (err) {
-        const message = err instanceof Error ? err.message : "No se pudo crear la compra";
+        const message = userErrorMessage(err, "No se pudo crear la compra");
         for (const entry of entries) {
           failed.push({ row: entry.row, error: message });
         }
       }
     }
-  });
+  }
 
   revalidatePath("/inventory");
   revalidatePath("/purchases");
@@ -644,7 +703,7 @@ export async function listPaymentOrders(): Promise<PaymentOrderRow[]> {
     tx.purchase.findMany({
       where: { companyId, ...(branchId ? { branchId } : {}), voided: false, paymentStatus: "PENDING" },
       orderBy: { createdAt: "asc" },
-      take: 300,
+      take: 1000,
       include: { supplier: { select: { name: true } }, payments: { select: { amountEurCents: true, paymentMethod: true, paidInForeignCurrency: true } } },
     })
   );

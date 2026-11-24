@@ -57,3 +57,16 @@ export function effectiveIvaRates(
 ): { general: number; reduced: number } {
   return ivaEnabled ? { general: generalRatePercent, reduced: reducedRatePercent } : { general: 0, reduced: 0 };
 }
+
+type TaxParts = { baseImponibleCents: number; taxCents: number };
+
+// Base e IVA netos del Libro de Ventas: facturas + notas de débito − notas de
+// crédito. Es el mismo criterio de app/tax-book; así el Estado de IVA y el
+// libro no se contradicen cuando una factura se anuló con nota de crédito.
+export function netSalesTax(sales: TaxParts[], creditNotes: TaxParts[], debitNotes: TaxParts[]): { base: number; tax: number } {
+  const sum = (rows: TaxParts[], f: (r: TaxParts) => number) => rows.reduce((n, r) => n + f(r), 0);
+  return {
+    base: sum(sales, (r) => r.baseImponibleCents) + sum(debitNotes, (r) => r.baseImponibleCents) - sum(creditNotes, (r) => r.baseImponibleCents),
+    tax: sum(sales, (r) => r.taxCents) + sum(debitNotes, (r) => r.taxCents) - sum(creditNotes, (r) => r.taxCents),
+  };
+}

@@ -1,12 +1,14 @@
 "use server";
 
 import { QUOTE_LOST_REASONS, QUOTE_LOST_REASONS_LEGACY, type FollowUpKind } from "@/lib/quote-follow-up";
+import { userErrorMessage } from "@/lib/user-error";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
 import { requireSectionAccess, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { QuoteSchema, type QuoteInput } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
+import { resolveTierPrice } from "@/lib/pricing";
 import type { QuoteStatus } from "@prisma/client";
 
 export type CreateQuoteResult =
@@ -59,13 +61,15 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
         if (!product) {
           throw new Error("Uno de los productos ya no existe");
         }
-        const subtotalCents = product.priceCents * item.quantity;
+        // Mismo precio que cobrará la venta: por mayor / gran mayor según la cantidad.
+        const unitPriceCents = resolveTierPrice(product, item.quantity).priceCents;
+        const subtotalCents = unitPriceCents * item.quantity;
         totalCents += subtotalCents;
         return {
           productId: product.id,
           productName: product.name,
           category: product.category,
-          unitPriceCents: product.priceCents,
+          unitPriceCents,
           quantity: item.quantity,
           subtotalCents,
         };
@@ -82,7 +86,7 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
           phone: customerPhone,
           address: customerAddress,
         },
-        update: {
+        update: customerPhone === "0000-0000000" ? {} : {
           firstName: customerFirstName,
           lastName: customerLastName,
           address: customerAddress,
@@ -116,7 +120,7 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
 
     return { success: true, quoteId };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "No se pudo generar el presupuesto";
+    const message = userErrorMessage(err, "No se pudo generar el presupuesto");
     return { success: false, error: message };
   }
 }
@@ -243,14 +247,16 @@ export async function listQuotes(limit = 200, windows?: { start: Date; end: Date
 
 export async function updateQuoteStatus(quoteId: string, status: QuoteStatus, lostReason?: string): Promise<ActionResult> {
   const { companyId, branchId } = await requireSession();
+  // CONVERTED solo lo pone la facturación de la venta; un presupuesto ya facturado no se reabre desde aquí.
+  if (status === "CONVERTED") return { success: false, error: "Un presupuesto pasa a Facturado al cobrarlo en el POS" };
   const result = await withTenant(companyId, (tx) =>
     tx.quote.updateMany({
-      where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) },
+      where: { id: quoteId, companyId, status: { not: "CONVERTED" }, ...(branchId ? { branchId } : {}) },
       data: { status, lostReason: status === "LOST" ? ([...QUOTE_LOST_REASONS, ...QUOTE_LOST_REASONS_LEGACY] as readonly string[]).includes(lostReason ?? "") ? lostReason : null : null },
     })
   );
   if (result.count === 0) {
-    return { success: false, error: "Presupuesto no encontrado" };
+    return { success: false, error: "Presupuesto no encontrado o ya facturado" };
   }
   revalidatePath("/quotes/history");
   return { success: true };
@@ -264,9 +270,11 @@ export async function updateQuoteStatusBulk(quoteIds: string[], status: QuoteSta
   if (quoteIds.length === 0) {
     return { success: false, error: "Selecciona al menos un presupuesto" };
   }
+  if (quoteIds.length > 200) return { success: false, error: "Máximo 200 presupuestos a la vez" };
+  if (status === "CONVERTED") return { success: false, error: "Un presupuesto pasa a Facturado al cobrarlo en el POS" };
   await withTenant(companyId, (tx) =>
     tx.quote.updateMany({
-      where: { id: { in: quoteIds }, companyId, ...(branchId ? { branchId } : {}) },
+      where: { id: { in: quoteIds }, companyId, status: { not: "CONVERTED" }, ...(branchId ? { branchId } : {}) },
       data: { status, ...(status !== "LOST" ? { lostReason: null } : {}) },
     })
   );
