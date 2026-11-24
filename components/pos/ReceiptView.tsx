@@ -7,7 +7,8 @@ import { Confetti } from "@/components/pos/Confetti";
 import { PosDocumentSheet } from "@/components/pos/PosDocumentSheet";
 import { dualForPayments } from "@/lib/money-primary";
 import { legacyCurrencyForPayment } from "@/lib/payment-currency";
-import { controlNumberLabel, type DeliveryNoteCompany } from "@/lib/delivery-note";
+import { controlNumberLabel } from "@/lib/delivery-note-labels";
+import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type {
   PaymentMethod,
   PaymentStatus,

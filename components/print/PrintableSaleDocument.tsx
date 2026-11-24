@@ -16,9 +16,8 @@ import {
   itemDescription,
   resolvePaymentLines,
   singlePaymentPaidLine,
-  type DeliveryNoteCompany,
-  type DeliveryNoteSale,
-} from "@/lib/delivery-note";
+} from "@/lib/delivery-note-labels";
+import type { DeliveryNoteCompany, DeliveryNoteSale } from "@/lib/delivery-note";
 import { isThermal, printRootClass } from "@/lib/print-paper-sizes";
 
 // Plain HTML/CSS rendering of a Nota de Entrega / Recibo de Pago for the
