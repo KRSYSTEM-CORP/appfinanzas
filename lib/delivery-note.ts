@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PAYMENT_METHOD_LABELS, formatDate } from "@/lib/format";
+import { paidAmount } from "@/lib/money-primary";
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, referenceNote } from "@/lib/currencies";
 import { legacyCurrencyForPayment } from "@/lib/payment-currency";
 import type { PaymentMethod, PaymentStatus, ReferenceCurrency } from "@prisma/client";
@@ -290,10 +291,10 @@ export function singlePaymentPaidLine(
 ): string | null {
   if (!p) return null;
   const currency = p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency);
-  if (currency === localCurrencyCode) return null;
-  const cents = p.amountCurrencyCents ?? p.amountEurCents;
+  if (currency === referenceCurrency) return null;
+  const paid = paidAmount({ amountEurCents: p.amountEurCents, amountCurrencyCents: p.amountCurrencyCents ?? p.amountEurCents, currencyCode: currency }, referenceCurrency);
   const rate = p.exchangeRate != null ? ` · Tasa ${formatLocalCurrency(p.exchangeRate, localCurrencyCode)}` : "";
-  return `Cobrado: ${formatCurrencyCents(currency, cents)}${rate}`;
+  return `Cobrado: ${paid.primary}${paid.secondary ? ` (${paid.secondary})` : ""}${rate}`;
 }
 
 function renderPaymentSection(
@@ -341,9 +342,9 @@ function renderPaymentSection(
     for (const p of payments) {
       const refPart = p.reference ? ` (Ref: ${p.reference})` : "";
       const currency = p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency);
-      const cents = p.amountCurrencyCents ?? p.amountEurCents;
+      const paid = paidAmount({ amountEurCents: p.amountEurCents, amountCurrencyCents: p.amountCurrencyCents ?? p.amountEurCents, currencyCode: currency }, referenceCurrency);
       doc.text(
-        `• ${PAYMENT_METHOD_LABELS[p.paymentMethod]}: ${formatCurrencyCents(currency, cents)}${refPart}`,
+        `• ${PAYMENT_METHOD_LABELS[p.paymentMethod]}: ${paid.primary}${paid.secondary ? ` (${paid.secondary})` : ""}${refPart}`,
         margin + 8,
         y
       );

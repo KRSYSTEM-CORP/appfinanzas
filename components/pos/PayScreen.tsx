@@ -24,7 +24,8 @@ import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { CustomerDisplay } from "@/components/pos/CustomerDisplay";
 import type { PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import type { PaymentAccountRow } from "@/lib/actions/payment-accounts";
-import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { dualForMethod, dualInline } from "@/lib/money-primary";
 import { ACCOUNT_KIND_LABELS, accountClipboardText, bankLabel, bankLogoSrc, defaultBankKey } from "@/lib/payment-accounts";
 import {
   amountToRefCents,
@@ -181,6 +182,7 @@ export function PayScreen({
   onConfirm: (r: PayConfirm) => void;
 }) {
   const ctx: CurrencyCtx = { currencyCode, rate, exchangeRateEnabled, referenceCurrency };
+  const mctx = { rate, localCurrencyCode: currencyCode, referenceCurrency, exchangeRateEnabled };
   const [mode, setModeState] = useState<PayMode>("full");
   const [sel, setSel] = useState<PosMethodId | null>(null);
   const [amt, setAmt] = useState("");
@@ -235,8 +237,9 @@ export function PayScreen({
   const amountText = amt !== "" ? amt : formatAmount(defAmount);
 
   const fmtRef = (cents: number) => formatCurrencyCents(referenceCurrency, cents);
-  const fmtLocal = (cents: number) =>
-    exchangeRateEnabled && rate != null ? formatLocalCurrency(eurCentsToLocal(cents, rate), currencyCode) : null;
+  // Total/saldo con la moneda del método con el que se cobra ahora primero (sin método, la referencia habitual).
+  const fmtSel = (cents: number) => dualForMethod(cents, selM, mctx);
+  const fmtSelInline = (cents: number) => dualInline(fmtSel(cents));
   const fmtIn = (amount: number, cur: string) =>
     cur === "USD" || cur === "EUR" ? formatCurrencyCents(cur, Math.round(amount * 100)) : formatLocalCurrency(amount, cur);
 
@@ -369,11 +372,11 @@ export function PayScreen({
     }
     const missing = total - all.reduce((s, l) => s + l.refCents, 0);
     if (missing > 0 || all.length === 0) {
-      setLocalError(`Falta cubrir ${fmtRef(Math.max(missing, 0))}`);
+      setLocalError(`Falta cubrir ${fmtSelInline(Math.max(missing, 0))}`);
       return;
     }
     if (missing < -all.length) {
-      setLocalError(`Los pagos superan el total por ${fmtRef(-missing)}: quita uno y agrégalo de nuevo`);
+      setLocalError(`Los pagos superan el total por ${fmtSelInline(-missing)}: quita uno y agrégalo de nuevo`);
       return;
     }
     onConfirm({ paymentStatus: "PAID", rows: toPaymentRows(all), change });
@@ -385,8 +388,8 @@ export function PayScreen({
       ? "Queda en Cuentas por cobrar"
       : sum.done
         ? "✓ Cierra y salda la cuenta"
-        : `Falta ${fmtRef(sum.saldoCents)}`;
-  const cta = exo ? "Registrar exonerada" : debt ? `Vender a crédito · ${fmtRef(sum.saldoCents || total)}` : `Cobrar ${fmtRef(total + igtf)}`;
+        : `Falta ${fmtSelInline(sum.saldoCents)}`;
+  const cta = exo ? "Registrar exonerada" : debt ? `Vender a crédito · ${fmtSelInline(sum.saldoCents || total)}` : `Cobrar ${fmtSelInline(total + igtf)}`;
   const ctaDisabled = isPending || (exo ? false : debt ? isGeneralCustomer : !sum.done);
   const accounts = selM?.accountKind ? paymentAccounts.filter((a) => a.kind === selM.accountKind) : [];
   const chosenAccId = accounts.length === 1 ? accounts[0].id : accId;
@@ -689,10 +692,10 @@ export function PayScreen({
         <aside className="flex min-w-0 flex-col gap-3.5">
           <section className={CARD}>
             <p className="kr-eyebrow">Saldo pendiente</p>
-            <div className="text-[44px] leading-[1.05] font-extrabold tracking-[-0.04em] tabular-nums">{fmtRef(exo ? 0 : sum.saldoCents)}</div>
-            {fmtLocal(exo ? 0 : sum.saldoCents) && (
+            <div className="text-[44px] leading-[1.05] font-extrabold tracking-[-0.04em] tabular-nums">{fmtSel(exo ? 0 : sum.saldoCents).primary}</div>
+            {fmtSel(exo ? 0 : sum.saldoCents).secondary && (
               <div className="text-muted-foreground">
-                {fmtLocal(exo ? 0 : sum.saldoCents)} · tasa {formatAmount(rate ?? 0)}
+                {fmtSel(exo ? 0 : sum.saldoCents).secondary} · tasa {formatAmount(rate ?? 0)}
               </div>
             )}
             <div className="mt-3 mb-1 h-2 min-w-[60px] overflow-hidden rounded-full bg-muted">
@@ -705,7 +708,7 @@ export function PayScreen({
               />
             </div>
             <small className="text-[0.8333em] text-muted-foreground">
-              Cubierto {fmtRef(exo ? 0 : sum.paidCents)} de {fmtRef(total)}
+              Cubierto {fmtSelInline(exo ? 0 : sum.paidCents)} de {fmtSelInline(total)}
             </small>
             {lines.length > 0 && (
               <div className="mt-2.5">
@@ -718,7 +721,14 @@ export function PayScreen({
                         <small className="block text-[0.8333em] text-muted-foreground">{l.reference ? `Ref. ${l.reference}` : ""}</small>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <b className="font-bold tabular-nums">{fmtIn(l.amount, methodCurrency(m, ctx))}</b>
+                        <span className="text-right">
+                          <b className="block font-bold tabular-nums">{fmtIn(l.amount, methodCurrency(m, ctx))}</b>
+                          {dualForMethod(l.refCents, m, mctx).secondary && (
+                            <small className="block text-[0.8333em] text-muted-foreground tabular-nums">
+                              {dualForMethod(l.refCents, m, mctx).secondary}
+                            </small>
+                          )}
+                        </span>
                         <button
                           type="button"
                           aria-label="Quitar pago"

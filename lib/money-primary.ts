@@ -41,3 +41,15 @@ export function paidAmount(
   if (line.currencyCode === referenceCurrency) return { primary: ref, secondary: null };
   return { primary: formatCurrencyCents(line.currencyCode, line.amountCurrencyCents), secondary: ref };
 }
+
+// Monto con la moneda del método elegido primero; sin método (null) queda la referencia habitual con los bolívares debajo,
+// como siempre. `foreign` distingue «Efectivo $» de «Efectivo Bs».
+export function dualForMethod(refCents: number, method: { method: PaymentMethod; foreign: boolean } | null, ctx: MoneyCtx): DualAmount {
+  const local = method ? isLocalMethod(method.method, method.foreign, ctx) : false;
+  return dualAmount(refCents, ctx, local);
+}
+
+// «Bs 1.000,00 · $10,00» en una sola línea (botones, mensajes de error, textos de una línea).
+export function dualInline(d: DualAmount): string {
+  return d.secondary ? `${d.primary} · ${d.secondary}` : d.primary;
+}
