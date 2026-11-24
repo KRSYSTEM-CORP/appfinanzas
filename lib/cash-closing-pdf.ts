@@ -5,8 +5,13 @@ import { PAYMENT_METHOD_LABELS, formatDate, formatDateOnly } from "@/lib/format"
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, referenceNote } from "@/lib/currencies";
 import { renderCompanyHeader, renderDocumentTitleBlock, type DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { CashClosingSummary } from "@/lib/actions/cash-closing";
+import { countedDifference, differenceLabel, expectedCashByCurrency } from "@/lib/cash-closing";
+import { SHOP_TIME_ZONE } from "@/lib/report-types";
 import { grandTotals, groupIncomeByMethod } from "@/lib/income-by-method";
 import type { ReferenceCurrency } from "@prisma/client";
+
+const formatTime = (d: Date | string) =>
+  new Intl.DateTimeFormat("es-VE", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: SHOP_TIME_ZONE }).format(typeof d === "string" ? new Date(d) : d);
 
 export async function buildCashClosingPDF(
   summary: CashClosingSummary,
@@ -72,56 +77,95 @@ export async function buildCashClosingPDF(
     return local ? `${local} (${reference})` : reference;
   };
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text("Total vendido:", margin, y);
-  doc.setFont("helvetica", "bold");
-  doc.text(money(summary.totalCents), pageWidth - margin, y, { align: "right" });
-  y += 18;
-  doc.setFont("helvetica", "normal");
-  doc.text("Número de ventas:", margin, y);
-  doc.text(String(summary.salesCount), pageWidth - margin, y, { align: "right" });
-  y += 18;
-  doc.text(`Pagadas (${summary.paidCount}):`, margin, y);
-  doc.text(money(summary.paidCents), pageWidth - margin, y, { align: "right" });
-  y += 18;
-  doc.text(`A crédito (${summary.creditCount}):`, margin, y);
-  doc.text(money(summary.creditCents), pageWidth - margin, y, { align: "right" });
-  y += 26;
-
-  // Caja Chica: efectivo del día.
-  doc.setFont("helvetica", "bold");
-  doc.text("Caja Chica", margin, y);
-  y += 16;
-  doc.setFont("helvetica", "normal");
-  for (const [label, value] of [
-    ["Apertura:", money(summary.openingCents ?? 0)],
-    ["Ventas en efectivo:", money(summary.cashSalesCents)],
-    ["Salidas:", `-${money(summary.outflowsCents)}`],
-  ]) {
+  const row = (label: string, value: string, opts: { bold?: boolean; gap?: number; color?: [number, number, number] } = {}) => {
+    if (y > doc.internal.pageSize.getHeight() - 60) {
+      doc.addPage();
+      y = 50;
+    }
+    doc.setFont("helvetica", opts.bold ? "bold" : "normal");
+    if (opts.color) doc.setTextColor(...opts.color);
     doc.text(label, margin, y);
     doc.text(value, pageWidth - margin, y, { align: "right" });
+    doc.setTextColor(0, 0, 0);
+    y += opts.gap ?? 16;
+  };
+  const section = (title: string) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(title, margin, y);
     y += 16;
+    doc.setFontSize(10.5);
+  };
+
+  // Ventas del turno. Las anuladas no suman; las ventas a crédito entran en el total pero aún no se han cobrado.
+  doc.setFontSize(10.5);
+  section("Ventas del turno");
+  row(`Ventas pagadas (${summary.paidCount})`, money(summary.paidCents));
+  row(`Ventas a crédito, por cobrar (${summary.creditCount})`, money(summary.creditCents));
+  row(`Total vendido (${summary.salesCount} ${summary.salesCount === 1 ? "venta" : "ventas"})`, money(summary.totalCents), { bold: true });
+  if (summary.voidedCount > 0) {
+    row(`Ventas anuladas (${summary.voidedCount}), no suman`, money(summary.voidedCents), { color: [110, 110, 110] });
   }
-  doc.setFont("helvetica", "bold");
-  doc.text("Efectivo esperado:", margin, y);
-  doc.text(money(summary.expectedCashCents), pageWidth - margin, y, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  y += 18;
+  y += 10;
+
+  // Caja Chica: efectivo del turno, por moneda.
+  const refMoney = (cents: number) => formatCurrencyCents(referenceCurrency, cents);
+  const localMoney = (cents: number) => formatCurrencyCents(currencyCode, cents);
+  const expected = expectedCashByCurrency({
+    openingCents: summary.openingCents,
+    openingRefCents: summary.openingRefCents,
+    openingLocalCents: summary.openingLocalCents,
+    incomeRows: summary.byAccount ?? [],
+    outflowsCents: summary.outflowsCents,
+    referenceCurrency,
+    localCurrency: currencyCode,
+  });
+  const showBs = showLocal || expected.localCents !== 0 || (summary.counted?.bsCents ?? 0) > 0;
+  section("Caja Chica (efectivo)");
+  row("Apertura", money(summary.openingCents ?? 0));
+  row("Ventas en efectivo", money(summary.cashSalesCents));
+  row("Salidas", `-${money(summary.outflowsCents)}`, { gap: 20 });
+  row(`Efectivo esperado en ${referenceCurrency === "EUR" ? "euros" : "dólares"}`, refMoney(expected.refCents), { bold: true });
+  if (showBs) row("Efectivo esperado en bolívares", localMoney(expected.localCents), { bold: true });
+  if (showLocal) row("Total equivalente (a la tasa del día, solo referencia)", money(summary.expectedCashCents), { color: [110, 110, 110], gap: 20 });
+  else y += 4;
+  if (summary.counted) {
+    const diff = countedDifference(expected, summary.counted);
+    const diffRow = (label: string, cents: number, fmt: (c: number) => string) => {
+      const kind = differenceLabel(cents);
+      const sign = cents > 0 ? "+" : cents < 0 ? "-" : "";
+      row(label, `${sign}${fmt(Math.abs(cents))} · ${kind}`, { bold: true, color: cents < 0 ? [180, 30, 30] : cents > 0 ? [20, 120, 60] : [0, 0, 0] });
+    };
+    row(`Efectivo contado en ${referenceCurrency === "EUR" ? "euros" : "dólares"}`, refMoney(summary.counted.usdCents));
+    if (showBs) row("Efectivo contado en bolívares", localMoney(summary.counted.bsCents));
+    diffRow(`Diferencia en ${referenceCurrency === "EUR" ? "euros" : "dólares"}`, diff.refDiffCents, refMoney);
+    if (showBs) diffRow("Diferencia en bolívares", diff.localDiffCents, localMoney);
+    y += 4;
+  } else if (summary.closed) {
+    row("Efectivo contado", "No se registró conteo", { color: [110, 110, 110] });
+  }
+  y += 6;
+
+  // Todas las salidas del turno (gastos, devoluciones por anulación, etc.).
   if (summary.outflows.length > 0) {
     autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },
-      head: [["Salida", "Monto"]],
-      body: summary.outflows.map((o) => [o.concept, money(o.amountCents)]),
+      head: [["Hora", "Salida de Caja Chica", "Monto"]],
+      body: summary.outflows.map((o) => [formatTime(o.createdAt), o.concept, money(o.amountCents)]),
       theme: "grid",
       headStyles: { fillColor: [30, 41, 59] },
       styles: { fontSize: 10, cellPadding: 6 },
-      columnStyles: { 1: { halign: "right" } },
+      columnStyles: { 0: { cellWidth: 60 }, 2: { halign: "right" } },
     });
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 20;
   } else {
-    y += 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(110);
+    doc.text("Sin salidas de Caja Chica en este turno.", margin, y);
+    doc.setTextColor(0, 0, 0);
+    y += 20;
   }
 
   if (summary.byCurrency.length > 0) {
