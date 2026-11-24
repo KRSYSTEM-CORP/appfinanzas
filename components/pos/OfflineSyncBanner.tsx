@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
+import { syncBackoffMs } from "@/lib/offline/backoff";
 import { listPendingSales, syncPendingSales, type PendingSale } from "@/lib/offline/sync";
 
 // Shows queued-offline-sale status on the POS page and auto-syncs them once
@@ -14,6 +15,7 @@ export function OfflineSyncBanner({ canManage = false }: { canManage?: boolean }
   const online = useOnlineStatus();
   const [pending, setPending] = useState<PendingSale[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   const refresh = useCallback(async () => {
     setPending(await listPendingSales());
@@ -22,7 +24,8 @@ export function OfflineSyncBanner({ canManage = false }: { canManage?: boolean }
   const sync = useCallback(async () => {
     setSyncing(true);
     try {
-      await syncPendingSales();
+      const r = await syncPendingSales();
+      setAttempt((a) => (r.remaining > 0 ? a + 1 : 0));
     } finally {
       setSyncing(false);
       await refresh();
@@ -44,6 +47,21 @@ export function OfflineSyncBanner({ canManage = false }: { canManage?: boolean }
     const timer = setTimeout(sync, 0);
     return () => clearTimeout(timer);
   }, [online, sync]);
+
+  // Reintento con espera creciente mientras queden ventas en cola y haya red;
+  // también al volver a la pestaña.
+  useEffect(() => {
+    if (!online || pending.length === 0) return;
+    const timer = setTimeout(sync, syncBackoffMs(attempt));
+    const onVisible = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [online, pending.length, attempt, sync]);
 
   if (!online) {
     return (

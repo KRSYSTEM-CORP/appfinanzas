@@ -3,12 +3,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/action-menu";
-import {
-  buildCatalogPDF,
-  buildPriceListPDF,
-  loadCatalogImages,
-  type PriceListProduct,
-} from "@/lib/price-list-pdf";
+import type { PriceListProduct } from "@/lib/price-list-pdf";
+
+const loadPriceList = () => import("@/lib/price-list-pdf");
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { ReferenceCurrency } from "@prisma/client";
 
@@ -31,7 +28,7 @@ export function PriceListButton({
   async function downloadList() {
     setBusy("list");
     try {
-      const doc = await buildPriceListPDF(products, company, referenceCurrency);
+      const doc = await (await loadPriceList()).buildPriceListPDF(products, company, referenceCurrency);
       doc.save("lista-de-precios.pdf");
     } finally {
       setBusy(null);
@@ -41,8 +38,8 @@ export function PriceListButton({
   async function downloadCatalog() {
     setBusy("catalog");
     try {
-      const withImages = await loadCatalogImages(products);
-      const doc = await buildCatalogPDF(withImages, company, referenceCurrency);
+      const withImages = await (await loadPriceList()).loadCatalogImages(products);
+      const doc = await (await loadPriceList()).buildCatalogPDF(withImages, company, referenceCurrency);
       doc.save("catalogo-de-productos.pdf");
     } finally {
       setBusy(null);

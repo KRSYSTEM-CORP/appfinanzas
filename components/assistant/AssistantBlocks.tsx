@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRightIcon, DownloadIcon, EyeIcon, FileTextIcon, ImageIcon } from "lucide-react";
-import { buildAssistantReportPDF } from "@/lib/assistant-report-pdf";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { ResolvedBlock, ResolvedChart, ResolvedProducts, ResolvedTable, SalePreview } from "@/lib/assistant-types";
 
@@ -69,7 +68,7 @@ function Table({ b, company }: { b: ResolvedTable; company: DeliveryNoteCompany 
     if (url) return setUrl(null);
     setBusy(true);
     try {
-      const doc = await buildAssistantReportPDF(b, company);
+      const doc = await (await import("@/lib/assistant-report-pdf")).buildAssistantReportPDF(b, company);
       setUrl(URL.createObjectURL(doc.output("blob") as Blob));
     } finally {
       setBusy(false);
@@ -78,7 +77,7 @@ function Table({ b, company }: { b: ResolvedTable; company: DeliveryNoteCompany 
   async function download() {
     setBusy(true);
     try {
-      const doc = await buildAssistantReportPDF(b, company);
+      const doc = await (await import("@/lib/assistant-report-pdf")).buildAssistantReportPDF(b, company);
       doc.save(`${b.dataset}-${b.from}_${b.to}.pdf`);
     } finally {
       setBusy(false);

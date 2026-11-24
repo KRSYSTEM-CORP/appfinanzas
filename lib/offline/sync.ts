@@ -43,7 +43,16 @@ export type SyncResult = { synced: number; remaining: number };
 // (e.g. stock ran out while offline, since another device sold it in the
 // meantime) leaves it queued with its error message attached so the seller
 // can resolve it by hand rather than losing the sale silently.
-export async function syncPendingSales(): Promise<SyncResult> {
+let inFlight: Promise<SyncResult> | null = null;
+
+// Una sola pasada a la vez: evento `online`, reintento y botón comparten la
+// misma ejecución (la idempotencia del servidor ya evita duplicados).
+export function syncPendingSales(): Promise<SyncResult> {
+  if (!inFlight) inFlight = runSync().finally(() => (inFlight = null));
+  return inFlight;
+}
+
+async function runSync(): Promise<SyncResult> {
   const pending = await listPendingSales();
   let synced = 0;
   for (const sale of pending) {

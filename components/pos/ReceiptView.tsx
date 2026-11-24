@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Confetti } from "@/components/pos/Confetti";
 import { PosDocumentSheet } from "@/components/pos/PosDocumentSheet";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
-import { controlNumberLabel, type DeliveryNoteCompany } from "@/lib/delivery-note";
+import { controlNumberLabel } from "@/lib/delivery-note-labels";
+import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type {
   PaymentMethod,
   PaymentStatus,

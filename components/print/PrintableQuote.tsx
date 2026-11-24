@@ -7,8 +7,10 @@ import {
   formatLocalCurrency,
   referenceNote,
 } from "@/lib/currencies";
-import { quoteControlNumberLabel, type QuoteForPdf } from "@/lib/quote-pdf";
-import { itemDescription, type DeliveryNoteCompany } from "@/lib/delivery-note";
+import type { QuoteForPdf } from "@/lib/quote-pdf";
+import { quoteControlNumberLabel } from "@/lib/quote-labels";
+import type { DeliveryNoteCompany } from "@/lib/delivery-note";
+import { itemDescription } from "@/lib/delivery-note-labels";
 import { isThermal, printRootClass } from "@/lib/print-paper-sizes";
 
 // Plain HTML/CSS rendering of a Presupuesto for the browser print dialog —
