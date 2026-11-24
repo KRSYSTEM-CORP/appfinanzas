@@ -10,6 +10,8 @@ import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { listPaymentOrders, listRecentPurchases } from "@/lib/actions/purchases";
 import { restockSuggestions } from "@/lib/actions/reports";
 import { money } from "@/lib/money-display";
+import { paymentsPrimaryLocal, type MoneyCtx } from "@/lib/money-primary";
+import { ACCOUNT_KIND_LABELS } from "@/lib/payment-accounts";
 import { selectionLabel } from "@/lib/period-label";
 import { parseDateRangeSelection, selectionToWindows, todayDateString } from "@/lib/report-types";
 
@@ -23,12 +25,14 @@ export default async function PurchasesPage({
 }) {
   await requireAccountingPlan();
   const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
-  const [purchases, orders, restock, { referenceCurrency }] = await Promise.all([
+  const [purchases, orders, restock, rateInfo] = await Promise.all([
     listRecentPurchases(500, selectionToWindows(range)),
     listPaymentOrders(),
     restockSuggestions(6),
     getExchangeRateInfo(),
   ]);
+  const { referenceCurrency } = rateInfo;
+  const ctx: MoneyCtx = { rate: rateInfo.rate, localCurrencyCode: rateInfo.localCurrencyCode, referenceCurrency, exchangeRateEnabled: rateInfo.exchangeRateEnabled };
   const label = selectionLabel(range, todayDateString());
   const live = purchases.filter((p) => !p.voided);
   const bought = live.reduce((n, p) => n + p.totalCents, 0);
@@ -44,7 +48,43 @@ export default async function PurchasesPage({
       supplierName: p.supplier?.name ?? p.manualSupplierName ?? "—",
       supplierInvoiceNo: p.supplierInvoiceNo,
       concept: names.length > 2 ? `${names.slice(0, 2).join(", ")} y ${names.length - 2} más` : names.join(" y ") || (p.note ?? "—"),
-      items: p.items.map((i) => ({ name: i.productName, quantity: i.quantity, unitCostCents: i.unitCostCents, subtotalCents: i.subtotalCents })),
+      items: p.items.map((i) => ({
+        name: i.productName,
+        quantity: i.quantity,
+        unitCostCents: i.unitCostCents,
+        subtotalCents: i.subtotalCents,
+        baseCents: i.baseCents,
+        taxCents: i.taxCents,
+        taxRatePercent: i.taxRatePercent,
+        taxCategory: i.taxCategory,
+        affectsStock: i.affectsStock,
+      })),
+      supplierRif: p.supplier?.rif ?? null,
+      supplierContact: [p.supplier?.phone, p.supplier?.email, p.supplier?.address].filter(Boolean).join(" · ") || null,
+      branchName: p.branchName,
+      note: p.note,
+      baseCents: p.baseImponibleCents,
+      taxCents: p.taxCents,
+      ivaRetainedCents: p.ivaRetainedCents,
+      paidAt: p.paidAt?.toISOString() ?? null,
+      voidedAt: p.voidedAt?.toISOString() ?? null,
+      createdByName: p.createdByName,
+      voidedByName: p.voidedByName,
+      primaryLocal: paymentsPrimaryLocal(p.payments, ctx),
+      payments: p.payments.map((x) => ({
+        id: x.id,
+        createdAt: x.createdAt.toISOString(),
+        paymentMethod: x.paymentMethod,
+        paidInForeignCurrency: x.paidInForeignCurrency,
+        amountEurCents: x.amountEurCents,
+        amountCurrencyCents: x.amountCurrencyCents,
+        currencyCode: x.currencyCode,
+        exchangeRate: x.exchangeRate,
+        reference: x.reference,
+        accountLabel: x.paymentAccount
+          ? [x.paymentAccount.bankName ?? ACCOUNT_KIND_LABELS[x.paymentAccount.kind], x.paymentAccount.holder, x.paymentAccount.accountNumber].filter(Boolean).join(" · ")
+          : null,
+      })),
       fiscal: Boolean(p.supplierInvoiceNo) || p.taxCents > 0,
       totalCents: p.totalCents,
       owedCents: p.totalCents - p.ivaRetainedCents,
@@ -65,7 +105,7 @@ export default async function PurchasesPage({
         <Kpi tone="ok" icon={<LandmarkIcon />} label="Proveedores" value={activeSuppliers} hint="Activos en el periodo" />
       </KpiGrid>
       <RestockCard rows={restock} currency={referenceCurrency} />
-      <PurchasesTable purchases={rows} currency={referenceCurrency} />
+      <PurchasesTable purchases={rows} ctx={ctx} />
     </AdminShell>
   );
 }

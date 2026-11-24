@@ -18,12 +18,23 @@ import { accountChoiceMessage } from "@/lib/payment-method-accounts";
 import type { PaymentMethod } from "@prisma/client";
 import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
 import { money } from "@/lib/money-display";
+import { dualAmount, isLocalMethod, type MoneyCtx } from "@/lib/money-primary";
 
 const SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 // Compras → Órdenes de pago (preview): cuentas por pagar con casillas para agrupar facturas en una
 // orden de pago y pagarla de una vez; cada factura admite abonos parciales desde ⋯.
-export function PaymentOrdersPanel({ orders, currency }: { orders: PaymentOrderRow[]; currency: string }) {
+export function PaymentOrdersPanel({ orders, ctx }: { orders: PaymentOrderRow[]; ctx: MoneyCtx }) {
+  const currency = ctx.referenceCurrency;
+  const dual = (c: number, local: boolean) => {
+    const d = dualAmount(c, ctx, local);
+    return (
+      <>
+        {d.primary}
+        {d.secondary && <small className="block text-right text-xs font-normal text-muted-foreground">{d.secondary}</small>}
+      </>
+    );
+  };
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [paying, setPaying] = useState<PaymentOrderRow | null>(null);
   const [orderOpen, setOrderOpen] = useState(false);
@@ -64,13 +75,13 @@ export function PaymentOrdersPanel({ orders, currency }: { orders: PaymentOrderR
                     <span className="min-w-0">
                       <b className="block">{o.supplierName}</b>
                       <small className="block text-xs text-muted-foreground">
-                        Compra Nº {o.controlNumber ?? "—"} · {d.getDate()} {SHORT[d.getMonth()]} · {o.paidCents > 0 ? `Parcial · abonado ${m(o.paidCents)}` : "A crédito"}
+                        Compra Nº {o.controlNumber ?? "—"} · {d.getDate()} {SHORT[d.getMonth()]} · {o.paidCents > 0 ? `Parcial · abonado ${dualAmount(o.paidCents, ctx, o.primaryLocal).primary}` : "A crédito"}
                         {o.ageDays > 60 && <span className="font-bold text-destructive"> · hace {o.ageDays} días</span>}
                       </small>
                     </span>
                   </label>
                   <div className="flex items-center gap-1.5">
-                    <b className="tabular-nums">{m(o.remainingCents)}</b>
+                    <b className="tabular-nums">{dual(o.remainingCents, o.primaryLocal)}</b>
                     <RowMenu items={[{ label: "Registrar abono", onSelect: () => setPaying(o) }]} />
                   </div>
                 </div>
@@ -85,11 +96,11 @@ export function PaymentOrdersPanel({ orders, currency }: { orders: PaymentOrderR
           </>
         )}
       </SectionCard>
-      {paying && <PayDialog order={paying} currency={currency} onClose={() => setPaying(null)} />}
+      {paying && <PayDialog order={paying} ctx={ctx} onClose={() => setPaying(null)} />}
       {orderOpen && (
         <OrderSheet
           orders={chosen}
-          currency={currency}
+          ctx={ctx}
           onClose={() => setOrderOpen(false)}
           onPaid={() => {
             setOrderOpen(false);
@@ -102,7 +113,7 @@ export function PaymentOrdersPanel({ orders, currency }: { orders: PaymentOrderR
 }
 
 // Orden de pago: agrupa las facturas marcadas y las paga todas con un mismo método y referencia.
-function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrderRow[]; currency: string; onClose: () => void; onPaid: () => void }) {
+function OrderSheet({ orders, ctx, onClose, onPaid }: { orders: PaymentOrderRow[]; ctx: MoneyCtx; onClose: () => void; onPaid: () => void }) {
   const router = useRouter();
   const [method, setMethod] = useState<PaymentMethod>("TRANSFER");
   const [ref, setRef] = useState("");
@@ -111,6 +122,16 @@ function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrde
   const [funds, setFunds] = useState<FundsError | null>(null);
   const [pending, start] = useTransition();
   const total = orders.reduce((n, o) => n + o.remainingCents, 0);
+  const localMethod = isLocalMethod(method, false, ctx);
+  const amt = (c: number) => {
+    const d = dualAmount(c, ctx, localMethod);
+    return (
+      <>
+        {d.primary}
+        {d.secondary && <small className="block text-right text-xs font-normal text-muted-foreground">{d.secondary}</small>}
+      </>
+    );
+  };
   const [pickError, setPickError] = useState<string | null>(null);
   function pay() {
     setFunds(null);
@@ -151,12 +172,12 @@ function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrde
                 <b>{o.supplierName}</b>
                 <small className="block text-xs text-muted-foreground">Compra Nº {o.controlNumber ?? "—"}</small>
               </div>
-              <b className="tabular-nums">{money(currency, o.remainingCents)}</b>
+              <b className="tabular-nums">{amt(o.remainingCents)}</b>
             </div>
           ))}
           <div className="flex items-center justify-between gap-2.5 py-2.5">
             <b>Total de la orden</b>
-            <b className="tabular-nums">{money(currency, total)}</b>
+            <b className="tabular-nums">{amt(total)}</b>
           </div>
         </div>
         <Field label="Método de pago">
@@ -194,17 +215,37 @@ function OrderSheet({ orders, currency, onClose, onPaid }: { orders: PaymentOrde
 }
 
 // «Fraccionar pago»: se puede abonar una parte; cuando se cubre todo, la compra queda pagada.
-export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow; currency: string; onClose: () => void }) {
+export function PayDialog({ order, ctx, onClose }: { order: PaymentOrderRow; ctx: MoneyCtx; onClose: () => void }) {
   const router = useRouter();
   const [method, setMethod] = useState<PaymentMethod>("TRANSFER");
-  const [amount, setAmount] = useState((order.remainingCents / 100).toFixed(2));
+  // Con un método en bolívares el monto se escribe en bolívares; con divisa, en la moneda de referencia.
+  const local = isLocalMethod(method, false, ctx) && ctx.rate != null;
+  const fullText = (loc: boolean) => (loc && ctx.rate != null ? ((order.remainingCents * ctx.rate) / 100).toFixed(2) : (order.remainingCents / 100).toFixed(2));
+  const [amount, setAmount] = useState(fullText(local));
   const [ref, setRef] = useState("");
   const [accountId, setAccountId] = useState("");
   const { accounts, reload } = useSourceAccountsReload();
   const [funds, setFunds] = useState<FundsError | null>(null);
   const [pending, start] = useTransition();
-  const cents = Math.round((parseFloat(amount.replace(",", ".")) || 0) * 100);
+  const typed = parseFloat(amount.replace(",", ".")) || 0;
+  // Si lo escrito en Bs equivale al saldo completo se usa el saldo exacto (evita un centavo de diferencia por redondeo).
+  const cents =
+    local && ctx.rate != null
+      ? Math.round(typed * 100) === Math.round(order.remainingCents * ctx.rate)
+        ? order.remainingCents
+        : Math.round((typed * 100) / ctx.rate)
+      : Math.round(typed * 100);
   const left = order.remainingCents - cents;
+  const d = (c: number) => dualAmount(c, ctx, local);
+  const both = (c: number) => {
+    const x = d(c);
+    return x.secondary ? `${x.primary} (${x.secondary})` : x.primary;
+  };
+  function changeMethod(m: PaymentMethod) {
+    setMethod(m);
+    const nextLocal = isLocalMethod(m, false, ctx) && ctx.rate != null;
+    if (nextLocal !== local) setAmount(fullText(nextLocal));
+  }
 
   const [pickError, setPickError] = useState<string | null>(null);
   function save() {
@@ -229,13 +270,13 @@ export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow
         <DialogHeader>
           <DialogTitle>Registrar pago a {order.supplierName}</DialogTitle>
           <DialogDescription>
-            Compra Nº {order.controlNumber ?? "—"} · saldo {money(currency, order.remainingCents)}. Puedes pagar una parte y el resto después.
+            Compra Nº {order.controlNumber ?? "—"} · saldo {both(order.remainingCents)}. Puedes pagar una parte y el resto después.
           </DialogDescription>
         </DialogHeader>
         <Field label="Método">
-          <MethodAndAccount method={method} onMethod={setMethod} accounts={accounts} accountId={accountId} onAccount={setAccountId} />
+          <MethodAndAccount method={method} onMethod={changeMethod} accounts={accounts} accountId={accountId} onAccount={setAccountId} />
         </Field>
-        <Field label="Monto a pagar">
+        <Field label={`Monto a pagar (${local ? ctx.localCurrencyCode : ctx.referenceCurrency})`}>
           <input className={FIELD_CONTROL} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
         <Field label="Referencia (opcional)">
@@ -257,7 +298,7 @@ export function PayDialog({ order, currency, onClose }: { order: PaymentOrderRow
           />
         )}
         {cents > 0 && cents <= order.remainingCents && (
-          <p className="mt-2 text-sm text-muted-foreground">{left === 0 ? "Con este pago la compra queda pagada." : `Quedará un saldo de ${money(currency, left)}.`}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{left === 0 ? "Con este pago la compra queda pagada." : `Quedará un saldo de ${both(left)}.`}</p>
         )}
         <SheetActions>
           <Button disabled={pending || cents <= 0 || cents > order.remainingCents} onClick={save}>

@@ -19,6 +19,7 @@ import { quickCreateProduct } from "@/lib/actions/products";
 import { TAX_CATEGORY_LABELS, decomposeTax, rateForCategory } from "@/lib/tax";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { tryToEurCents } from "@/lib/payment-currency";
+import { dualAmount, paymentsPrimaryLocal } from "@/lib/money-primary";
 import type { IvaSettingsInfo } from "@/lib/actions/settings";
 import type { ReferenceCurrency } from "@prisma/client";
 
@@ -228,6 +229,21 @@ export function PurchaseForm({
     ? Math.round((taxTotalCents * ivaSettings.ivaWithholdingPercent) / 100)
     : 0;
   const amountOwedCents = invoiceTotalCents - ivaRetainedCents;
+
+  // Si todo se paga en bolívares el resumen se ve primero en bolívares y debajo la referencia; con alguna divisa (o a crédito), al revés.
+  const moneyCtx = { rate, localCurrencyCode: currencyCode, referenceCurrency, exchangeRateEnabled };
+  const summaryLocal = paymentStatus === "PAID" && paymentsPrimaryLocal(paymentRows, moneyCtx);
+  const dual = (cents: number) => dualAmount(cents, moneyCtx, summaryLocal);
+  const dualNode = (cents: number, sign = "") => {
+    const d = dual(cents);
+    return (
+      <span className="text-right tabular-nums">
+        {sign}
+        {d.primary}
+        {d.secondary && <small className="block text-xs font-normal text-muted-foreground">{d.secondary}</small>}
+      </span>
+    );
+  };
 
   // Keep the single default payment row in sync with the purchase total as
   // rows/costs are edited, same pattern as the POS cart.
@@ -557,17 +573,17 @@ export function PurchaseForm({
             </div>
             <div className="flex items-end justify-between border-t pt-3">
               <span className="text-sm text-muted-foreground">Total de la compra</span>
-              <span className="text-[28px] font-extrabold leading-none tracking-[-0.03em] tabular-nums">{formatCurrencyCents(referenceCurrency, invoiceTotalCents)}</span>
+              <span className="text-right text-[28px] font-extrabold leading-none tracking-[-0.03em] tabular-nums">{dual(invoiceTotalCents).primary}{dual(invoiceTotalCents).secondary && <small className="block text-sm font-normal tracking-normal text-muted-foreground">{dual(invoiceTotalCents).secondary}</small>}</span>
             </div>
             {ivaRetainedCents > 0 && (
               <>
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
                   <span>IVA retenido</span>
-                  <span className="tabular-nums">−{formatCurrencyCents(referenceCurrency, ivaRetainedCents)}</span>
+                  {dualNode(ivaRetainedCents, "−")}
                 </div>
                 <div className="flex items-center justify-between text-sm font-semibold">
                   <span>Monto a pagar al proveedor</span>
-                  <span className="tabular-nums">{formatCurrencyCents(referenceCurrency, amountOwedCents)}</span>
+                  {dualNode(amountOwedCents)}
                 </div>
               </>
             )}
