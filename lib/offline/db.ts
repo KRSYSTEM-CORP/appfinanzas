@@ -94,6 +94,8 @@ export type CatalogSnapshot = {
   company: DeliveryNoteCompany;
   // Cuentas de cobro guardadas para poder elegir en cuál se recibe el pago sin internet (instantáneas anteriores no las traen).
   paymentAccounts?: PaymentAccountRow[];
+  // Último estado conocido de la caja (turno abierto) al guardar la instantánea; ausente = no se sabe.
+  shiftOpen?: boolean;
 };
 
 let dbPromise: Promise<IDBPDatabase> | null = null;

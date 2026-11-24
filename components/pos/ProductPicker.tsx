@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { productImageUrl, type ListedProduct } from "@/lib/product-image";
 import { SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { useBarcodeWedge } from "@/lib/use-barcode-wedge";
 import { isLowStock } from "@/lib/inventory";
 import type { ReferenceCurrency } from "@prisma/client";
 
+const PAGE_SIZE = 90;
 const ALL_CATEGORIES = "__all__";
 
 export function ProductPicker({
@@ -37,8 +38,14 @@ export function ProductPicker({
   // Unidades de cada producto en la venta actual (insignia y borde de marca).
   quantities?: Record<string, number>;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQueryRaw] = useState("");
+  const setQuery = (v: string) => {
+    setQueryRaw(v);
+    setLimit(PAGE_SIZE);
+  };
   const [category, setCategory] = useState(ALL_CATEGORIES);
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const deferredQuery = useDeferredValue(query);
   const [scanNotice, setScanNotice] = useState<ScanFeedback | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -55,14 +62,15 @@ export function ProductPicker({
   }, []);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     return products.filter((p) => {
       const matchesQuery =
         !q || p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q);
       const matchesCategory = category === ALL_CATEGORIES || p.category === category;
       return matchesQuery && matchesCategory;
     });
-  }, [products, query, category]);
+  }, [products, deferredQuery, category]);
+  const visible = useMemo(() => filtered.slice(0, limit), [filtered, limit]);
 
   // Adds a product found by scan or by Enter in the search box. Scanning must
   // respect stock the same way tapping a card does (those are disabled when out
@@ -149,7 +157,10 @@ export function ProductPicker({
       {categories.length > 0 && (
         <div className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible md:pb-0">
           {[ALL_CATEGORIES, ...categories].map((c) => (
-            <Chip key={c} active={category === c} onClick={() => setCategory(c)} className="min-w-max">
+            <Chip key={c} active={category === c} onClick={() => {
+                setCategory(c);
+                setLimit(PAGE_SIZE);
+              }} className="min-w-max">
               {c === ALL_CATEGORIES ? "Todos" : c}
               {c === ALL_CATEGORIES && <small className="text-[0.8333em]">{products.length}</small>}
             </Chip>
@@ -157,7 +168,7 @@ export function ProductPicker({
         </div>
       )}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,158px),1fr))] gap-2.5 overflow-y-auto pr-1">
-        {filtered.map((p) => {
+        {visible.map((p) => {
           const outOfStock = !allowOutOfStock && p.trackStock && p.stock <= 0;
           const q = quantities?.[p.id] ?? 0;
           const tint = `var(--chart-${(p.name.charCodeAt(0) % 5) + 1})`;
@@ -168,6 +179,7 @@ export function ProductPicker({
               disabled={outOfStock}
               onClick={() => onAdd(p)}
               aria-label={`Agregar ${p.name}`}
+              style={{ contentVisibility: "auto", containIntrinsicSize: "auto 150px" }}
               className={`relative flex flex-col items-start gap-1.5 rounded-[19px] border-2 bg-card p-3 text-left shadow-(--shadow-card) transition-[transform,border-color] duration-150 hover:-translate-y-0.5 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:active:scale-100 ${
                 q ? "border-primary" : "border-transparent"
               }`}
@@ -223,6 +235,15 @@ export function ProductPicker({
             </button>
           );
         })}
+        {filtered.length > visible.length && (
+          <button
+            type="button"
+            onClick={() => setLimit((l) => l + PAGE_SIZE)}
+            className="col-span-full min-h-11 rounded-full border text-sm font-bold"
+          >
+            Mostrar más ({filtered.length - visible.length})
+          </button>
+        )}
         {filtered.length === 0 && (
           <p className="col-span-full text-center text-muted-foreground py-8 text-sm">
             No hay productos con ese filtro.

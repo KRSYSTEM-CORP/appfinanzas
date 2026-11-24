@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { GroupTabs, SubTabs } from "@/components/shared/GroupTabs";
 import { Pill } from "@/components/shared/Pills";
 import { ADMIN_GROUPS, adminGroup, type AdminGroupId } from "@/lib/admin-nav";
-import { getExchangeRateInfo } from "@/lib/actions/settings";
+import { getExchangeRateInfo, getIvaSettings } from "@/lib/actions/settings";
 import { monthProgressLabel } from "@/lib/period-label";
 import { todayDateString } from "@/lib/report-types";
 
@@ -20,7 +20,8 @@ const ICONS = {
 // tarjetas de grupo y los chips de sub-pestaña. Cada sub-vista es una ruta que se pinta dentro.
 export async function AdminShell({ group, sub, children }: { group: AdminGroupId; sub: string; children: React.ReactNode }) {
   const { rate, referenceCurrency, exchangeRateEnabled } = await getExchangeRateInfo();
-  const g = adminGroup(group);
+  const { ivaEnabled } = await getIvaSettings();
+  const g = adminGroup(group, ivaEnabled);
   const rateText =
     exchangeRateEnabled && rate
       ? `Tasa ${new Intl.NumberFormat("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rate)} Bs por ${referenceCurrency === "EUR" ? "€" : "$"}`

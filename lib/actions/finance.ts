@@ -93,13 +93,14 @@ export async function netSalesWithoutCost(range: DateRangeSelection): Promise<nu
 }
 
 export async function listExpenses(range: DateRangeSelection, search = "") {
-  const { companyId } = await requireAccountingPlan();
+  const { companyId, branchId } = await requireAccountingPlan();
   const windows = selectionToWindows(range);
   const query = search.trim();
   return withTenant(companyId, (tx) =>
     tx.expense.findMany({
       where: {
         companyId,
+        ...(branchId ? { branchId } : {}),
         AND: [
           { OR: windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
           ...(query
@@ -217,12 +218,12 @@ export async function deleteExpense(expenseId: string): Promise<ActionResult> {
 }
 
 export async function expensesTotal(range: DateRangeSelection): Promise<number> {
-  const { companyId } = await requireManager();
+  const { companyId, branchId } = await requireManager();
   const windows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
     const result = await tx.expense.aggregate({
       _sum: { amountCents: true },
-      where: { companyId, OR: windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
+      where: { companyId, ...(branchId ? { branchId } : {}), OR: windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
     });
     return result._sum.amountCents ?? 0;
   });

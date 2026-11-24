@@ -56,7 +56,10 @@ function PosSession({
   branchName,
   ivaGeneralRatePercent,
   ivaReducedRatePercent,
+  shiftOpen = null,
 }: {
+  // false = caja sin abrir (no se puede cobrar); null = no se sabe.
+  shiftOpen?: boolean | null;
   paymentAccounts?: PaymentAccountRow[];
   requireCustomer?: boolean;
   products: ListedProduct[];
@@ -120,6 +123,7 @@ function PosSession({
     ivaReducedRatePercent,
     company,
     paymentAccounts,
+    shiftOpen,
   });
   const productById = new Map(products.map((p) => [p.id, p]));
   const initialLines: CartLine[] = (initialQuote?.lines ?? [])
@@ -536,6 +540,7 @@ const [step, setStep] = useState<Step>("cart");
           topMethod={topMethod}
           isPending={isPending}
           error={error}
+          cashClosed={shiftOpen === false}
           onBack={() => setStep("cart")}
           onPickCustomer={() => openDirectory(true)}
           documentKind={documentKind}
@@ -658,6 +663,7 @@ const [step, setStep] = useState<Step>("cart");
           onHold={onHold}
           isPending={isPending}
           error={error}
+          cashClosed={shiftOpen === false}
         />
       </div>
     );

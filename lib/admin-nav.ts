@@ -69,13 +69,16 @@ export const ADMIN_GROUPS: AdminGroup[] = [
   },
 ];
 
-export function adminGroup(id: AdminGroupId): AdminGroup {
-  return ADMIN_GROUPS.find((g) => g.id === id) ?? ADMIN_GROUPS[0];
+export function adminGroup(id: AdminGroupId, ivaEnabled = true): AdminGroup {
+  const g = ADMIN_GROUPS.find((x) => x.id === id) ?? ADMIN_GROUPS[0];
+  // Sin IVA no hay resumen de IVA: se oculta esa sub-pestaña.
+  return ivaEnabled ? g : { ...g, subs: g.subs.filter((s) => s.id !== "iva") };
 }
 
 // Pestaña de Contabilidad válida a partir de ?tab= (por defecto Movimientos).
 export const STATEMENT_TABS = ["mov", "estado", "sit", "costo", "iva"] as const;
 export type StatementTab = (typeof STATEMENT_TABS)[number];
-export function statementTab(raw: string | undefined): StatementTab {
+export function statementTab(raw: string | undefined, ivaEnabled = true): StatementTab {
+  if (raw === "iva" && !ivaEnabled) return "mov";
   return (STATEMENT_TABS as readonly string[]).includes(raw ?? "") ? (raw as StatementTab) : "mov";
 }

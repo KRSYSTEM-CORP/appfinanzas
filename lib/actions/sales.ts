@@ -1,6 +1,6 @@
 "use server";
 
-import { rangeToDates } from "@/lib/report-types";
+import { rangeToDates, todayDateString } from "@/lib/report-types";
 import { userErrorMessage } from "@/lib/user-error";
 import { computeIgtfCents } from "@/lib/igtf";
 import { nextDocumentNumber } from "@/lib/document-sequence";
@@ -24,7 +24,9 @@ import type { ActionResult } from "@/lib/types";
 import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateProductsCache } from "@/lib/products-cache";
 import { assertReceivingAccounts } from "@/lib/account-balance";
-import { assertDayNotClosed } from "@/lib/closed-days";
+import { assertDayNotClosed, closingDateFromString } from "@/lib/closed-days";
+import { activeShiftNumber } from "@/lib/cash-shifts";
+import { cashGateError, mustCheckShift } from "@/lib/cash-gate";
 import { discountPolicyError, isOfflineRateAcceptable, sanitizeQueuedAt } from "@/lib/sale-policy";
 
 export type CompleteSaleResult =
@@ -120,6 +122,17 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           select: { id: true },
         });
         if (existing) return existing.id;
+      }
+
+      // Regla del dueño: sin caja abierta no se vende (las ventas encoladas sin internet ya ocurrieron y no se rechazan).
+      if (mustCheckShift({ queued: !!queuedDate, alreadyRegistered: false })) {
+        const day = closingDateFromString(todayDateString());
+        const [openings, closings] = await Promise.all([
+          tx.cashOpening.findMany({ where: { branchId, date: day }, select: { shiftNumber: true } }),
+          tx.cashClosing.findMany({ where: { branchId, closingDate: day }, select: { shiftNumber: true, closedAt: true } }),
+        ]);
+        const gate = cashGateError(activeShiftNumber(openings, closings) != null);
+        if (gate) throw new Error(gate);
       }
 
       const company = await tx.company.findUnique({
