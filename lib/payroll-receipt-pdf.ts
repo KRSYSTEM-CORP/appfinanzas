@@ -37,13 +37,13 @@ export async function buildPayrollReceiptPDF(
   const y0 = 40;
   const money = (c: number) => formatCurrencyCents(referenceCurrency, c);
 
-  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y0, pageWidth, "RECIBO DE PAGO DE NÓMINA");
+  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y0, pageWidth);
   const titleBottomY = renderDocumentTitleBlock(
     doc,
     "RECIBO DE PAGO DE NÓMINA",
     [`Fecha: ${formatDate(data.paidAt)}`, periodLabel(data.period)],
     margin,
-    y0,
+    fiscalEndY + 6,
     pageWidth
   );
   let y = Math.max(titleBottomY + 20, fiscalEndY + 20);

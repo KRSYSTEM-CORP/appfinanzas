@@ -33,7 +33,7 @@ export async function buildPriceListPDF(
     "LISTA DE PRECIOS",
     [`Fecha de emisión: ${formatDate(new Date())}`],
     margin,
-    y,
+    fiscalEndY + 6,
     pageWidth
   );
 

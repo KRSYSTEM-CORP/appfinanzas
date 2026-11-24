@@ -57,7 +57,7 @@ export async function buildQuotePDF(
     "PRESUPUESTO",
     [`Nº de control: ${quoteControlNumberLabel(quote)}`, `Fecha: ${formatDate(quote.createdAt)}`],
     margin,
-    y,
+    fiscalEndY + 6,
     pageWidth
   );
 
