@@ -1,6 +1,6 @@
 "use server";
 
-import { requireManager } from "@/lib/session";
+import { requireAccountingPlan } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { revenueTotals, receivablesTotals } from "@/lib/actions/reports";
@@ -41,7 +41,7 @@ export type Statements = {
 };
 
 export async function getStatements(range: DateRangeSelection, islrPercent: number): Promise<Statements> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const windows = selectionToWindows(range);
   const rate = Math.min(Math.max(islrPercent, 0), 60) / 100;
 
@@ -128,7 +128,7 @@ export type MovementRow = { date: string; kind: "Ingreso" | "Egreso"; label: str
 
 // Movimientos: ingresos (ventas por día) y egresos (gastos y compras) del período.
 export async function listMovements(range: DateRangeSelection): Promise<MovementRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const windows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
     const or = (f: string) => windows.map((w) => ({ [f]: { gte: w.start, lt: w.end } }));

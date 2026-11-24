@@ -1,13 +1,18 @@
 import "server-only";
 import { headers } from "next/headers";
 
-// Vercel sets x-forwarded-for with the real client IP first in the list
-// (any proxies it passed through are appended after). Falls back to a
-// constant key in local dev / when the header is missing, so rate limiting
-// degrades to "shared across all local requests" instead of throwing.
+// El cliente puede mandar su propio x-forwarded-for: un proxy honesto AÑADE la IP
+// real al final, así que se usa x-real-ip (lo fija el proxy) o, si no, el ÚLTIMO
+// salto de la lista (nunca el primero, que lo controla quien hace la petición).
+// Sin cabeceras (dev local) cae a una clave constante.
+export function pickClientIp(realIp: string | null, forwarded: string | null): string {
+  const real = realIp?.trim();
+  if (real) return real;
+  const hops = (forwarded ?? "").split(",").map((h) => h.trim()).filter(Boolean);
+  return hops.length > 0 ? hops[hops.length - 1] : "unknown";
+}
+
 export async function getClientIp(): Promise<string> {
   const h = await headers();
-  const forwarded = h.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  return "unknown";
+  return pickClientIp(h.get("x-real-ip"), h.get("x-forwarded-for"));
 }

@@ -27,6 +27,28 @@ export async function checkRateLimit(
   return { allowed: true, retryAfterMinutes: 0 };
 }
 
+// Versión ATÓMICA para intentos de adivinar secretos (clave, PIN): primero
+// registra el intento y después cuenta. Con peticiones en paralelo, cada una
+// ve al menos los intentos ya confirmados, así que como máximo `maxAttempts`
+// pasan; el resto se rechaza (y se borra su propia fila para no alargar el
+// bloqueo). Un acierto debe llamar a clearAttempts.
+export async function consumeAttempt(
+  scope: string,
+  identifier: string,
+  maxAttempts: number,
+  windowMs: number
+): Promise<RateLimitStatus> {
+  const key = buildKey(scope, identifier);
+  const row = await prisma.loginAttempt.create({ data: { key }, select: { id: true } });
+  const since = new Date(Date.now() - windowMs);
+  const count = await prisma.loginAttempt.count({ where: { key, createdAt: { gte: since } } });
+  if (count > maxAttempts) {
+    await prisma.loginAttempt.delete({ where: { id: row.id } }).catch(() => undefined);
+    return { allowed: false, retryAfterMinutes: Math.ceil(windowMs / 60_000) };
+  }
+  return { allowed: true, retryAfterMinutes: 0 };
+}
+
 // Recorded on every failed attempt (wrong password, unknown email/code) —
 // never on a merely malformed submission, so a validation typo doesn't cost
 // the user part of their attempt budget.

@@ -402,6 +402,15 @@ export async function approvePaymentReport(reportId: string): Promise<ActionResu
       return { ok: false as const, error: "Empresa no encontrada" };
     }
 
+    // Reclamo atómico: solo una aprobación simultánea gana (la otra ve count 0).
+    const claimed = await tx.paymentReport.updateMany({
+      where: { id: reportId, status: "PENDING" },
+      data: { status: "APPROVED", reviewedById: session.userId, reviewedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      return { ok: false as const, error: "Reporte no encontrado o ya fue procesado" };
+    }
+
     const totalUsdCents = report.lines.reduce((sum, line) => sum + line.amountUsdCents, 0);
 
     // Si la empresa pidió cambiar de plan al reportar el pago (nota «Plan solicitado: X.»),
@@ -437,10 +446,6 @@ export async function approvePaymentReport(reportId: string): Promise<ActionResu
       },
     });
     await tx.company.update({ where: { id: report.companyId }, data: { nextPaymentDueDate: periodEnd } });
-    await tx.paymentReport.update({
-      where: { id: reportId },
-      data: { status: "APPROVED", reviewedById: session.userId, reviewedAt: new Date() },
-    });
 
     return { ok: true as const, companyId: report.companyId, totalUsdCents };
   });

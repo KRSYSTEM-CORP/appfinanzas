@@ -2,7 +2,7 @@
 // can import them WITHOUT pulling jspdf + autotable (~400 KB) into their
 // bundle. delivery-note.ts re-exports everything here, so existing imports
 // keep working.
-import { formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { formatLocalCurrency } from "@/lib/currencies";
 import { legacyCurrencyForPayment } from "@/lib/payment-currency";
 import { paidAmount } from "@/lib/money-primary";
 import type { ReferenceCurrency } from "@prisma/client";

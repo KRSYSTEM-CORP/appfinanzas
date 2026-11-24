@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
-import { requireManager } from "@/lib/session";
+import { requireManager, requireAccountingPlan } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { closedDayWindows } from "@/lib/closed-days";
@@ -51,7 +51,7 @@ export async function costOfGoodsSold(range: DateRangeSelection): Promise<number
 // y no son ingreso). Es la base correcta para restar el costo y los gastos y obtener la utilidad.
 // Solo cuenta días con cierre de caja, igual que las demás cifras de Estadísticas.
 export async function netSalesCents(range: DateRangeSelection): Promise<number> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const requestedWindows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
@@ -72,7 +72,7 @@ export async function netSalesCents(range: DateRangeSelection): Promise<number> 
 // Ventas netas de productos que no tienen costo cargado (o ya no existen): su costo no se puede
 // restar, así que la utilidad real puede ser menor a la mostrada. Sirve para avisarlo.
 export async function netSalesWithoutCost(range: DateRangeSelection): Promise<number> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const requestedWindows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
@@ -93,7 +93,7 @@ export async function netSalesWithoutCost(range: DateRangeSelection): Promise<nu
 }
 
 export async function listExpenses(range: DateRangeSelection, search = "") {
-  const { companyId } = await requireManager();
+  const { companyId } = await requireAccountingPlan();
   const windows = selectionToWindows(range);
   const query = search.trim();
   return withTenant(companyId, (tx) =>
@@ -120,7 +120,7 @@ export async function listExpenses(range: DateRangeSelection, search = "") {
 }
 
 export async function createExpense(formData: FormData): Promise<ActionResult> {
-  const { companyId, userId, branchId } = await requireManager();
+  const { companyId, userId, branchId } = await requireAccountingPlan();
   const parsed = ExpenseSchema.safeParse({
     description: formData.get("description"),
     category: formData.get("category"),
@@ -197,7 +197,7 @@ export async function createExpense(formData: FormData): Promise<ActionResult> {
 }
 
 export async function deleteExpense(expenseId: string): Promise<ActionResult> {
-  const { companyId } = await requireManager();
+  const { companyId } = await requireAccountingPlan();
   const result = await withTenant(companyId, async (tx) => {
     // Un gasto de nómina nace de un pago: se anula desde Nómina (revierte la cuenta).
     const payroll = await tx.payrollPayment.findFirst({ where: { companyId, expenseId }, select: { id: true } });
@@ -231,7 +231,7 @@ export async function expensesTotal(range: DateRangeSelection): Promise<number> 
 // Ventas netas (sin IVA) y costo por categoría del período, para el punto de equilibrio. Las
 // ventas sin categoría se agrupan en "Sin categoría".
 export async function categoryMargins(range: DateRangeSelection): Promise<CategoryMargin[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const requestedWindows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
@@ -257,7 +257,7 @@ export async function categoryMargins(range: DateRangeSelection): Promise<Catego
 // Mismo cálculo que categoryMargins pero agrupado por producto (los 15 que más
 // venden). `category` lleva el nombre del producto para reutilizar el cálculo.
 export async function productMargins(range: DateRangeSelection): Promise<CategoryMargin[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const requestedWindows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
@@ -291,7 +291,7 @@ export async function getProfitGoal(): Promise<number | null> {
 }
 
 export async function setProfitGoal(amountCents: number | null): Promise<ActionResult> {
-  const { companyId } = await requireManager();
+  const { companyId } = await requireAccountingPlan();
   if (amountCents != null && (!Number.isInteger(amountCents) || amountCents < 0)) {
     return { success: false, error: "La meta no puede ser negativa" };
   }
