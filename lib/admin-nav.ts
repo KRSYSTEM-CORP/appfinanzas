@@ -16,6 +16,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
       { id: "resumen", label: "Resumen", href: "/accounting" },
       { id: "cobros", label: "Cobros", href: "/accounting/cobros" },
       { id: "gastos", label: "Gastos", href: "/accounting/gastos" },
+      { id: "salidas", label: "Salidas y devoluciones", href: "/accounting/salidas" },
     ],
   },
   {

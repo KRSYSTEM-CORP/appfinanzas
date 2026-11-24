@@ -1,4 +1,5 @@
 import type { AccountIncomeRow } from "@/lib/actions/cash-closing";
+import { cashOutflowImpact, type CashOutflowLike } from "@/lib/cash-outflow";
 
 // Efectivo de un turno separado por moneda: dólares (moneda de referencia) y bolívares (moneda local).
 export type CashByCurrency = { refCents: number; localCents: number };
@@ -9,14 +10,18 @@ export type ExpectedCashInput = {
   openingLocalCents: number | null;
   // Cobros del turno; solo se usan los de efectivo.
   incomeRows: Pick<AccountIncomeRow, "paymentMethod" | "currencyCode" | "cents" | "refCents">[];
-  outflowsCents: number;
+  // Salidas del turno: solo las de efectivo restan, cada una en su moneda.
+  outflows: CashOutflowLike[];
+  // Efectivo cobrado en ventas luego anuladas con devolución (sigue en la gaveta).
+  refundedCash?: { currencyCode: string; cents: number; refCents: number }[];
+  rate?: number | null;
   referenceCurrency: string;
   localCurrency: string;
 };
 
 // Efectivo esperado por moneda. La apertura usa el desglose $/Bs si se guardó; si no (aperturas antiguas) todo cuenta
 // como referencia. El efectivo cobrado en la moneda local va a bolívares; el resto, en referencia. Las salidas de Caja
-// Chica se guardan en referencia, así que restan de los dólares.
+// Chica en efectivo restan en la moneda en que salieron; las pagadas desde una cuenta no tocan la caja.
 export function expectedCashByCurrency(i: ExpectedCashInput): CashByCurrency {
   const hasSplit = i.openingRefCents != null || i.openingLocalCents != null;
   let ref = hasSplit ? i.openingRefCents ?? 0 : i.openingCents ?? 0;
@@ -26,7 +31,15 @@ export function expectedCashByCurrency(i: ExpectedCashInput): CashByCurrency {
     if (r.currencyCode === i.localCurrency && r.currencyCode !== i.referenceCurrency) local += r.cents;
     else ref += r.refCents;
   }
-  ref -= i.outflowsCents;
+  for (const r of i.refundedCash ?? []) {
+    if (r.currencyCode === i.localCurrency && r.currencyCode !== i.referenceCurrency) local += r.cents;
+    else ref += r.refCents;
+  }
+  for (const o of i.outflows) {
+    const d = cashOutflowImpact(o, i.localCurrency, i.referenceCurrency, i.rate ?? null);
+    ref -= d.refCents;
+    local -= d.localCents;
+  }
   return { refCents: ref, localCents: local };
 }
 

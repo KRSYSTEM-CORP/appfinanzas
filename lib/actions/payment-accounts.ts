@@ -54,11 +54,11 @@ export type SourceAccountRow = { id: string; label: string; currency: string; ki
 
 // Cuentas activas que pueden ser el origen de un pago (compras, nómina, gastos): su saldo baja al pagar.
 // Incluye el saldo para mostrarlo al elegir la cuenta y avisar antes de que falten fondos.
-export async function listSourceAccounts(): Promise<SourceAccountRow[]> {
+export async function listSourceAccounts(includePos = false): Promise<SourceAccountRow[]> {
   const { companyId } = await requireManager();
   return withTenant(companyId, async (tx) => {
     const rate = await currentRateOf(tx, companyId);
-    const rows = await tx.paymentAccount.findMany({ where: { companyId, active: true, kind: { not: "PUNTO_DE_VENTA" } }, orderBy: { createdAt: "asc" } });
+    const rows = await tx.paymentAccount.findMany({ where: { companyId, active: true, ...(includePos ? {} : { kind: { not: "PUNTO_DE_VENTA" as const } }) }, orderBy: { createdAt: "asc" } });
     const out: SourceAccountRow[] = [];
     for (const a of rows) {
       const b = await accountBalance(tx, companyId, a, rate);

@@ -673,7 +673,7 @@ model Sale {
   branch                Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   items                 SaleItem[]
   creditNote            CreditNote?
-  cashOutflow           CashOutflow?
+  cashOutflows          CashOutflow[]
   debitNotes            DebitNote[]
   // Breakdown when the customer split payment across multiple methods (e.g.
   // half cash USD, half Pago Móvil in Bs). The singular paymentMethod/
@@ -1341,11 +1341,24 @@ model CashOutflow {
   amountCents Int
   createdById String
   shiftNumber Int      @default(1)
-  // Venta anulada que originó esta salida (devolución de efectivo). Único: una venta, una devolución.
-  saleId      String?  @unique
+  // Venta anulada que originó esta salida (devolución). Una venta puede tener varias (una por método/cuenta).
+  saleId      String?
   sale        Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
+  // De dónde salió el dinero. Null en salidas anteriores = efectivo en la moneda de referencia.
+  // amountCents sigue siendo el monto en la moneda de referencia; aquí queda lo realmente pagado.
+  paymentMethod       PaymentMethod?
+  paymentAccountId    String?
+  paymentAccount      PaymentAccount? @relation(fields: [paymentAccountId], references: [id], onDelete: SetNull)
+  currencyCode        String?
+  amountCurrencyCents Int?
+  exchangeRate        Decimal?        @db.Decimal(12, 4)
+  // Clave de idempotencia (reintentos no duplican): única por empresa cuando existe.
+  requestKey          String?
 
+  @@unique([companyId, requestKey])
+  @@index([saleId])
+  @@index([paymentAccountId])
   @@index([companyId, branchId, date])
 }
 
@@ -1451,6 +1464,7 @@ model PaymentAccount {
   purchasePayments PurchasePayment[]
   payrollPayments  PayrollPayment[]
   expenses         Expense[]
+  cashOutflows     CashOutflow[]
   fundings         AccountFunding[]
   salePayments     SalePayment[]
 

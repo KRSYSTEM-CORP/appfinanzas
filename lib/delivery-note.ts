@@ -1,3 +1,4 @@
+import { layoutCompanyName } from "@/lib/pdf-header-layout";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PAYMENT_METHOD_LABELS, formatDate } from "@/lib/format";
@@ -120,7 +121,13 @@ function fiscalLines(company: DeliveryNoteCompany): string[] {
   return lines;
 }
 
-export function renderFiscalHeader(doc: jsPDF, company: DeliveryNoteCompany, x: number, startY: number): number {
+export function renderFiscalHeader(
+  doc: jsPDF,
+  company: DeliveryNoteCompany,
+  x: number,
+  startY: number,
+  maxWidth: number = 260
+): number {
   const lines = fiscalLines(company);
   if (lines.length === 0) return startY;
   doc.setFont("helvetica", "normal");
@@ -128,65 +135,60 @@ export function renderFiscalHeader(doc: jsPDF, company: DeliveryNoteCompany, x: 
   doc.setTextColor(90);
   let y = startY;
   for (const line of lines) {
-    doc.text(line, x, y, { maxWidth: 260 });
-    y += 10;
+    const wrapped = doc.splitTextToSize(line, maxWidth) as string[];
+    doc.text(wrapped, x, y);
+    y += wrapped.length * 10;
   }
   doc.setTextColor(0, 0, 0);
   return y;
 }
 
-// Renders the logo + company name + fiscal lines block that opens every
-// generated document. The company name is capped to roughly the left half
-// of the page and wraps onto extra lines instead of running unbounded to the
-// right — without this, a long company name collided with the centered
-// document title (FACTURA/NOTA DE ENTREGA/PRESUPUESTO/RECIBO DE PAGO/CIERRE
-// DE CAJA) drawn on the same baseline, making both illegible. Shared by
-// every PDF builder (delivery note, receipt, quote, cash closing) so the fix
-// — and the logo-loading logic — only exists in one place.
+// Encabezado de empresa de todos los PDF (nota, factura, presupuesto, recibo,
+// Corte Z, nómina, reportes): logo a la izquierda y, a su derecha, el nombre en
+// su propio bloque con TODO el ancho disponible (hasta el margen derecho), con
+// salto de línea ordenado y letra que se reduce hasta un mínimo legible si el
+// nombre es larguísimo. Debajo van RIF/teléfono/dirección. El título del
+// documento NO se dibuja aquí: renderDocumentTitleBlock va en su propia línea
+// debajo de lo que devuelve esta función, así nunca chocan.
 export async function renderCompanyHeader(
   doc: jsPDF,
   company: DeliveryNoteCompany,
   margin: number,
   y: number,
-  pageWidth: number,
-  // Título del documento que se dibuja en el centro: el nombre de la empresa se ajusta para no chocar con él.
-  // Por defecto se asume «NOTA DE ENTREGA»; los títulos más anchos (Corte Z, recibo de nómina) deben indicar el suyo.
-  title: string = "NOTA DE ENTREGA"
+  pageWidth: number
 ): Promise<number> {
   let logoWidth = 0;
+  let logoHeight = 0;
   if (company.logoDataUrl) {
     try {
-      const { width, height } = await loadImageSize(company.logoDataUrl);
+      const size = await loadImageSize(company.logoDataUrl);
       const maxBox = 50;
-      const scale = Math.min(1, maxBox / Math.max(width, height));
-      logoWidth = width * scale;
-      const logoHeight = height * scale;
+      const scale = Math.min(1, maxBox / Math.max(size.width, size.height));
+      logoWidth = size.width * scale;
+      logoHeight = size.height * scale;
       doc.addImage(company.logoDataUrl, dataUrlImageFormat(company.logoDataUrl), margin, y, logoWidth, logoHeight);
     } catch {
       logoWidth = 0;
+      logoHeight = 0;
     }
   }
 
   const textX = margin + (logoWidth > 0 ? logoWidth + 12 : 0);
+  const availableWidth = Math.max(120, pageWidth - margin - textX);
 
-  // Measure the actual widest document title ("NOTA DE ENTREGA" — longer
-  // than FACTURA/PRESUPUESTO/RECIBO DE PAGO/CIERRE DE CAJA) at the real
-  // font/size it's drawn with, rather than guessing a fixed pixel budget —
-  // that's what let a long company name creep far enough right to collide
-  // with the title in the first place, even after adding a width cap.
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  const titleHalfWidth = doc.getTextWidth(title) / 2;
-  const titleLeftEdge = pageWidth / 2 - titleHalfWidth - 16;
+  const layout = layoutCompanyName(company.name, availableWidth, (text, size, width) => {
+    doc.setFontSize(size);
+    return doc.splitTextToSize(text, width) as string[];
+  });
+  doc.setFontSize(layout.fontSize);
+  const lineHeight = layout.fontSize * 1.15;
+  const firstBaseline = y + layout.fontSize + 2;
+  doc.text(layout.lines, textX, firstBaseline, { lineHeightFactor: 1.15 });
+  const nameBottomY = firstBaseline + (layout.lines.length - 1) * lineHeight;
 
-  const nameMaxWidth = Math.max(100, titleLeftEdge - textX);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  const nameLines = doc.splitTextToSize(company.name, nameMaxWidth) as string[];
-  doc.text(nameLines, textX, y + 20);
-  const nameBottomY = y + 20 + (nameLines.length - 1) * 15;
-
-  return renderFiscalHeader(doc, company, textX, nameBottomY + 12);
+  const fiscalEnd = renderFiscalHeader(doc, company, textX, nameBottomY + 12, availableWidth);
+  return Math.max(fiscalEnd, y + logoHeight);
 }
 
 // Renders the centered document title (FACTURA/PRESUPUESTO/etc.) and, below
@@ -431,7 +433,7 @@ export async function buildDeliveryNotePDF(
           `Fecha: ${formatDate(sale.createdAt)}`,
         ],
     margin,
-    y,
+    fiscalEndY + 6,
     pageWidth
   );
 
@@ -557,7 +559,7 @@ export async function buildPaymentReceiptPDF(
       `Fecha de pago: ${sale.paidAt ? formatDate(sale.paidAt) : "—"}`,
     ],
     margin,
-    y,
+    fiscalEndY + 6,
     pageWidth
   );
 
