@@ -39,7 +39,15 @@ export async function createSupplier(formData: FormData): Promise<ActionResult> 
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   }
 
-  await withTenant(companyId, (tx) => tx.supplier.create({ data: { ...parsed.data, companyId } }));
+  try {
+    const dup = await withTenant(companyId, (tx) =>
+      tx.supplier.findFirst({ where: { companyId, name: { equals: parsed.data.name, mode: "insensitive" } }, select: { id: true } })
+    );
+    if (dup) return { success: false, error: "Ya tienes un proveedor con ese nombre" };
+    await withTenant(companyId, (tx) => tx.supplier.create({ data: { ...parsed.data, companyId } }));
+  } catch {
+    return { success: false, error: "No se pudo crear el proveedor" };
+  }
 
   revalidatePath("/suppliers");
   return { success: true };
@@ -68,14 +76,16 @@ export async function setSupplierRating(id: string, rating: number | null): Prom
   if (rating !== null && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
     return { success: false, error: "La calificación va de 1 a 5" };
   }
-  await withTenant(companyId, (tx) => tx.supplier.updateMany({ where: { id, companyId }, data: { rating } }));
+  const r = await withTenant(companyId, (tx) => tx.supplier.updateMany({ where: { id, companyId }, data: { rating } }));
+  if (r.count === 0) return { success: false, error: "Proveedor no encontrado" };
   revalidatePath("/suppliers");
   return { success: true };
 }
 
 export async function setSupplierActive(id: string, isActive: boolean): Promise<ActionResult> {
   const { companyId } = await requireAccountingPlan();
-  await withTenant(companyId, (tx) => tx.supplier.updateMany({ where: { id, companyId }, data: { isActive } }));
+  const r = await withTenant(companyId, (tx) => tx.supplier.updateMany({ where: { id, companyId }, data: { isActive } }));
+  if (r.count === 0) return { success: false, error: "Proveedor no encontrado" };
   revalidatePath("/suppliers");
   return { success: true };
 }

@@ -445,6 +445,7 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
   let updated = 0;
   const failed: { row: number; error: string }[] = [];
 
+  const seenSkus = new Map<string, number>();
   await withTenant(companyId, async (tx) => {
     for (let i = 0; i < rows.length; i++) {
       const parsed = ProductSchema.safeParse(rows[i]);
@@ -452,6 +453,17 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
         failed.push({ row: i + 1, error: parsed.error.issues[0]?.message ?? "Datos inválidos" });
         continue;
       }
+      const skuKey = parsed.data.sku ? parsed.data.sku.toLowerCase() : null;
+      if (skuKey) {
+        const first = seenSkus.get(skuKey);
+        if (first != null) {
+          failed.push({ row: i + 1, error: `SKU repetido en el archivo (ya aparece en la fila ${first})` });
+          continue;
+        }
+        seenSkus.set(skuKey, i + 1);
+      }
+      const rawRow = (rows[i] ?? {}) as Record<string, unknown>;
+      const has = (k: string) => rawRow[k] !== undefined && rawRow[k] !== null && rawRow[k] !== "";
 
       const { price, cost, stock, trackStock, wholesalePrice, bulkPrice, image: _ignored, ...rest } = parsed.data;
       void _ignored;
@@ -467,6 +479,7 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
         isActive,
       };
 
+      await tx.$executeRawUnsafe(`SAVEPOINT import_row`);
       try {
         if (rest.sku) {
           // Lock an existing SKU before reading its stock snapshot so a
@@ -479,17 +492,32 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
         }
         const existing = rest.sku
           ? await tx.product.findUnique({ where: { branchId_sku: { branchId, sku: rest.sku } } })
-          : null;
+          : await tx.product.findFirst({ where: { companyId, branchId, sku: null, name: { equals: rest.name, mode: "insensitive" } } });
 
         if (existing) {
-          await tx.product.update({
-            where: { id: existing.id },
-            data: { ...rest, ...priceFields },
-          });
-          if (resolvedStock !== existing.stock) await recordStockMovement(tx, {
+          // Al re-importar solo se tocan las columnas que vienen en el archivo; el resto del producto se conserva.
+          const touchStock = has("stock") || has("trackStock");
+          const nextStock = touchStock ? resolvedStock : existing.stock;
+          const data: Prisma.ProductUncheckedUpdateInput = {
+            name: rest.name,
+            priceCents: price,
+            ...(has("category") ? { category: rest.category } : {}),
+            ...(has("cost") ? { costCents: cost } : {}),
+            ...(has("trackStock") ? { trackStock } : {}),
+            ...(touchStock ? { stock: nextStock, isActive: (has("trackStock") ? trackStock : existing.trackStock) ? nextStock > 0 : true } : {}),
+            ...(has("lowStockThreshold") ? { lowStockThreshold: rest.lowStockThreshold } : {}),
+            ...(has("taxCategory") ? { taxCategory: rest.taxCategory } : {}),
+            ...(has("priceTiersEnabled") ? { priceTiersEnabled: rest.priceTiersEnabled } : {}),
+            ...(has("wholesalePrice") ? { wholesalePriceCents: wholesalePrice } : {}),
+            ...(has("wholesaleMinQty") ? { wholesaleMinQty: rest.wholesaleMinQty } : {}),
+            ...(has("bulkPrice") ? { bulkPriceCents: bulkPrice } : {}),
+            ...(has("bulkMinQty") ? { bulkMinQty: rest.bulkMinQty } : {}),
+          };
+          await tx.product.update({ where: { id: existing.id }, data });
+          if (nextStock !== existing.stock) await recordStockMovement(tx, {
             companyId, branchId, productId: existing.id, productName: existing.name, actorId, actorName,
             reason: "IMPORT", sourceType: "product_import", sourceId: existing.id,
-            quantityChange: resolvedStock - existing.stock, stockBefore: existing.stock,
+            quantityChange: nextStock - existing.stock, stockBefore: existing.stock,
           });
           updated++;
         } else {
@@ -508,8 +536,11 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
           });
           created++;
         }
-      } catch {
-        failed.push({ row: i + 1, error: "No se pudo guardar (¿SKU duplicado?)" });
+        await tx.$executeRawUnsafe(`RELEASE SAVEPOINT import_row`);
+      } catch (err) {
+        await tx.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT import_row`);
+        const code = (err as { code?: string } | null)?.code;
+        failed.push({ row: i + 1, error: code === "P2002" ? "SKU duplicado" : "No se pudo guardar la fila" });
       }
     }
   });
@@ -718,11 +749,18 @@ export async function listInternalUse(): Promise<InternalUseRow[]> {
   const session = await requireManager();
   const { companyId } = session;
   return withTenant(companyId, async (tx) => {
-    const moves = await tx.stockMovement.findMany({
+    let moves = await tx.stockMovement.findMany({
       where: { companyId, reason: "INTERNAL_USE", ...(session.branchId ? { branchId: session.branchId } : {}) },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
+    const reversed = new Set(
+      (await tx.stockMovement.findMany({
+        where: { companyId, sourceType: "internal_use_void", sourceId: { in: moves.map((m) => m.id) } },
+        select: { sourceId: true },
+      })).map((r) => r.sourceId)
+    );
+    moves = moves.filter((m) => !reversed.has(m.id));
     const ids = [...new Set(moves.map((m) => m.productId).filter((x): x is string => !!x))];
     const products = await tx.product.findMany({ where: { companyId, id: { in: ids } }, select: { id: true, costCents: true } });
     const cost = new Map(products.map((p) => [p.id, p.costCents ?? 0]));
@@ -741,25 +779,51 @@ export async function listInternalUse(): Promise<InternalUseRow[]> {
   });
 }
 
-// Eliminar un retiro devuelve la mercancía al inventario.
+// Eliminar un retiro devuelve la mercancía al inventario. No se borra el movimiento original: se registra uno inverso
+// (así la cadena de existencias y la auditoría quedan intactas) y el retiro deja de listarse.
 export async function deleteInternalUse(movementId: string): Promise<ActionResult> {
   const session = await requireManager();
-  const { companyId } = session;
+  const { companyId, userId: actorId, sellerName: actorName } = session;
+  let affectedBranch: string | null = null;
   try {
     await withTenant(companyId, async (tx) => {
-      const m = await tx.stockMovement.findFirst({ where: { id: movementId, companyId, reason: "INTERNAL_USE" } });
+      const m = await tx.stockMovement.findFirst({
+        where: { id: movementId, companyId, reason: "INTERNAL_USE", ...(session.branchId ? { branchId: session.branchId } : {}) },
+      });
       if (!m) throw new Error("Retiro no encontrado");
+      const already = await tx.stockMovement.findFirst({ where: { companyId, sourceType: "internal_use_void", sourceId: m.id }, select: { id: true } });
+      if (already) throw new Error("Este retiro ya fue eliminado");
+      affectedBranch = m.branchId;
       if (m.productId) {
-        const p = await tx.product.findFirst({ where: { id: m.productId, companyId } });
-        if (p && p.trackStock) await tx.product.update({ where: { id: p.id }, data: { stock: p.stock + Math.abs(m.quantityChange), isActive: true } });
+        const qty = Math.abs(m.quantityChange);
+        const rows = await tx.$queryRaw<{ stock: number }[]>`
+          UPDATE "Product" SET "stock" = "stock" + ${qty}, "isActive" = true
+          WHERE "id" = ${m.productId} AND "companyId" = ${companyId} AND "branchId" = ${m.branchId} AND "trackStock" = true
+          RETURNING "stock"
+        `;
+        if (rows[0]) {
+          await recordStockMovement(tx, {
+            companyId, branchId: m.branchId, productId: m.productId, productName: m.productName, actorId, actorName,
+            reason: "ADJUSTMENT", sourceType: "internal_use_void", sourceId: m.id,
+            quantityChange: qty, stockBefore: rows[0].stock - qty,
+          });
+        } else {
+          await tx.stockMovement.create({
+            data: {
+              companyId, branchId: m.branchId, productId: m.productId, productName: m.productName, actorId, actorName,
+              reason: "ADJUSTMENT", sourceType: "internal_use_void", sourceId: m.id, quantityChange: 0, stockBefore: 0, stockAfter: 0,
+            },
+          });
+        }
       }
-      await tx.stockMovement.delete({ where: { id: m.id } });
     });
   } catch (err) {
     return { success: false, error: userErrorMessage(err, "No se pudo eliminar") };
   }
+  await invalidateProductsCache(companyId, affectedBranch);
   revalidatePath("/accounting/consumption");
   revalidatePath("/inventory");
+  revalidatePath("/pos");
   return { success: true };
 }
 

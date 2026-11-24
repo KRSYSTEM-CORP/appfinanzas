@@ -252,6 +252,9 @@ const [step, setStep] = useState<Step>("cart");
   }
 
   const dirReq = useRef(0);
+  // Una clave por intento de venta (se reinicia en «Nueva venta») y un candado contra doble clic en «Cobrar».
+  const saleKey = useRef<string | null>(null);
+  const checkoutBusy = useRef(false);
   function loadDirectory(q: string, page: number) {
     const id = ++dirReq.current;
     setDirLoading(true);
@@ -322,6 +325,10 @@ const [step, setStep] = useState<Step>("cart");
 
   function checkout({ paymentStatus: status, rows, extraNote, change: changeText }: PayConfirm) {
     if (!customer) return;
+    // Candado contra doble clic: mientras una venta está en curso no se manda otra.
+    if (checkoutBusy.current) return;
+    checkoutBusy.current = true;
+    saleKey.current ??= crypto.randomUUID();
     setPaymentStatus(status);
     setPaymentRows(rows);
     setChange(changeText);
@@ -332,7 +339,7 @@ const [step, setStep] = useState<Step>("cart");
     // arrived, the queued retry resolves to that same sale instead of
     // creating (and charging, and discounting stock for) a second one.
     const saleInput: PendingSaleInput = {
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: saleKey.current,
       items: lines.map((l) => ({
         productId: l.productId,
         quantity: l.quantity,
@@ -380,6 +387,7 @@ const [step, setStep] = useState<Step>("cart");
     }
 
     startTransition(async () => {
+      try {
       if (!online) {
         await queueOfflineSale(customer);
         return;
@@ -418,10 +426,14 @@ const [step, setStep] = useState<Step>("cart");
         setPendingSync(false);
         setStep("receipt");
       }
+      } finally {
+        checkoutBusy.current = false;
+      }
     });
   }
 
   function newSale() {
+    saleKey.current = null;
     setCustomer(null);
     resetCart();
     setPaymentStatus("PAID");
