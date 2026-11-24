@@ -48,6 +48,7 @@ Ver la sección «Cuentas y dinero» (abajo). Pantalla `app/accounting/accounts/
 - **Aviso de renovación / prueba** (`lib/renewal.ts`): `RENEWAL_NOTICE_DAYS = 5`; en días calendario de Venezuela (UTC-4). Si la empresa nunca ha pagado el texto habla de «prueba gratis» (hoy, mañana, N días); si no, de renovar el plan. Es solo aviso dentro de la app.
 - **Días gratis** (superadmin): módulo `/admin/dias-gratis`, acciones `lib/actions/trial.ts` (`listTrialCompanies`, regalar días), reglas `lib/trial.ts` (atajos +15 d, +1/+2/+3 meses de 30 días, máximo 730; `addFreeDays` suma a lo que quede o desde hoy si ya venció, así una empresa bloqueada vuelve a entrar). Cuenta el total regalado en `Company.freeDaysGranted`.
 - **Registro con teléfono obligatorio**: `lib/phone.ts` (`normalizeContactPhone` → `+58412…`, 8 a 15 dígitos, acepta formatos venezolanos) guarda `Company.ownerPhone` (opcional en empresas antiguas).
+- **Verificación de Cloudflare (Turnstile)**: solo al entrar (inicio de sesión, empleado, registro, arranque de Google; `lib/turnstile.ts`). Con varias sucursales, `login()` devuelve un permiso firmado de 5 minutos (`lib/branch-ticket.ts`) y `completeBranchLogin()` entra a la sucursal sin repetir la verificación ni la contraseña.
 - **Panel de Plataforma `/admin`** (`app/admin/`): anuncios, aprendizaje (videos), aprobaciones, auditoría, cobranza, CRM, cupones (un solo uso), dias-gratis, empresas, export, marketing, pagos, uso. Solo superadmin (`lib/platform-guard.ts`).
 
 ## Cuentas y dinero

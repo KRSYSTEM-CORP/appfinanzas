@@ -23,7 +23,7 @@ export async function buildCashClosingPDF(
   let y = 40;
   const showLocal = exchangeRateEnabled && rate != null;
 
-  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
+  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth, "CORTE Z · CIERRE DE CAJA");
 
   const titleBottomY = renderDocumentTitleBlock(
     doc,

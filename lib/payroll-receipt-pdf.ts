@@ -37,7 +37,7 @@ export async function buildPayrollReceiptPDF(
   const y0 = 40;
   const money = (c: number) => formatCurrencyCents(referenceCurrency, c);
 
-  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y0, pageWidth);
+  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y0, pageWidth, "RECIBO DE PAGO DE NÓMINA");
   const titleBottomY = renderDocumentTitleBlock(
     doc,
     "RECIBO DE PAGO DE NÓMINA",

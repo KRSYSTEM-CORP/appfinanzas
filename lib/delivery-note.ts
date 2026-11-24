@@ -163,7 +163,10 @@ export async function renderCompanyHeader(
   company: DeliveryNoteCompany,
   margin: number,
   y: number,
-  pageWidth: number
+  pageWidth: number,
+  // Título del documento que se dibuja en el centro: el nombre de la empresa se ajusta para no chocar con él.
+  // Por defecto se asume «NOTA DE ENTREGA»; los títulos más anchos (Corte Z, recibo de nómina) deben indicar el suyo.
+  title: string = "NOTA DE ENTREGA"
 ): Promise<number> {
   let logoWidth = 0;
   if (company.logoDataUrl) {
@@ -188,7 +191,7 @@ export async function renderCompanyHeader(
   // with the title in the first place, even after adding a width cap.
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  const titleHalfWidth = doc.getTextWidth("NOTA DE ENTREGA") / 2;
+  const titleHalfWidth = doc.getTextWidth(title) / 2;
   const titleLeftEdge = pageWidth / 2 - titleHalfWidth - 16;
 
   const nameMaxWidth = Math.max(100, titleLeftEdge - textX);
