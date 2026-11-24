@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireManager } from "@/lib/session";
+import { assertBranchAllowed, requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateCache } from "@/lib/cache";
@@ -22,7 +22,9 @@ export type TransferRow = {
 
 // Productos con existencias en la sucursal de origen.
 export async function listTransferableProducts(branchId: string): Promise<TransferableProduct[]> {
-  const { companyId } = await requireManager();
+  const session = await requireManager();
+  const { companyId } = session;
+  assertBranchAllowed(session, branchId);
   return withTenant(companyId, (tx) =>
     tx.product.findMany({
       where: { companyId, branchId, trackStock: true, stock: { gt: 0 } },
@@ -67,12 +69,18 @@ const TransferSchema = z.object({
 // (mismo SKU, o mismo nombre cuando no tiene SKU) se crea como copia con las
 // existencias traspasadas. Todo ocurre en una sola transacción.
 export async function createTransfer(input: unknown): Promise<ActionResult> {
-  const { companyId, userId, sellerName } = await requireManager();
+  const session = await requireManager();
+  const { companyId, userId, sellerName } = session;
   const parsed = TransferSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   const d = parsed.data;
   if (d.fromBranchId === d.toBranchId) {
     return { success: false, error: "El origen y el destino deben ser sucursales distintas" };
+  }
+  try {
+    assertBranchAllowed(session, d.fromBranchId);
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
   }
   const ids = d.items.map((i) => i.productId);
   if (new Set(ids).size !== ids.length) return { success: false, error: "Un producto está repetido en el traspaso" };

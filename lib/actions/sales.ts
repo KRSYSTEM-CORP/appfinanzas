@@ -248,7 +248,8 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           address: customerAddress,
           rif: customerRif ?? null,
         },
-        update: {
+        // «Cliente general» es una ficha compartida: nunca se reescribe con los datos de una venta.
+        update: customerPhone === "0000-0000000" ? {} : {
           firstName: customerFirstName,
           lastName: customerLastName,
           address: customerAddress,
@@ -452,6 +453,12 @@ async function restoreStock(tx: Prisma.TransactionClient, saleId: string, compan
   );
 }
 
+// Al anular, el cupón canjeado en la venta queda libre y el presupuesto del que salió vuelve a estar abierto.
+async function releaseSaleLinks(tx: Prisma.TransactionClient, saleId: string, companyId: string, quoteId: string | null) {
+  await tx.promotionRedemption.deleteMany({ where: { saleId, companyId } });
+  if (quoteId) await tx.quote.updateMany({ where: { id: quoteId, companyId, status: "CONVERTED" }, data: { status: "PENDING" } });
+}
+
 export async function voidSale(saleId: string): Promise<ActionResult> {
   const session = await requireManager();
   if (!hasPermission(session, "void")) return { success: false, error: "No tienes permiso para anular ventas" };
@@ -474,6 +481,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       // Una venta de un día cuya caja ya se cerró no se anula: cambiaría el Corte Z ya emitido (ver CashClosing).
       await assertDayNotClosed(tx, companyId, sale.branchId, sale.createdAt);
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
+      await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
@@ -533,6 +541,8 @@ export async function issueCreditNote(saleId: string, reason: string): Promise<A
         },
       });
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
+      await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
+      await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {

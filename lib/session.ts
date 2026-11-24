@@ -77,6 +77,8 @@ export type Session = {
   // assignment changes mid-session.
   branchId: string | null;
   branchName: string | null;
+  // Sede a la que está fija la persona (User.branchId); null = puede moverse entre sedes (con la clave de cada una).
+  pinnedBranchId: string | null;
   // Gates the first-time product tour (components/onboarding/ProductTour.tsx)
   // — false only for a brand-new signup/employee that hasn't clicked through
   // or skipped it yet.
@@ -178,6 +180,7 @@ async function readSession(): Promise<Session | null> {
     needsPlanChoice: !user.company.planChosen && user.role === "GERENTE",
     branchId,
     branchName: branch?.name ?? null,
+    pinnedBranchId: user.branchId ?? null,
     hasSeenTour: user.hasSeenTour,
     locked: payload.lk === true,
     hasPin: user.pinHash != null,
@@ -292,4 +295,11 @@ export async function requirePermission(permission: PermissionId): Promise<Sessi
   const session = await requireSession();
   if (!hasPermission(session, permission)) redirect("/pos");
   return session;
+}
+
+// Una persona fija a una sede no puede operar sobre otra: se valida en el servidor, no solo en la pantalla.
+export function assertBranchAllowed(session: Pick<Session, "pinnedBranchId">, branchId: string): void {
+  if (session.pinnedBranchId && session.pinnedBranchId !== branchId) {
+    throw new Error("Tu usuario está fijo a otra sucursal y no puede operar en esta.");
+  }
 }
