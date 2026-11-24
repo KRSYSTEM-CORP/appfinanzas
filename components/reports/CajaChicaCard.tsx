@@ -10,6 +10,7 @@ import { formatCurrencyCents } from "@/lib/currencies";
 import { Price } from "@/components/money/Price";
 import { addCashOutflow, deleteCashOutflow, type CashClosingSummary } from "@/lib/actions/cash-closing";
 import type { ReferenceCurrency } from "@prisma/client";
+import { IncomeByMethodDialog } from "@/components/reports/IncomeByMethodDialog";
 
 // Vista "Movimientos de Caja Chica": entradas y salidas del turno
 // (apertura + ventas en efectivo − salidas = efectivo esperado) y el registro
@@ -51,6 +52,9 @@ export function CajaChicaCard({
 
   return (
     <div className="flex flex-col gap-4">
+      <div>
+        <IncomeByMethodDialog summary={summary} referenceCurrency={referenceCurrency} />
+      </div>
       {canEdit && (
         <Card>
           <CardContent>

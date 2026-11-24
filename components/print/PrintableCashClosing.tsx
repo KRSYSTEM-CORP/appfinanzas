@@ -3,6 +3,7 @@ import { PAYMENT_METHOD_LABELS, formatDate, formatDateOnly } from "@/lib/format"
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { CashClosingSummary } from "@/lib/actions/cash-closing";
+import { grandTotals, groupIncomeByMethod } from "@/lib/income-by-method";
 import { isThermal, printRootClass } from "@/lib/print-paper-sizes";
 
 // Plain HTML/CSS rendering of a Cierre de Caja for the browser print dialog
@@ -34,6 +35,9 @@ export function PrintableCashClosing({
     showLocal
       ? formatLocalCurrency(eurCentsToLocal(cents, rate!), currencyCode)
       : formatCurrencyCents(referenceCurrency, cents);
+
+  const incomeSections = groupIncomeByMethod(summary.byAccount);
+  const incomeTotal = grandTotals(incomeSections);
 
   return (
     <div className={printRootClass(paperSize)}>
@@ -123,6 +127,33 @@ export function PrintableCashClosing({
               <span>{formatCurrencyCents(c.currencyCode, c.cents)}</span>
             </div>
           ))}
+        </>
+      )}
+
+      {incomeSections.length > 0 && (
+        <>
+          <div className="my-2 border-t border-dashed border-black" />
+          <p className="print-title">Ingresos por método y cuenta</p>
+          {incomeSections.map((s) => (
+            <div key={s.key} className="mb-1">
+              <div className="flex justify-between font-bold">
+                <span>{s.title} ({s.count})</span>
+                <span>{s.byCurrency.map((c) => formatCurrencyCents(c.currencyCode, c.cents)).join(" + ")}</span>
+              </div>
+              {s.rows.map((r, i) => (
+                <div key={`${r.accountId ?? r.paymentMethod}-${r.currencyCode}-${i}`} className="flex justify-between text-xs">
+                  <span>
+                    {[r.label, r.kind === "PAGO_MOVIL" || r.kind === "PUNTO_DE_VENTA" || r.accountNumber ? r.accountNumber : null].filter(Boolean).join(" · ")} ({r.count})
+                  </span>
+                  <span>{formatCurrencyCents(r.currencyCode, r.cents)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          <div className="flex justify-between font-bold">
+            <span>Total cobrado ({incomeTotal.count}):</span>
+            <span>{money(incomeTotal.refCents)}</span>
+          </div>
         </>
       )}
 
