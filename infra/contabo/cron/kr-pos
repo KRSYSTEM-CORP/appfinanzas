@@ -7,3 +7,5 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 0 0 * * *  kr /usr/local/bin/kr-cron.sh /api/cron/bcv-rate       >> /var/log/kr-cron.log 2>&1
 0 4 1 * *  kr /usr/local/bin/kr-cron.sh /api/cron/db-size-check   >> /var/log/kr-cron.log 2>&1
 30 3 * * * kr /usr/local/bin/kr-cron.sh /api/cron/login-attempts-cleanup >> /var/log/kr-cron.log 2>&1
+# Reintento cada 2 horas: el BCV y el agregador publican a horas distintas y a veces tarde.
+15 */2 * * * kr /usr/local/bin/kr-cron.sh /api/cron/bcv-rate       >> /var/log/kr-cron.log 2>&1
