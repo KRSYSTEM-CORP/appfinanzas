@@ -269,6 +269,13 @@ export async function requirePurchasesAccess(): Promise<Session> {
   return session;
 }
 
+// Contabilidad (libros, cuentas por cobrar, nómina): además del plan, exige el permiso "admin".
+export async function requireAdminAccess(): Promise<Session> {
+  const session = await requireAccountingPlan();
+  if (!hasPermission(session, "admin")) redirect("/pos");
+  return session;
+}
+
 export async function requireFeature(featureId: string): Promise<Session> {
   const session = await requireSession();
   if (!hasFeature(session.enabledFeatures, featureId)) redirect("/pos");

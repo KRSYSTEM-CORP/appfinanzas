@@ -3,7 +3,7 @@
 import { assertAccountFunds, toActionResult } from "@/lib/account-balance";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAccountingPlan } from "@/lib/session";
+import { requireAdminAccess } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { methodForAccountKind, refToAccountCents } from "@/lib/account-money";
 import { commissionFor, computeFortnight, isValidPeriod, payrollSettlement, periodDateRange, type PayrollRates } from "@/lib/payroll";
@@ -92,7 +92,7 @@ async function salesTotalForPeriod(
 
 async function requirePayrollManager() {
   // Contabilidad (Pyme y Corporativo) y solo gerente.
-  const session = await requireAccountingPlan();
+  const session = await requireAdminAccess();
   if (session.role !== "GERENTE" && !session.isSuperAdmin) throw new Error("Solo el gerente puede gestionar la nómina");
   return session;
 }

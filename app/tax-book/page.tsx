@@ -1,4 +1,4 @@
-import { requireAccountingPlan } from "@/lib/session";
+import { requireAdminAccess } from "@/lib/session";
 import { BookOpenIcon, PackageIcon, PercentIcon, ReceiptTextIcon } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PurchasesBookList, SalesBookList } from "@/components/finance/TaxBookLists";
@@ -21,7 +21,7 @@ export default async function TaxBookPage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string; from?: string; to?: string; libro?: string }>;
 }) {
-  await requireAccountingPlan();
+  await requireAdminAccess();
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
 
