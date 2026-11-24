@@ -61,6 +61,7 @@ export function dualForPayments(refCents: number, payments: { currencyCode: stri
 // «Bs 1.000,00 · $10,00» en una sola línea (botones, mensajes de error, textos de una línea).
 export function dualInline(d: DualAmount): string {
   return d.secondary ? `${d.primary} · ${d.secondary}` : d.primary;
+}
 
 // Una línea de pago de compra ya registrada, con su moneda primero. Si quedó guardada la moneda real, se usa; en registros
 // antiguos (sin moneda de línea) se decide por el método.
