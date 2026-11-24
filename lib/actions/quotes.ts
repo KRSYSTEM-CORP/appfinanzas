@@ -364,11 +364,13 @@ export async function duplicateQuote(quoteId: string): Promise<ActionResult> {
 
 // Elimina un presupuesto que no se haya facturado.
 export async function deleteQuote(quoteId: string): Promise<ActionResult> {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId, userId, role, isSuperAdmin } = await requireSession();
   const result = await withTenant(companyId, async (tx) => {
     const q = await tx.quote.findFirst({ where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) }, include: { sale: { select: { id: true } } } });
     if (!q) return "Presupuesto no encontrado";
     if (q.sale) return "Este presupuesto ya se facturó y no se puede eliminar";
+    // Un vendedor solo borra sus propios presupuestos; el gerente, cualquiera.
+    if (role !== "GERENTE" && !isSuperAdmin && q.sellerId !== userId) return "Solo puedes eliminar tus propios presupuestos";
     await tx.quote.delete({ where: { id: quoteId } });
     return null;
   });
