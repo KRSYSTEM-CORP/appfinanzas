@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireManager } from "@/lib/session";
 import { lineCurrency, lineNativeCents } from "@/lib/currency-breakdown";
+import { caracasDateTimeString } from "@/lib/report-types";
 import { withTenant } from "@/lib/tenant-db";
 import { buildDailyReport } from "@/lib/daily-report";
 import { sendWeeklyReportEmail } from "@/lib/email";
@@ -34,7 +35,7 @@ export async function exportSalesHistory(): Promise<Cell[][]> {
     return [
       ["Fecha", "N.º", "Cliente", "Base imponible (ref.)", "IVA (ref.)", "Total (referencia)", "Cobrado en Bs", "Cobrado en USD", "Cobrado en EUR", "Estado de pago"],
       ...sales.map((s): Cell[] => [
-        s.createdAt.toISOString().slice(0, 16).replace("T", " "),
+        caracasDateTimeString(s.createdAt),
         s.controlNumber ?? null,
         [s.customerFirstName, s.customerLastName].filter(Boolean).join(" ") || "Consumidor final",
         s.baseImponibleCents / 100,
@@ -65,7 +66,7 @@ export async function exportPaymentsBackup(): Promise<Cell[][]> {
     return [
       ["Fecha", "Venta N.º", "Método", "Moneda", "Monto", "Equivalente (referencia)", "Referencia"],
       ...pays.map((p): Cell[] => [
-        p.createdAt.toISOString().slice(0, 16).replace("T", " "),
+        caracasDateTimeString(p.createdAt),
         p.sale.controlNumber ?? null,
         String(p.paymentMethod),
         p.currencyCode ?? null,

@@ -60,7 +60,9 @@ export type CsvMovement = {
   currency: string;
 };
 
-function csvCell(v: string): string {
+export function csvCell(v: string): string {
+  // Protección contra fórmulas de Excel en textos que escribe el usuario.
+  if (/^[=+\-@\t\r]/.test(v)) v = `'${v}`;
   return /[;"\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 

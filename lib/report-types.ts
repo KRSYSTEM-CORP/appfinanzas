@@ -72,6 +72,19 @@ export function zonedDateStringToUtc(dateStr: string, timeZone: string = SHOP_TI
   return zonedMidnightUtc(anchor, timeZone, 0);
 }
 
+// «AAAA-MM-DD» de un instante en hora de Venezuela (toISOString().slice(0, 10)
+// da el día UTC y tras las 8 p. m. cae en el día siguiente).
+export function caracasDateString(instant: Date): string {
+  const { year, month, day } = zonedDateParts(instant, SHOP_TIME_ZONE);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+// «AAAA-MM-DD HH:mm» de un instante en hora de Venezuela.
+export function caracasDateTimeString(instant: Date): string {
+  const f = new Intl.DateTimeFormat("sv-SE", { timeZone: SHOP_TIME_ZONE, dateStyle: "short", timeStyle: "short" });
+  return f.format(instant);
+}
+
 export function todayDateString(): string {
   const { year, month, day } = zonedDateParts(new Date(), SHOP_TIME_ZONE);
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
