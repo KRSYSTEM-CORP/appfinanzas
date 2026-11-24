@@ -45,7 +45,7 @@ const METHODS: { id: string; label: string; icon: React.ReactNode }[] = [
   { id: "TRANSFER", label: "Transferencia", icon: <LandmarkIcon /> },
 ];
 
-function Logo({ a, size = 44 }: { a: Pick<BankAccount, "bankKey" | "kind">; size?: number }) {
+export function Logo({ a, size = 44 }: { a: Pick<BankAccount, "bankKey" | "kind">; size?: number }) {
   const src = bankLogoSrc(a.bankKey ?? defaultBankKey(a.kind));
   return (
     <span style={{ width: size, height: size }} className="grid shrink-0 place-items-center overflow-hidden rounded-[12px] border bg-card">

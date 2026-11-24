@@ -18,6 +18,20 @@ export type CashShiftRow = {
   closedAt: Date | null;
 };
 
+// Cobros del turno por cuenta (o sin cuenta: efectivo, cobros antiguos) y método.
+export type AccountIncomeRow = {
+  accountId: string | null;
+  kind: string | null;
+  bankKey: string | null;
+  bankName: string | null;
+  accountNumber: string | null;
+  paymentMethod: PaymentMethod;
+  count: number;
+  refCents: number;
+  currencyCode: string;
+  cents: number;
+};
+
 export type CashClosingSummary = {
   date: string;
   // Turno que se muestra (el abierto o, si no hay, el último cerrado). En la vista
@@ -46,6 +60,7 @@ export type CashClosingSummary = {
   byMethod: { paymentMethod: PaymentMethod; totalCents: number }[];
   // Lo realmente cobrado en cada moneda (Bs en Bs, divisas en divisas); refCents es solo referencia.
   byCurrency: { currencyCode: string; cents: number; refCents: number }[];
+  byAccount: AccountIncomeRow[];
   closed: { closedAt: Date; note: string | null } | null;
 };
 
@@ -89,7 +104,7 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
     const viewClosing = viewShift != null ? closings.find((c) => c.shiftNumber === viewShift) ?? null : null;
     const viewOpening = viewShift != null ? viewOpenings[0] ?? null : null;
 
-    const [totals, byStatus, byMethodRows, byCurrencyRows, outflows] = await Promise.all([
+    const [totals, byStatus, byMethodRows, byCurrencyRows, byAccountRows, outflows] = await Promise.all([
       tx.sale.aggregate({
         where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: window.start, lt: window.end }, voided: false },
         _sum: { totalCents: true },
@@ -122,6 +137,28 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
           AND s."createdAt" >= ${window.start} AND s."createdAt" < ${window.end}
           AND s."voided" = false
         GROUP BY 1
+        ORDER BY ref DESC
+      `,
+      tx.$queryRaw<
+        {
+          accountId: string | null; kind: string | null; bankKey: string | null; bankName: string | null;
+          accountNumber: string | null; paymentMethod: PaymentMethod;
+          count: bigint; ref: bigint; currency: string; cents: bigint;
+        }[]
+      >`
+        SELECT sp."paymentAccountId" AS "accountId", pa.kind::text AS kind, pa."bankKey" AS "bankKey", pa."bankName" AS "bankName",
+               pa."accountNumber" AS "accountNumber", sp."paymentMethod" AS "paymentMethod",
+               COUNT(*)::bigint AS count, SUM(sp."amountEurCents")::bigint AS ref,
+               COALESCE(sp."currencyCode", CASE WHEN sp."paymentMethod"::text IN ('ZELLE','BINANCE','PAYPAL') THEN 'USD' ELSE 'EUR' END) AS currency,
+               SUM(COALESCE(sp."amountCurrencyCents", sp."amountEurCents"))::bigint AS cents
+        FROM "SalePayment" sp
+        JOIN "Sale" s ON s.id = sp."saleId"
+        LEFT JOIN "PaymentAccount" pa ON pa.id = sp."paymentAccountId"
+        WHERE s."companyId" = ${companyId}
+          ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+          AND s."createdAt" >= ${window.start} AND s."createdAt" < ${window.end}
+          AND s."voided" = false
+        GROUP BY 1, 2, 3, 4, 5, 6, 9
         ORDER BY ref DESC
       `,
       tx.cashOutflow.findMany({
@@ -197,6 +234,18 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
       creditCount: byStatus.find((r) => r.paymentStatus === "CREDIT")?._count ?? 0,
       byMethod: byMethodRows.map((r) => ({ paymentMethod: r.paymentMethod, totalCents: Number(r.total_cents) })),
       byCurrency: byCurrencyRows.map((r) => ({ currencyCode: r.currency, cents: Number(r.cents), refCents: Number(r.ref) })),
+      byAccount: byAccountRows.map((r) => ({
+        accountId: r.accountId,
+        kind: r.kind,
+        bankKey: r.bankKey,
+        bankName: r.bankName,
+        accountNumber: r.accountNumber,
+        paymentMethod: r.paymentMethod,
+        count: Number(r.count),
+        refCents: Number(r.ref),
+        currencyCode: r.currency,
+        cents: Number(r.cents),
+      })),
       closed,
     };
   });

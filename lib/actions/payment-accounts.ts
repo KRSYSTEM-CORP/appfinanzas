@@ -6,8 +6,9 @@ import { requireManager, requireSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import type { ActionResult } from "@/lib/types";
 import type { PaymentAccountKind } from "@prisma/client";
-import { defaultCurrencyForKind, lineInAccountCurrency, payrollDebitCents } from "@/lib/account-money";
-import { accountBalance, collectedWhere, currentRateOf, expenseDebitCents } from "@/lib/account-balance";
+import { defaultCurrencyForKind } from "@/lib/account-money";
+import { accountMovementsList, type AccountMovement } from "@/lib/account-movements";
+import { accountBalance, currentRateOf } from "@/lib/account-balance";
 import { normalizeBankSiteUrl } from "@/lib/bank-sites";
 
 export type PaymentAccountRow = {
@@ -195,70 +196,17 @@ export async function addAccountFunds(input: unknown): Promise<ActionResult> {
   return { success: true };
 }
 
-export type AccountMovement = {
-  id: string;
-  at: string;
-  kind: "COBRO" | "FONDOS" | "COMPRA" | "NOMINA" | "GASTO";
-  label: string;
-  // Positivo entra a la cuenta, negativo sale; en la moneda de la cuenta.
-  amountCents: number;
-};
+export type { AccountMovement } from "@/lib/account-movements";
 
-// Últimos movimientos de una cuenta (cobros, inyecciones, compras, nómina y gastos), del más reciente al más antiguo.
-export async function getAccountMovements(accountId: string, limit = 40): Promise<AccountMovement[]> {
+// Movimientos de una cuenta (cobros, inyecciones, compras, nómina y gastos), del más reciente al más antiguo.
+// `limit` null = historial completo; `windows` limita a esos períodos.
+export async function getAccountMovements(accountId: string, limit: number | null = 40, windows?: { start: Date; end: Date }[]): Promise<AccountMovement[]> {
   const { companyId } = await requireManager();
   return withTenant(companyId, async (tx) => {
     const a = await tx.paymentAccount.findFirst({ where: { id: accountId, companyId } });
     if (!a) return [];
     const rate = await currentRateOf(tx, companyId);
-    const since = { gte: a.balanceSince };
-    const [sales, fundings, purchases, payroll, expenses] = await Promise.all([
-      tx.salePayment.findMany({
-        where: { ...collectedWhere(companyId, a), createdAt: since },
-        select: { id: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true, reference: true },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-      }),
-      tx.accountFunding.findMany({ where: { paymentAccountId: a.id, createdAt: since }, orderBy: { createdAt: "desc" }, take: limit }),
-      tx.purchasePayment.findMany({
-        where: { paymentAccountId: a.id, purchase: { companyId, voided: false }, createdAt: since },
-        select: { id: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true, reference: true, purchase: { select: { supplierInvoiceNo: true, manualSupplierName: true, supplier: { select: { name: true } } } } },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-      }),
-      tx.payrollPayment.findMany({
-        where: { paymentAccountId: a.id, companyId, createdAt: since },
-        select: { id: true, createdAt: true, accountDebitCents: true, paidCents: true, isAdvance: true, employee: { select: { name: true } } },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-      }),
-      tx.expense.findMany({
-        where: { paymentAccountId: a.id, companyId, createdAt: since },
-        select: { id: true, createdAt: true, description: true, amountCents: true, localAmountCents: true, enteredInLocal: true },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-      }),
-    ]);
-    const out: AccountMovement[] = [
-      ...sales.map((p) => ({ id: `s${p.id}`, at: p.createdAt.toISOString(), kind: "COBRO" as const, label: p.reference ? `Cobro de venta · ref. ${p.reference}` : "Cobro de venta", amountCents: lineInAccountCurrency(p, a.currency, rate) })),
-      ...fundings.map((f) => ({ id: `f${f.id}`, at: f.createdAt.toISOString(), kind: "FONDOS" as const, label: f.note ? `Fondos agregados · ${f.note}` : "Fondos agregados", amountCents: f.amountCents })),
-      ...purchases.map((p) => ({
-        id: `p${p.id}`,
-        at: p.createdAt.toISOString(),
-        kind: "COMPRA" as const,
-        label: `Pago de compra · ${p.purchase.supplier?.name ?? p.purchase.manualSupplierName ?? "Proveedor"}`,
-        amountCents: -lineInAccountCurrency(p, a.currency, rate),
-      })),
-      ...payroll.map((p) => ({
-        id: `n${p.id}`,
-        at: p.createdAt.toISOString(),
-        kind: "NOMINA" as const,
-        label: `${p.isAdvance ? "Adelanto" : "Nómina"} · ${p.employee.name}`,
-        amountCents: -payrollDebitCents(p, a.currency, rate),
-      })),
-      ...expenses.map((e) => ({ id: `g${e.id}`, at: e.createdAt.toISOString(), kind: "GASTO" as const, label: `Gasto · ${e.description}`, amountCents: -expenseDebitCents(e, a.currency, rate) })),
-    ];
-    return out.sort((x, y) => (x.at < y.at ? 1 : -1)).slice(0, limit);
+    return accountMovementsList(tx, companyId, a, rate, limit, windows);
   });
 }
 
