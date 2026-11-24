@@ -4,6 +4,7 @@ import { PAYMENT_METHOD_LABELS, formatDate, formatDateOnly } from "@/lib/format"
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, referenceNote } from "@/lib/currencies";
 import { renderCompanyHeader, renderDocumentTitleBlock, type DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { CashClosingSummary } from "@/lib/actions/cash-closing";
+import { grandTotals, groupIncomeByMethod } from "@/lib/income-by-method";
 import type { ReferenceCurrency } from "@prisma/client";
 
 export async function buildCashClosingPDF(
@@ -95,7 +96,7 @@ export async function buildCashClosingPDF(
   for (const [label, value] of [
     ["Apertura:", money(summary.openingCents ?? 0)],
     ["Ventas en efectivo:", money(summary.cashSalesCents)],
-    ["Salidas:", `−${money(summary.outflowsCents)}`],
+    ["Salidas:", `-${money(summary.outflowsCents)}`],
   ]) {
     doc.text(label, margin, y);
     doc.text(value, pageWidth - margin, y, { align: "right" });
@@ -156,6 +157,45 @@ export async function buildCashClosingPDF(
     doc.text("No hubo ventas registradas este día.", margin, y);
     doc.setTextColor(0, 0, 0);
     y += 20;
+  }
+
+  // Ingresos por método y cuenta (puntos de venta por banco, pago móvil, transferencias, Zelle…): lo mismo que el botón
+  // «Ingresos por método» de Caja Chica y la versión impresa.
+  const incomeSections = groupIncomeByMethod(summary.byAccount ?? []);
+  if (incomeSections.length > 0) {
+    const total = grandTotals(incomeSections);
+    const amountOf = (cents: number, currency: string) => formatCurrencyCents(currency, cents);
+    type Cell = string | { content: string; colSpan?: number; styles?: Record<string, unknown> };
+    const body: Cell[][] = [];
+    for (const sec of incomeSections) {
+      body.push([
+        { content: sec.title, colSpan: 2, styles: { fontStyle: "bold", fillColor: [235, 238, 245] } },
+        { content: String(sec.count), styles: { fontStyle: "bold", halign: "center", fillColor: [235, 238, 245] } },
+        { content: sec.byCurrency.map((c) => amountOf(c.cents, c.currencyCode)).join(" + "), styles: { fontStyle: "bold", halign: "right", fillColor: [235, 238, 245] } },
+        { content: formatCurrencyCents(referenceCurrency, sec.refCents), styles: { fontStyle: "bold", halign: "right", fillColor: [235, 238, 245] } },
+      ]);
+      for (const r of sec.rows) {
+        const detail = [r.accountId ? (r.kind === "PUNTO_DE_VENTA" ? "Terminal" : null) : null, r.accountNumber].filter(Boolean).join(" ");
+        body.push([r.label || "—", detail, String(r.count), amountOf(r.cents, r.currencyCode), formatCurrencyCents(referenceCurrency, r.refCents)]);
+      }
+    }
+    body.push([
+      { content: "Total general", colSpan: 2, styles: { fontStyle: "bold" } },
+      { content: String(total.count), styles: { fontStyle: "bold", halign: "center" } },
+      { content: total.byCurrency.map((c) => amountOf(c.cents, c.currencyCode)).join(" + "), styles: { fontStyle: "bold", halign: "right" } },
+      { content: formatCurrencyCents(referenceCurrency, total.refCents), styles: { fontStyle: "bold", halign: "right" } },
+    ]);
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [["Ingresos por método y cuenta", "Cuenta", "Cobros", "Monto", "Equiv. ref."]],
+      body,
+      theme: "grid",
+      headStyles: { fillColor: [30, 41, 59] },
+      styles: { fontSize: 9, cellPadding: 5 },
+      columnStyles: { 2: { halign: "center" }, 3: { halign: "right" }, 4: { halign: "right" } },
+    });
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 20;
   }
 
   if (exchangeRateEnabled && rate != null) {
