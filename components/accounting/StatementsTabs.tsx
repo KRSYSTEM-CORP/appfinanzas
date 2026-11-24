@@ -19,7 +19,7 @@ const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", 
 
 // Traductor contable: explica cada línea en palabras simples.
 const HELP: Record<string, string> = {
-  income: "Lo que vendiste en el periodo, sin contar ventas anuladas.",
+  income: "Lo que vendiste en el periodo sin IVA y sin contar ventas anuladas. El IVA no es ingreso.",
   cogs: "Lo que te costó la mercancía que vendiste.",
   gross: "Ingresos menos costo de ventas: lo que queda antes de pagar gastos.",
   sales: "Gastos de vender, como las comisiones de los vendedores.",
@@ -60,6 +60,7 @@ export function StatementsTabs({
   if (tab === "estado") return <>{periodBar}<IncomeStatement s={s} m={m} islr={islr} periodLabel={periodLabel} /></>;
   if (tab === "sit") return <>{periodBar}<Position s={s} m={m} periodLabel={periodLabel} /></>;
   if (tab === "costo") return <>{periodBar}<CostAnalysis s={s} m={m} /></>;
+  if (!s.ivaEnabled) return <>{periodBar}<SectionCard title="Resumen de IVA"><Note>Tu empresa no usa IVA. Puedes activarlo en Ajustes.</Note></SectionCard></>;
   return <>{periodBar}<Iva s={s} m={m} periodLabel={periodLabel} rate={rate} /></>;
 }
 
@@ -186,7 +187,7 @@ function IncomeStatement({ s, m, islr, periodLabel }: { s: Statements; m: M; isl
     router.replace(`?${next.toString()}`);
   }
   const lines: { k: string; label: string; v: number; bold?: boolean }[] = [
-    { k: "income", label: "Ingresos por ventas", v: s.income },
+    { k: "income", label: "Ventas netas", v: s.income },
     { k: "cogs", label: "Costo de ventas", v: -s.cogs },
     { k: "gross", label: "Utilidad bruta", v: s.gross, bold: true },
     { k: "sales", label: "Gastos de ventas", v: -s.salesExpenses },
@@ -307,7 +308,7 @@ function Position({ s, m, periodLabel }: { s: Statements; m: M; periodLabel: str
       <p className="text-[13px] text-muted-foreground">{periodLabel} · estilo NIIF</p>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-3.5">
         {block("Activo corriente", [["Efectivo y bancos", s.banks], ["Cuentas por cobrar", s.receivables], ["Inventarios", s.inventory]], "Total activo", s.assets)}
-        {block("Pasivo corriente", [["Cuentas por pagar", s.payables], ["IVA por pagar", s.ivaPayable]], "Total pasivo", s.liabilities)}
+        {block("Pasivo corriente", [["Cuentas por pagar", s.payables], ...(s.ivaEnabled ? ([["IVA por pagar", s.ivaPayable]] as [string, number][]) : [])], "Total pasivo", s.liabilities)}
         {block("Patrimonio", [["Activo − pasivo", s.equity]], "Total patrimonio", s.equity)}
       </div>
       <SectionCard title="La ecuación que siempre cuadra" subtitle="Activo = Pasivo + Patrimonio: lo que tienes se financia con deudas o con dinero tuyo">

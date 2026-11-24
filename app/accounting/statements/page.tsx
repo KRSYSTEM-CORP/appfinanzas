@@ -4,7 +4,7 @@ import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { PeriodBar } from "@/components/shared/PeriodBar";
 import { StatementsTabs } from "@/components/accounting/StatementsTabs";
 import { getStatements, listMovements } from "@/lib/actions/statements";
-import { getExchangeRateInfo } from "@/lib/actions/settings";
+import { getExchangeRateInfo, getIvaSettings } from "@/lib/actions/settings";
 import { statementTab } from "@/lib/admin-nav";
 import { selectionLabel } from "@/lib/period-label";
 import { parseDateRangeSelection, todayDateString } from "@/lib/report-types";
@@ -21,7 +21,8 @@ export default async function StatementsPage({
   await requirePermission("admin");
   await requireAccountingPlan();
   const params = await searchParams;
-  const tab = statementTab(params.tab);
+  const { ivaEnabled } = await getIvaSettings();
+  const tab = statementTab(params.tab, ivaEnabled);
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const islr = Number.isFinite(Number(params.islr)) && params.islr !== undefined ? Number(params.islr) : 15;
   const [statements, movements, { referenceCurrency, rate, exchangeRateEnabled }] = await Promise.all([
