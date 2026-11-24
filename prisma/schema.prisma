@@ -673,6 +673,7 @@ model Sale {
   branch                Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
   items                 SaleItem[]
   creditNote            CreditNote?
+  cashOutflow           CashOutflow?
   debitNotes            DebitNote[]
   // Breakdown when the customer split payment across multiple methods (e.g.
   // half cash USD, half Pago Móvil in Bs). The singular paymentMethod/
@@ -1340,6 +1341,9 @@ model CashOutflow {
   amountCents Int
   createdById String
   shiftNumber Int      @default(1)
+  // Venta anulada que originó esta salida (devolución de efectivo). Único: una venta, una devolución.
+  saleId      String?  @unique
+  sale        Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
   @@index([companyId, branchId, date])

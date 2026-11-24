@@ -17,7 +17,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("@/lib/realtime", () => ({ notifyLive: async () => {}, posChannel: (id: string) => id }));
 
-const { completeSale, issueCreditNote, registerPayment, getOrCreateInvoiceNumber } = await import("@/lib/actions/sales");
+const { completeSale, voidSale, issueCreditNote, registerPayment, getOrCreateInvoiceNumber } = await import("@/lib/actions/sales");
 
 async function stockOf(productId: string) {
   return (await owner.product.findUniqueOrThrow({ where: { id: productId } })).stock;
@@ -105,23 +105,40 @@ describe("completeSale", () => {
   });
 });
 
-describe("notas de crédito", () => {
-  it("anulan la venta facturada y reponen el stock", async () => {
-    const sale = await sell(3);
+describe("notas de crédito (Próximamente)", () => {
+  it("el servidor las rechaza y la venta sigue intacta", async () => {
+    const sale = await sell(1);
     await getOrCreateInvoiceNumber(sale.id);
-    const before = await stockOf(ctx.productId);
     const result = await issueCreditNote(sale.id, "Devolución de prueba");
-    expect(result.success).toBe(true);
-    expect(await stockOf(ctx.productId)).toBe(before + 3);
-    const updated = await owner.sale.findUniqueOrThrow({ where: { id: sale.id }, include: { creditNote: true } });
-    expect(updated.voided).toBe(true);
-    expect(updated.creditNote?.totalCents).toBe(sale.totalCents);
+    expect(result.success).toBe(false);
+    const after = await owner.sale.findUniqueOrThrow({ where: { id: sale.id } });
+    expect(after.voided).toBe(false);
+  });
+});
+
+describe("anular con efectivo cobrado", () => {
+  it("registra una devolución en Caja Chica atada a la venta, sin duplicarse", async () => {
+    const sale = await sell(1);
+    await owner.salePayment.deleteMany({ where: { saleId: sale.id } });
+    await owner.salePayment.create({ data: { saleId: sale.id, paymentMethod: "CASH", amountEurCents: 700 } });
+    const before = await stockOf(ctx.productId);
+    expect((await voidSale(sale.id)).success).toBe(true);
+    expect(await stockOf(ctx.productId)).toBe(before + 1);
+    const rows = await owner.cashOutflow.findMany({ where: { saleId: sale.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].amountCents).toBe(700);
+    expect(rows[0].concept).toMatch(/^Devolución por anulación de venta N\.º /);
+    // Reintentar no duplica ni crea otra salida.
+    expect((await voidSale(sale.id)).success).toBe(false);
+    expect(await owner.cashOutflow.count({ where: { saleId: sale.id } })).toBe(1);
   });
 
-  it("no se emiten sobre una venta sin factura", async () => {
+  it("un cobro que no es efectivo no genera salida", async () => {
     const sale = await sell(1);
-    const result = await issueCreditNote(sale.id, "Sin factura");
-    expect(result.success).toBe(false);
+    await owner.salePayment.deleteMany({ where: { saleId: sale.id } });
+    await owner.salePayment.create({ data: { saleId: sale.id, paymentMethod: "ZELLE", amountEurCents: 700 } });
+    expect((await voidSale(sale.id)).success).toBe(true);
+    expect(await owner.cashOutflow.count({ where: { saleId: sale.id } })).toBe(0);
   });
 });
 

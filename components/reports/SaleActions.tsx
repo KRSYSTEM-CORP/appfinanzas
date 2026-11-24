@@ -4,8 +4,6 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogClose,
@@ -16,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { voidSale, registerPayment, issueCreditNote, issueDebitNote } from "@/lib/actions/sales";
+import { voidSale, registerPayment } from "@/lib/actions/sales";
 import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { accountChoiceMessage } from "@/lib/payment-method-accounts";
 import { ACCOUNT_KIND_LABELS } from "@/lib/payment-accounts";
@@ -77,13 +75,6 @@ export function SaleActions({
     };
   }, [payOpen]);
   const router = useRouter();
-  const [creditOpen, setCreditOpen] = useState(false);
-  const [creditReason, setCreditReason] = useState("");
-  const [creditError, setCreditError] = useState<string | null>(null);
-  const [debitOpen, setDebitOpen] = useState(false);
-  const [debitReason, setDebitReason] = useState("");
-  const [debitAmount, setDebitAmount] = useState("");
-  const [debitError, setDebitError] = useState<string | null>(null);
 
   const withinRemaining = isPaymentSplitWithinRemaining(
     paymentRows,
@@ -101,37 +92,6 @@ export function SaleActions({
         toast.error(result.error);
         return;
       }
-      router.refresh();
-    });
-  }
-
-  function handleCreditNote() {
-    setCreditError(null);
-    startTransition(async () => {
-      const result = await issueCreditNote(saleId, creditReason);
-      if (!result.success) {
-        setCreditError(result.error);
-        return;
-      }
-      setCreditOpen(false);
-      setCreditReason("");
-      toast.success("Nota de crédito emitida.");
-      router.refresh();
-    });
-  }
-
-  function handleDebitNote() {
-    setDebitError(null);
-    startTransition(async () => {
-      const result = await issueDebitNote(saleId, debitReason, Number(debitAmount.replace(",", ".")));
-      if (!result.success) {
-        setDebitError(result.error);
-        return;
-      }
-      setDebitOpen(false);
-      setDebitReason("");
-      setDebitAmount("");
-      toast.success("Nota de débito emitida.");
       router.refresh();
     });
   }
@@ -253,102 +213,14 @@ export function SaleActions({
       <div className="flex justify-end">
       {/* Inline buttons, not a popover/drawer menu: a dialog opened from
           inside one closed together with the menu (same bug as Compartir). */}
-      {canManage && !voided && hasInvoice && (
-        <Dialog
-          open={debitOpen}
-          onOpenChange={(open) => {
-            setDebitOpen(open);
-            if (!open) setDebitError(null);
-          }}
-        >
-          <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
-            Nota de débito
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Emitir nota de débito</DialogTitle>
-              <DialogDescription>
-                Para un cargo adicional sobre esta factura. El monto incluye IVA (se desglosa con la
-                tasa general) y se expresa en {referenceCurrency}.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor={`debit-amount-${saleId}`}>Monto ({referenceCurrency})</Label>
-                <Input
-                  id={`debit-amount-${saleId}`}
-                  inputMode="decimal"
-                  value={debitAmount}
-                  placeholder="0.00"
-                  onChange={(e) => setDebitAmount(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor={`debit-reason-${saleId}`}>Motivo</Label>
-                <Input
-                  id={`debit-reason-${saleId}`}
-                  value={debitReason}
-                  maxLength={300}
-                  placeholder="Ej.: flete no incluido en la factura"
-                  onChange={(e) => setDebitReason(e.target.value)}
-                />
-              </div>
-              {debitError && <p className="text-sm text-destructive">{debitError}</p>}
-            </div>
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-              <Button
-                disabled={isPending || debitReason.trim().length < 3 || !(Number(debitAmount.replace(",", ".")) > 0)}
-                onClick={handleDebitNote}
-              >
-                Emitir nota de débito
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
       {canManage && !voided && (hasInvoice ? (
-        <Dialog
-          open={creditOpen}
-          onOpenChange={(open) => {
-            setCreditOpen(open);
-            if (!open) setCreditError(null);
-          }}
-        >
-          <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
-            Nota de crédito
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Emitir nota de crédito</DialogTitle>
-              <DialogDescription>
-                Esta venta tiene factura, así que se anula con una nota de crédito por el total. El
-                stock se repone y la venta queda marcada como &quot;Anulada&quot; en el historial.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`credit-reason-${saleId}`}>Motivo</Label>
-              <Input
-                id={`credit-reason-${saleId}`}
-                value={creditReason}
-                maxLength={300}
-                placeholder="Ej.: devolución de la mercancía"
-                onChange={(e) => setCreditReason(e.target.value)}
-              />
-              {creditError && <p className="text-sm text-destructive">{creditError}</p>}
-            </div>
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-              <Button
-                variant="destructive"
-                disabled={isPending || creditReason.trim().length < 3}
-                onClick={handleCreditNote}
-              >
-                Emitir nota de crédito
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          {["Nota de débito", "Nota de crédito"].map((label) => (
+            <Button key={label} size="sm" variant="outline" disabled aria-disabled="true" title="Próximamente">
+              {label} · Próximamente
+            </Button>
+          ))}
+        </div>
       ) : (
         <Dialog>
           <DialogTrigger render={<Button size="sm" variant="outline" disabled={isPending} />}>
@@ -362,7 +234,7 @@ export function SaleActions({
                 los ingresos y gráficas. Seguirá visible en el historial marcada como
                 &quot;Anulada&quot;.
                 {(paymentStatus === "PAID" || remainingCents < totalCents) &&
-                  " Esta venta ya tenía cobros: al anularla salen del efectivo esperado y de los ingresos, pero el sistema no registra la devolución. Entrega ese dinero al cliente y anótalo como salida en Caja Chica."}
+                  " Esta venta ya tenía cobros: al anularla salen de los ingresos y se registrará una salida en Caja Chica por el efectivo cobrado («Devolución por anulación de venta»). Entrega ese dinero al cliente."}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

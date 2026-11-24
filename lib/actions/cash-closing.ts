@@ -51,6 +51,13 @@ export type CashClosingSummary = {
   outflows: CashOutflowRow[];
   outflowsCents: number;
   expectedCashCents: number;
+  // Apertura desglosada por moneda (nulo en aperturas antiguas) y conteo físico guardado al cerrar el turno.
+  openingRefCents: number | null;
+  openingLocalCents: number | null;
+  counted: { usdCents: number; bsCents: number; expectedCents: number | null; differenceCents: number | null } | null;
+  // Ventas anuladas del turno: no suman en ningún total.
+  voidedCount: number;
+  voidedCents: number;
   totalCents: number;
   salesCount: number;
   // Desglose de lo vendido: ya cobrado vs. a crédito (por cobrar).
@@ -108,6 +115,12 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
     const viewClosing = viewShift != null ? closings.find((c) => c.shiftNumber === viewShift) ?? null : null;
     const viewOpening = viewShift != null ? viewOpenings[0] ?? null : null;
 
+    const voidedAgg = await tx.sale.aggregate({
+      where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: window.start, lt: window.end }, voided: true },
+      _sum: { totalCents: true },
+      _count: true,
+    });
+    const hasOpeningSplit = viewOpenings.some((o) => o.openingUsdCents != null || o.openingBsCents != null);
     const [totals, byStatus, byMethodRows, byCurrencyRows, byAccountRows, outflows] = await Promise.all([
       tx.sale.aggregate({
         where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: window.start, lt: window.end }, voided: false },
@@ -177,7 +190,20 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
       }),
     ]);
     const openingCents = viewOpenings.length > 0 ? viewOpenings.reduce((a, o) => a + o.amountCents, 0) : null;
-    const cashSalesCents = Number(byMethodRows.find((r) => r.paymentMethod === "CASH")?.total_cents ?? 0);
+    // El efectivo de una venta anulada con devolución registrada sigue en la gaveta hasta que sale por la
+    // devolución (salida de Caja Chica): se cuenta aquí para que la salida no reste dos veces.
+    const refundedCashRows = await tx.$queryRaw<{ total_cents: bigint | null }[]>`
+      SELECT SUM(sp."amountEurCents")::bigint AS total_cents
+      FROM "SalePayment" sp
+      JOIN "Sale" s ON s.id = sp."saleId"
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND sp."createdAt" >= ${window.start} AND sp."createdAt" < ${window.end}
+        AND s."voided" = true AND sp."paymentMethod"::text = 'CASH'
+        AND EXISTS (SELECT 1 FROM "CashOutflow" co WHERE co."saleId" = s.id)
+    `;
+    const cashSalesCents =
+      Number(byMethodRows.find((r) => r.paymentMethod === "CASH")?.total_cents ?? 0) + Number(refundedCashRows[0]?.total_cents ?? 0);
     const outflowsCents = outflows.reduce((a, o) => a + o.amountCents, 0);
 
     // En la vista consolidada el día solo cuenta como «cerrado» cuando TODAS las
@@ -230,6 +256,19 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
       outflows,
       outflowsCents,
       expectedCashCents: (openingCents ?? 0) + cashSalesCents - outflowsCents,
+      openingRefCents: hasOpeningSplit ? viewOpenings.reduce((a, o) => a + (o.openingUsdCents ?? 0), 0) : null,
+      openingLocalCents: hasOpeningSplit ? viewOpenings.reduce((a, o) => a + (o.openingBsCents ?? 0), 0) : null,
+      counted:
+        viewClosing && (viewClosing.countedUsdCents != null || viewClosing.countedBsCents != null)
+          ? {
+              usdCents: viewClosing.countedUsdCents ?? 0,
+              bsCents: viewClosing.countedBsCents ?? 0,
+              expectedCents: viewClosing.expectedCashCents,
+              differenceCents: viewClosing.differenceCents,
+            }
+          : null,
+      voidedCount: voidedAgg._count,
+      voidedCents: voidedAgg._sum.totalCents ?? 0,
       totalCents: totals._sum.totalCents ?? 0,
       salesCount: totals._count,
       paidCents: byStatus.find((r) => r.paymentStatus === "PAID")?._sum.totalCents ?? 0,
