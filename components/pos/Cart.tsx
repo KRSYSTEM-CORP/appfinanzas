@@ -110,6 +110,7 @@ export function Cart({
   onCheckout,
   onHold,
   isPending,
+  cashClosed = false,
   error,
 }: {
   // Sin tarjeta, título ni canal propios: los pone PosClient (como en la preview).
@@ -146,6 +147,7 @@ export function Cart({
   // Solo modo `bare`: deja la cuenta en espera y abre una nueva.
   onHold?: () => void;
   isPending: boolean;
+  cashClosed?: boolean;
   error: string | null;
 }) {
   const rawTotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
@@ -533,12 +535,12 @@ export function Cart({
             <Button type="button" variant="outline" className="min-h-[54px] justify-center text-[15px] whitespace-normal disabled:opacity-45" disabled={lines.length === 0} onClick={onHold}>
               <PauseIcon strokeWidth={2.2} /> En espera <kbd className="ml-1 rounded-[6px] bg-muted-foreground/22 px-1.5 py-0.5 text-[11px] font-bold">E</kbd>
             </Button>
-            <Button type="button" className="min-h-[54px] justify-center text-[15px] font-extrabold disabled:opacity-45" disabled={lines.length === 0} loading={isPending} onClick={onCheckout}>
+            <Button type="button" className="min-h-[54px] justify-center text-[15px] font-extrabold disabled:opacity-45" disabled={lines.length === 0 || cashClosed} loading={isPending} onClick={onCheckout}>
               Cobrar {formatCurrencyCents(referenceCurrency, total)} <kbd className="ml-1 rounded-[6px] bg-muted-foreground/22 px-1.5 py-0.5 text-[11px] font-bold">C</kbd>
             </Button>
           </div>
         ) : (
-          <Button type="button" size="lg" disabled={lines.length === 0} loading={isPending} onClick={onCheckout}>
+          <Button type="button" size="lg" disabled={lines.length === 0 || cashClosed} loading={isPending} onClick={onCheckout}>
             {isPending ? "Procesando..." : "Completar venta"}
           </Button>
         )}

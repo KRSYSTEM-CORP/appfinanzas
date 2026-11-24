@@ -25,6 +25,7 @@ import { CustomerDisplay } from "@/components/pos/CustomerDisplay";
 import type { PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import type { PaymentAccountRow } from "@/lib/actions/payment-accounts";
 import { formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
+import { CASH_CLOSED_MESSAGE } from "@/lib/cash-gate";
 import { dualForMethod, dualInline } from "@/lib/money-primary";
 import { ACCOUNT_KIND_LABELS, accountClipboardText, bankLabel, bankLogoSrc, defaultBankKey } from "@/lib/payment-accounts";
 import {
@@ -147,6 +148,7 @@ export function PayScreen({
   topMethod,
   isPending,
   error,
+  cashClosed = false,
   documentKind,
   onDocumentKindChange,
   onBack,
@@ -174,6 +176,7 @@ export function PayScreen({
   topMethod: PaymentMethod | null;
   isPending: boolean;
   error: string | null;
+  cashClosed?: boolean;
   documentKind: DocumentKind;
   onDocumentKindChange: (k: DocumentKind) => void;
   onBack: () => void;
@@ -238,7 +241,11 @@ export function PayScreen({
 
   const fmtRef = (cents: number) => formatCurrencyCents(referenceCurrency, cents);
   // Total/saldo con la moneda del método con el que se cobra ahora primero (sin método, la referencia habitual).
-  const fmtSel = (cents: number) => dualForMethod(cents, selM, mctx);
+  // En «Fraccionado», tras agregar un pago ya no hay método elegido: se usa el de la última línea para no saltar a la
+  // referencia mientras la línea muestra bolívares (saldo, falta, cubierto, total, errores y botón van en la misma moneda).
+  const lastLine = lines.length > 0 ? lines[lines.length - 1] : null;
+  const primaryM = selM ?? (mode !== "debt" && lastLine ? posMethod(lastLine.id) : null);
+  const fmtSel = (cents: number) => dualForMethod(cents, primaryM, mctx);
   const fmtSelInline = (cents: number) => dualInline(fmtSel(cents));
   const fmtIn = (amount: number, cur: string) =>
     cur === "USD" || cur === "EUR" ? formatCurrencyCents(cur, Math.round(amount * 100)) : formatLocalCurrency(amount, cur);
@@ -390,7 +397,7 @@ export function PayScreen({
         ? "✓ Cierra y salda la cuenta"
         : `Falta ${fmtSelInline(sum.saldoCents)}`;
   const cta = exo ? "Registrar exonerada" : debt ? `Vender a crédito · ${fmtSelInline(sum.saldoCents || total)}` : `Cobrar ${fmtSelInline(total + igtf)}`;
-  const ctaDisabled = isPending || (exo ? false : debt ? isGeneralCustomer : !sum.done);
+  const ctaDisabled = isPending || cashClosed || (exo ? false : debt ? isGeneralCustomer : !sum.done);
   const accounts = selM?.accountKind ? paymentAccounts.filter((a) => a.kind === selM.accountKind) : [];
   const chosenAccId = accounts.length === 1 ? accounts[0].id : accId;
   const vuelto = (() => {
@@ -412,7 +419,7 @@ export function PayScreen({
     selM && selCur && selCur !== currencyCode && igtfRatePercent != null
       ? Math.round((amountToRefCents(parseAmount(amountText), selCur, ctx) * igtfRatePercent) / 100)
       : null;
-  const msg = localError ?? error;
+  const msg = cashClosed ? CASH_CLOSED_MESSAGE : (localError ?? error);
 
   return (
     <div className="flex flex-col gap-3.5 pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] md:pb-0">

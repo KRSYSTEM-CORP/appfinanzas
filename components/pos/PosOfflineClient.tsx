@@ -15,6 +15,7 @@ import { computeItemDiscountCents } from "@/lib/discount";
 import { queueSale, type PendingSaleInput } from "@/lib/offline/sync";
 import { buildPendingReceipt } from "@/lib/offline/pending-receipt";
 import { useCart } from "@/lib/pos/use-cart";
+import { CashClosedAlert } from "@/components/pos/CashClosedAlert";
 import { getCatalogSnapshot } from "@/lib/offline/db";
 import { readLastBranch } from "@/lib/offline/use-catalog-sync";
 import type { CatalogSnapshot } from "@/lib/offline/db";
@@ -258,6 +259,7 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
   return (
     <div className="flex flex-col gap-3 md:h-full p-6">
       <OfflineSyncBanner />
+      {snapshot.shiftOpen === false && <CashClosedAlert offline />}
       {freshnessNote}
       <div className="flex items-center justify-between rounded-lg border px-3 py-2">
         <div className="text-sm">

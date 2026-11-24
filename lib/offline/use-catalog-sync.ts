@@ -58,6 +58,7 @@ export function useCatalogSync(params: {
   ivaReducedRatePercent: number;
   company: DeliveryNoteCompany;
   paymentAccounts?: PaymentAccountRow[];
+  shiftOpen?: boolean | null;
 }) {
   const { branchId, branchName, companyId, companyName, sellerName, products, categories } = params;
   useEffect(() => {
@@ -84,6 +85,7 @@ export function useCatalogSync(params: {
       ivaReducedRatePercent: params.ivaReducedRatePercent,
       company: params.company,
       paymentAccounts: params.paymentAccounts,
+      ...(params.shiftOpen != null ? { shiftOpen: params.shiftOpen } : {}),
     };
     putCatalogSnapshot(snapshot);
     writeLastBranch({ branchId, branchName, companyName });
@@ -92,5 +94,5 @@ export function useCatalogSync(params: {
     // `products` (same server render), so re-listing every field here would
     // just be noise for the linter without changing behavior.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, branchName, companyId, companyName, sellerName, products, categories, params.paymentAccounts]);
+  }, [branchId, branchName, companyId, companyName, sellerName, products, categories, params.paymentAccounts, params.shiftOpen]);
 }

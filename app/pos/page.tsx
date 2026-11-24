@@ -10,6 +10,7 @@ import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { requireSession } from "@/lib/session";
 import { getRequireCustomerOnSale } from "@/lib/actions/marketing";
 import { getDailyClosingSummary } from "@/lib/actions/cash-closing";
+import { CashClosedAlert } from "@/components/pos/CashClosedAlert";
 import { todayDateString } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,7 @@ export default async function PosPage({
     getRequireCustomerOnSale().catch(() => false),
   ]);
   const { general: ivaGeneralRatePercent, reduced: ivaReducedRatePercent } = effectiveIvaRates(ivaEnabled, rawIvaGeneral, rawIvaReduced);
+  const shiftOpen: boolean | null = todaySummary && branchId ? todaySummary.shiftOpen : null;
   const company = { name: companyName, logoDataUrl, ...fiscalData };
 
   const quoteConversion = fromQuote ? await getQuoteForConversion(fromQuote) : null;
@@ -73,6 +75,7 @@ export default async function PosPage({
           </div>
         </div>
       </div>
+      {shiftOpen === false && <CashClosedAlert />}
       <OfflineSyncBanner canManage={role === "GERENTE" || isSuperAdmin} />
       {exchangeRateEnabled && rate == null && (
         <p className="text-sm text-destructive">
@@ -111,6 +114,7 @@ export default async function PosPage({
           branchName={branchName}
           ivaGeneralRatePercent={ivaGeneralRatePercent}
           ivaReducedRatePercent={ivaReducedRatePercent}
+          shiftOpen={shiftOpen}
           igtfRatePercent={isIgtfAgent ? igtfRatePercent : null}
         />
       </div>
