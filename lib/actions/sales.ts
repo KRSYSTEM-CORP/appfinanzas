@@ -556,7 +556,6 @@ export async function issueCreditNote(saleId: string, reason: string): Promise<A
       });
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
       await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
-      await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
