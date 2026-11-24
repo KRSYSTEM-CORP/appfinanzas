@@ -195,6 +195,7 @@ export function PayScreen({
   const [localError, setLocalError] = useState<string | null>(null);
   const [discType, setDiscType] = useState<"%" | "$">("%");
   const [discText, setDiscText] = useState("");
+  const [discWarn, setDiscWarn] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [beforeExo, setBeforeExo] = useState("0");
   const [accId, setAccId] = useState<string | null>(null);
@@ -303,6 +304,7 @@ export function PayScreen({
   }
 
   function setPercent(v: number) {
+    setDiscWarn(null);
     setDiscType("%");
     setDiscText("");
     onDiscountPercentChange(String(v));
@@ -311,11 +313,26 @@ export function PayScreen({
   function onDiscText(text: string, type: "%" | "$" = discType) {
     setDiscText(text);
     const n = parseAmount(text);
-    const pct = type === "%" ? Math.min(100, Math.max(0, n)) : discountPercentFromAmount(Math.round(n * 100), rawTotal);
+    // Un valor fuera de rango no se recorta en silencio (150 % pasaba a 100 % y exoneraba la venta): se avisa y no se aplica.
+    const tooHigh = type === "%" ? n > 100 : Math.round(n * 100) > rawTotal;
+    if (n < 0 || tooHigh) {
+      setDiscWarn(
+        n < 0
+          ? "El descuento no puede ser negativo."
+          : type === "%"
+            ? "El descuento máximo es 100 %. Para regalar la venta usa «Venta exonerada»."
+            : "El descuento no puede superar el total de la venta."
+      );
+      onDiscountPercentChange("0");
+      return;
+    }
+    setDiscWarn(null);
+    const pct = type === "%" ? n : discountPercentFromAmount(Math.round(n * 100), rawTotal);
     onDiscountPercentChange(String(pct));
   }
 
   function toggleExo() {
+    setDiscWarn(null);
     if (exo) onDiscountPercentChange(beforeExo);
     else {
       setBeforeExo(discountPercent);
@@ -393,7 +410,9 @@ export function PayScreen({
     ? "✓ Exonerada · sin cobro"
     : debt
       ? "Queda en Cuentas por cobrar"
-      : sum.done
+      : !sel && lines.length === 0 && total > 0
+        ? "Elige un método de pago para cobrar"
+        : sum.done
         ? "✓ Cierra y salda la cuenta"
         : `Falta ${fmtSelInline(sum.saldoCents)}`;
   const cta = exo ? "Registrar exonerada" : debt ? `Vender a crédito · ${fmtSelInline(sum.saldoCents || total)}` : `Cobrar ${fmtSelInline(total + igtf)}`;
@@ -833,6 +852,11 @@ export function PayScreen({
                 </select>
               </Field>
             </div>
+            {discWarn && (
+              <p role="alert" className="mt-1.5 text-[13px] font-semibold text-destructive">
+                {discWarn}
+              </p>
+            )}
             <div className="mt-2.5 flex items-center justify-between gap-2.5 border-b border-border py-2.5">
               <div>
                 <b className="font-bold">Venta exonerada</b>
