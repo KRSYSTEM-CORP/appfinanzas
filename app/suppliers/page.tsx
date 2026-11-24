@@ -1,4 +1,4 @@
-import { requireAccountingPlan } from "@/lib/session";
+import { requirePurchasesAccess } from "@/lib/session";
 import { AdminShell } from "@/components/accounting/AdminShell";
 import { CostComparisonCard, SupplierCards } from "@/components/suppliers/SupplierCards";
 import { listSuppliers } from "@/lib/actions/suppliers";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 // Administración → Compras → Proveedores.
 export default async function SuppliersPage() {
-  await requireAccountingPlan();
+  await requirePurchasesAccess();
   const [suppliers, stats, comparison, { referenceCurrency }] = await Promise.all([listSuppliers(), supplierStats(), costComparison(), getExchangeRateInfo()]);
   return (
     <AdminShell group="compras" sub="prov">

@@ -262,6 +262,13 @@ export async function requireAccountingPlan(): Promise<Session> {
   return session;
 }
 
+// Compras y proveedores: además del plan, exige el permiso "purchases" (gerente y superadmin siempre lo tienen).
+export async function requirePurchasesAccess(): Promise<Session> {
+  const session = await requireAccountingPlan();
+  if (!hasPermission(session, "purchases")) redirect("/pos");
+  return session;
+}
+
 export async function requireFeature(featureId: string): Promise<Session> {
   const session = await requireSession();
   if (!hasFeature(session.enabledFeatures, featureId)) redirect("/pos");
