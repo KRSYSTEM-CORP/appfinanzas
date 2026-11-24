@@ -177,7 +177,20 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
       }),
     ]);
     const openingCents = viewOpenings.length > 0 ? viewOpenings.reduce((a, o) => a + o.amountCents, 0) : null;
-    const cashSalesCents = Number(byMethodRows.find((r) => r.paymentMethod === "CASH")?.total_cents ?? 0);
+    // El efectivo de una venta anulada con devolución registrada sigue en la gaveta hasta que sale por la
+    // devolución (salida de Caja Chica): se cuenta aquí para que la salida no reste dos veces.
+    const refundedCashRows = await tx.$queryRaw<{ total_cents: bigint | null }[]>`
+      SELECT SUM(sp."amountEurCents")::bigint AS total_cents
+      FROM "SalePayment" sp
+      JOIN "Sale" s ON s.id = sp."saleId"
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND sp."createdAt" >= ${window.start} AND sp."createdAt" < ${window.end}
+        AND s."voided" = true AND sp."paymentMethod"::text = 'CASH'
+        AND EXISTS (SELECT 1 FROM "CashOutflow" co WHERE co."saleId" = s.id)
+    `;
+    const cashSalesCents =
+      Number(byMethodRows.find((r) => r.paymentMethod === "CASH")?.total_cents ?? 0) + Number(refundedCashRows[0]?.total_cents ?? 0);
     const outflowsCents = outflows.reduce((a, o) => a + o.amountCents, 0);
 
     // En la vista consolidada el día solo cuenta como «cerrado» cuando TODAS las

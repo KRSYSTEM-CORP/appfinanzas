@@ -25,7 +25,10 @@ import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateProductsCache } from "@/lib/products-cache";
 import { assertReceivingAccounts } from "@/lib/account-balance";
 import { assertDayNotClosed, closingDateFromString } from "@/lib/closed-days";
-import { activeShiftNumber } from "@/lib/cash-shifts";
+import { activeShiftNumber, nextShiftNumber } from "@/lib/cash-shifts";
+import { FISCAL_NOTES_ENABLED, FISCAL_NOTES_COMING_SOON_MESSAGE } from "@/lib/fiscal-notes";
+import { cashRefundCents, refundConcept } from "@/lib/sale-refund";
+import { SHOP_TIME_ZONE, zonedDateParts } from "@/lib/report-types";
 import { cashGateError, mustCheckShift } from "@/lib/cash-gate";
 import { discountPolicyError, isOfflineRateAcceptable, sanitizeQueuedAt } from "@/lib/sale-policy";
 
@@ -480,6 +483,41 @@ async function releaseSaleLinks(tx: Prisma.TransactionClient, saleId: string, co
   if (quoteId) await tx.quote.updateMany({ where: { id: quoteId, companyId, status: "CONVERTED" }, data: { status: "PENDING" } });
 }
 
+// Al anular una venta con efectivo cobrado queda una salida de Caja Chica «Devolución por anulación…»,
+// atada a la venta (saleId único: reintentar no la duplica). Cae en el turno abierto de hoy; sin turno
+// abierto, en el día de hoy sin exigir turno (se cuenta en el próximo que se abra). Los cobros que no
+// son efectivo no salen de la caja física y no se registran aquí.
+async function recordVoidRefund(
+  tx: Prisma.TransactionClient,
+  sale: { id: string; companyId: string; branchId: string | null; controlNumber: number | null },
+  actorId: string
+) {
+  if (!sale.branchId) return;
+  const payments = await tx.salePayment.findMany({ where: { saleId: sale.id }, select: { paymentMethod: true, amountEurCents: true } });
+  const amountCents = cashRefundCents(payments);
+  if (amountCents <= 0) return;
+  if (await tx.cashOutflow.findFirst({ where: { saleId: sale.id }, select: { id: true } })) return;
+  const { year, month, day } = zonedDateParts(new Date(), SHOP_TIME_ZONE);
+  const date = closingDateFromString(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+  const [openings, closings] = await Promise.all([
+    tx.cashOpening.findMany({ where: { branchId: sale.branchId, date }, select: { shiftNumber: true } }),
+    tx.cashClosing.findMany({ where: { branchId: sale.branchId, closingDate: date }, select: { shiftNumber: true, closedAt: true } }),
+  ]);
+  const shiftNumber = activeShiftNumber(openings, closings) ?? nextShiftNumber(openings, closings);
+  await tx.cashOutflow.create({
+    data: {
+      companyId: sale.companyId,
+      branchId: sale.branchId,
+      date,
+      shiftNumber,
+      concept: refundConcept(sale.controlNumber ?? sale.id.slice(-6)),
+      amountCents,
+      createdById: actorId,
+      saleId: sale.id,
+    },
+  });
+}
+
 export async function voidSale(saleId: string): Promise<ActionResult> {
   const session = await requireManager();
   if (!hasPermission(session, "void")) return { success: false, error: "No tienes permiso para anular ventas" };
@@ -495,7 +533,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       if (!sale) throw new Error("Venta no encontrada");
       if (sale.voided) throw new Error("La venta ya está anulada");
       if (sale.invoiceNumber != null) {
-        throw new Error("Esta venta tiene factura: anúlala emitiendo una nota de crédito.");
+        throw new Error(`Esta venta tiene factura y se anula con nota de crédito. ${FISCAL_NOTES_COMING_SOON_MESSAGE}`);
       }
 
       saleBranchId = sale.branchId;
@@ -504,6 +542,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
       await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
+      await recordVoidRefund(tx, sale, actorId);
     });
   } catch (err) {
     const message = userErrorMessage(err, "No se pudo anular la venta");
@@ -523,6 +562,7 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
 // the full sale — it voids the sale and restores its stock in the same
 // transaction, and gets its own per-branch number.
 export async function issueCreditNote(saleId: string, reason: string): Promise<ActionResult> {
+  if (!FISCAL_NOTES_ENABLED) return { success: false, error: FISCAL_NOTES_COMING_SOON_MESSAGE };
   const mgr = await requireManager();
   if (!hasPermission(mgr, "void")) return { success: false, error: "No tienes permiso para anular ventas" };
   const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = mgr;
@@ -583,6 +623,7 @@ export async function issueCreditNote(saleId: string, reason: string): Promise<A
 // amount) the factura missed. Decomposed with the company's general IVA rate;
 // several can exist per sale. Doesn't touch stock or the sale's payments.
 export async function issueDebitNote(saleId: string, reason: string, amount: number): Promise<ActionResult> {
+  if (!FISCAL_NOTES_ENABLED) return { success: false, error: FISCAL_NOTES_COMING_SOON_MESSAGE };
   const mgr = await requireManager();
   if (!hasPermission(mgr, "void")) return { success: false, error: "No tienes permiso para emitir notas" };
   const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = mgr;
