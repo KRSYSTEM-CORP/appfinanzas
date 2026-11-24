@@ -39,6 +39,8 @@ export type PendingSaleInput = {
   quoteId?: string;
   // Rate at the counter when the sale was queued (see SaleSchema).
   offlineExchangeRate?: number;
+  // Sucursal de la venta al encolarla (se respeta al sincronizar).
+  queuedBranchId?: string;
 };
 
 // Enough to render a "pending" receipt immediately, before the real Sale
