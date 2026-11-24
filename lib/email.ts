@@ -49,7 +49,9 @@ function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 export async function sendAnnouncementEmail(
@@ -130,7 +132,7 @@ export async function sendPaymentReportEmail(to: string, input: PaymentReportEma
         ${row("Código", share.code)}
       </table>
       <p style="margin-top:18px">
-        <a href="${share.pdfUrl}" style="${btn};background:#433ddd;color:#fff">Ver PDF con el comprobante</a>
+        <a href="${escapeHtml(share.pdfUrl)}" style="${btn};background:#433ddd;color:#fff">Ver PDF con el comprobante</a>
         <a href="${reviewUrl}" style="${btn};background:#f1f1f7;color:#222">Revisar y aprobar</a>
         ${waUrl ? `<a href="${waUrl}" style="${btn};background:#25d366;color:#fff">Escribirle por WhatsApp</a>` : ""}
       </p>

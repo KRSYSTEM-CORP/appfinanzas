@@ -6,3 +6,4 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # Verificación de medianoche (VE): en el servidor propio sí hay cron extra.
 0 0 * * *  kr /usr/local/bin/kr-cron.sh /api/cron/bcv-rate       >> /var/log/kr-cron.log 2>&1
 0 4 1 * *  kr /usr/local/bin/kr-cron.sh /api/cron/db-size-check   >> /var/log/kr-cron.log 2>&1
+30 3 * * * kr /usr/local/bin/kr-cron.sh /api/cron/login-attempts-cleanup >> /var/log/kr-cron.log 2>&1
