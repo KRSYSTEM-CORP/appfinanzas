@@ -50,6 +50,9 @@ export async function syncPendingSales(): Promise<SyncResult> {
     try {
       const result = await completeSale({
         ...sale.input,
+        queuedAt: sale.queuedAt,
+        queuedSellerName: sale.preview.sellerName ?? undefined,
+        queuedBranchId: sale.input.queuedBranchId,
         // Older IndexedDB entries predate server-side idempotency.
         idempotencyKey: sale.input.idempotencyKey ?? sale.localId,
       });

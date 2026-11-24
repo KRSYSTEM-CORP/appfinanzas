@@ -332,6 +332,10 @@ export const SaleSchema = z
     // and queued (audit KRPOS-BIZ-001); completeSale uses it instead of the
     // rate in effect when the queue syncs, within sanity bounds.
     offlineExchangeRate: z.number().positive().optional(),
+    // Datos de la venta original cuando sale de la cola sin internet (opcionales; el servidor los valida).
+    queuedAt: z.string().max(40).optional(),
+    queuedBranchId: z.string().max(60).optional(),
+    queuedSellerName: z.string().max(120).optional(),
   })
   .merge(CustomerSchema)
   .superRefine((data, ctx) => {
