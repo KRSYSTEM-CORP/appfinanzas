@@ -6,6 +6,7 @@ import { ArrowRightLeftIcon, TruckIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { formatCurrencyCents } from "@/lib/currencies";
+import { pct } from "@/lib/money-display";
 import type { BranchSummary } from "@/lib/actions/branches";
 import type { TransferRow, TransferSuggestion } from "@/lib/actions/transfers";
 
@@ -32,7 +33,7 @@ export function BranchComparison({ summaries, currency }: { summaries: BranchSum
     }));
   const value = (r: (typeof rows)[number]) =>
     order === "sales" ? r.s.salesMonthCents : order === "profit" ? r.s.profitMonthCents : order === "margin" ? r.margin : r.avg;
-  const fmt = (n: number) => (order === "margin" ? `${n.toFixed(1)} %` : formatCurrencyCents(currency, Math.round(n)));
+  const fmt = (n: number) => (order === "margin" ? pct(n, 100) : formatCurrencyCents(currency, Math.round(n)));
   const sorted = [...rows].sort((a, b) => value(b) - value(a));
   const max = Math.max(1, ...sorted.map((r) => Math.abs(value(r))));
   const total = rows.reduce(
@@ -93,7 +94,7 @@ export function BranchComparison({ summaries, currency }: { summaries: BranchSum
                 <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(r.s.expensesMonthCents)}</td>
                 <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(r.s.commissionsMonthCents)}</td>
                 <td className={`border-b px-3.5 py-[11px] text-right font-bold tabular-nums ${r.s.profitMonthCents < 0 ? "text-destructive" : "text-success"}`}>{c(r.s.profitMonthCents)}</td>
-                <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{r.margin.toFixed(1)} %</td>
+                <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{pct(r.margin, 100)}</td>
               </tr>
             ))}
           </tbody>
@@ -105,7 +106,7 @@ export function BranchComparison({ summaries, currency }: { summaries: BranchSum
               <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(total.exp)}</td>
               <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(total.com)}</td>
               <td className="border-b px-3.5 py-[11px] text-right tabular-nums">{c(total.profit)}</td>
-              <td className="px-3.5 py-[11px] text-right tabular-nums">{total.sales > 0 ? ((total.profit / total.sales) * 100).toFixed(1) : "0.0"} %</td>
+              <td className="px-3.5 py-[11px] text-right tabular-nums">{pct(total.profit, total.sales)}</td>
             </tr>
           </tfoot>
         </table>

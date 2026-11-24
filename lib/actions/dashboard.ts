@@ -29,7 +29,7 @@ export async function getDashboardTasks() {
       return { count: Number(count[0]?.count ?? 0), products };
     }),
     withTenant(companyId, (tx) => tx.quote.count({ where: { companyId, ...(branchId ? { branchId } : {}), status: "PENDING" } })),
-    listPendingClosings({ kind: "preset", preset: "7d" }),
+    listPendingClosings({ kind: "preset", preset: "month" }),
   ]);
   const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Caracas" }).format(new Date());
   const completedDays = pendingClosings.filter((closing) => closing.date < today);

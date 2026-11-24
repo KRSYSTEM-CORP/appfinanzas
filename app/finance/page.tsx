@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { listPendingClosings } from "@/lib/actions/cash-closing";
 import { formatCurrencyTotals } from "@/lib/currency-breakdown";
 import { requireAccountingPlan, requirePermission } from "@/lib/session";
 import { LightbulbIcon, ShoppingCartIcon, TrendingDownIcon, TrendingUpIcon, WalletIcon } from "lucide-react";
@@ -131,6 +132,7 @@ export default async function FinancePage({
     getExchangeRateInfo(),
   ]);
 
+  const unclosedDays = (await listPendingClosings(range)).length;
   const cur = referenceCurrency as string;
   const money = (c: number) => formatCurrencyCents(cur, c);
   const today = zonedDateParts(new Date(), SHOP_TIME_ZONE);
@@ -198,6 +200,13 @@ export default async function FinancePage({
           <DateRangeSwitcher selection={range} extraParams={expenseSearch ? { q: expenseSearch } : undefined} />
         </PeriodBar>
       </header>
+
+      {unclosedDays > 0 && (
+        <p role="note" className="rounded-[14px] bg-warning/18 px-3.5 py-3 text-[13px] font-semibold text-warning">
+          Las ventas de días sin cierre de caja no se cuentan aquí: {unclosedDays} {unclosedDays === 1 ? "día tiene" : "días tienen"} ventas sin cerrar en este período.{" "}
+          <Link href="/reports" className="underline">Cerrar caja</Link>
+        </p>
+      )}
 
       {chips.length > 0 && (
         <Reveal className={s.trio}>

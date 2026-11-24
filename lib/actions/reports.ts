@@ -127,28 +127,23 @@ export async function receivablesTotals() {
   return withTenant(companyId, async (tx) => {
     const currentRate = await getCurrentRate(tx, companyId);
 
-    const result = await tx.sale.aggregate({
-      _sum: { totalCents: true },
-      _count: true,
-      where: { companyId, ...(branchId ? { branchId } : {}), voided: false, paymentStatus: "CREDIT" },
-    });
-    const totalEurCents = result._sum.totalCents ?? 0;
+    const creditWhere = { companyId, ...(branchId ? { branchId } : {}), voided: false, paymentStatus: "CREDIT" as const };
+    const [result, paid] = await Promise.all([
+      tx.sale.aggregate({ _sum: { totalCents: true }, _count: true, where: creditWhere }),
+      // Lo que ya se abonó a esas ventas: «por cobrar» es el saldo pendiente, igual que en Cuentas por cobrar.
+      tx.salePayment.aggregate({ _sum: { amountEurCents: true }, where: { sale: creditWhere } }),
+    ]);
+    const totalEurCents = Math.max(0, (result._sum.totalCents ?? 0) - (paid._sum.amountEurCents ?? 0));
     const count = result._count;
 
     // Unlike settled sales, an outstanding credit balance isn't worth a fixed
     // amount of bolívares until it's collected — always value it at today's
     // rate rather than the (possibly stale) rate from whenever it was sold.
-    const [vesRow] = await tx.$queryRaw<{ ves_total: number | null }[]>`
-      SELECT COALESCE(SUM("totalCents"::numeric * ${currentRate} / 100), 0) AS ves_total
-      FROM "Sale"
-      WHERE "companyId" = ${companyId}
-        ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
-        AND "voided" = false AND "paymentStatus" = 'CREDIT'
-    `;
+    const totalVES = totalEurCents * (currentRate ?? 0) / 100;
 
     return {
       totalEurCents,
-      totalVES: Number(vesRow?.ves_total ?? 0),
+      totalVES,
       count,
     };
   });

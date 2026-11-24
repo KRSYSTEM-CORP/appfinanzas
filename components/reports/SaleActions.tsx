@@ -361,6 +361,8 @@ export function SaleActions({
                 El stock de los productos vendidos se repondrá y la venta dejará de contar en
                 los ingresos y gráficas. Seguirá visible en el historial marcada como
                 &quot;Anulada&quot;.
+                {(paymentStatus === "PAID" || remainingCents < totalCents) &&
+                  " Esta venta ya tenía cobros: al anularla salen del efectivo esperado y de los ingresos, pero el sistema no registra la devolución. Entrega ese dinero al cliente y anótalo como salida en Caja Chica."}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

@@ -471,7 +471,7 @@ export async function buildDeliveryNotePDF(
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [["Cant.", "Descripción", `Precio unit. (${referenceCurrency} ref.)`, "Subtotal"]],
+    head: [["Cant.", "Descripción", showLocal ? `Precio unit. (${currencyCode})` : `Precio unit. (${referenceCurrency} ref.)`, "Subtotal"]],
     body: rows,
     theme: "grid",
     headStyles: { fillColor: [30, 41, 59] },
@@ -595,7 +595,7 @@ export async function buildPaymentReceiptPDF(
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [["Cant.", "Descripción", `Precio unit. (${referenceCurrency} ref.)`, "Subtotal"]],
+    head: [["Cant.", "Descripción", showLocal ? `Precio unit. (${currencyCode})` : `Precio unit. (${referenceCurrency} ref.)`, "Subtotal"]],
     body: rows,
     theme: "grid",
     headStyles: { fillColor: [30, 41, 59] },

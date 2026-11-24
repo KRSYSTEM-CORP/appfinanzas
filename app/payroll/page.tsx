@@ -2,12 +2,13 @@ import { AdminShell } from "@/components/accounting/AdminShell";
 import { PayrollPanel } from "@/components/payroll/PayrollPanel";
 import { listPayroll } from "@/lib/actions/payroll";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
-import { requireSession } from "@/lib/session";
+import { requireAdminAccess, requireSession } from "@/lib/session";
 import { periodFor } from "@/lib/payroll";
 
 export const dynamic = "force-dynamic";
 
 export default async function PayrollPage() {
+  await requireAdminAccess();
   const [{ employees, payments, rates, sellers, ledger }, { referenceCurrency }, { companyName }, { logoDataUrl }, fiscalData] = await Promise.all([
     listPayroll(periodFor(new Date())),
     getExchangeRateInfo(),
