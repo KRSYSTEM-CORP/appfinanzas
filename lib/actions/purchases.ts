@@ -14,6 +14,7 @@ import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateProductsCache } from "@/lib/products-cache";
 import { assertAccountFunds, toActionResult } from "@/lib/account-balance";
 import { lineInAccountCurrency } from "@/lib/account-money";
+import { paymentSettlesPurchase, purchaseRemaining } from "@/lib/purchase-payment";
 
 export type CompletePurchaseResult =
   | { success: true; purchaseId: string }
@@ -319,26 +320,6 @@ async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, co
   );
 }
 
-export async function markPurchasePaid(purchaseId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireManager();
-  const result = await withTenant(companyId, (tx) =>
-    tx.purchase.updateMany({
-      where: {
-        id: purchaseId,
-        companyId,
-        paymentStatus: "PENDING",
-        ...(sessionBranchId ? { branchId: sessionBranchId } : {}),
-      },
-      data: { paymentStatus: "PAID", paidAt: new Date() },
-    })
-  );
-  if (result.count === 0) {
-    return { success: false, error: "Compra no encontrada o ya estaba pagada" };
-  }
-  revalidatePath("/purchases");
-  return { success: true };
-}
-
 export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
   const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
   let purchaseBranchId: string | null = sessionBranchId;
@@ -352,8 +333,10 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
       if (purchase.voided) throw new Error("La compra ya está anulada");
 
       purchaseBranchId = purchase.branchId;
+      // Marca atómica: si otra anulación simultánea ya la marcó, esta no revierte el stock otra vez.
+      const claimed = await tx.purchase.updateMany({ where: { id: purchaseId, companyId, voided: false }, data: { voided: true, voidedAt: new Date() } });
+      if (claimed.count === 0) throw new Error("La compra ya está anulada");
       await reverseStock(tx, purchaseId, companyId, purchase.branchId, actorId, actorName);
-      await tx.purchase.update({ where: { id: purchaseId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "No se pudo anular la compra";
@@ -519,7 +502,8 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           : 0;
 
         const controlNumber = await nextDocumentNumber(tx, branchId, "purchase");
-        const paymentStatus = entries[0].data.paymentStatus ?? "PENDING";
+        // Una importación no trae pagos ni cuenta: siempre queda por pagar y se abona con registerPurchasePayment.
+        const paymentStatus = "PENDING" as const;
 
         const purchase = await tx.purchase.create({
           data: {
@@ -533,7 +517,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
             taxCents: taxTotalCents,
             ivaRetainedCents,
             paymentStatus,
-            paidAt: paymentStatus === "PAID" ? new Date() : null,
+            paidAt: null,
             note: entries[0].data.note ?? null,
             items: { create: itemsData },
           },
@@ -656,14 +640,15 @@ export async function registerPurchasePayment(
   if (!Number.isInteger(amountCents) || amountCents <= 0) return { success: false, error: "El monto debe ser mayor a 0" };
   try {
     await withTenant(companyId, async (tx) => {
+      // Bloquea la compra: dos abonos simultáneos no pueden pasar con el mismo saldo.
+      await tx.$queryRaw`SELECT "id" FROM "Purchase" WHERE "id" = ${purchaseId} AND "companyId" = ${companyId} FOR UPDATE`;
       const p = await tx.purchase.findFirst({
         where: { id: purchaseId, companyId, voided: false, paymentStatus: "PENDING", ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
         include: { payments: { select: { amountEurCents: true } } },
       });
       if (!p) throw new Error("Compra no encontrada o ya estaba pagada");
-      const owed = p.totalCents - p.ivaRetainedCents;
       const paid = p.payments.reduce((n, x) => n + x.amountEurCents, 0);
-      const remaining = owed - paid;
+      const remaining = purchaseRemaining(p.totalCents, p.ivaRetainedCents, paid);
       if (amountCents > remaining) throw new Error("El abono es mayor al saldo pendiente");
       if (paymentAccountId) {
         // Un abono en la moneda de referencia: se convierte a la de la cuenta con la tasa del día.
@@ -680,7 +665,7 @@ export async function registerPurchasePayment(
           paymentAccountId: paymentAccountId || null,
         },
       });
-      if (amountCents === remaining) {
+      if (paymentSettlesPurchase(amountCents, remaining)) {
         await tx.purchase.update({ where: { id: p.id }, data: { paymentStatus: "PAID", paidAt: new Date() } });
       }
     });
