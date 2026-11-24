@@ -501,7 +501,7 @@ export async function periodExtras(range: DateRangeSelection): Promise<PeriodExt
           }),
       tx.expense.aggregate({
         _sum: { amountCents: true },
-        where: { companyId, OR: comparison.windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
+        where: { companyId, ...(branchId ? { branchId } : {}), OR: comparison.windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
       }),
     ]);
     const count = sales._count;

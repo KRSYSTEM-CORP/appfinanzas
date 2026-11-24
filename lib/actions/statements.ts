@@ -2,15 +2,17 @@
 
 import { requireAccountingPlan } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { netSalesTax } from "@/lib/tax";
+import { incomeStatement, ivaPosition, purchasesCost } from "@/lib/statements-math";
 import { caracasDateString, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
-import { revenueTotals, receivablesTotals } from "@/lib/actions/reports";
-import { costOfGoodsSold, expensesTotal } from "@/lib/actions/finance";
+import { receivablesTotals } from "@/lib/actions/reports";
+import { costOfGoodsSold, expensesTotal, netSalesCents } from "@/lib/actions/finance";
 import { commissionsTotal } from "@/lib/actions/seller-reports";
 import { getSalesTaxBook, getPurchasesTaxBook, getCreditNotesTaxBook, getDebitNotesTaxBook } from "@/lib/actions/tax-book";
+import { getIvaSettings } from "@/lib/actions/settings";
 import { getAccountBalances } from "@/lib/actions/payment-accounts";
 
 export type Statements = {
+  ivaEnabled: boolean;
   // Estado de resultados (moneda de referencia, centavos)
   income: number;
   cogs: number;
@@ -46,16 +48,17 @@ export async function getStatements(range: DateRangeSelection, islrPercent: numb
   const windows = selectionToWindows(range);
   const rate = Math.min(Math.max(islrPercent, 0), 60) / 100;
 
-  const [rev, cogs, expenses, commissions, recv, salesBook, purchasesBook, creditNotes, debitNotes, accounts] = await Promise.all([
-    revenueTotals(range),
+  const { ivaEnabled } = await getIvaSettings();
+  const [netSales, cogs, expenses, commissions, recv, salesBook, purchasesBook, creditNotes, debitNotes, accounts] = await Promise.all([
+    netSalesCents(range),
     costOfGoodsSold(range),
     expensesTotal(range),
     commissionsTotal(range),
     receivablesTotals(),
-    getSalesTaxBook(range),
+    ivaEnabled ? getSalesTaxBook(range) : Promise.resolve([] as Awaited<ReturnType<typeof getSalesTaxBook>>),
     getPurchasesTaxBook(range),
-    getCreditNotesTaxBook(range),
-    getDebitNotesTaxBook(range),
+    ivaEnabled ? getCreditNotesTaxBook(range) : Promise.resolve([] as Awaited<ReturnType<typeof getCreditNotesTaxBook>>),
+    ivaEnabled ? getDebitNotesTaxBook(range) : Promise.resolve([] as Awaited<ReturnType<typeof getDebitNotesTaxBook>>),
     getAccountBalances().catch(() => []),
   ]);
 
@@ -85,46 +88,40 @@ export async function getStatements(range: DateRangeSelection, islrPercent: numb
     return { inventory, payables: pending._sum.totalCents ?? 0, internalUse };
   });
 
-  const income = rev.totalEurCents;
-  const gross = income - cogs;
-  const operating = gross - commissions - expenses;
-  const islr = operating > 0 ? Math.round(operating * rate) : 0;
-
-  const salesNet = netSalesTax(salesBook, creditNotes, debitNotes);
-  const ivaDebit = salesNet.tax;
-  const ivaCredit = purchasesBook.reduce((n, p) => n + p.taxCents, 0);
-  const ivaBalance = ivaDebit - ivaCredit;
+  const is = incomeStatement({ netSales, cogs, commissions, expenses, islrRate: rate });
+  const iva = ivaPosition(ivaEnabled, salesBook, creditNotes, debitNotes, purchasesBook);
 
   const banks = accounts.filter((a) => a.currency === "USD").reduce((n, a) => n + a.balanceCents, 0);
   const assets = recv.totalEurCents + extra.inventory + banks;
-  const liabilities = extra.payables + Math.max(ivaBalance, 0);
-  const purchases = purchasesBook.reduce((n, p) => n + p.totalCents, 0);
+  const liabilities = extra.payables + iva.payable;
+  const purchases = purchasesCost(ivaEnabled, purchasesBook);
 
   return {
-    income,
+    ivaEnabled,
+    income: is.income,
     cogs,
-    gross,
+    gross: is.gross,
     salesExpenses: commissions,
     adminExpenses: expenses,
-    operating,
-    islr,
-    net: operating - islr,
+    operating: is.operating,
+    islr: is.islr,
+    net: is.net,
     receivables: recv.totalEurCents,
     inventory: extra.inventory,
     banks,
     payables: extra.payables,
-    ivaPayable: Math.max(ivaBalance, 0),
+    ivaPayable: iva.payable,
     assets,
     liabilities,
     equity: assets - liabilities,
     purchases,
     internalUse: extra.internalUse,
     unexplained: purchases - cogs - extra.internalUse,
-    ivaDebit,
-    ivaCredit,
-    ivaBalance,
-    salesBase: salesNet.base,
-    purchasesBase: purchasesBook.reduce((n, p) => n + p.baseImponibleCents, 0),
+    ivaDebit: iva.debit,
+    ivaCredit: iva.credit,
+    ivaBalance: iva.balance,
+    salesBase: iva.salesBase,
+    purchasesBase: iva.purchasesBase,
   };
 }
 
@@ -141,7 +138,7 @@ export async function listMovements(range: DateRangeSelection): Promise<Movement
         where: { companyId, ...(branchId ? { branchId } : {}), voided: false, OR: or("createdAt") },
         select: { createdAt: true, totalCents: true },
       }),
-      tx.expense.findMany({ where: { companyId, OR: or("spentAt") }, select: { spentAt: true, description: true, category: true, amountCents: true } }),
+      tx.expense.findMany({ where: { companyId, ...(branchId ? { branchId } : {}), OR: or("spentAt") }, select: { spentAt: true, description: true, category: true, amountCents: true } }),
       tx.purchase.findMany({
         where: { companyId, ...(branchId ? { branchId } : {}), voided: false, OR: or("createdAt") },
         select: { createdAt: true, totalCents: true, manualSupplierName: true, supplier: { select: { name: true } } },

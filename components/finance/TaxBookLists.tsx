@@ -47,7 +47,9 @@ export function SalesBookList({
   referenceCurrency,
   totals,
   empty,
+  ivaEnabled = true,
 }: {
+  ivaEnabled?: boolean;
   sales: SaleEntry[];
   referenceCurrency: ReferenceCurrency;
   totals: { base: number; tax: number; total: number };
@@ -63,8 +65,7 @@ export function SalesBookList({
       footer={
         <TotalsStrip
           items={[
-            { label: "Base", value: money(totals.base) },
-            { label: "IVA", value: money(totals.tax) },
+            ...(ivaEnabled ? [{ label: "Base", value: money(totals.base) }, { label: "IVA", value: money(totals.tax) }] : []),
             { label: "Total", value: money(totals.total) },
           ]}
         />
@@ -85,7 +86,7 @@ export function SalesBookList({
               {formatDateSlash(s.createdAt)} · Nº {s.invoiceNumber ?? s.controlNumber ?? "—"}
             </span>
           </span>
-          <span className="w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums">IVA {money(s.taxCents)}</span>
+          {ivaEnabled && <span className="w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums">IVA {money(s.taxCents)}</span>}
           <span className="w-28 shrink-0 text-right text-sm font-medium tabular-nums">{money(s.totalCents)}</span>
         </>
       )}
@@ -99,8 +100,8 @@ export function SalesBookList({
             <Field label="Fecha">{formatDateSlash(s.createdAt)}</Field>
             <Field label="Nº control">{s.controlNumber ?? "—"}</Field>
             <Field label="Nº factura">{s.invoiceNumber ?? "—"}</Field>
-            <Field label="Base imponible">{money(s.baseImponibleCents)}</Field>
-            <Field label="IVA">{money(s.taxCents)}</Field>
+            {ivaEnabled && <Field label="Base imponible">{money(s.baseImponibleCents)}</Field>}
+            {ivaEnabled && <Field label="IVA">{money(s.taxCents)}</Field>}
             {s.igtfCents > 0 && <Field label="IGTF">{money(s.igtfCents)}</Field>}
             <Field label="Total" wide>
               <span className="text-lg font-semibold">{money(s.totalCents)}</span>
@@ -117,7 +118,9 @@ export function PurchasesBookList({
   referenceCurrency,
   totals,
   empty,
+  ivaEnabled = true,
 }: {
+  ivaEnabled?: boolean;
   purchases: PurchaseEntry[];
   referenceCurrency: ReferenceCurrency;
   totals: { base: number; tax: number; retained: number; total: number };
@@ -133,9 +136,7 @@ export function PurchasesBookList({
       footer={
         <TotalsStrip
           items={[
-            { label: "Base", value: money(totals.base) },
-            { label: "IVA", value: money(totals.tax) },
-            { label: "Retenido", value: money(totals.retained) },
+            ...(ivaEnabled ? [{ label: "Base", value: money(totals.base) }, { label: "IVA", value: money(totals.tax) }, { label: "Retenido", value: money(totals.retained) }] : []),
             { label: "Total", value: money(totals.total) },
           ]}
         />
@@ -156,7 +157,7 @@ export function PurchasesBookList({
               {formatDateSlash(p.createdAt)} · Nº {p.supplierInvoiceNo ?? p.controlNumber ?? "—"}
             </span>
           </span>
-          <span className="w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums">IVA {money(p.taxCents)}</span>
+          {ivaEnabled && <span className="w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums">IVA {money(p.taxCents)}</span>}
           <span className="w-28 shrink-0 text-right text-sm font-medium tabular-nums">{money(p.totalCents)}</span>
         </>
       )}
@@ -170,9 +171,9 @@ export function PurchasesBookList({
             <Field label="Fecha">{formatDateSlash(p.createdAt)}</Field>
             <Field label="Nº control">{p.controlNumber ?? "—"}</Field>
             <Field label="Factura proveedor">{p.supplierInvoiceNo ?? "—"}</Field>
-            <Field label="Base imponible">{money(p.baseImponibleCents)}</Field>
-            <Field label="IVA">{money(p.taxCents)}</Field>
-            <Field label="IVA retenido">{money(p.ivaRetainedCents)}</Field>
+            {ivaEnabled && <Field label="Base imponible">{money(p.baseImponibleCents)}</Field>}
+            {ivaEnabled && <Field label="IVA">{money(p.taxCents)}</Field>}
+            {ivaEnabled && <Field label="IVA retenido">{money(p.ivaRetainedCents)}</Field>}
             <Field label="Total" wide>
               <span className="text-lg font-semibold">{money(p.totalCents)}</span>
             </Field>

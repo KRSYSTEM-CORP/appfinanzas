@@ -3,8 +3,7 @@ import { AdminShell } from "@/components/accounting/AdminShell";
 import { BalanceSummary } from "@/components/accounting/BalanceSummary";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { PeriodBar } from "@/components/shared/PeriodBar";
-import { revenueTotals } from "@/lib/actions/reports";
-import { costOfGoodsSold, expensesTotal, listExpenses } from "@/lib/actions/finance";
+import { costOfGoodsSold, expensesTotal, listExpenses, netSalesCents } from "@/lib/actions/finance";
 import { commissionsTotal } from "@/lib/actions/seller-reports";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { selectionLabel } from "@/lib/period-label";
@@ -22,15 +21,15 @@ export default async function AccountingPage({
   await requireAccountingPlan();
   const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
   const today = todayDateString();
-  const [totals, cogsCents, expensesCents, commissionsCents, expenses, { referenceCurrency, rate, exchangeRateEnabled }] = await Promise.all([
-    revenueTotals(range),
+  const [netSales, cogsCents, expensesCents, commissionsCents, expenses, { referenceCurrency, rate, exchangeRateEnabled }] = await Promise.all([
+    netSalesCents(range),
     costOfGoodsSold(range),
     expensesTotal(range),
     commissionsTotal(range),
     listExpenses(range),
     getExchangeRateInfo(),
   ]);
-  const b = { salesCents: totals.totalEurCents, cogsCents, expensesCents, commissionsCents };
+  const b = { salesCents: netSales, cogsCents, expensesCents, commissionsCents };
   const label = selectionLabel(range, today);
 
   return (
