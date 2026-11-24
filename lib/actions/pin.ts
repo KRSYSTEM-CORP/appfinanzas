@@ -6,7 +6,7 @@ import { withTenant } from "@/lib/tenant-db";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { PIN_PATTERN, computePinKey, pinProblem } from "@/lib/pin";
 import { countManagersWithPin } from "@/lib/pin-rules";
-import { checkRateLimit, clearAttempts, rateLimitMessage, recordFailedAttempt } from "@/lib/rate-limit";
+import { clearAttempts, consumeAttempt, rateLimitMessage } from "@/lib/rate-limit";
 import type { ActionResult } from "@/lib/types";
 
 function authSecret(): string {
@@ -145,8 +145,8 @@ export async function unlockWithPin(userId: string, pin: string): Promise<Action
   const personScope = "pin-unlock";
   const companyScope = "pin-unlock-company";
   const [person, company] = await Promise.all([
-    checkRateLimit(personScope, userId, PER_PERSON_MAX, WINDOW_MS),
-    checkRateLimit(companyScope, session.companyId, PER_COMPANY_MAX, WINDOW_MS),
+    consumeAttempt(personScope, userId, PER_PERSON_MAX, WINDOW_MS),
+    consumeAttempt(companyScope, session.companyId, PER_COMPANY_MAX, WINDOW_MS),
   ]);
   if (!person.allowed || !company.allowed) {
     return { success: false, error: rateLimitMessage(Math.max(person.retryAfterMinutes, company.retryAfterMinutes)) };
@@ -160,11 +160,12 @@ export async function unlockWithPin(userId: string, pin: string): Promise<Action
   );
   const ok = Boolean(target?.pinHash) && PIN_PATTERN.test(pin) && verifyPassword(pin, target!.pinHash!);
   if (!ok || !target) {
-    await Promise.all([recordFailedAttempt(personScope, userId), recordFailedAttempt(companyScope, session.companyId)]);
+    // El intento ya quedó registrado por consumeAttempt (antes de verificar).
     return { success: false, error: "PIN incorrecto" };
   }
 
   await clearAttempts(personScope, userId);
+  await clearAttempts(companyScope, session.companyId);
   await setSessionCookie({
     uid: target.id,
     cid: session.companyId,
@@ -192,7 +193,7 @@ export async function createFirstManagerPin(
   if (problem) return { success: false, error: problem };
 
   const scope = "pin-create";
-  const limit = await checkRateLimit(scope, session.companyId, PER_COMPANY_MAX, WINDOW_MS);
+  const limit = await consumeAttempt(scope, session.companyId, PER_COMPANY_MAX, WINDOW_MS);
   if (!limit.allowed) return { success: false, error: rateLimitMessage(limit.retryAfterMinutes) };
 
   const outcome = await withTenant(session.companyId, async (tx) => {
@@ -213,7 +214,6 @@ export async function createFirstManagerPin(
     return { ok: true as const, target };
   });
   if (!outcome.ok) {
-    await recordFailedAttempt(scope, session.companyId);
     return { success: false, error: outcome.error };
   }
 

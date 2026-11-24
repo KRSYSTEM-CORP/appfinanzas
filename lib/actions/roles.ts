@@ -4,8 +4,16 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requirePermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
-import { ALL_PERMISSIONS, DEFAULT_LOCK_MINUTES, DEFAULT_ROLES, LOCK_MINUTE_CHOICES } from "@/lib/permissions";
+import { ALL_PERMISSIONS, canAdministerRoles, DEFAULT_LOCK_MINUTES, DEFAULT_ROLES, LOCK_MINUTE_CHOICES } from "@/lib/permissions";
 import type { ActionResult } from "@/lib/types";
+
+const ROLE_ADMIN_ERROR = "Solo un gerente puede administrar los roles";
+
+// «settings» da acceso a la pantalla, pero crear/editar/asignar roles exige ser GERENTE de base.
+async function requireRoleAdmin() {
+  const session = await requirePermission("settings");
+  return { session, denied: canAdministerRoles(session) ? null : ROLE_ADMIN_ERROR };
+}
 
 export type RoleRow = {
   id: string;
@@ -51,7 +59,9 @@ export async function listRoles(): Promise<RoleRow[]> {
 const PermissionList = z.array(z.enum(ALL_PERMISSIONS as [string, ...string[]]));
 
 export async function updateRolePermissions(roleId: string, permissions: string[]): Promise<ActionResult> {
-  const { companyId } = await requirePermission("settings");
+  const { session: roleSession, denied } = await requireRoleAdmin();
+  if (denied) return { success: false, error: denied };
+  const { companyId } = roleSession;
   const parsed = PermissionList.safeParse(permissions);
   if (!parsed.success) return { success: false, error: "Permisos no válidos" };
   const result = await withTenant(companyId, async (tx) => {
@@ -74,7 +84,9 @@ const NewRole = z.object({
 });
 
 export async function createRole(input: unknown): Promise<ActionResult> {
-  const { companyId } = await requirePermission("settings");
+  const { session: roleSession, denied } = await requireRoleAdmin();
+  if (denied) return { success: false, error: denied };
+  const { companyId } = roleSession;
   const parsed = NewRole.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Datos no válidos" };
   try {
@@ -90,7 +102,9 @@ export async function createRole(input: unknown): Promise<ActionResult> {
 }
 
 export async function deleteRole(roleId: string): Promise<ActionResult> {
-  const { companyId } = await requirePermission("settings");
+  const { session: roleSession, denied } = await requireRoleAdmin();
+  if (denied) return { success: false, error: denied };
+  const { companyId } = roleSession;
   const result = await withTenant(companyId, async (tx) => {
     const role = await tx.companyRole.findFirst({ where: { id: roleId, companyId }, include: { _count: { select: { users: true } } } });
     if (!role) return "Rol no encontrado";
@@ -107,7 +121,8 @@ export async function deleteRole(roleId: string): Promise<ActionResult> {
 // Asigna un rol a una persona. El rol base (gerente/vendedor) se aplica a su cuenta; un vendedor
 // necesita sucursal. Nadie puede quitarse a sí mismo el acceso de administración.
 export async function assignRole(userId: string, roleId: string | null): Promise<ActionResult> {
-  const session = await requirePermission("settings");
+  const { session, denied } = await requireRoleAdmin();
+  if (denied) return { success: false, error: denied };
   const { companyId } = session;
   const result = await withTenant(companyId, async (tx) => {
     const user = await tx.user.findFirst({ where: { id: userId, companyId } });
@@ -136,7 +151,9 @@ export async function assignRole(userId: string, roleId: string | null): Promise
 
 // Minutos sin actividad antes de bloquear la pantalla de las personas con este rol (5, 10 o 15).
 export async function updateRoleLockMinutes(roleId: string, minutes: number): Promise<ActionResult> {
-  const { companyId } = await requirePermission("settings");
+  const { session: roleSession, denied } = await requireRoleAdmin();
+  if (denied) return { success: false, error: denied };
+  const { companyId } = roleSession;
   if (!(LOCK_MINUTE_CHOICES as readonly number[]).includes(minutes)) return { success: false, error: "Elige 5, 10 o 15 minutos" };
   const done = await withTenant(companyId, async (tx) => {
     const role = await tx.companyRole.findFirst({ where: { id: roleId, companyId }, select: { id: true } });

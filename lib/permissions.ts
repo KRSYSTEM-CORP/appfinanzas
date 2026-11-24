@@ -50,3 +50,10 @@ export const DEFAULT_LOCK_MINUTES: Record<string, number> = {
   Contador: 10,
 };
 export const LOCK_MINUTE_CHOICES = [5, 10, 15] as const;
+
+// Quién puede crear/editar roles o asignarlos. Tener el permiso «settings» en un
+// rol personalizado NO basta: se podría dar gerente a sí mismo. Solo cuentas con
+// rol base GERENTE (o el superadmin de la plataforma) administran roles.
+export function canAdministerRoles(actor: { role: string; isSuperAdmin?: boolean }): boolean {
+  return actor.role === "GERENTE" || actor.isSuperAdmin === true;
+}

@@ -29,6 +29,7 @@ import {
   type AssistantReply,
   type Proposal,
 } from "@/lib/assistant";
+import { consumeAttempt } from "@/lib/rate-limit";
 import type { ActionResult } from "@/lib/types";
 import type { PlanId } from "@/lib/plans";
 
@@ -164,6 +165,8 @@ export async function askAssistant(question: string, history: ChatTurn[] = []): 
   }
 }
 
+const AI_MAX_PER_MINUTE = 10;
+
 async function askAssistantInner(question: string, history: ChatTurn[]): Promise<AskResult> {
   const { companyId, plan, branchId, userId } = await requireManager();
   const q = question.trim().slice(0, MAX_QUESTION_CHARS);
@@ -172,6 +175,10 @@ async function askAssistantInner(question: string, history: ChatTurn[]): Promise
 
   // Cada consulta cuesta créditos: se verifica el saldo ANTES de llamar al modelo (mínimo 1) y se
   // cobra DESPUÉS, solo si hubo respuesta; un fallo del proveedor nunca descuenta créditos.
+  // Tope de consultas por minuto y empresa: evita ráfagas en paralelo que gasten la cuota del proveedor.
+  const burst = await consumeAttempt("ai-ask", companyId, AI_MAX_PER_MINUTE, 60_000);
+  if (!burst.allowed) return { success: false, error: "Demasiadas consultas seguidas. Espera un minuto e intenta de nuevo." };
+
   const credits = await withTenant(companyId, async (tx) => {
     const c = await tx.company.findUnique({ where: { id: companyId }, select: { aiCreditsExtra: true, aiCreditsUsed: true, aiPeriod: true } });
     const used = c?.aiPeriod === periodKey(new Date()) ? c.aiCreditsUsed : 0;
@@ -212,6 +219,8 @@ async function askAssistantInner(question: string, history: ChatTurn[]): Promise
     };
   }
   const creditsLeft = await withTenant(companyId, async (tx) => {
+    // Bloquea la fila de la empresa: dos respuestas simultáneas no pueden leer el mismo saldo.
+    await tx.$queryRaw`SELECT id FROM "Company" WHERE id = ${companyId} FOR UPDATE`;
     const c = await tx.company.findUnique({ where: { id: companyId }, select: { aiCreditsExtra: true, aiCreditsUsed: true, aiPeriod: true } });
     const period = periodKey(new Date());
     const used = c?.aiPeriod === period ? c.aiCreditsUsed : 0;
