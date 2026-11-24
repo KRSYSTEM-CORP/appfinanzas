@@ -8,7 +8,8 @@ import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PrintableSaleDocument } from "@/components/print/PrintableSaleDocument";
 import { PrintFrame, type PrintFrameHandle } from "@/components/print/PrintFrame";
-import { buildDeliveryNotePDF, controlNumberLabel, type DeliveryNoteCompany, type DeliveryNoteSale } from "@/lib/delivery-note";
+import { controlNumberLabel } from "@/lib/delivery-note-labels";
+import type { DeliveryNoteCompany, DeliveryNoteSale } from "@/lib/delivery-note";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 
 type Fmt = "58" | "80" | "c";
@@ -67,7 +68,7 @@ export function PosDocumentSheet({
   );
 
   async function pdfBlob() {
-    const pdf = await buildDeliveryNotePDF(sale, company, rate, currencyCode, exchangeRateEnabled, referenceCurrency, "letter", variant);
+    const pdf = await (await import("@/lib/delivery-note")).buildDeliveryNotePDF(sale, company, rate, currencyCode, exchangeRateEnabled, referenceCurrency, "letter", variant);
     return pdf.output("blob") as Blob;
   }
 

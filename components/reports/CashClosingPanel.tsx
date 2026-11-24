@@ -15,7 +15,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { closeCashRegister, setCashOpening, type CashClosingSummary } from "@/lib/actions/cash-closing";
-import { buildCashClosingPDF } from "@/lib/cash-closing-pdf";
 import { pdfFormatForPaperSize } from "@/lib/print-paper-sizes";
 import { PrintDialog } from "@/components/print/PrintDialog";
 import { PrintableCashClosing } from "@/components/print/PrintableCashClosing";
@@ -65,7 +64,7 @@ export function CashClosingPanel({
   const nextShiftNo = summary.shifts.length > 0 ? Math.max(...summary.shifts.map((x) => x.shiftNumber)) + 1 : 1;
 
   async function buildPdf(paperSize?: PrintPaperSize) {
-    return buildCashClosingPDF(
+    return (await import("@/lib/cash-closing-pdf")).buildCashClosingPDF(
       summary,
       company,
       branchName,

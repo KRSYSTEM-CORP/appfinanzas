@@ -1,6 +1,6 @@
 "use server";
 
-import { requireManager } from "@/lib/session";
+import { requireAccountingPlan } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 
@@ -9,7 +9,7 @@ import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types"
 // completed before the IVA feature existed show baseImponibleCents=0/
 // taxCents=0 (an approximation, not a real historical record).
 export async function getSalesTaxBook(range: DateRangeSelection) {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const windows = selectionToWindows(range);
   return withTenant(companyId, (tx) =>
     tx.sale.findMany({
@@ -44,7 +44,7 @@ export async function getSalesTaxBook(range: DateRangeSelection) {
 // Libro de Compras — one row per non-voided purchase in the period, with the
 // supplier's RIF and any IVA withheld (see Company.isIvaWithholdingAgent).
 export async function getPurchasesTaxBook(range: DateRangeSelection) {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const windows = selectionToWindows(range);
   return withTenant(companyId, (tx) =>
     tx.purchase.findMany({
@@ -63,7 +63,7 @@ export async function getPurchasesTaxBook(range: DateRangeSelection) {
 // Notas de crédito issued in the period (audit KRPOS-FIS-003), each with the
 // factura it cancels — they subtract from the Libro de Ventas.
 export async function getCreditNotesTaxBook(range: DateRangeSelection) {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const windows = selectionToWindows(range);
   return withTenant(companyId, (tx) =>
     tx.creditNote.findMany({
@@ -92,7 +92,7 @@ export async function getCreditNotesTaxBook(range: DateRangeSelection) {
 
 // Notas de débito issued in the period: they add to the Libro de Ventas.
 export async function getDebitNotesTaxBook(range: DateRangeSelection) {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const windows = selectionToWindows(range);
   return withTenant(companyId, (tx) =>
     tx.debitNote.findMany({

@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { PlusIcon, ShoppingCartIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmSheet } from "@/components/shared/ConfirmSheet";
 import { Pill, StatusPill } from "@/components/shared/Pills";
 import { RowMenu } from "@/components/shared/RowMenu";
@@ -15,25 +14,13 @@ import { PayDialog } from "@/components/purchases/PaymentOrdersPanel";
 import { voidPurchase, type PaymentOrderRow } from "@/lib/actions/purchases";
 import type { RestockSuggestion } from "@/lib/actions/reports";
 import { money } from "@/lib/money-display";
+import { dualAmount, purchaseStatus, type MoneyCtx } from "@/lib/money-primary";
+import { PurchaseDetailDialog, type RegisterPurchase } from "@/components/purchases/PurchaseDetailDialog";
 import { cn } from "@/lib/utils";
 
 const SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-export type RegisterPurchase = {
-  id: string;
-  createdAt: string;
-  controlNumber: number | null;
-  supplierName: string;
-  supplierInvoiceNo: string | null;
-  concept: string;
-  items: { name: string; quantity: number; unitCostCents: number; subtotalCents: number }[];
-  fiscal: boolean;
-  totalCents: number;
-  owedCents: number;
-  paidCents: number;
-  paymentStatus: "PAID" | "PENDING";
-  voided: boolean;
-};
+export type { RegisterPurchase };
 
 // «Sugerencia de compra»: productos que se acaban, cuánto pedir y el costo estimado.
 export function RestockCard({ rows, currency }: { rows: RestockSuggestion[]; currency: string }) {
@@ -76,7 +63,8 @@ export function RestockCard({ rows, currency }: { rows: RestockSuggestion[]; cur
 }
 
 // «Compras del periodo»: tabla con proveedor, concepto, factura, total, estado y menú ⋯.
-export function PurchasesTable({ purchases, currency }: { purchases: RegisterPurchase[]; currency: string }) {
+export function PurchasesTable({ purchases, ctx }: { purchases: RegisterPurchase[]; ctx: MoneyCtx }) {
+  const currency = ctx.referenceCurrency;
   const router = useRouter();
   const [supplier, setSupplier] = useState("");
   const [view, setView] = useState<RegisterPurchase | null>(null);
@@ -86,13 +74,38 @@ export function PurchasesTable({ purchases, currency }: { purchases: RegisterPur
   const suppliers = [...new Set(purchases.map((p) => p.supplierName))].sort();
   const shown = supplier ? purchases.filter((p) => p.supplierName === supplier) : purchases;
   const total = shown.filter((p) => !p.voided).reduce((n, p) => n + p.totalCents, 0);
-  const m = (c: number) => money(currency, c);
+
+  const Amt = ({ cents, local }: { cents: number; local: boolean }) => {
+    const d = dualAmount(cents, ctx, local);
+    return (
+      <>
+        {d.primary}
+        {d.secondary && <small className="block text-xs font-normal text-muted-foreground">{d.secondary}</small>}
+      </>
+    );
+  };
 
   function status(p: RegisterPurchase) {
-    if (p.voided) return <StatusPill tone="neutral">Anulada</StatusPill>;
-    if (p.paymentStatus === "PAID") return <StatusPill tone="ok">Pagada</StatusPill>;
-    if (p.paidCents > 0) return <StatusPill tone="warn">Parcial</StatusPill>;
+    const st = purchaseStatus(p);
+    if (st === "VOIDED") return <StatusPill tone="neutral">Anulada</StatusPill>;
+    if (st === "PAID") return <StatusPill tone="ok">Pagada</StatusPill>;
+    if (st === "PARTIAL") return <StatusPill tone="warn">Parcial</StatusPill>;
     return <StatusPill tone="bad">A crédito</StatusPill>;
+  }
+
+  function payOrder(p: RegisterPurchase): PaymentOrderRow {
+    return {
+      id: p.id,
+      controlNumber: p.controlNumber,
+      supplierName: p.supplierName,
+      createdAt: p.createdAt,
+      ageDays: 0,
+      totalCents: p.totalCents,
+      owedCents: p.owedCents,
+      paidCents: p.paidCents,
+      remainingCents: Math.max(0, p.owedCents - p.paidCents),
+      primaryLocal: p.primaryLocal,
+    };
   }
 
   function doVoid() {
@@ -102,6 +115,7 @@ export function PurchasesTable({ purchases, currency }: { purchases: RegisterPur
       if (!r.success) toast.error(r.error);
       else toast.success("Compra anulada");
       setToVoid(null);
+      setView(null);
       router.refresh();
     });
   }
@@ -144,7 +158,6 @@ export function PurchasesTable({ purchases, currency }: { purchases: RegisterPur
             <tbody>
               {shown.map((p) => {
                 const d = new Date(p.createdAt);
-                const remaining = Math.max(0, p.owedCents - p.paidCents);
                 return (
                   <tr key={p.id} className={cn("border-b [&>td]:px-3.5 [&>td]:py-[11px]", p.voided && "text-muted-foreground line-through")}>
                     <td className="whitespace-nowrap">
@@ -153,32 +166,14 @@ export function PurchasesTable({ purchases, currency }: { purchases: RegisterPur
                     <td className="font-bold">{p.supplierName}</td>
                     <td>{p.concept}</td>
                     <td>{p.fiscal ? <Pill tone="val">Fiscal</Pill> : <Pill>Sin factura</Pill>}</td>
-                    <td className="text-right tabular-nums">{m(p.totalCents)}</td>
+                    <td className="text-right tabular-nums"><Amt cents={p.totalCents} local={p.primaryLocal} /></td>
                     <td className="no-underline">{status(p)}</td>
                     <td className="text-right">
                       <RowMenu
                         items={[
-                          { label: "Ver", onSelect: () => setView(p) },
-                          ...(!p.voided && p.paymentStatus === "PENDING"
-                            ? [
-                                {
-                                  label: "Registrar pago",
-                                  onSelect: () =>
-                                    setPaying({
-                                      id: p.id,
-                                      controlNumber: p.controlNumber,
-                                      supplierName: p.supplierName,
-                                      createdAt: p.createdAt,
-                                      ageDays: 0,
-                                      totalCents: p.totalCents,
-                                      owedCents: p.owedCents,
-                                      paidCents: p.paidCents,
-                                      remainingCents: remaining,
-                                    }),
-                                },
-                              ]
-                            : []),
-                          ...(!p.voided ? [{ label: "Anular", danger: true, onSelect: () => setToVoid(p) }] : []),
+                          { label: "Ver detalle", onSelect: () => setView(p) },
+                          ...(!p.voided && p.paymentStatus === "PENDING" ? [{ label: "Registrar pago", onSelect: () => setPaying(payOrder(p)) }] : []),
+                          ...(!p.voided ? [{ label: "Anular compra", danger: true, onSelect: () => setToVoid(p) }] : []),
                         ]}
                       />
                     </td>
@@ -191,7 +186,7 @@ export function PurchasesTable({ purchases, currency }: { purchases: RegisterPur
                 <td colSpan={4} className="text-right">
                   Total (sin anuladas)
                 </td>
-                <td className="text-right tabular-nums">{m(total)}</td>
+                <td className="text-right tabular-nums">{money(currency, total)}</td>
                 <td colSpan={2} />
               </tr>
             </tfoot>
@@ -199,42 +194,34 @@ export function PurchasesTable({ purchases, currency }: { purchases: RegisterPur
         </div>
       )}
       {view && (
-        <Dialog open onOpenChange={(v) => !v && setView(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Compra Nº {view.controlNumber ?? "—"}</DialogTitle>
-              <DialogDescription>
-                {view.supplierName}
-                {view.supplierInvoiceNo ? ` · factura ${view.supplierInvoiceNo}` : ""}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="mt-2">
-              {view.items.map((it, i) => (
-                <div key={i} className="flex items-center justify-between gap-2.5 border-b py-2.5">
-                  <div className="min-w-0">
-                    <b>{it.name}</b>
-                    <small className="block text-xs text-muted-foreground">
-                      {it.quantity} × {m(it.unitCostCents)}
-                    </small>
-                  </div>
-                  <b className="tabular-nums">{m(it.subtotalCents)}</b>
-                </div>
-              ))}
-              <div className="flex items-center justify-between gap-2.5 py-2.5">
-                <b>Total</b>
-                <b className="tabular-nums">{m(view.totalCents)}</b>
-              </div>
-              {view.paidCents > 0 && <p className="text-[13px] text-muted-foreground">Pagado {m(view.paidCents)} de {m(view.owedCents)}</p>}
-            </div>
-          </DialogContent>
-        </Dialog>
+        <PurchaseDetailDialog
+          purchase={view}
+          ctx={ctx}
+          onClose={() => setView(null)}
+          onVoid={() => setToVoid(view)}
+          onPay={() => {
+            setPaying(payOrder(view));
+            setView(null);
+          }}
+        />
       )}
-      {paying && <PayDialog order={paying} currency={currency} onClose={() => setPaying(null)} />}
+      {paying && <PayDialog order={paying} ctx={ctx} onClose={() => setPaying(null)} />}
       <ConfirmSheet
         open={toVoid != null}
         onOpenChange={(v) => !v && setToVoid(null)}
         title="¿Anular esta compra?"
-        description="Se descuenta del inventario lo que entró con ella y deja de sumar. Queda tachada en la lista."
+        description={
+          <>
+            Se anula la compra Nº {toVoid?.controlNumber ?? "—"} de {toVoid?.supplierName}. Esto revierte:
+            <span className="mt-2 block">
+              · Existencias: baja del inventario lo que entró con ella. Si parte ya se vendió, no se anula y se te avisa qué falta.
+            </span>
+            <span className="block">
+              · Pagos: los {toVoid?.payments.length ?? 0} pago(s) registrados dejan de contar y el dinero vuelve al saldo de las cuentas de donde salió.
+            </span>
+            <span className="block">· Cuentas por pagar: sale de las órdenes de pago. Queda tachada en la lista y no se puede deshacer.</span>
+          </>
+        }
         confirmLabel="Sí, anular"
         onConfirm={doVoid}
         pending={pending}

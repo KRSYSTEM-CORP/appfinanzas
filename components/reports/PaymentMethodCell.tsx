@@ -10,6 +10,7 @@ import { PAYMENT_METHOD_LABELS, formatDate } from "@/lib/format";
 import { formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
 import { legacyCurrencyForPayment } from "@/lib/payment-currency";
 import type { PaymentMethod, ReferenceCurrency } from "@prisma/client";
+import { paidAmount } from "@/lib/money-primary";
 
 // The only fields of a sale this needs — loose enough for both the raw
 // server-side sale (Decimal rates) and the plain one sent to Client
@@ -39,6 +40,7 @@ type PaymentEntry = {
   method: PaymentMethod;
   currencyCode: string;
   amountCents: number | null;
+  refCents: number | null;
   reference: string | null;
   date: Date | string | null;
   rate: number | null;
@@ -67,6 +69,7 @@ export function PaymentMethodCell({
           method: p.paymentMethod,
           currencyCode: p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency),
           amountCents: p.amountCurrencyCents ?? p.amountEurCents,
+          refCents: p.amountEurCents,
           reference: p.reference,
           date: p.createdAt,
           rate: p.exchangeRate != null ? Number(p.exchangeRate) : null,
@@ -77,6 +80,7 @@ export function PaymentMethodCell({
               method: sale.paymentMethod,
               currencyCode: legacyCurrencyForPayment(sale.paymentMethod, referenceCurrency),
               amountCents: null,
+              refCents: null,
               reference: sale.paymentReference,
               date: sale.paidAt,
               rate: sale.paidExchangeRate != null ? Number(sale.paidExchangeRate) : null,
@@ -121,7 +125,14 @@ export function PaymentMethodCell({
                   {PAYMENT_METHOD_LABELS[e.method]}
                 </span>
                 {e.amountCents != null && (
-                  <span className="font-medium">{formatCurrencyCents(e.currencyCode, e.amountCents)}</span>
+                  <span className="text-right font-medium">
+                    {formatCurrencyCents(e.currencyCode, e.amountCents)}
+                    {e.refCents != null && paidAmount({ amountEurCents: e.refCents, amountCurrencyCents: e.amountCents, currencyCode: e.currencyCode }, referenceCurrency).secondary && (
+                      <small className="block text-xs font-normal text-muted-foreground">
+                        {paidAmount({ amountEurCents: e.refCents, amountCurrencyCents: e.amountCents, currencyCode: e.currencyCode }, referenceCurrency).secondary}
+                      </small>
+                    )}
+                  </span>
                 )}
               </div>
               {e.reference && <span className="text-muted-foreground text-xs">Ref: {e.reference}</span>}

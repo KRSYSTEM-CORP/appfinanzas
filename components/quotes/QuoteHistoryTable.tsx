@@ -22,7 +22,7 @@ import {
   updateQuoteStatus,
 } from "@/lib/actions/quotes";
 import { FOLLOW_UP_KINDS, QUOTE_LOST_REASONS, closeProbability, daysToExpire, expiryPill, nextStepSuggestion, type FollowUpKind } from "@/lib/quote-follow-up";
-import { buildQuotePDF, quoteControlNumberLabel } from "@/lib/quote-pdf";
+import { quoteControlNumberLabel } from "@/lib/quote-labels";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import { PrintDialog } from "@/components/print/PrintDialog";
 import { PrintableQuote } from "@/components/print/PrintableQuote";
@@ -157,7 +157,7 @@ export function QuoteHistoryTable({
   }
   async function downloadPrintQuote() {
     if (!printQuote) return;
-    const doc = await buildQuotePDF(printQuote, company, printQuote.exchangeRate ?? rate, currencyCode, exchangeRateEnabled, referenceCurrency, "letter", printQuote.useLocalCurrency);
+    const doc = await (await import("@/lib/quote-pdf")).buildQuotePDF(printQuote, company, printQuote.exchangeRate ?? rate, currencyCode, exchangeRateEnabled, referenceCurrency, "letter", printQuote.useLocalCurrency);
     const url = URL.createObjectURL(doc.output("blob") as Blob);
     const a = document.createElement("a");
     a.href = url;

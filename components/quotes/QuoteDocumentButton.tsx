@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getQuote } from "@/lib/actions/quotes";
-import { buildQuotePDF, quoteControlNumberLabel } from "@/lib/quote-pdf";
+import { quoteControlNumberLabel } from "@/lib/quote-labels";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { ReferenceCurrency } from "@prisma/client";
 
@@ -38,7 +38,7 @@ export function QuoteDocumentButton({
         setError("Presupuesto no encontrado");
         return;
       }
-      const doc = await buildQuotePDF(
+      const doc = await (await import("@/lib/quote-pdf")).buildQuotePDF(
         quote,
         company,
         quote.exchangeRate ?? rate,

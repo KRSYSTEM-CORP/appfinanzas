@@ -362,7 +362,7 @@ const [step, setStep] = useState<Step>("cart");
     };
 
     async function queueOfflineSale(customerInfo: CustomerInfo) {
-      await queueSale({ ...saleInput, offlineExchangeRate: rate ?? undefined }, {
+      await queueSale({ ...saleInput, offlineExchangeRate: rate ?? undefined, queuedBranchId: branchId ?? undefined }, {
         totalCents: total,
         items: lines.map((l) => ({
           productName: productById.get(l.productId)?.name ?? l.name,

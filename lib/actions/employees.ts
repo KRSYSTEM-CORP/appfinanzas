@@ -221,7 +221,7 @@ export async function updateEmployee(userId: string, formData: FormData): Promis
 }
 
 export async function setEmployeeStatus(userId: string, status: UserStatus): Promise<ActionResult> {
-  const { companyId, userId: currentUserId } = await requireManager();
+  const { companyId, userId: currentUserId, plan } = await requireManager();
   if (userId === currentUserId && status === "SUSPENDED") {
     return { success: false, error: "No puedes suspender tu propia cuenta" };
   }
@@ -235,6 +235,12 @@ export async function setEmployeeStatus(userId: string, status: UserStatus): Pro
       if (!stillHasManager) {
         return { ok: false as const, error: "No puedes suspender al único gerente activo" };
       }
+    }
+
+    // Reactivar ocupa un cupo del plan igual que crear: no se salta el límite de usuarios.
+    if (status === "ACTIVE" && target.status !== "ACTIVE") {
+      const limitMsg = await userLimitError(tx, companyId, plan);
+      if (limitMsg) return { ok: false as const, error: limitMsg };
     }
 
     await tx.user.update({ where: { id: userId }, data: { status } });

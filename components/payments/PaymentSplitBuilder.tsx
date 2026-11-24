@@ -11,7 +11,8 @@ import {
   PAYMENT_METHODS_REQUIRING_REFERENCE,
   USD_DENOMINATED_METHODS,
 } from "@/lib/format";
-import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, getCurrency } from "@/lib/currencies";
+import { dualForMethod } from "@/lib/money-primary";
+import { eurCentsToLocal, formatLocalCurrency, getCurrency } from "@/lib/currencies";
 import { resolvePaymentCurrency, tryToEurCents } from "@/lib/payment-currency";
 import type { PaymentMethod, ReferenceCurrency } from "@prisma/client";
 
@@ -169,6 +170,16 @@ export function PaymentSplitBuilder({
   mode?: "exact" | "upTo";
 }) {
   const assignedCents = paymentSplitRowsTotalCents(rows, currencyCode, rate, exchangeRateEnabled, referenceCurrency);
+  // Montos con la moneda del método con el que se cobra ahora (la última línea) primero y la otra entre paréntesis.
+  const lastRow = rows[rows.length - 1];
+  const fmtSel = (cents: number) => {
+    const d = dualForMethod(
+      cents,
+      lastRow ? { method: lastRow.paymentMethod, foreign: lastRow.paidInForeignCurrency } : null,
+      { rate, localCurrencyCode: currencyCode, referenceCurrency, exchangeRateEnabled }
+    );
+    return d.secondary ? `${d.primary} (${d.secondary})` : d.primary;
+  };
   const remainingCents = totalCents - assignedCents;
   const balanced =
     mode === "upTo"
@@ -345,23 +356,19 @@ export function PaymentSplitBuilder({
         </p>
       )}
       <div className={`text-sm ${balanced ? "text-muted-foreground" : "text-destructive"}`}>
-        Asignado: {formatCurrencyCents(referenceCurrency, assignedCents)}
-        {exchangeRateEnabled &&
-          rate != null &&
-          ` (${formatLocalCurrency(eurCentsToLocal(assignedCents, rate), currencyCode)})`}{" "}
-        de {formatCurrencyCents(referenceCurrency, totalCents)}
+        Asignado: {fmtSel(assignedCents)} de {fmtSel(totalCents)}
         {mode === "upTo"
           ? !balanced
             ? assignedCents <= 0
               ? " — ingresa un monto mayor a 0"
-              : ` — supera el saldo pendiente por ${formatCurrencyCents(referenceCurrency, -remainingCents)}`
+              : ` — supera el saldo pendiente por ${fmtSel(-remainingCents)}`
             : remainingCents > 0
-              ? ` — quedará un saldo pendiente de ${formatCurrencyCents(referenceCurrency, remainingCents)}`
+              ? ` — quedará un saldo pendiente de ${fmtSel(remainingCents)}`
               : " — salda la deuda por completo"
           : !balanced &&
             (remainingCents > 0
-              ? ` — faltan ${formatCurrencyCents(referenceCurrency, remainingCents)}`
-              : ` — sobran ${formatCurrencyCents(referenceCurrency, -remainingCents)}`)}
+              ? ` — faltan ${fmtSel(remainingCents)}`
+              : ` — sobran ${fmtSel(-remainingCents)}`)}
       </div>
     </div>
   );

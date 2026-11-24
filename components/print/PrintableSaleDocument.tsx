@@ -1,3 +1,4 @@
+import { paidAmount } from "@/lib/money-primary";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 import { PAYMENT_METHOD_LABELS, formatDate } from "@/lib/format";
 import {
@@ -15,9 +16,8 @@ import {
   itemDescription,
   resolvePaymentLines,
   singlePaymentPaidLine,
-  type DeliveryNoteCompany,
-  type DeliveryNoteSale,
-} from "@/lib/delivery-note";
+} from "@/lib/delivery-note-labels";
+import type { DeliveryNoteCompany, DeliveryNoteSale } from "@/lib/delivery-note";
 import { isThermal, printRootClass } from "@/lib/print-paper-sizes";
 
 // Plain HTML/CSS rendering of a Nota de Entrega / Recibo de Pago for the
@@ -177,10 +177,17 @@ export function PrintableSaleDocument({
               {payments.map((p, i) => (
                 <p key={i}>
                   • {PAYMENT_METHOD_LABELS[p.paymentMethod]}:{" "}
-                  {formatCurrencyCents(
-                    p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency),
-                    p.amountCurrencyCents ?? p.amountEurCents
-                  )}
+                  {(() => {
+                    const d = paidAmount(
+                      {
+                        amountEurCents: p.amountEurCents,
+                        amountCurrencyCents: p.amountCurrencyCents ?? p.amountEurCents,
+                        currencyCode: p.currencyCode ?? legacyCurrencyForPayment(p.paymentMethod, referenceCurrency),
+                      },
+                      referenceCurrency
+                    );
+                    return d.secondary ? `${d.primary} (${d.secondary})` : d.primary;
+                  })()}
                   {p.reference ? ` (${p.reference})` : ""}
                   {(p.createdAt || p.exchangeRate != null) && (
                     <span className="block ml-3">

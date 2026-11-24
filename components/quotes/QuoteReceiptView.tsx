@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { formatDate } from "@/lib/format";
 import { eurCentsToLocal, formatCurrencyCents, formatLocalCurrency } from "@/lib/currencies";
-import { buildQuotePDF, quoteControlNumberLabel, type QuoteForPdf } from "@/lib/quote-pdf";
-import { itemDescription, type DeliveryNoteCompany } from "@/lib/delivery-note";
+import type { QuoteForPdf } from "@/lib/quote-pdf";
+import { quoteControlNumberLabel } from "@/lib/quote-labels";
+import type { DeliveryNoteCompany } from "@/lib/delivery-note";
+import { itemDescription } from "@/lib/delivery-note-labels";
 import { pdfFormatForPaperSize } from "@/lib/print-paper-sizes";
 import { PrintDialog } from "@/components/print/PrintDialog";
 import { PrintableQuote } from "@/components/print/PrintableQuote";
@@ -45,7 +47,7 @@ export function QuoteReceiptView({
   const [noteError, setNoteError] = useState<string | null>(null);
 
   async function generatePdfBlob(paperSize?: PrintPaperSize) {
-    const doc = await buildQuotePDF(
+    const doc = await (await import("@/lib/quote-pdf")).buildQuotePDF(
       quote,
       company,
       effectiveRate,

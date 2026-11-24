@@ -3,15 +3,11 @@
 import { useState } from "react";
 import { FileTextIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  buildDeliveryNotePDF,
-  buildPaymentReceiptPDF,
-  buildDebitNotePDF,
-  controlNumberLabel,
-  receiptControlNumberLabel,
-  type DeliveryNoteCompany,
-  type DeliveryNoteSale,
-} from "@/lib/delivery-note";
+import { controlNumberLabel, receiptControlNumberLabel } from "@/lib/delivery-note-labels";
+import type { DeliveryNoteCompany, DeliveryNoteSale } from "@/lib/delivery-note";
+
+// jspdf (~400 KB) only loads when someone actually presses a PDF button.
+const loadDeliveryNote = () => import("@/lib/delivery-note");
 import { pdfFormatForPaperSize } from "@/lib/print-paper-sizes";
 import { PrintDialog } from "@/components/print/PrintDialog";
 import { PrintableSaleDocument } from "@/components/print/PrintableSaleDocument";
@@ -50,7 +46,7 @@ export function SaleDocumentButtons({
   const hasReceipt = sale.receiptControlNumber != null;
 
   async function buildNotePdf(paperSize?: PrintPaperSize) {
-    return buildDeliveryNotePDF(
+    return (await loadDeliveryNote()).buildDeliveryNotePDF(
       sale,
       company,
       noteRate,
@@ -67,7 +63,7 @@ export function SaleDocumentButtons({
   // moment of sale, not something this viewer offers to change after the
   // fact.
   async function buildInvoicePdf(paperSize?: PrintPaperSize) {
-    return buildDeliveryNotePDF(
+    return (await loadDeliveryNote()).buildDeliveryNotePDF(
       sale,
       company,
       noteRate,
@@ -80,7 +76,7 @@ export function SaleDocumentButtons({
   }
 
   async function buildReceiptPdf(paperSize?: PrintPaperSize) {
-    return buildPaymentReceiptPDF(
+    return (await loadDeliveryNote()).buildPaymentReceiptPDF(
       sale,
       company,
       receiptRate,
@@ -115,7 +111,7 @@ export function SaleDocumentButtons({
     if (!sale.creditNote) return;
     setBusy(true);
     try {
-      const doc = await buildDeliveryNotePDF(
+      const doc = await (await loadDeliveryNote()).buildDeliveryNotePDF(
         sale,
         company,
         noteRate,
@@ -135,7 +131,7 @@ export function SaleDocumentButtons({
   async function downloadDebitNote(note: { controlNumber: number; createdAt: Date; reason: string; totalCents: number; baseImponibleCents: number; taxCents: number }) {
     setBusy(true);
     try {
-      const doc = await buildDebitNotePDF(sale, note, company, noteRate, currencyCode, exchangeRateEnabled, referenceCurrency);
+      const doc = await (await loadDeliveryNote()).buildDebitNotePDF(sale, note, company, noteRate, currencyCode, exchangeRateEnabled, referenceCurrency);
       doc.save(`nota-debito-${String(note.controlNumber).padStart(6, "0")}.pdf`);
     } finally {
       setBusy(false);

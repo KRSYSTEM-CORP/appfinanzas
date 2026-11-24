@@ -105,12 +105,17 @@ export async function createTransfer(input: unknown): Promise<ActionResult> {
           ? await tx.product.findUnique({ where: { branchId_sku: { branchId: d.toBranchId, sku: src.sku } } })
           : await tx.product.findFirst({ where: { companyId, branchId: d.toBranchId, sku: null, name: src.name } });
         if (dest) {
-          const destAfter = dest.stock + line.quantity;
-          await tx.product.update({ where: { id: dest.id }, data: { stock: destAfter, isActive: true } });
+          // Incremento atómico: el stock del destino se lee bloqueando la fila (una venta concurrente no se pierde).
+          const destRows = await tx.$queryRaw<{ stock: number }[]>`
+            UPDATE "Product" SET "stock" = "stock" + ${line.quantity}, "isActive" = true
+            WHERE "id" = ${dest.id} AND "companyId" = ${companyId} AND "branchId" = ${d.toBranchId}
+            RETURNING "stock"
+          `;
+          if (!destRows[0]) throw new Error("Un producto ya no existe en la sucursal de destino");
           await recordStockMovement(tx, {
             companyId, branchId: d.toBranchId, productId: dest.id, productName: dest.name,
             actorId: userId, actorName: sellerName, reason: "TRANSFER_IN", sourceType: "transfer",
-            quantityChange: line.quantity, stockBefore: dest.stock,
+            quantityChange: line.quantity, stockBefore: destRows[0].stock - line.quantity,
           });
         } else {
           const created = await tx.product.create({

@@ -2,8 +2,8 @@
 
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
-import type { Prisma, TaxCategory } from "@prisma/client";
-import { requireManager } from "@/lib/session";
+import type { PaymentMethod, Prisma, TaxCategory } from "@prisma/client";
+import { requireAccountingPlan } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { BulkPurchaseRowSchema, PurchaseSchema } from "@/lib/validations";
 import { decomposeTax, effectiveIvaRates, rateForCategory } from "@/lib/tax";
@@ -14,6 +14,9 @@ import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateProductsCache } from "@/lib/products-cache";
 import { assertAccountFunds, toActionResult } from "@/lib/account-balance";
 import { lineInAccountCurrency } from "@/lib/account-money";
+import { paymentsPrimaryLocal } from "@/lib/money-primary";
+import { buildPurchasePaymentLine, stockShortfalls } from "@/lib/purchase-payment";
+import { paymentSettlesPurchase, purchaseRemaining } from "@/lib/purchase-payment";
 
 export type CompletePurchaseResult =
   | { success: true; purchaseId: string }
@@ -24,7 +27,7 @@ export type CompletePurchaseResult =
 // actually just paid for it — the shop's own cost basis should reflect the
 // latest purchase, same way a real inventory system would.
 export async function createPurchase(input: unknown): Promise<CompletePurchaseResult> {
-  const session = await requireManager();
+  const session = await requireAccountingPlan();
   const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return {
@@ -294,53 +297,46 @@ async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, co
   });
   const productById = new Map(products.map((p) => [p.id, p]));
 
-  await Promise.all(
-    Array.from(quantityByProductId, async ([productId, quantity]) => {
-      const product = productById.get(productId);
-      if (!product) return null;
-      const rows = await tx.$queryRaw<{ stock: number; stock_before: number }[]>`
-        WITH before_update AS (
-          SELECT "id", "stock" AS stock_before FROM "Product"
-          WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
-          FOR UPDATE
-        ), updated AS (
-          UPDATE "Product" p SET "stock" = GREATEST(p."stock" - ${quantity}, 0)
-          FROM before_update b WHERE p."id" = b."id"
-          RETURNING p."stock", b.stock_before
-        ) SELECT "stock", stock_before FROM updated
-      `;
-      if (!rows[0]) return;
-      await recordStockMovement(tx, {
-        companyId, branchId, productId, productName: product.name, actorId, actorName,
-        reason: "PURCHASE_VOID", sourceType: "purchase", sourceId: purchaseId,
-        quantityChange: rows[0].stock - rows[0].stock_before, stockBefore: rows[0].stock_before, stockAfter: rows[0].stock,
-      });
-    })
+  // Primero se bloquean las filas y se revisa que la mercancía de la compra siga en existencias: si ya se vendió
+  // (stock menor a lo que entró) no se anula en silencio dejando el inventario en 0, se avisa qué falta.
+  const locked = await tx.$queryRaw<{ id: string; stock: number }[]>`
+    SELECT "id", "stock" FROM "Product"
+    WHERE "id" = ANY(${Array.from(quantityByProductId.keys())}) AND "companyId" = ${companyId} AND "branchId" = ${branchId}
+    FOR UPDATE
+  `;
+  const stockById = new Map(locked.map((r) => [r.id, r.stock]));
+  const short = stockShortfalls(
+    Array.from(quantityByProductId, ([productId, quantity]) => ({
+      name: productById.get(productId)?.name ?? "Producto",
+      quantity,
+      stock: stockById.get(productId) ?? null,
+    }))
   );
-}
-
-export async function markPurchasePaid(purchaseId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireManager();
-  const result = await withTenant(companyId, (tx) =>
-    tx.purchase.updateMany({
-      where: {
-        id: purchaseId,
-        companyId,
-        paymentStatus: "PENDING",
-        ...(sessionBranchId ? { branchId: sessionBranchId } : {}),
-      },
-      data: { paymentStatus: "PAID", paidAt: new Date() },
-    })
-  );
-  if (result.count === 0) {
-    return { success: false, error: "Compra no encontrada o ya estaba pagada" };
+  if (short.length) {
+    throw new Error(
+      `No se puede anular: parte de lo que entró con esta compra ya se vendió o salió (${short.join("; ")}). Ajusta el inventario o registra una devolución primero.`
+    );
   }
-  revalidatePath("/purchases");
-  return { success: true };
+
+  for (const [productId, quantity] of quantityByProductId) {
+    const product = productById.get(productId);
+    if (!product) continue;
+    const rows = await tx.$queryRaw<{ stock: number }[]>`
+      UPDATE "Product" SET "stock" = "stock" - ${quantity}
+      WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
+      RETURNING "stock"
+    `;
+    if (!rows[0]) continue;
+    await recordStockMovement(tx, {
+      companyId, branchId, productId, productName: product.name, actorId, actorName,
+      reason: "PURCHASE_VOID", sourceType: "purchase", sourceId: purchaseId,
+      quantityChange: -quantity, stockBefore: rows[0].stock + quantity, stockAfter: rows[0].stock,
+    });
+  }
 }
 
 export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireAccountingPlan();
   let purchaseBranchId: string | null = sessionBranchId;
 
   try {
@@ -352,8 +348,12 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
       if (purchase.voided) throw new Error("La compra ya está anulada");
 
       purchaseBranchId = purchase.branchId;
+      // Se marca primero con condición (voided=false): dos clics simultáneos no revierten el stock dos veces.
+      const claimed = await tx.purchase.updateMany({ where: { id: purchaseId, companyId, voided: false }, data: { voided: true, voidedAt: new Date() } });
+      if (claimed.count === 0) throw new Error("La compra ya está anulada");
+      // Sus pagos dejan de contar en el saldo de las cuentas (accountBalance excluye compras anuladas) y la compra sale de
+      // las órdenes de pago (listPaymentOrders solo toma voided=false).
       await reverseStock(tx, purchaseId, companyId, purchase.branchId, actorId, actorName);
-      await tx.purchase.update({ where: { id: purchaseId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "No se pudo anular la compra";
@@ -362,6 +362,8 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
 
   revalidatePath("/inventory");
   revalidatePath("/purchases");
+  revalidatePath("/purchases/orders");
+  revalidatePath("/accounting/accounts");
   await invalidateProductsCache(companyId, purchaseBranchId);
   return { success: true };
 }
@@ -371,7 +373,7 @@ export async function voidPurchase(purchaseId: string): Promise<ActionResult> {
 // (voided) keeps it in the history and reverses its effect on stock. Kept
 // as an action so an old client calling it gets a clear answer.
 export async function deletePurchase(): Promise<ActionResult> {
-  await requireManager();
+  await requireAccountingPlan();
   return {
     success: false,
     error: "Las compras no se eliminan porque son documentos fiscales. Usa Anular: queda en el historial y se revierte el stock.",
@@ -404,7 +406,7 @@ export type BulkPurchaseResult = {
 // and stock/cost-bump logic as createPurchase, just driven by rows parsed
 // from a spreadsheet instead of a single form submission.
 export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<BulkPurchaseResult> {
-  const session = await requireManager();
+  const session = await requireAccountingPlan();
   const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return {
@@ -519,7 +521,8 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           : 0;
 
         const controlNumber = await nextDocumentNumber(tx, branchId, "purchase");
-        const paymentStatus = entries[0].data.paymentStatus ?? "PENDING";
+        // Una importación no trae pagos ni cuenta: siempre queda por pagar y se abona con registerPurchasePayment.
+        const paymentStatus = "PENDING" as const;
 
         const purchase = await tx.purchase.create({
           data: {
@@ -533,7 +536,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
             taxCents: taxTotalCents,
             ivaRetainedCents,
             paymentStatus,
-            paidAt: paymentStatus === "PAID" ? new Date() : null,
+            paidAt: null,
             note: entries[0].data.note ?? null,
             items: { create: itemsData },
           },
@@ -576,7 +579,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
 }
 
 export async function listRecentPurchases(limit = 100, windows?: { start: Date; end: Date }[]) {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const purchases = await withTenant(companyId, (tx) =>
     tx.purchase.findMany({
       where: {
@@ -586,12 +589,33 @@ export async function listRecentPurchases(limit = 100, windows?: { start: Date; 
       },
       orderBy: { createdAt: "desc" },
       take: limit,
-      include: { items: true, supplier: true, payments: true },
+      include: {
+        items: true,
+        supplier: true,
+        branch: { select: { name: true } },
+        payments: {
+          orderBy: { createdAt: "asc" },
+          include: { paymentAccount: { select: { kind: true, bankName: true, holder: true, accountNumber: true, currency: true } } },
+        },
+      },
     })
   );
+  // Quién registró / anuló la compra: queda en los movimientos de stock que generó (solo si tuvo líneas con inventario).
+  const moves = purchases.length
+    ? await withTenant(companyId, (tx) =>
+        tx.stockMovement.findMany({
+          where: { companyId, sourceType: "purchase", sourceId: { in: purchases.map((p) => p.id) }, reason: { in: ["PURCHASE", "PURCHASE_VOID"] } },
+          select: { sourceId: true, reason: true, actorName: true },
+        })
+      )
+    : [];
+  const actor = (id: string, reason: string) => moves.find((m) => m.sourceId === id && m.reason === reason)?.actorName ?? null;
   // Decimal can't cross the Server->Client Component boundary.
   return purchases.map((p) => ({
     ...p,
+    branchName: p.branch.name,
+    createdByName: actor(p.id, "PURCHASE"),
+    voidedByName: actor(p.id, "PURCHASE_VOID"),
     payments: p.payments.map((pay) => ({
       ...pay,
       exchangeRate: pay.exchangeRate != null ? Number(pay.exchangeRate) : null,
@@ -609,19 +633,30 @@ export type PaymentOrderRow = {
   owedCents: number; // lo que se le debe al proveedor (total menos IVA retenido)
   paidCents: number;
   remainingCents: number;
+  // Verdadero si lo ya abonado fue todo en bolívares: el saldo se ve primero en Bs.
+  primaryLocal: boolean;
 };
 
 // Órdenes de pago: compras a crédito con saldo pendiente, de la más antigua a la más reciente.
 export async function listPaymentOrders(): Promise<PaymentOrderRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const rows = await withTenant(companyId, (tx) =>
     tx.purchase.findMany({
       where: { companyId, ...(branchId ? { branchId } : {}), voided: false, paymentStatus: "PENDING" },
       orderBy: { createdAt: "asc" },
       take: 300,
-      include: { supplier: { select: { name: true } }, payments: { select: { amountEurCents: true } } },
+      include: { supplier: { select: { name: true } }, payments: { select: { amountEurCents: true, paymentMethod: true, paidInForeignCurrency: true } } },
     })
   );
+  const co = await withTenant(companyId, (tx) =>
+    tx.company.findUnique({ where: { id: companyId }, select: { exchangeRate: true, localCurrencyCode: true, exchangeRateEnabled: true, referenceCurrency: true } })
+  );
+  const ctx = {
+    rate: co?.exchangeRate != null ? Number(co.exchangeRate) : null,
+    localCurrencyCode: co?.localCurrencyCode ?? DEFAULT_CURRENCY_CODE,
+    referenceCurrency: co?.referenceCurrency ?? "EUR",
+    exchangeRateEnabled: co?.exchangeRateEnabled ?? true,
+  };
   const now = Date.now();
   return rows.map((p) => {
     const owed = p.totalCents - p.ivaRetainedCents;
@@ -636,6 +671,7 @@ export async function listPaymentOrders(): Promise<PaymentOrderRow[]> {
       owedCents: owed,
       paidCents: paid,
       remainingCents: Math.max(0, owed - paid),
+      primaryLocal: paymentsPrimaryLocal(p.payments, ctx),
     };
   });
 }
@@ -651,24 +687,42 @@ export async function registerPurchasePayment(
   reference?: string,
   paymentAccountId?: string
 ): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireManager();
+  const { companyId, branchId: sessionBranchId } = await requireAccountingPlan();
   if (!(PAY_METHODS as readonly string[]).includes(method)) return { success: false, error: "Elige un método de pago" };
   if (!Number.isInteger(amountCents) || amountCents <= 0) return { success: false, error: "El monto debe ser mayor a 0" };
   try {
     await withTenant(companyId, async (tx) => {
+      // Bloquea la compra: dos abonos simultáneos no pueden pasar con el mismo saldo.
+      await tx.$queryRaw`SELECT "id" FROM "Purchase" WHERE "id" = ${purchaseId} AND "companyId" = ${companyId} FOR UPDATE`;
       const p = await tx.purchase.findFirst({
         where: { id: purchaseId, companyId, voided: false, paymentStatus: "PENDING", ...(sessionBranchId ? { branchId: sessionBranchId } : {}) },
         include: { payments: { select: { amountEurCents: true } } },
       });
       if (!p) throw new Error("Compra no encontrada o ya estaba pagada");
-      const owed = p.totalCents - p.ivaRetainedCents;
       const paid = p.payments.reduce((n, x) => n + x.amountEurCents, 0);
-      const remaining = owed - paid;
+      const remaining = purchaseRemaining(p.totalCents, p.ivaRetainedCents, paid);
       if (amountCents > remaining) throw new Error("El abono es mayor al saldo pendiente");
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+        select: { exchangeRate: true, localCurrencyCode: true, exchangeRateEnabled: true, referenceCurrency: true },
+      });
+      const rate = company?.exchangeRate != null ? Number(company.exchangeRate) : null;
+      // La moneda real del abono según el método (Bs para pago móvil/punto/transferencia/efectivo; divisa para Zelle…).
+      const line = buildPurchasePaymentLine(method as PaymentMethod, amountCents, {
+        rate,
+        localCurrencyCode: company?.localCurrencyCode ?? DEFAULT_CURRENCY_CODE,
+        referenceCurrency: company?.referenceCurrency ?? "EUR",
+        exchangeRateEnabled: company?.exchangeRateEnabled ?? true,
+      });
       if (paymentAccountId) {
-        // Un abono en la moneda de referencia: se convierte a la de la cuenta con la tasa del día.
+        const acc = await tx.paymentAccount.findFirst({ where: { id: paymentAccountId, companyId }, select: { id: true } });
+        if (!acc) throw new Error("La cuenta elegida no existe. Recarga la página e inténtalo de nuevo.");
         await assertAccountFunds(tx, companyId, [
-          { accountId: paymentAccountId, debit: (cur, r) => lineInAccountCurrency({ amountCurrencyCents: null, amountEurCents: amountCents, currencyCode: null, exchangeRate: null }, cur, r) },
+          {
+            accountId: paymentAccountId,
+            debit: (cur, r) =>
+              lineInAccountCurrency({ amountCurrencyCents: line.amountCurrencyCents, amountEurCents: amountCents, currencyCode: line.currencyCode, exchangeRate: rate }, cur, r),
+          },
         ]);
       }
       await tx.purchasePayment.create({
@@ -676,11 +730,15 @@ export async function registerPurchasePayment(
           purchaseId: p.id,
           paymentMethod: method as (typeof PAY_METHODS)[number],
           amountEurCents: amountCents,
+          currencyCode: line.currencyCode,
+          amountCurrencyCents: line.amountCurrencyCents,
+          paidInForeignCurrency: false,
+          exchangeRate: rate,
           reference: reference?.trim().slice(0, 80) || null,
           paymentAccountId: paymentAccountId || null,
         },
       });
-      if (amountCents === remaining) {
+      if (paymentSettlesPurchase(amountCents, remaining)) {
         await tx.purchase.update({ where: { id: p.id }, data: { paymentStatus: "PAID", paidAt: new Date() } });
       }
     });
@@ -699,7 +757,7 @@ export type CostComparisonRow = { productName: string; offers: CostOffer[]; best
 // Comparativa de último costo: por producto, lo último que se pagó a cada proveedor. Solo productos
 // comprados a 2 o más proveedores; el más barato va primero.
 export async function costComparison(): Promise<CostComparisonRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireAccountingPlan();
   const items = await withTenant(companyId, (tx) =>
     tx.purchaseItem.findMany({
       where: { productId: { not: null }, purchase: { companyId, voided: false, ...(branchId ? { branchId } : {}) } },

@@ -23,6 +23,8 @@ import type { ActionResult } from "@/lib/types";
 import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateProductsCache } from "@/lib/products-cache";
 import { assertReceivingAccounts } from "@/lib/account-balance";
+import { assertDayNotClosed } from "@/lib/closed-days";
+import { discountPolicyError, isOfflineRateAcceptable, sanitizeQueuedAt } from "@/lib/sale-policy";
 
 export type CompleteSaleResult =
   | { success: true; saleId: string }
@@ -61,7 +63,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       error: 'Selecciona una sucursal antes de completar una venta — no se puede con "Todas las sucursales".',
     };
   }
-  const branchId = session.branchId;
+  const sessionBranchId = session.branchId;
   const parsed = SaleSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Carrito inválido" };
@@ -82,7 +84,19 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     quoteId,
     idempotencyKey,
     offlineExchangeRate,
+    queuedAt,
+    queuedBranchId,
+    queuedSellerName,
   } = parsed.data;
+  const isManager = session.isSuperAdmin || session.role === "GERENTE";
+  const discountError = discountPolicyError({
+    discountPercent: requestedDiscountPercent,
+    hasCoupon: !!promoCode,
+    isManager,
+    note,
+  });
+  if (discountError) return { success: false, error: discountError };
+  const queuedDate = sanitizeQueuedAt(queuedAt);
 
   // Una venta a crédito necesita un cliente real a quien cobrarle después.
   if (paymentStatus === "CREDIT" && customerPhone === "0000-0000000") {
@@ -91,6 +105,13 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
 
   try {
     const saleId = await withTenant(companyId, async (tx) => {
+      // Venta sincronizada desde la cola: conserva la sucursal original si pertenece a la empresa
+      // y la persona puede operar en ella.
+      let branchId = sessionBranchId;
+      if (queuedDate && queuedBranchId && queuedBranchId !== sessionBranchId && isManager) {
+        const qb = await tx.branch.findFirst({ where: { id: queuedBranchId, companyId }, select: { id: true } });
+        if (qb) branchId = qb.id;
+      }
       await lockBranchSequence(tx, companyId, branchId);
       if (idempotencyKey) {
         const existing = await tx.sale.findFirst({
@@ -139,12 +160,8 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       // within a sane band around today's rate.
       const companyRate = company?.exchangeRate != null ? Number(company.exchangeRate) : null;
       const useOfflineRate =
-        exchangeRateEnabled &&
-        offlineExchangeRate != null &&
-        companyRate != null &&
-        offlineExchangeRate >= companyRate * 0.5 &&
-        offlineExchangeRate <= companyRate * 2;
-      const exchangeRate = useOfflineRate
+        exchangeRateEnabled && isOfflineRateAcceptable(offlineExchangeRate, companyRate, queuedDate != null);
+      const exchangeRate = useOfflineRate && offlineExchangeRate != null
         ? new Prisma.Decimal(offlineExchangeRate.toFixed(4))
         : (company?.exchangeRate ?? null);
       const rate = exchangeRate != null ? Number(exchangeRate) : null;
@@ -257,7 +274,8 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           paymentMethod: firstPayment?.paymentMethod ?? null,
           paymentStatus,
           channel,
-          paidAt: isPaid ? new Date() : null,
+          ...(queuedDate ? { createdAt: queuedDate } : {}),
+          paidAt: isPaid ? (queuedDate ?? new Date()) : null,
           // For credit sales, the customer hasn't decided currency yet — that's
           // captured later when payment is registered. Otherwise true if ANY
           // split line was paid in a currency other than the company's own.
@@ -280,7 +298,7 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
             : 0,
           idempotencyKey: idempotencyKey ?? null,
           sellerId: userId,
-          sellerName,
+          sellerName: queuedDate && queuedSellerName ? queuedSellerName : sellerName,
           note: note ?? null,
           items: { create: itemsData },
           payments: isPaid
@@ -360,11 +378,12 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       // same quote twice (e.g. two tabs open) throws here instead of
       // silently double-linking it.
       if (quoteId) {
-        await tx.sale.update({ where: { id: sale.id }, data: { quoteId } });
-        await tx.quote.updateMany({
-          where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) },
+        const upd = await tx.quote.updateMany({
+          where: { id: quoteId, companyId, branchId, status: { not: "CONVERTED" } },
           data: { status: "CONVERTED" },
         });
+        if (upd.count === 0) throw new Error("El presupuesto no existe o ya fue facturado.");
+        await tx.sale.update({ where: { id: sale.id }, data: { quoteId } });
       }
 
       return sale.id;
@@ -375,7 +394,8 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
     revalidatePath("/reports");
     revalidatePath("/customers");
     revalidatePath("/quotes/history");
-    await invalidateProductsCache(companyId, branchId); // el inventario del POS debe verse ya descontado
+    if (queuedBranchId && queuedBranchId !== sessionBranchId) await invalidateProductsCache(companyId, queuedBranchId);
+    await invalidateProductsCache(companyId, sessionBranchId); // el inventario del POS debe verse ya descontado
     void notifyLive(posChannel(companyId), "sale");
     return { success: true, saleId };
   } catch (err) {
@@ -451,6 +471,8 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
       }
 
       saleBranchId = sale.branchId;
+      // Una venta de un día cuya caja ya se cerró no se anula: cambiaría el Corte Z ya emitido (ver CashClosing).
+      await assertDayNotClosed(tx, companyId, sale.branchId, sale.createdAt);
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
       await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
@@ -472,7 +494,9 @@ export async function voidSale(saleId: string): Promise<ActionResult> {
 // the full sale — it voids the sale and restores its stock in the same
 // transaction, and gets its own per-branch number.
 export async function issueCreditNote(saleId: string, reason: string): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
+  const mgr = await requireManager();
+  if (!hasPermission(mgr, "void")) return { success: false, error: "No tienes permiso para anular ventas" };
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = mgr;
   const trimmed = reason.trim();
   if (trimmed.length < 3) return { success: false, error: "Escribe el motivo de la nota de crédito." };
   if (trimmed.length > 300) return { success: false, error: "El motivo es demasiado largo (máximo 300 caracteres)." };
@@ -529,7 +553,9 @@ export async function issueCreditNote(saleId: string, reason: string): Promise<A
 // amount) the factura missed. Decomposed with the company's general IVA rate;
 // several can exist per sale. Doesn't touch stock or the sale's payments.
 export async function issueDebitNote(saleId: string, reason: string, amount: number): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = await requireManager();
+  const mgr = await requireManager();
+  if (!hasPermission(mgr, "void")) return { success: false, error: "No tienes permiso para emitir notas" };
+  const { companyId, branchId: sessionBranchId, userId: actorId, sellerName: actorName } = mgr;
   const trimmed = reason.trim();
   if (trimmed.length < 3) return { success: false, error: "Escribe el motivo de la nota de débito." };
   if (trimmed.length > 300) return { success: false, error: "El motivo es demasiado largo (máximo 300 caracteres)." };
@@ -611,11 +637,12 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
           id: saleId,
           companyId,
           paymentStatus: "CREDIT",
+          voided: false,
           ...(sessionBranchId ? { branchId: sessionBranchId } : {}),
         },
         include: { payments: true },
       });
-      if (!sale) throw new Error("Venta no encontrada o ya estaba pagada");
+      if (!sale) throw new Error("Venta no encontrada, anulada o ya estaba pagada");
 
       const company = await tx.company.findUnique({
         where: { id: companyId },
@@ -731,6 +758,7 @@ export async function getOrCreateInvoiceNumber(saleId: string): Promise<{ invoic
     });
     if (!sale) return null;
     if (sale.invoiceNumber != null) return { invoiceNumber: sale.invoiceNumber };
+    if (sale.voided) return null;
 
     await lockBranchSequence(tx, companyId, sale.branchId);
     const current = await tx.sale.findFirst({

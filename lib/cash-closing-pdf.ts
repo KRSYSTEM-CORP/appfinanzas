@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { dualForMethod } from "@/lib/money-primary";
 import { PAYMENT_METHOD_LABELS, formatDate, formatDateOnly } from "@/lib/format";
 import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLocalCurrency, referenceNote } from "@/lib/currencies";
 import { renderCompanyHeader, renderDocumentTitleBlock, type DeliveryNoteCompany } from "@/lib/delivery-note";
@@ -138,7 +139,11 @@ export async function buildCashClosingPDF(
   }
 
   if (summary.byMethod.length > 0) {
-    const rows = summary.byMethod.map((m) => [PAYMENT_METHOD_LABELS[m.paymentMethod], money(m.totalCents)]);
+    const rows = summary.byMethod.map((m) => {
+      // Zelle/Binance/PayPal: divisa primero y bolívares debajo; el resto (incluido el efectivo, cuyo desglose por moneda va abajo): bolívares primero.
+      const d = dualForMethod(m.totalCents, { method: m.paymentMethod, foreign: false }, { rate, localCurrencyCode: currencyCode, referenceCurrency, exchangeRateEnabled: showLocal });
+      return [PAYMENT_METHOD_LABELS[m.paymentMethod], d.secondary ? `${d.primary} (${d.secondary})` : d.primary];
+    });
     autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },

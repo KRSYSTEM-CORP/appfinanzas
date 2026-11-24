@@ -6,7 +6,7 @@ import { withTenant } from "@/lib/tenant-db";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { branchLimitError } from "@/lib/plan-limits";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
+import { consumeAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { dayBoundsUtc, todayDateString } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
 
@@ -103,7 +103,7 @@ export async function enterBranch(branchId: string | null, password: string): Pr
   const session = await requireManager();
   if (branchId === (session.branchId ?? null)) return { success: true };
 
-  const limit = await checkRateLimit("branch-enter", session.userId, 5, 15 * 60_000);
+  const limit = await consumeAttempt("branch-enter", session.userId, 5, 15 * 60_000);
   if (!limit.allowed) return { success: false, error: rateLimitMessage(limit.retryAfterMinutes) };
 
   const target = branchId
@@ -114,7 +114,6 @@ export async function enterBranch(branchId: string | null, password: string): Pr
   if (target?.accessKeyHash) {
     // La sede tiene su propia clave de 4 dígitos: se valida contra ella.
     if (!verifyPassword(password, target.accessKeyHash)) {
-      await recordFailedAttempt("branch-enter", session.userId);
       return { success: false, error: "Clave incorrecta" };
     }
     await clearAttempts("branch-enter", session.userId);
@@ -124,8 +123,7 @@ export async function enterBranch(branchId: string | null, password: string): Pr
     );
     if (user?.passwordHash) {
       if (!password || !verifyPassword(password, user.passwordHash)) {
-        await recordFailedAttempt("branch-enter", session.userId);
-        return { success: false, error: "Clave incorrecta" };
+          return { success: false, error: "Clave incorrecta" };
       }
       await clearAttempts("branch-enter", session.userId);
     }

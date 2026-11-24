@@ -17,7 +17,7 @@ import {
   generateSignupCode,
   createSignupVerification,
 } from "@/lib/signup-verification";
-import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
+import { checkRateLimit, consumeAttempt, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import { signBranchTicket, verifyBranchTicket } from "@/lib/branch-ticket";
@@ -175,11 +175,17 @@ export async function confirmSignupCode(
     return { success: false, error: "Demasiados intentos. Solicita un nuevo código." };
   }
 
+  // Reclamo atómico del intento ANTES de comparar: peticiones en paralelo no pueden pasar del tope.
+  const claimed = await prisma.signupVerification.updateMany({
+    where: { id: verificationId, attempts: { lt: SIGNUP_CODE_MAX_ATTEMPTS } },
+    data: { attempts: { increment: 1 } },
+  });
+  if (claimed.count === 0) {
+    await prisma.signupVerification.deleteMany({ where: { id: verificationId } });
+    return { success: false, error: "Demasiados intentos. Solicita un nuevo código." };
+  }
+
   if (hashSignupCode(code) !== verification.codeHash) {
-    await prisma.signupVerification.update({
-      where: { id: verificationId },
-      data: { attempts: { increment: 1 } },
-    });
     const remaining = SIGNUP_CODE_MAX_ATTEMPTS - verification.attempts - 1;
     return { success: false, error: `Código incorrecto. Te quedan ${remaining} intentos.` };
   }
@@ -284,7 +290,7 @@ export async function login(formData: FormData): Promise<LoginResult> {
   const { email, password } = parsed.data;
   const genericError = "Correo o contraseña incorrectos";
 
-  const limit = await checkRateLimit("login", email, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
+  const limit = await consumeAttempt("login", email, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
   if (!limit.allowed) {
     return { success: false, error: rateLimitMessage(limit.retryAfterMinutes) };
   }
@@ -297,7 +303,6 @@ export async function login(formData: FormData): Promise<LoginResult> {
   // Google (see app/api/auth/google/callback) — a password attempt against
   // it must fail the same generic way as a non-existent email, not throw.
   if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
-    await recordFailedAttempt("login", email);
     return { success: false, error: genericError };
   }
   await clearAttempts("login", email);

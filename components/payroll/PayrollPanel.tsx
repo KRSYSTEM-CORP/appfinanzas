@@ -33,7 +33,6 @@ import { MethodAndAccount } from "@/components/payments/MethodAndAccount";
 import { accountChoiceMessage } from "@/lib/payment-method-accounts";
 import { InsufficientFundsNotice, type FundsError } from "@/components/accounts/InsufficientFundsNotice";
 import { todayDateString } from "@/lib/report-types";
-import { buildPayrollReceiptPDF } from "@/lib/payroll-receipt-pdf";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import {
   getPayrollProof,
@@ -99,7 +98,7 @@ export function PayrollPanel({
 
   function downloadReceipt(p: PayrollPaymentRow) {
     startTransition(async () => {
-      const doc = await buildPayrollReceiptPDF(p, company, referenceCurrency);
+      const doc = await (await import("@/lib/payroll-receipt-pdf")).buildPayrollReceiptPDF(p, company, referenceCurrency);
       doc.save(`recibo-nomina-${p.employeeName.replace(/\s+/g, "-").toLowerCase()}-${p.period}.pdf`);
     });
   }
