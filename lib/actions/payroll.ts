@@ -300,6 +300,12 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
     await withTenant(companyId, async (tx) => {
       const employee = await tx.payrollEmployee.findFirst({ where: { id: d.employeeId, companyId, active: true } });
       if (!employee) throw new Error("Empleado no encontrado");
+      // Idempotencia: mismo empleado, período y monto registrados hace menos de 10 s (doble clic).
+      const dup = await tx.payrollPayment.findFirst({
+        where: { companyId, employeeId: employee.id, period: d.period, paidCents: d.amountCents, createdAt: { gte: new Date(Date.now() - 10_000) } },
+        select: { id: true },
+      });
+      if (dup) throw new Error("Este pago ya se registró hace un momento");
       const company = await tx.company.findUnique({
         where: { id: companyId },
         select: { payrollIvssPct: true, payrollParoPct: true, payrollFaovPct: true, exchangeRate: true, exchangeRateEnabled: true },
@@ -366,6 +372,27 @@ export async function payPayroll(input: unknown): Promise<ActionResult> {
     });
   } catch (err) {
     return toActionResult(err, "No se pudo registrar el pago");
+  }
+  revalidatePath("/payroll");
+  revalidatePath("/finance");
+  revalidatePath("/accounting");
+  revalidatePath("/accounting/accounts");
+  return { success: true };
+}
+
+// Anula un pago de nómina: borra el pago y su gasto «Nómina» en una sola transacción,
+// lo que devuelve el débito a la cuenta (el saldo se calcula desde los pagos).
+export async function voidPayrollPayment(paymentId: string): Promise<ActionResult> {
+  const { companyId } = await requirePayrollManager();
+  try {
+    await withTenant(companyId, async (tx) => {
+      const pay = await tx.payrollPayment.findFirst({ where: { id: paymentId, companyId }, select: { id: true, expenseId: true } });
+      if (!pay) throw new Error("Pago no encontrado");
+      await tx.payrollPayment.delete({ where: { id: pay.id } });
+      if (pay.expenseId) await tx.expense.deleteMany({ where: { id: pay.expenseId, companyId } });
+    });
+  } catch (err) {
+    return toActionResult(err, "No se pudo anular el pago");
   }
   revalidatePath("/payroll");
   revalidatePath("/finance");

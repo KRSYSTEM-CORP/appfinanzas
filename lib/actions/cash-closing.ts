@@ -66,6 +66,9 @@ export type CashClosingSummary = {
 
 const MAX_RESPONSIBLE_LENGTH = 80;
 
+// Cobros (efectivo esperado, métodos, cuentas): se agrupan por la fecha del COBRO
+// (sp.createdAt), no de la venta, para que los abonos de créditos viejos entren al
+// turno donde se cobran. Para cobros hechos al vender coincide con la venta.
 // Computed live (not just read from the CashClosing row) even for an
 // already-closed shift. Con una sede seleccionada el resumen es el del TURNO
 // abierto (o el último cerrado): solo sus ventas, salidas y apertura. Con
@@ -122,7 +125,7 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
         JOIN "Sale" s ON s.id = sp."saleId"
         WHERE s."companyId" = ${companyId}
           ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
-          AND s."createdAt" >= ${window.start} AND s."createdAt" < ${window.end}
+          AND sp."createdAt" >= ${window.start} AND sp."createdAt" < ${window.end}
           AND s."voided" = false
         GROUP BY sp."paymentMethod"
         ORDER BY total_cents DESC
@@ -134,7 +137,7 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
         JOIN "Sale" s ON s.id = sp."saleId"
         WHERE s."companyId" = ${companyId}
           ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
-          AND s."createdAt" >= ${window.start} AND s."createdAt" < ${window.end}
+          AND sp."createdAt" >= ${window.start} AND sp."createdAt" < ${window.end}
           AND s."voided" = false
         GROUP BY 1
         ORDER BY ref DESC
@@ -156,7 +159,7 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
         LEFT JOIN "PaymentAccount" pa ON pa.id = sp."paymentAccountId"
         WHERE s."companyId" = ${companyId}
           ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
-          AND s."createdAt" >= ${window.start} AND s."createdAt" < ${window.end}
+          AND sp."createdAt" >= ${window.start} AND sp."createdAt" < ${window.end}
           AND s."voided" = false
         GROUP BY 1, 2, 3, 4, 5, 6, 9
         ORDER BY ref DESC

@@ -116,3 +116,22 @@ export async function openDayList(
   const closedSet = await closedDateSet(tx, companyId, branchId, days);
   return days.filter((d) => !closedSet.has(d.dateStr)).sort((a, b) => (a.dateStr < b.dateStr ? 1 : -1));
 }
+
+// A1: el servidor debe rechazar vender/anular/nota de crédito en un día ya cerrado
+// de la sede. `at` es el instante de la venta (o de la venta que se anula).
+export async function assertDayNotClosed(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  branchId: string,
+  at: Date = new Date()
+): Promise<void> {
+  const { year, month, day } = zonedDateParts(at, SHOP_TIME_ZONE);
+  const date = closingDateFromString(dateStringFromParts(year, month, day));
+  const [closings, openings] = await Promise.all([
+    tx.cashClosing.findMany({ where: { companyId, branchId, closingDate: date }, select: { shiftNumber: true, closedAt: true } }),
+    tx.cashOpening.findMany({ where: { companyId, branchId, date }, select: { shiftNumber: true } }),
+  ]);
+  if (isDayClosed(openings, closings)) {
+    throw new Error("La caja de ese día ya fue cerrada. Abre un nuevo turno para seguir.");
+  }
+}
