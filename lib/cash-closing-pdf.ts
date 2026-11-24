@@ -30,7 +30,7 @@ export async function buildCashClosingPDF(
   let y = 40;
   const showLocal = exchangeRateEnabled && rate != null;
 
-  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth, "CORTE Z · CIERRE DE CAJA");
+  const fiscalEndY = await renderCompanyHeader(doc, company, margin, y, pageWidth);
 
   const titleBottomY = renderDocumentTitleBlock(
     doc,
@@ -41,7 +41,7 @@ export async function buildCashClosingPDF(
       ...(summary.shiftNumber != null ? [`Turno ${summary.shiftNumber}${summary.responsibleName ? ` · Responsable: ${summary.responsibleName}` : ""}`] : []),
     ],
     margin,
-    y,
+    fiscalEndY + 6,
     pageWidth
   );
 
