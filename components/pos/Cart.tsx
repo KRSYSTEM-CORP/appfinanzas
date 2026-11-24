@@ -216,6 +216,8 @@ export function Cart({
     if (dismiss) setSheetOpen(false);
   }
 
+  const payableAccounts = paymentAccounts.filter((a) => a.kind !== "PUNTO_DE_VENTA");
+
   return (
     <>
     {/* Phones only: scrim behind the sheet. */}
@@ -437,13 +439,13 @@ export function Cart({
 
       {!bare && (
       <>
-      {paymentAccounts.length > 0 && !isExonerated && (
+      {payableAccounts.length > 0 && !isExonerated && (
         <details className="rounded-lg border bg-card p-2.5">
           <summary className="cursor-pointer text-sm font-medium">
-            Datos para cobrar ({paymentAccounts.length})
+            Datos para cobrar ({payableAccounts.length})
           </summary>
           <div className="mt-2">
-            <PaymentAccountsList accounts={paymentAccounts} />
+            <PaymentAccountsList accounts={payableAccounts} />
           </div>
         </details>
       )}
