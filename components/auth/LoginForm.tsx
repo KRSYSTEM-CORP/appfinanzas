@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   login,
+  completeBranchLogin,
   getCompanyBrandingByEmail,
   type CompanyBranding,
 } from "@/lib/actions/auth";
@@ -46,7 +47,8 @@ export function LoginForm({
   const [isPending, startTransition] = useTransition();
   // Con varias sucursales activas se elige a cuál entrar antes del acceso por perfil.
   const [branchChoices, setBranchChoices] = useState<BranchOption[] | null>(null);
-  const [pendingCredentials, setPendingCredentials] = useState<{ email: string; password: string } | null>(null);
+  // Permiso firmado que entrega el servidor tras verificar al visitante: sirve para elegir sucursal sin repetir la verificación.
+  const [branchTicket, setBranchTicket] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileGeneration, setTurnstileGeneration] = useState(0);
 
@@ -91,31 +93,23 @@ export function LoginForm({
         return;
       }
       resetTurnstile();
-      setPendingCredentials({
-        email: String(formData.get("email") ?? ""),
-        password: String(formData.get("password") ?? ""),
-      });
+      setBranchTicket(result.ticket);
       setBranchChoices(result.branches);
     });
   }
 
   function handleBranchPick(branchId: string) {
-    if (!pendingCredentials) return;
-    if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken) {
-      setError("Resuelve la verificación de seguridad para continuar.");
-      return;
-    }
+    if (!branchTicket) return;
     setError(null);
     startTransition(async () => {
-      const formData = new FormData();
-      formData.set("email", pendingCredentials.email);
-      formData.set("password", pendingCredentials.password);
-      formData.set("branchId", branchId);
-      formData.set("cf-turnstile-response", turnstileToken);
-      const result = await login(formData);
-      if (!result.success && "error" in result) {
+      const result = await completeBranchLogin(branchTicket, branchId);
+      if (result && !result.success) {
         setError(result.error);
-        resetTurnstile();
+        // El permiso venció: se vuelve al formulario para iniciar sesión otra vez.
+        if (/venci/i.test(result.error)) {
+          setBranchChoices(null);
+          setBranchTicket(null);
+        }
       }
     });
   }
@@ -190,7 +184,8 @@ export function LoginForm({
         <p className="text-sm text-destructive text-center">{GOOGLE_ERRORS[authError]}</p>
       )}
 
-      <Turnstile key={turnstileGeneration} onVerify={setTurnstileToken} />
+      {/* La verificación de Cloudflare solo se pide al iniciar sesión, no al elegir sucursal. */}
+      {!branchChoices && <Turnstile key={turnstileGeneration} onVerify={setTurnstileToken} />}
 
       {branchChoices ? (
         <div className="flex flex-col gap-4">
@@ -240,7 +235,7 @@ export function LoginForm({
             onClick={() => {
               setError(null);
               setBranchChoices(null);
-              setPendingCredentials(null);
+              setBranchTicket(null);
             }}
           >
             Volver
