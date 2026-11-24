@@ -62,3 +62,11 @@ Medidas exactas en `rediseno/PARIDAD-VISUAL.md`. Cada fase se cierra con `node r
 - Texto visible: `grep -n "Lista de reposición" rediseno/referencia-lectura/03-inventario.html`
 - Estilos de una clase: `grep -o "\.kpi[^}]*}" rediseno/referencia-lectura/01-inicio.html`
 - Iconos: objeto `IC` (buscar `var IC=` y `Object.assign(IC`).
+
+## Lecciones operativas
+- Migración con PR: aplicarla en producción **antes de unir** (respaldo, copiar carpeta, `migrate`, `kr-grants`) y poner la etiqueta `migracion-aplicada` al PR; procedimiento exacto en `00 ADMINISTRACION/MANUAL-OPERACION-KR-SYSTEM.md` §6 (sin `:ro` en el montaje).
+- El cliente Prisma de `node_modules` se desactualiza entre ramas: `npx prisma generate` con `DIRECT_URL` y `DATABASE_URL` falsos.
+- eslint necesita memoria: `NODE_OPTIONS=--max-old-space-size=6144 npx eslint <archivos>`.
+- Subagentes: siempre en copias aisladas (`git worktree`), nunca dos en la misma rama o carpeta.
+- No hay Postgres local ni acceso a Neon desde el Mac: verificar con la vista previa de Vercel o capturas existentes.
+- Nunca crear ventas de prueba en producción (clientes reales); mapa del producto en `docs/producto/FUNCIONES-KR-POS.md`.
