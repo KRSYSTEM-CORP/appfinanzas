@@ -198,13 +198,21 @@ export async function createExpense(formData: FormData): Promise<ActionResult> {
 
 export async function deleteExpense(expenseId: string): Promise<ActionResult> {
   const { companyId } = await requireManager();
-  const result = await withTenant(companyId, (tx) =>
-    tx.expense.deleteMany({ where: { id: expenseId, companyId } })
-  );
+  const result = await withTenant(companyId, async (tx) => {
+    // Un gasto de nómina nace de un pago: se anula desde Nómina (revierte la cuenta).
+    const payroll = await tx.payrollPayment.findFirst({ where: { companyId, expenseId }, select: { id: true } });
+    if (payroll) return "PAYROLL" as const;
+    return tx.expense.deleteMany({ where: { id: expenseId, companyId } });
+  });
+  if (result === "PAYROLL") {
+    return { success: false, error: "Este gasto pertenece a un pago de nómina: anula el pago desde Nómina." };
+  }
   if (result.count === 0) {
     return { success: false, error: "Gasto no encontrado" };
   }
   revalidatePath("/finance");
+  revalidatePath("/accounting/gastos");
+  revalidatePath("/accounting/accounts");
   return { success: true };
 }
 
