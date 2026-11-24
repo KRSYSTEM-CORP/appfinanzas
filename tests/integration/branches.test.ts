@@ -6,6 +6,8 @@ let ctx: Ctx;
 const setCookie = vi.fn();
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/session", () => ({
+  requireAccountingPlan: async () => sessionFor(ctx),
+  hasPermission: () => true,
   getSession: async () => sessionFor(ctx),
   requireSession: async () => sessionFor(ctx),
   requireManager: async () => sessionFor(ctx),

@@ -6,6 +6,8 @@ import { loadContext, owner, sessionFor, type Ctx } from "./helpers";
 let ctx: Ctx;
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/session", () => ({
+  requireAccountingPlan: async () => sessionFor(ctx),
+  hasPermission: () => true,
   getSession: async () => ({ ...sessionFor(ctx), isSuperAdmin: true }),
   requireSession: async () => ({ ...sessionFor(ctx), isSuperAdmin: true }),
   requireManager: async () => ({ ...sessionFor(ctx), isSuperAdmin: true }),
