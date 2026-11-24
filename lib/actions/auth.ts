@@ -20,6 +20,7 @@ import {
 import { checkRateLimit, recordFailedAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { signBranchTicket, verifyBranchTicket } from "@/lib/branch-ticket";
 import type { Role } from "@prisma/client";
 import {
   LoginSchema,
@@ -233,7 +234,32 @@ export type LoginResult =
   | { success: true }
   | { success: false; error: string }
   | { success: false; suspended: true }
-  | { success: false; needsBranch: true; branches: { id: string; name: string }[] };
+  // «ticket»: permiso firmado de 5 minutos para elegir sucursal sin repetir la verificación ni la contraseña.
+  | { success: false; needsBranch: true; branches: { id: string; name: string }[]; ticket: string };
+
+// Segundo paso del inicio de sesión de una empresa con varias sucursales: la verificación anti-bot, el correo y la clave ya
+// se comprobaron en login(); aquí solo se valida el permiso firmado (5 min) y que la sucursal sea de esa empresa y esté activa.
+export async function completeBranchLogin(ticket: string, branchId: string): Promise<ActionResult> {
+  const expired = { success: false as const, error: "La sesión de acceso venció. Vuelve a iniciar sesión." };
+  const proof = verifyBranchTicket(ticket);
+  if (!proof) return expired;
+  const user = await prisma.user.findUnique({ where: { id: proof.userId }, include: { company: true } });
+  if (!user || user.companyId !== proof.companyId || user.status !== "ACTIVE") return expired;
+  const branch = await withTenant(user.companyId, (tx) =>
+    tx.branch.findFirst({ where: { id: branchId, companyId: user.companyId, isActive: true } })
+  );
+  if (!branch) return { success: false, error: "Esa sucursal no está disponible." };
+
+  await rememberDeviceCompany(user.company.loginCode);
+  await setSessionCookie({
+    uid: user.id,
+    cid: user.companyId,
+    companyName: user.company.name,
+    bid: branch.id,
+    lk: true,
+  });
+  redirect("/lock");
+}
 
 export async function login(formData: FormData): Promise<LoginResult> {
   const ip = await getClientIp();
@@ -321,7 +347,12 @@ export async function login(formData: FormData): Promise<LoginResult> {
     })
   );
   if (branches.length > 1) {
-    return { success: false, needsBranch: true, branches: branches.map((b) => ({ id: b.id, name: b.name })) };
+    return {
+      success: false,
+      needsBranch: true,
+      branches: branches.map((b) => ({ id: b.id, name: b.name })),
+      ticket: signBranchTicket(user.id, user.companyId),
+    };
   }
 
   await setSessionCookie({
