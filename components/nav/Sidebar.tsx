@@ -81,7 +81,7 @@ export function Sidebar({
   currentBranchName: string | null;
   hasPin?: boolean;
   planLabel?: string;
-  planMaxUsers?: number;
+  planMaxUsers?: number | null;
   rateLabel?: string | null;
 }) {
   const pathname = usePathname();
@@ -204,7 +204,7 @@ export function Sidebar({
         <div className="mt-auto flex flex-col gap-1.5 px-1.5 pt-2">
           {planLabel && (
             <Link prefetch={false} href="/settings" className={pillCls}>
-              Plan {planLabel} · {planMaxUsers} usuarios
+              Plan {planLabel} · {planMaxUsers == null ? "usuarios ilimitados" : `${planMaxUsers} usuarios`}
             </Link>
           )}
           {rateLabel && <span className={`${pillCls} bg-primary/12 text-primary`}>Tasa {rateLabel}</span>}

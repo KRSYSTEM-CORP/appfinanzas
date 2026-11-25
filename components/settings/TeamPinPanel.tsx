@@ -34,7 +34,7 @@ export function TeamPinPanel({
   currentHasPin?: boolean;
   roles: RoleRow[];
   branches: BranchOption[];
-  maxUsers: number;
+  maxUsers: number | null;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -112,7 +112,7 @@ export function TeamPinPanel({
   return (
     <div className="flex min-w-0 flex-col gap-3.5">
       <div className={TWO_COLS}>
-        <SCard title={`Equipo (${people.length} de ${maxUsers})`} description="Usuarios y lo que cada uno puede hacer">
+        <SCard title={`Equipo (${people.length}${maxUsers == null ? "" : ` de ${maxUsers}`})`} description="Usuarios y lo que cada uno puede hacer">
           {people.map((p) => {
             const r = roleOf(p);
             return (

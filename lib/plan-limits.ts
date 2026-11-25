@@ -23,7 +23,7 @@ export async function userLimitError(
 ): Promise<string | null> {
   const plan = getPlan(planId);
   const count = await tx.user.count({ where: { companyId, status: "ACTIVE" } });
-  return count + 1 > plan.maxUsers ? userLimitMessage(plan) : null;
+  return plan.maxUsers != null && count + 1 > plan.maxUsers ? userLimitMessage(plan) : null;
 }
 
 // Sucursales activas de la empresa contra el tope del plan (Emprende: solo la principal).

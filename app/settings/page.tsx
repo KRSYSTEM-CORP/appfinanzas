@@ -82,7 +82,7 @@ export default async function SettingsPage() {
     {
       id: "plan",
       label: "Mi plan",
-      hint: `Plan ${planUsage.plan.label} · ${planUsage.usedUsers} de ${planUsage.plan.maxUsers} usuarios`,
+      hint: `Plan ${planUsage.plan.label} · ${planUsage.usedUsers} de ${planUsage.plan.maxUsers ?? "∞"} usuarios`,
       content: <MyPlanPanel usage={planUsage} />,
     },
     {

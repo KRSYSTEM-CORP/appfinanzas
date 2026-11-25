@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { AI_PACKS } from "@/lib/assistant";
-import { PLANS, planAmountDueUsdCents, recommendPlan, type PlanDef } from "@/lib/plans";
+import { PLANS, planAmountDueUsdCents, recommendPlan, usersText, type PlanDef } from "@/lib/plans";
 import { TRIAL_DAYS } from "@/lib/billing";
 import { CONTACT_EMAIL, WHATSAPP_PHONE } from "@/lib/legal";
 import { formatDate } from "@/lib/format";
@@ -361,7 +361,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
               <div className="kp-li"><span>Asistente IA</span><b>1 crédito por consulta · 5 por documento</b></div>
             )}
             <p className="kp-note">
-              Con {current.maxUsers} {current.maxUsers === 1 ? "usuario" : "usuarios"} y {current.maxProducts == null ? "productos ilimitados" : `${nf(current.maxProducts, 0)} productos máximo`}. Si llegas al límite, te avisamos para cambiar de plan.
+              Con {usersText(current)} y {current.maxProducts == null ? "productos ilimitados" : `${nf(current.maxProducts, 0)} productos máximo`}. Si llegas al límite, te avisamos para cambiar de plan.
             </p>
           </section>
           <section className="kp-card">
@@ -427,7 +427,7 @@ export function MyPlanPanel({ usage }: { usage: PlanUsage }) {
                   <span>/ mes</span>
                 </div>
                 <div className="kp-muted" style={{ fontSize: 13 }}>
-                  {p.maxUsers} {p.maxUsers === 1 ? "usuario" : "usuarios"} · {p.maxProducts == null ? "productos ilimitados" : `${nf(p.maxProducts, 0)} productos`}
+                  {usersText(p)} · {p.maxProducts == null ? "productos ilimitados" : `${nf(p.maxProducts, 0)} productos`}
                   {p.aiCredits ? ` · ${p.aiCredits} créditos IA` : ""}
                 </div>
                 <ul>
