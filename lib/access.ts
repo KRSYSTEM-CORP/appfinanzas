@@ -32,6 +32,12 @@ export function hasPermission(session: AccessSubject, permission: PermissionId):
   return enabled.some((sec) => SECTION_PERMISSION[sec] === permission && permission !== "admin");
 }
 
+// Caja Chica (apertura, salidas y cierre): gerente, o un rol con el permiso «Caja Chica» (Cajero).
+// Un vendedor sin rol o con el rol Vendedor no opera la caja aunque vea la pantalla.
+export function canOperateCash(session: Pick<AccessSubject, "isSuperAdmin" | "role" | "permissions">): boolean {
+  return isManagerSession(session) || (session.permissions?.includes("cash") ?? false);
+}
+
 // ¿Puede entrar a alguna de estas secciones (lib/sections.ts)? Gerente y superadmin siempre.
 export function hasSectionAccess(session: AccessSubject, sections: string[]): boolean {
   if (isManagerSession(session)) return true;

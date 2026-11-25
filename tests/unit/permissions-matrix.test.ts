@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { MODULE_ACCESS, canAccess, landingPath, type AccessSubject } from "@/lib/access";
+import { MODULE_ACCESS, canAccess, canOperateCash, landingPath, type AccessSubject } from "@/lib/access";
 import { DEFAULT_ROLES } from "@/lib/permissions";
 
 const ROOT = path.resolve(__dirname, "../..");
@@ -48,6 +48,17 @@ describe("matriz rol × módulo", () => {
     }
   });
 
+  it("opera la Caja Chica (apertura, salidas, cierre) solo gerente y Cajero", () => {
+    const who = Object.entries(SUBJECTS).filter(([, s]) => canOperateCash(s)).map(([n]) => n);
+    expect(who.sort()).toEqual(["Cajero", "Dueño", "Gerente", "Gerente sin rol", "Superadmin"]);
+  });
+
+  it("las acciones de caja usan requireCashAccess y no requireManager", () => {
+    const src = fs.readFileSync(path.join(ROOT, "lib/actions/cash-closing.ts"), "utf8");
+    expect(src).not.toMatch(/requireManager\(/);
+    expect(src.match(/requireCashAccess\(/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("quien no tiene POS aterriza en su primer módulo y nunca en uno prohibido", () => {
     for (const subject of Object.values(SUBJECTS)) {
       const href = landingPath(subject);
@@ -69,7 +80,7 @@ function walk(dir: string, name: string, out: string[] = []): string[] {
   return out;
 }
 
-const GUARD = /require(Session|Manager|SuperAdmin|SectionAccess|Permission|AdminAccess|PurchasesAccess|AccountingPlan|ManagerPermission|ManagerOrPermission|AccountingManager\w*|Feature|CompanyUser|Owner|ManagerEvenIfBlocked|PayrollManager|RoleAdmin|BranchDay)\(|getSession\(|redirect\(/;
+const GUARD = /require(Session|Manager|SuperAdmin|SectionAccess|Permission|AdminAccess|PurchasesAccess|AccountingPlan|ManagerPermission|CashAccess|ManagerOrPermission|AccountingManager\w*|Feature|CompanyUser|Owner|ManagerEvenIfBlocked|PayrollManager|RoleAdmin|BranchDay)\(|getSession\(|redirect\(/;
 
 // Páginas sin guarda propia a propósito (públicas, o que solo redirigen).
 const PUBLIC_PAGES = [

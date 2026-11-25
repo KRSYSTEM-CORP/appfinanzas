@@ -61,7 +61,7 @@ export function Logo({ a, size = 44 }: { a: Pick<BankAccount, "bankKey" | "kind"
 
 // Administración → Cuentas Bancarias (preview): saldo por cuenta con logo, «Datos para cobrar»,
 // «Agregar cuenta» y «Vincular métodos de pago a cuentas».
-export function BankAccountsView({ accounts, rate, referenceCurrency }: { accounts: BankAccount[]; rate: number | null; referenceCurrency: string }) {
+export function BankAccountsView({ accounts, rate, referenceCurrency, canWrite = true }: { accounts: BankAccount[]; rate: number | null; referenceCurrency: string; canWrite?: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [adding, setAdding] = useState(false);
@@ -85,9 +85,11 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
           {accounts.length} cuentas · total <b className="text-foreground">{money(referenceCurrency, totalRef)}</b>
           {rate ? ` · ${money("VES", Math.round(totalRef * rate), 0)}` : ""}
         </p>
-        <Button onClick={() => setAdding(true)}>
-          <PlusIcon aria-hidden /> Agregar cuenta
-        </Button>
+        {canWrite && (
+          <Button onClick={() => setAdding(true)}>
+            <PlusIcon aria-hidden /> Agregar cuenta
+          </Button>
+        )}
       </div>
 
       {accounts.length === 0 ? (
@@ -119,9 +121,11 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
                 </small>
               )}
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <Button type="button" size="sm" onClick={() => setFunding(a)}>
-                  <PlusIcon aria-hidden className="size-4" /> Agregar fondos
-                </Button>
+                {canWrite && (
+                  <Button type="button" size="sm" onClick={() => setFunding(a)}>
+                    <PlusIcon aria-hidden className="size-4" /> Agregar fondos
+                  </Button>
+                )}
                 <Button type="button" size="sm" variant="outline" onClick={() => setMovements(a)}>
                   Movimientos
                 </Button>
@@ -130,9 +134,11 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
                   return url ? <BankSiteButton url={url} bankName={a.bankName ?? ACCOUNT_KIND_LABELS[a.kind]} /> : null;
                 })()}
               </div>
-              <button type="button" onClick={() => setDetail(a)} className="mt-2 self-center rounded-full px-2 py-1.5 text-[13px] font-semibold text-primary hover:bg-muted">
-                Datos para cobrar
-              </button>
+              {canWrite && (
+                <button type="button" onClick={() => setDetail(a)} className="mt-2 self-center rounded-full px-2 py-1.5 text-[13px] font-semibold text-primary hover:bg-muted">
+                  Datos para cobrar
+                </button>
+              )}
             </div>
           ))}
         </div>

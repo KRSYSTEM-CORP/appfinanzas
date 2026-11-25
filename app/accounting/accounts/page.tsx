@@ -1,4 +1,4 @@
-import { requireAccountingPlan, requirePermission } from "@/lib/session";
+import { requireAccountingPlan, requirePermission, isManagerSession } from "@/lib/session";
 import { getAccountBalances, listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { getAccountsPeriodReport } from "@/lib/actions/accounts-period";
@@ -16,7 +16,9 @@ export default async function AccountsPage({
 }: {
   searchParams: Promise<{ seg?: string; turno?: string; range?: string; year?: string; months?: string; from?: string; to?: string }>;
 }) {
-  await requirePermission("admin");
+  const me = await requirePermission("admin");
+  // Solo el gerente agrega fondos o cambia cuentas (lo exige también el servidor).
+  const canWrite = isManagerSession(me);
   await requireAccountingPlan();
   const params = await searchParams;
   const seg = parseSegMode(params.seg);
@@ -53,7 +55,7 @@ export default async function AccountsPage({
   });
   return (
     <AdminShell group="bancos" sub="cuentas">
-      <BankAccountsView accounts={rows} rate={exchangeRateEnabled ? rate : null} referenceCurrency={referenceCurrency} />
+      <BankAccountsView canWrite={canWrite} accounts={rows} rate={exchangeRateEnabled ? rate : null} referenceCurrency={referenceCurrency} />
       <AccountsPeriodSection report={report} selection={selection} seg={seg} />
     </AdminShell>
   );

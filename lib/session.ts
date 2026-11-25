@@ -1,5 +1,5 @@
 import { DEFAULT_LOCK_MINUTES, type PermissionId } from "@/lib/permissions";
-import { hasPermission, hasSectionAccess, isManagerSession } from "@/lib/access";
+import { canOperateCash, hasPermission, hasSectionAccess, isManagerSession } from "@/lib/access";
 import { getPlan, type PlanId } from "@/lib/plans";
 import "server-only";
 import { cache } from "react";
@@ -292,7 +292,15 @@ export function requireBranchId(session: Session): string {
 
 // Datos que un gerente siempre puede leer y que un rol de vendedor (p. ej. Contador) puede leer si
 // tiene alguno de estos permisos. Quien no, vuelve al POS.
-export { hasPermission, isManagerSession };
+export { canOperateCash, hasPermission, isManagerSession };
+
+// Caja Chica (apertura, salidas y cierre): gerente, o un rol con el permiso «Caja Chica» (Cajero).
+// Un vendedor sin rol o con el rol Vendedor no entra, aunque vea la pantalla.
+export async function requireCashAccess(): Promise<Session> {
+  const session = await requireSession();
+  if (!canOperateCash(session)) redirect("/pos");
+  return session;
+}
 
 export async function requireManagerOrPermission(...permissions: PermissionId[]): Promise<Session> {
   const session = await requireSession();

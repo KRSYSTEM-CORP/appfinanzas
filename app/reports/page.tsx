@@ -10,7 +10,7 @@ import { ChannelFilter, PaymentStatusFilter } from "@/components/reports/Payment
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { formatCurrencyCents, getCurrency } from "@/lib/currencies";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
-import { requireSectionAccess } from "@/lib/session";
+import { canOperateCash, requireSectionAccess } from "@/lib/session";
 import { listRecentSales } from "@/lib/actions/sales";
 import { getDailyClosingSummary, listPendingClosings, listRecentClosings } from "@/lib/actions/cash-closing";
 import { parseDateRangeSelection, selectionToWindows, todayDateString } from "@/lib/report-types";
@@ -108,7 +108,7 @@ export default async function ReportsPage({
         </header>
         <CajaChicaCard
           summary={todaySummary}
-          canEdit={canManage && todaySummary.shiftOpen}
+          canEdit={canOperateCash(session) && todaySummary.shiftOpen}
           rate={rate}
           currencyCode={localCurrencyCode}
           exchangeRateEnabled={exchangeRateEnabled}
@@ -155,7 +155,7 @@ export default async function ReportsPage({
               company={company}
               branchName={session.branchName}
               printPaperSize={printPaperSize}
-              canClose={canManage}
+              canClose={canOperateCash(session)}
               branchSelected={session.branchId != null}
             />
           </CardHeader>
@@ -202,7 +202,7 @@ export default async function ReportsPage({
           currencyCode={localCurrencyCode}
           exchangeRateEnabled={exchangeRateEnabled}
           referenceCurrency={referenceCurrency}
-          canClose={canManage}
+          canClose={canOperateCash(session)}
         />
       </PendingClosingsRow>
 

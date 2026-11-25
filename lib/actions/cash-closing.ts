@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { userErrorMessage } from "@/lib/user-error";
-import { requireManager, requireSession, requireSectionAccess } from "@/lib/session";
+import { requireCashAccess, requireSession, requireSectionAccess } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { SHOP_TIME_ZONE, dayBoundsUtc, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { closingDateFromString, openDayList } from "@/lib/closed-days";
@@ -345,7 +345,7 @@ export async function closeCashRegister(
 ): Promise<ActionResult> {
   // Closing the day is the manager's call (KRPOS-SEC-004); sellers still see
   // the summary through the read actions below.
-  const session = await requireManager();
+  const session = await requireCashAccess();
   const { companyId, userId } = session;
   if (!session.branchId) {
     return {
@@ -478,7 +478,7 @@ export async function listCashClosings() {
 }
 
 async function requireBranchDay(dateStr: string) {
-  const session = await requireManager();
+  const session = await requireCashAccess();
   if (!session.branchId) {
     return { ok: false, error: 'Selecciona una sucursal — no se puede con "Todas las sucursales".' } as const;
   }
