@@ -1,5 +1,7 @@
 import "server-only";
-import type { PaymentAccount, Prisma } from "@prisma/client";
+import { Prisma, type PaymentAccount } from "@prisma/client";
+import { bq, jsDate } from "@/lib/batch-sql";
+import { scopeMemo } from "@/lib/tenant-db";
 import { lineInAccountCurrency, payrollDebitCents, refToAccountCents } from "@/lib/account-money";
 import { outflowDebitCents } from "@/lib/cash-outflow";
 import type { ActionResult } from "@/lib/types";
@@ -22,9 +24,11 @@ export type AccountBalance = {
 
 type AccountForBalance = Pick<PaymentAccount, "id" | "currency" | "linkedMethod" | "balanceSince" | "openingCents">;
 
-export async function currentRateOf(tx: Tx, companyId: string): Promise<number | null> {
-  const co = await tx.company.findUnique({ where: { id: companyId }, select: { exchangeRate: true, exchangeRateEnabled: true } });
-  return co?.exchangeRateEnabled && co.exchangeRate ? Number(co.exchangeRate) : null;
+export function currentRateOf(tx: Tx, companyId: string): Promise<number | null> {
+  return scopeMemo(`rateOf:${companyId}`, async () => {
+    const [co] = await bq<{ rate: number | null; enabled: boolean }>(tx)`SELECT "exchangeRate"::float8 AS rate, "exchangeRateEnabled" AS enabled FROM "Company" WHERE "id" = ${companyId}`;
+    return co?.enabled && co.rate ? Number(co.rate) : null;
+  });
 }
 
 // Lo que un gasto descuenta de la cuenta, en la moneda de ella: en bolívares se toma lo anotado en Bs
@@ -79,36 +83,41 @@ export async function accountBalances(
   const ids = accounts.map((a) => a.id);
   const since = new Date(Math.min(...accounts.map((a) => a.balanceSince.getTime())));
   const methods = [...new Set(accounts.flatMap((a) => (a.linkedMethod ? [a.linkedMethod] : [])))];
-  const [pays, fundings, purchaseOut, payrollOut, expenseOut, outflowOut] = await Promise.all([
-    tx.salePayment.findMany({
-      where: {
-        sale: { companyId, OR: [{ voided: false }, { voided: true, cashOutflows: { some: {} } }] },
-        OR: [{ paymentAccountId: { in: ids } }, ...(methods.length ? [{ paymentAccountId: null, paymentMethod: { in: methods } }] : [])],
-        createdAt: { gte: since },
-      },
-      select: { paymentAccountId: true, paymentMethod: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
-    }),
-    tx.accountFunding.findMany({
-      where: { paymentAccountId: { in: ids }, createdAt: { gte: since } },
-      select: { paymentAccountId: true, createdAt: true, amountCents: true },
-    }),
-    tx.purchasePayment.findMany({
-      where: { paymentAccountId: { in: ids }, purchase: { companyId, voided: false }, createdAt: { gte: since } },
-      select: { paymentAccountId: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
-    }),
-    tx.payrollPayment.findMany({
-      where: { paymentAccountId: { in: ids }, companyId, createdAt: { gte: since } },
-      select: { paymentAccountId: true, createdAt: true, accountDebitCents: true, paidCents: true },
-    }),
-    tx.expense.findMany({
-      where: { paymentAccountId: { in: ids }, companyId, createdAt: { gte: since } },
-      select: { paymentAccountId: true, createdAt: true, amountCents: true, localAmountCents: true, enteredInLocal: true },
-    }),
-    tx.cashOutflow.findMany({
-      where: { paymentAccountId: { in: ids }, companyId, createdAt: { gte: since } },
-      select: { paymentAccountId: true, createdAt: true, amountCents: true, amountCurrencyCents: true, currencyCode: true, exchangeRate: true },
-    }),
+  // Las seis lecturas viajan juntas en una sola sentencia (lib/batch-sql.ts).
+  type Dated<T> = T & { createdAt: string };
+  const [paysRaw, fundingsRaw, purchaseRaw, payrollRaw, expenseRaw, outflowRaw] = await Promise.all([
+    bq<Dated<{ paymentAccountId: string | null; paymentMethod: string; amountCurrencyCents: number | null; amountEurCents: number; currencyCode: string | null; exchangeRate: number | null }>>(tx)`
+      SELECT sp."paymentAccountId", sp."paymentMethod"::text AS "paymentMethod", sp."createdAt", sp."amountCurrencyCents", sp."amountEurCents", sp."currencyCode", sp."exchangeRate"::float8 AS "exchangeRate"
+      FROM "SalePayment" sp JOIN "Sale" s ON s."id" = sp."saleId"
+      WHERE s."companyId" = ${companyId}
+        AND (s."voided" = false OR EXISTS (SELECT 1 FROM "CashOutflow" co WHERE co."saleId" = s."id"))
+        AND (sp."paymentAccountId" = ANY(${ids}::text[])
+             ${methods.length ? Prisma.sql`OR (sp."paymentAccountId" IS NULL AND sp."paymentMethod"::text = ANY(${methods}::text[]))` : Prisma.empty})
+        AND sp."createdAt" >= ${since}`,
+    bq<Dated<{ paymentAccountId: string; amountCents: number }>>(tx)`
+      SELECT "paymentAccountId", "createdAt", "amountCents" FROM "AccountFunding"
+      WHERE "paymentAccountId" = ANY(${ids}::text[]) AND "createdAt" >= ${since}`,
+    bq<Dated<{ paymentAccountId: string | null; amountCurrencyCents: number | null; amountEurCents: number; currencyCode: string | null; exchangeRate: number | null }>>(tx)`
+      SELECT pp."paymentAccountId", pp."createdAt", pp."amountCurrencyCents", pp."amountEurCents", pp."currencyCode", pp."exchangeRate"::float8 AS "exchangeRate"
+      FROM "PurchasePayment" pp JOIN "Purchase" p ON p."id" = pp."purchaseId"
+      WHERE pp."paymentAccountId" = ANY(${ids}::text[]) AND p."companyId" = ${companyId} AND p."voided" = false AND pp."createdAt" >= ${since}`,
+    bq<Dated<{ paymentAccountId: string | null; accountDebitCents: number | null; paidCents: number }>>(tx)`
+      SELECT "paymentAccountId", "createdAt", "accountDebitCents", "paidCents" FROM "PayrollPayment"
+      WHERE "paymentAccountId" = ANY(${ids}::text[]) AND "companyId" = ${companyId} AND "createdAt" >= ${since}`,
+    bq<Dated<{ paymentAccountId: string | null; amountCents: number; localAmountCents: number | null; enteredInLocal: boolean }>>(tx)`
+      SELECT "paymentAccountId", "createdAt", "amountCents", "localAmountCents", "enteredInLocal" FROM "Expense"
+      WHERE "paymentAccountId" = ANY(${ids}::text[]) AND "companyId" = ${companyId} AND "createdAt" >= ${since}`,
+    bq<Dated<{ paymentAccountId: string | null; amountCents: number; amountCurrencyCents: number | null; currencyCode: string | null; exchangeRate: number | null }>>(tx)`
+      SELECT "paymentAccountId", "createdAt", "amountCents", "amountCurrencyCents", "currencyCode", "exchangeRate"::float8 AS "exchangeRate" FROM "CashOutflow"
+      WHERE "paymentAccountId" = ANY(${ids}::text[]) AND "companyId" = ${companyId} AND "createdAt" >= ${since}`,
   ]);
+  const dated = <T extends { createdAt: string }>(rows: T[]) => rows.map((r) => ({ ...r, createdAt: jsDate(r.createdAt) }));
+  const pays = dated(paysRaw);
+  const fundings = dated(fundingsRaw);
+  const purchaseOut = dated(purchaseRaw);
+  const payrollOut = dated(payrollRaw);
+  const expenseOut = dated(expenseRaw);
+  const outflowOut = dated(outflowRaw);
   for (const a of accounts) {
     const from = a.balanceSince.getTime();
     const mine = <T extends { paymentAccountId: string | null; createdAt: Date }>(rows: T[]) =>

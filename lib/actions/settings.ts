@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSession, requireSession, requireManager, setSessionCookie } from "@/lib/session";
 import { outsideScope, scopeMemo, withTenant } from "@/lib/tenant-db";
+import { bq, jsDate } from "@/lib/batch-sql";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { fetchBcvRate } from "@/lib/bcv-rate";
@@ -52,19 +53,13 @@ export async function getExchangeRateInfo(): Promise<ExchangeRateInfo> {
 }
 
 async function computeExchangeRateInfo(companyId: string): Promise<ExchangeRateInfo> {
-  const company = await withTenant(companyId, (tx) =>
-    tx.company.findUnique({
-      where: { id: companyId },
-      select: {
-        exchangeRate: true,
-        exchangeRateUpdatedAt: true,
-        localCurrencyCode: true,
-        exchangeRateEnabled: true,
-        referenceCurrency: true,
-        printPaperSize: true,
-      },
-    })
+  const [raw] = await withTenant(companyId, (tx) =>
+    bq<{ exchangeRate: number | null; exchangeRateUpdatedAt: string | null; localCurrencyCode: string; exchangeRateEnabled: boolean; referenceCurrency: ReferenceCurrency; printPaperSize: PrintPaperSize }>(tx)`
+      SELECT "exchangeRate"::float8 AS "exchangeRate", "exchangeRateUpdatedAt", "localCurrencyCode", "exchangeRateEnabled",
+             "referenceCurrency"::text AS "referenceCurrency", "printPaperSize"::text AS "printPaperSize"
+      FROM "Company" WHERE "id" = ${companyId}`
   );
+  const company = raw ? { ...raw, exchangeRateUpdatedAt: raw.exchangeRateUpdatedAt ? jsDate(raw.exchangeRateUpdatedAt) : null } : undefined;
 
   let rate = company?.exchangeRate != null ? Number(company.exchangeRate) : null;
   let updatedAt = company?.exchangeRateUpdatedAt ?? null;
@@ -173,19 +168,10 @@ export async function getIvaSettings(): Promise<IvaSettingsInfo> {
 
 async function getIvaSettingsQuery(): Promise<IvaSettingsInfo> {
   const { companyId } = await requireSession();
-  const company = await withTenant(companyId, (tx) =>
-    tx.company.findUnique({
-      where: { id: companyId },
-      select: {
-        ivaEnabled: true,
-        ivaGeneralRatePercent: true,
-        ivaReducedRatePercent: true,
-        isIvaWithholdingAgent: true,
-        ivaWithholdingPercent: true,
-        isIgtfAgent: true,
-        igtfRatePercent: true,
-      },
-    })
+  const [company] = await withTenant(companyId, (tx) =>
+    bq<IvaSettingsInfo>(tx)`
+      SELECT "ivaEnabled", "ivaGeneralRatePercent", "ivaReducedRatePercent", "isIvaWithholdingAgent", "ivaWithholdingPercent", "isIgtfAgent", "igtfRatePercent"
+      FROM "Company" WHERE "id" = ${companyId}`
   );
   return {
     ivaEnabled: company?.ivaEnabled ?? true,
@@ -446,14 +432,10 @@ export async function getFiscalData(): Promise<FiscalData> {
 
 async function getFiscalDataQuery(): Promise<FiscalData> {
   const { companyId } = await requireSession();
-  const company = await withTenant(companyId, (tx) =>
-    tx.company.findUnique({
-      where: { id: companyId },
-      select: {
-        fiscalLegalName: true, fiscalRif: true, fiscalAddress: true, fiscalPhone: true,
-        businessCountry: true, businessWhatsapp: true, businessInstagram: true,
-      },
-    })
+  const [company] = await withTenant(companyId, (tx) =>
+    bq<FiscalData>(tx)`
+      SELECT "fiscalLegalName", "fiscalRif", "fiscalAddress", "fiscalPhone", "businessCountry", "businessWhatsapp", "businessInstagram"
+      FROM "Company" WHERE "id" = ${companyId}`
   );
   return {
     fiscalLegalName: company?.fiscalLegalName ?? null,

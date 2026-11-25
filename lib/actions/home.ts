@@ -2,6 +2,7 @@
 
 import { Prisma } from "@prisma/client";
 import { requireManager, requireManagerOrPermission } from "@/lib/session";
+import { bq } from "@/lib/batch-sql";
 import { withTenant } from "@/lib/tenant-db";
 import { dayBoundsUtc, SHOP_TIME_ZONE, todayDateString } from "@/lib/report-types";
 
@@ -13,7 +14,7 @@ export async function salesByHourToday(): Promise<HourPoint[]> {
   const { companyId, branchId } = await requireManager();
   const { start, end } = dayBoundsUtc(todayDateString());
   return withTenant(companyId, async (tx) => {
-    const rows = await tx.$queryRaw<{ h: number; n: bigint; cents: bigint }[]>`
+    const rows = await bq<{ h: number; n: bigint; cents: bigint }>(tx)`
       SELECT EXTRACT(HOUR FROM s."createdAt" AT TIME ZONE ${SHOP_TIME_ZONE})::int AS h,
              COUNT(*)::bigint AS n,
              COALESCE(SUM(s."totalCents"), 0)::bigint AS cents
@@ -42,21 +43,28 @@ export type LatestSale = {
 // Las últimas ventas (no anuladas), de la más reciente a la más antigua.
 export async function latestSales(limit = 5): Promise<LatestSale[]> {
   const { companyId, branchId } = await requireManager();
+  type Row = {
+    id: string;
+    controlNumber: number | null;
+    customerFirstName: string | null;
+    customerLastName: string | null;
+    totalCents: number;
+    paymentStatus: string;
+    payments: { paymentMethod: string; currencyCode: string | null; amountCurrencyCents: number | null; amountEurCents: number }[];
+  };
+  // Venta y sus cobros en una sola consulta (antes: ventas + cobros).
   const rows = await withTenant(companyId, (tx) =>
-    tx.sale.findMany({
-      where: { companyId, ...(branchId ? { branchId } : {}), voided: false },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      select: {
-        id: true,
-        controlNumber: true,
-        customerFirstName: true,
-        customerLastName: true,
-        totalCents: true,
-        paymentStatus: true,
-        payments: { select: { paymentMethod: true, currencyCode: true, amountCurrencyCents: true, amountEurCents: true } },
-      },
-    })
+    bq<Row>(tx)`
+      SELECT s."id", s."controlNumber", s."customerFirstName", s."customerLastName", s."totalCents", s."paymentStatus"::text AS "paymentStatus",
+             COALESCE((SELECT json_agg(json_build_object('paymentMethod', p."paymentMethod"::text, 'currencyCode', p."currencyCode",
+                                                         'amountCurrencyCents', p."amountCurrencyCents", 'amountEurCents', p."amountEurCents")
+                                       ORDER BY p."createdAt", p."id")
+                       FROM "SalePayment" p WHERE p."saleId" = s."id"), '[]'::json) AS "payments"
+      FROM "Sale" s
+      WHERE s."companyId" = ${companyId} ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty} AND s."voided" = false
+      ORDER BY s."createdAt" DESC
+      LIMIT ${limit}
+    `
   );
   return rows.map((s) => ({
     id: s.id,
@@ -77,7 +85,7 @@ export async function salesHeatmap(): Promise<HeatCell[]> {
   const { companyId, branchId } = await requireManagerOrPermission("stats");
   const since = new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
   return withTenant(companyId, async (tx) => {
-    const rows = await tx.$queryRaw<{ d: number; h: number; n: bigint }[]>`
+    const rows = await bq<{ d: number; h: number; n: bigint }>(tx)`
       SELECT ((EXTRACT(DOW FROM s."createdAt" AT TIME ZONE ${SHOP_TIME_ZONE})::int + 6) % 7) AS d,
              EXTRACT(HOUR FROM s."createdAt" AT TIME ZONE ${SHOP_TIME_ZONE})::int AS h,
              COUNT(*)::bigint AS n

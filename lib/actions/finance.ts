@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { requireManager, requireAccountingPlan, requireManagerOrPermission, requireAccountingManagerOrPermission } from "@/lib/session";
+import { bq, jsDate } from "@/lib/batch-sql";
+import type { Expense } from "@prisma/client";
 import { withTenant } from "@/lib/tenant-db";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { closedDayWindows } from "@/lib/closed-days";
@@ -32,7 +34,7 @@ export async function costOfGoodsSold(range: DateRangeSelection): Promise<number
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return 0;
 
-    const [row] = await tx.$queryRaw<{ cogs_cents: bigint | null }[]>`
+    const [row] = await bq<{ cogs_cents: bigint | null }>(tx)`
       SELECT SUM(si."quantity" * p."costCents")::bigint AS cogs_cents
       FROM "SaleItem" si
       JOIN "Sale" s ON s.id = si."saleId"
@@ -56,7 +58,7 @@ export async function netSalesCents(range: DateRangeSelection): Promise<number> 
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return 0;
-    const [row] = await tx.$queryRaw<{ net: bigint | null }[]>`
+    const [row] = await bq<{ net: bigint | null }>(tx)`
       SELECT SUM(si."baseCents")::bigint AS net
       FROM "SaleItem" si
       JOIN "Sale" s ON s.id = si."saleId"
@@ -77,7 +79,7 @@ export async function netSalesWithoutCost(range: DateRangeSelection): Promise<nu
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return 0;
-    const [row] = await tx.$queryRaw<{ net: bigint | null }[]>`
+    const [row] = await bq<{ net: bigint | null }>(tx)`
       SELECT SUM(si."baseCents")::bigint AS net
       FROM "SaleItem" si
       JOIN "Sale" s ON s.id = si."saleId"
@@ -96,29 +98,34 @@ export async function listExpenses(range: DateRangeSelection, search = "") {
   const { companyId, branchId } = await requireAccountingManagerOrPermission("stats", "admin");
   const windows = selectionToWindows(range);
   const query = search.trim();
-  return withTenant(companyId, (tx) =>
-    tx.expense.findMany({
-      where: {
-        companyId,
-        ...(branchId ? { branchId } : {}),
-        AND: [
-          { OR: windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
-          ...(query
-            ? [
-                {
-                  OR: [
-                    { description: { contains: query, mode: "insensitive" as const } },
-                    { category: { contains: query, mode: "insensitive" as const } },
-                  ],
-                },
-              ]
-            : []),
-        ],
-      },
-      orderBy: { spentAt: "desc" },
-    })
+  const like = `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const rows = await withTenant(companyId, (tx) =>
+    bq<ExpenseJson>(tx)`
+      SELECT "id", "companyId", "description", "category", "branchId", "amountCents", "enteredInLocal", "localAmountCents",
+             "exchangeRate"::float8 AS "exchangeRate", "spentAt", "createdById", "createdAt", "paymentMethod"::text AS "paymentMethod", "paymentAccountId"
+      FROM "Expense"
+      WHERE "companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+        AND ${windowsSql('"spentAt"', windows)}
+        ${query ? Prisma.sql`AND ("description" ILIKE ${like} OR "category" ILIKE ${like})` : Prisma.empty}
+      ORDER BY "spentAt" DESC
+    `
   );
+  return rows.map((e) => ({
+    ...e,
+    // Decimal(12,4) pasado a número (la pantalla lo vuelve a leer con Number()).
+    exchangeRate: e.exchangeRate as unknown as Expense["exchangeRate"],
+    spentAt: jsDate(e.spentAt),
+    createdAt: jsDate(e.createdAt),
+  })) as Expense[];
 }
+
+type ExpenseJson = Omit<Expense, "spentAt" | "createdAt" | "exchangeRate" | "paymentMethod"> & {
+  spentAt: string;
+  createdAt: string;
+  exchangeRate: number | null;
+  paymentMethod: string | null;
+};
 
 export async function createExpense(formData: FormData): Promise<ActionResult> {
   const { companyId, userId, branchId } = await requireAccountingManagerOrPermission("admin");
@@ -221,11 +228,14 @@ export async function expensesTotal(range: DateRangeSelection): Promise<number> 
   const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const windows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
-    const result = await tx.expense.aggregate({
-      _sum: { amountCents: true },
-      where: { companyId, ...(branchId ? { branchId } : {}), OR: windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
-    });
-    return result._sum.amountCents ?? 0;
+    const [row] = await bq<{ total: number | null }>(tx)`
+      SELECT SUM("amountCents")::bigint AS total
+      FROM "Expense"
+      WHERE "companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+        AND ${windowsSql('"spentAt"', windows)}
+    `;
+    return Number(row?.total ?? 0);
   });
 }
 
@@ -238,7 +248,7 @@ export async function categoryMargins(range: DateRangeSelection): Promise<Catego
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return [];
-    const rows = await tx.$queryRaw<{ category: string; revenue: bigint; cogs: bigint | null }[]>`
+    const rows = await bq<{ category: string; revenue: bigint; cogs: bigint | null }>(tx)`
       SELECT COALESCE(NULLIF(si."category", ''), 'Sin categoría') AS category,
              SUM(si."baseCents")::bigint AS revenue,
              SUM(CASE WHEN p."costCents" IS NOT NULL THEN si."quantity" * p."costCents" ELSE 0 END)::bigint AS cogs
@@ -264,7 +274,7 @@ export async function productMargins(range: DateRangeSelection): Promise<Categor
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return [];
-    const rows = await tx.$queryRaw<{ name: string; revenue: bigint; cogs: bigint | null }[]>`
+    const rows = await bq<{ name: string; revenue: bigint; cogs: bigint | null }>(tx)`
       SELECT si."productName" AS name,
              SUM(si."baseCents")::bigint AS revenue,
              SUM(CASE WHEN p."costCents" IS NOT NULL THEN si."quantity" * p."costCents" ELSE 0 END)::bigint AS cogs
@@ -285,10 +295,10 @@ export async function productMargins(range: DateRangeSelection): Promise<Categor
 
 export async function getProfitGoal(): Promise<number | null> {
   const { companyId } = await requireManagerOrPermission("stats", "admin");
-  const company = await withTenant(companyId, (tx) =>
-    tx.company.findUnique({ where: { id: companyId }, select: { profitGoalCents: true } })
+  const [company] = await withTenant(companyId, (tx) =>
+    bq<{ goal: number | null }>(tx)`SELECT "profitGoalCents" AS goal FROM "Company" WHERE "id" = ${companyId}`
   );
-  return company?.profitGoalCents ?? null;
+  return company?.goal ?? null;
 }
 
 export async function setProfitGoal(amountCents: number | null): Promise<ActionResult> {

@@ -1,6 +1,7 @@
 import { scopeMemo } from "@/lib/tenant-db";
 import "server-only";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { bq, jsDate, jsDateOnly } from "@/lib/batch-sql";
 import { isDayClosed } from "@/lib/cash-shifts";
 import { SHOP_TIME_ZONE, zonedDateParts, zonedMidnightUtc } from "@/lib/report-types";
 
@@ -70,17 +71,27 @@ async function closedDateSetQuery(
   days: Day[]
 ): Promise<Set<string>> {
   if (days.length === 0) return new Set();
-  const closingDates = days.map((d) => closingDateFromString(d.dateStr));
-  const [closings, openings] = await Promise.all([
-    tx.cashClosing.findMany({
-      where: { companyId, closingDate: { in: closingDates }, ...(branchId ? { branchId } : {}) },
-      select: { branchId: true, closingDate: true, shiftNumber: true, closedAt: true },
-    }),
-    tx.cashOpening.findMany({
-      where: { companyId, date: { in: closingDates }, ...(branchId ? { branchId } : {}) },
-      select: { branchId: true, date: true, shiftNumber: true },
-    }),
+  const dates = days.map((d) => d.dateStr);
+  const branchSql = branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty;
+  // Las tres lecturas (cierres, aperturas y sedes activas) viajan juntas en una sola sentencia (lib/batch-sql.ts).
+  const [closingRows, openingRows, branchCount] = await Promise.all([
+    bq<{ branchId: string; closingDate: string; shiftNumber: number; closedAt: string }>(tx)`
+      SELECT "branchId", "closingDate"::text AS "closingDate", "shiftNumber", "closedAt"
+      FROM "CashClosing"
+      WHERE "companyId" = ${companyId} AND "closingDate" = ANY(${dates}::date[]) ${branchSql}`,
+    bq<{ branchId: string; date: string; shiftNumber: number }>(tx)`
+      SELECT "branchId", "date"::text AS "date", "shiftNumber"
+      FROM "CashOpening"
+      WHERE "companyId" = ${companyId} AND "date" = ANY(${dates}::date[]) ${branchSql}`,
+    branchId
+      ? Promise.resolve(0)
+      : scopeMemo(`activeBranchCount:${companyId}`, async () => {
+          const [r] = await bq<{ n: number }>(tx)`SELECT COUNT(*)::int AS n FROM "Branch" WHERE "companyId" = ${companyId} AND "isActive" = true`;
+          return r?.n ?? 0;
+        }),
   ]);
+  const closings = closingRows.map((c) => ({ branchId: c.branchId, closingDate: jsDateOnly(c.closingDate), shiftNumber: c.shiftNumber, closedAt: jsDate(c.closedAt as string) }));
+  const openings = openingRows.map((o) => ({ branchId: o.branchId, date: jsDateOnly(o.date), shiftNumber: o.shiftNumber }));
 
   // Un día de una sede cuenta como cerrado cuando tiene al menos un cierre y ningún
   // turno sigue abierto (varios turnos por día: se cierra el último).
@@ -98,7 +109,7 @@ async function closedDateSetQuery(
 
   if (branchId) return new Set(closedEntries.map((e) => e.date));
 
-  const activeBranchCount = await tx.branch.count({ where: { companyId, isActive: true } });
+  const activeBranchCount = branchCount;
   if (activeBranchCount === 0) return new Set();
   const countByDate = new Map<string, number>();
   for (const e of closedEntries) countByDate.set(e.date, (countByDate.get(e.date) ?? 0) + 1);

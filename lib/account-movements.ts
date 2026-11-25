@@ -1,5 +1,6 @@
 import "server-only";
-import type { PaymentAccount, Prisma } from "@prisma/client";
+import { Prisma, type PaymentAccount } from "@prisma/client";
+import { bq, jsDate } from "@/lib/batch-sql";
 import { lineInAccountCurrency, payrollDebitCents } from "@/lib/account-money";
 import { outflowDebitCents } from "@/lib/cash-outflow";
 import { collectedWhere, expenseDebitCents } from "@/lib/account-balance";
@@ -113,37 +114,48 @@ export async function accountMovementsMany(
   const out = new Map<string, AccountMovement[]>();
   if (accounts.length === 0) return out;
   const ids = accounts.map((a) => a.id);
-  const since = { gte: new Date(Math.min(...accounts.map((a) => a.balanceSince.getTime()))) };
+  const since = new Date(Math.min(...accounts.map((a) => a.balanceSince.getTime())));
   const methods = [...new Set(accounts.flatMap((a) => (a.linkedMethod ? [a.linkedMethod] : [])))];
-  const extra: { AND?: { OR: { createdAt: { gte: Date; lt: Date } }[] }[] } = windows ? { AND: [{ OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })) }] } : {};
-  const [sales, fundings, purchases, payroll, expenses, outflows] = await Promise.all([
-    tx.salePayment.findMany({
-      where: {
-        sale: { companyId, OR: [{ voided: false }, { voided: true, cashOutflows: { some: {} } }] },
-        OR: [{ paymentAccountId: { in: ids } }, ...(methods.length ? [{ paymentAccountId: null, paymentMethod: { in: methods } }] : [])],
-        createdAt: since,
-        ...extra,
-      },
-      select: { id: true, paymentAccountId: true, paymentMethod: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true, reference: true },
-    }),
-    tx.accountFunding.findMany({ where: { paymentAccountId: { in: ids }, createdAt: since, ...extra } }),
-    tx.purchasePayment.findMany({
-      where: { paymentAccountId: { in: ids }, purchase: { companyId, voided: false }, createdAt: since, ...extra },
-      select: { id: true, paymentAccountId: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true, reference: true, purchase: { select: { supplierInvoiceNo: true, manualSupplierName: true, supplier: { select: { name: true } } } } },
-    }),
-    tx.payrollPayment.findMany({
-      where: { paymentAccountId: { in: ids }, companyId, createdAt: since, ...extra },
-      select: { id: true, paymentAccountId: true, createdAt: true, accountDebitCents: true, paidCents: true, isAdvance: true, employee: { select: { name: true } } },
-    }),
-    tx.expense.findMany({
-      where: { paymentAccountId: { in: ids }, companyId, createdAt: since, ...extra },
-      select: { id: true, paymentAccountId: true, createdAt: true, description: true, amountCents: true, localAmountCents: true, enteredInLocal: true },
-    }),
-    tx.cashOutflow.findMany({
-      where: { paymentAccountId: { in: ids }, companyId, createdAt: since, ...extra },
-      select: { id: true, paymentAccountId: true, createdAt: true, concept: true, amountCents: true, amountCurrencyCents: true, currencyCode: true, exchangeRate: true, saleId: true },
-    }),
+  const win = (col: string) => (windows ? Prisma.sql`AND (${Prisma.join(windows.map((w) => Prisma.sql`(${Prisma.raw(col)} >= ${w.start} AND ${Prisma.raw(col)} < ${w.end})`), " OR ")})` : Prisma.empty);
+  // Las seis lecturas viajan juntas en una sola sentencia (lib/batch-sql.ts).
+  type Dated<T> = T & { createdAt: string };
+  const [salesRaw, fundingsRaw, purchasesRaw, payrollRaw, expensesRaw, outflowsRaw] = await Promise.all([
+    bq<Dated<{ id: string; paymentAccountId: string | null; paymentMethod: string; amountCurrencyCents: number | null; amountEurCents: number; currencyCode: string; exchangeRate: number | null; reference: string | null }>>(tx)`
+      SELECT sp."id", sp."paymentAccountId", sp."paymentMethod"::text AS "paymentMethod", sp."createdAt", sp."amountCurrencyCents", sp."amountEurCents", sp."currencyCode", sp."exchangeRate"::float8 AS "exchangeRate", sp."reference"
+      FROM "SalePayment" sp JOIN "Sale" s ON s."id" = sp."saleId"
+      WHERE s."companyId" = ${companyId}
+        AND (s."voided" = false OR EXISTS (SELECT 1 FROM "CashOutflow" co WHERE co."saleId" = s."id"))
+        AND (sp."paymentAccountId" = ANY(${ids}::text[])
+             ${methods.length ? Prisma.sql`OR (sp."paymentAccountId" IS NULL AND sp."paymentMethod"::text = ANY(${methods}::text[]))` : Prisma.empty})
+        AND sp."createdAt" >= ${since} ${win('sp."createdAt"')}`,
+    bq<Dated<{ id: string; paymentAccountId: string; note: string | null; amountCents: number }>>(tx)`
+      SELECT "id", "paymentAccountId", "createdAt", "note", "amountCents" FROM "AccountFunding"
+      WHERE "paymentAccountId" = ANY(${ids}::text[]) AND "createdAt" >= ${since} ${win('"createdAt"')}`,
+    bq<Dated<{ id: string; paymentAccountId: string | null; amountCurrencyCents: number | null; amountEurCents: number; currencyCode: string; exchangeRate: number | null; manualSupplierName: string | null; supplierName: string | null }>>(tx)`
+      SELECT pp."id", pp."paymentAccountId", pp."createdAt", pp."amountCurrencyCents", pp."amountEurCents", pp."currencyCode", pp."exchangeRate"::float8 AS "exchangeRate",
+             p."manualSupplierName", sup."name" AS "supplierName"
+      FROM "PurchasePayment" pp JOIN "Purchase" p ON p."id" = pp."purchaseId" LEFT JOIN "Supplier" sup ON sup."id" = p."supplierId"
+      WHERE pp."paymentAccountId" = ANY(${ids}::text[]) AND p."companyId" = ${companyId} AND p."voided" = false
+        AND pp."createdAt" >= ${since} ${win('pp."createdAt"')}`,
+    bq<Dated<{ id: string; paymentAccountId: string | null; accountDebitCents: number | null; paidCents: number; isAdvance: boolean; employeeName: string }>>(tx)`
+      SELECT pp."id", pp."paymentAccountId", pp."createdAt", pp."accountDebitCents", pp."paidCents", pp."isAdvance", e."name" AS "employeeName"
+      FROM "PayrollPayment" pp JOIN "PayrollEmployee" e ON e."id" = pp."employeeId"
+      WHERE pp."paymentAccountId" = ANY(${ids}::text[]) AND pp."companyId" = ${companyId}
+        AND pp."createdAt" >= ${since} ${win('pp."createdAt"')}`,
+    bq<Dated<{ id: string; paymentAccountId: string | null; description: string; amountCents: number; localAmountCents: number | null; enteredInLocal: boolean }>>(tx)`
+      SELECT "id", "paymentAccountId", "createdAt", "description", "amountCents", "localAmountCents", "enteredInLocal" FROM "Expense"
+      WHERE "paymentAccountId" = ANY(${ids}::text[]) AND "companyId" = ${companyId} AND "createdAt" >= ${since} ${win('"createdAt"')}`,
+    bq<Dated<{ id: string; paymentAccountId: string | null; concept: string; amountCents: number; amountCurrencyCents: number | null; currencyCode: string | null; exchangeRate: number | null; saleId: string | null }>>(tx)`
+      SELECT "id", "paymentAccountId", "createdAt", "concept", "amountCents", "amountCurrencyCents", "currencyCode", "exchangeRate"::float8 AS "exchangeRate", "saleId" FROM "CashOutflow"
+      WHERE "paymentAccountId" = ANY(${ids}::text[]) AND "companyId" = ${companyId} AND "createdAt" >= ${since} ${win('"createdAt"')}`,
   ]);
+  const dated = <T extends { createdAt: string }>(rows: T[]) => rows.map((r) => ({ ...r, createdAt: jsDate(r.createdAt) }));
+  const sales = dated(salesRaw);
+  const fundings = dated(fundingsRaw);
+  const purchases = dated(purchasesRaw).map((p) => ({ ...p, purchase: { manualSupplierName: p.manualSupplierName, supplier: p.supplierName != null ? { name: p.supplierName } : null } }));
+  const payroll = dated(payrollRaw).map((p) => ({ ...p, employee: { name: p.employeeName } }));
+  const expenses = dated(expensesRaw);
+  const outflows = dated(outflowsRaw);
   for (const a of accounts) {
     const from = a.balanceSince.getTime();
     const mine = <T extends { paymentAccountId: string | null; createdAt: Date }>(rows: T[]) =>
