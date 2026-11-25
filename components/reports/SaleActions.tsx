@@ -328,7 +328,10 @@ export function SaleActions({
                   </div>
                 )}
                 {voidFunds && (
-                  <InsufficientFundsNotice failure={voidFunds} accounts={sourceAccounts} onFunded={() => { setVoidFunds(null); reloadSources(); }} />
+                  // El diálogo se desplaza: el aviso se trae a la vista para que no quede oculto bajo el pie.
+                  <div ref={(el) => el?.scrollIntoView({ block: "nearest" })}>
+                    <InsufficientFundsNotice failure={voidFunds} accounts={sourceAccounts} onFunded={() => { setVoidFunds(null); reloadSources(); }} />
+                  </div>
                 )}
               </div>
             )}

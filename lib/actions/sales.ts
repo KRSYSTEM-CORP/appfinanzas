@@ -580,8 +580,10 @@ export async function voidSale(saleId: string, refunds?: OutflowSource[]): Promi
       await assertDayNotClosed(tx, companyId, sale.branchId, sale.createdAt);
       await restoreStock(tx, saleId, companyId, sale.branchId, actorId, actorName);
       await releaseSaleLinks(tx, saleId, companyId, sale.quoteId);
-      await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
+      // La devolución va antes de marcar la venta como anulada: así el saldo de la cuenta aún cuenta este cobro al
+      // comprobar fondos (y «Agregar fondos» pide solo lo que falta de verdad).
       await recordVoidRefund(tx, sale, actorId, refunds);
+      await tx.sale.update({ where: { id: saleId }, data: { voided: true, voidedAt: new Date() } });
     });
   } catch (err) {
     if (err instanceof InsufficientFundsError) return toActionResult(err, "");

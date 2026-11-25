@@ -159,6 +159,8 @@ describe("devolución por anulación desde la cuenta", () => {
     });
     const v = await voidSale(res.saleId);
     expect(v).toMatchObject({ success: false, code: "INSUFFICIENT_FUNDS", accountId });
+    // El cobro de esta venta aún cuenta en el saldo al comprobar: «tiene» la diferencia real, no 0.
+    expect(v).toMatchObject({ shortfallCents: Math.round(totalBs * 100) - (await balanceOf(accountId)) });
     expect((await owner.sale.findUniqueOrThrow({ where: { id: res.saleId } })).voided).toBe(false);
     await owner.accountFunding.create({ data: { companyId: ctx.companyId, paymentAccountId: accountId, amountCents: 5_000_000 } });
     expect((await voidSale(res.saleId)).success).toBe(true);
