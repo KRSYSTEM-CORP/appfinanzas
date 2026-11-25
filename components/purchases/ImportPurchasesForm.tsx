@@ -33,6 +33,11 @@ const HEADER_MAP: Record<string, string> = {
   "costo unitario": "unitCost",
   unitcost: "unitCost",
   costo: "unitCost",
+  moneda: "currency",
+  currency: "currency",
+  "total factura": "invoiceTotal",
+  "total de la factura": "invoiceTotal",
+  invoicetotal: "invoiceTotal",
   iva: "taxCategory",
   "categoria de iva": "taxCategory",
   taxcategory: "taxCategory",
@@ -60,6 +65,8 @@ type ParsedRow = {
   productName?: unknown;
   quantity?: unknown;
   unitCost?: unknown;
+  currency?: unknown;
+  invoiceTotal?: unknown;
   taxCategory?: unknown;
   paymentStatus?: unknown;
   affectsStock?: unknown;
@@ -94,13 +101,15 @@ async function downloadTemplate() {
       "SKU",
       "Cantidad",
       "Costo unitario",
+      "Moneda",
+      "Total factura",
       "IVA",
       "Forma de pago",
       "Vincular al inventario",
       "Nota",
     ],
-    ["Distribuidora Central", "F-00123", "CAM-001", 20, 6.5, "General", "Contado", "Sí", ""],
-    ["Distribuidora Central", "F-00123", "PAN-002", 10, 3.2, "General", "Contado", "Sí", ""],
+    ["Distribuidora Central", "F-00123", "CAM-001", 20, 6.5, "USD", 162, "General", "Contado", "Sí", ""],
+    ["Distribuidora Central", "F-00123", "PAN-002", 10, 3.2, "USD", 162, "General", "Contado", "Sí", ""],
   ]);
   appendSheet(wb, ws, "Compras");
   await downloadWorkbook(wb, "plantilla-compras.xlsx");
@@ -148,6 +157,8 @@ export function ImportPurchasesForm() {
           productName: r.productName,
           quantity: r.quantity,
           unitCost: r.unitCost,
+          currency: r.currency,
+          invoiceTotal: r.invoiceTotal,
           taxCategory: r.taxCategory,
           paymentStatus: r.paymentStatus,
           affectsStock: r.affectsStock,
@@ -165,11 +176,12 @@ export function ImportPurchasesForm() {
       <div className="flex flex-col gap-1.5 rounded-lg border p-4">
         <p className="text-sm text-muted-foreground">
           Sube un archivo Excel (.xlsx) con tus compras. Las columnas esperadas son:{" "}
-          <strong>Proveedor, Nº factura proveedor, SKU (o Producto), Cantidad, Costo unitario, IVA, Forma
+          <strong>Proveedor, Nº factura proveedor, SKU (o Producto), Cantidad, Costo unitario, Moneda, Total factura, IVA, Forma
           de pago, Vincular al inventario, Nota</strong>{" "}
           (Proveedor, el producto, Cantidad y Costo unitario son obligatorios — el proveedor debe existir
           ya en <em>Proveedores</em>). Las filas con el mismo Proveedor y Nº de factura se agrupan en una
-          sola compra con varios productos; si dejas la factura en blanco, cada fila se registra como una
+          sola compra con varios productos. «Moneda» (USD, EUR o Bs; vacío = divisa de referencia) aplica al costo y al total.
+          Si pones «Total factura» (el mismo en todas las filas de esa factura), costos e IVA se ajustan a ese total real; si dejas la factura en blanco, cada fila se registra como una
           compra independiente. &quot;Vincular al inventario&quot; es &quot;Sí&quot; por defecto si dejas
           la columna en blanco — colócale &quot;No&quot; para que la compra quede en el libro de compras
           sin sumar al stock.
@@ -181,7 +193,7 @@ export function ImportPurchasesForm() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx"
+            accept=".xlsx,.csv"
             onChange={handleFile}
             className="hidden"
           />

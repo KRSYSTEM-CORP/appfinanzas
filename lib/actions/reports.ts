@@ -2,6 +2,7 @@
 
 import { Prisma } from "@prisma/client";
 import { requireManager } from "@/lib/session";
+import { RESTOCK_WINDOW_DAYS, restockPlan } from "@/lib/restock";
 import { withTenant } from "@/lib/tenant-db";
 import { closedDayWindows } from "@/lib/closed-days";
 import {
@@ -425,22 +426,24 @@ export type RestockSuggestion = {
   daysLeft: number | null;
   suggestedQty: number;
   estimatedCostCents: number | null;
+  /** Unidades vendidas en la ventana de cálculo. */
+  soldInWindow: number;
+  /** Ritmo de venta usado (unidades por día). */
+  perDay: number;
+  /** Nivel ideal de existencia al que se repone. */
+  idealQty: number;
+  /** Mínimo configurado del producto (alerta de stock bajo). */
+  minStock: number;
 };
 
-const RESTOCK_COVER_DAYS = 20;
-const RESTOCK_WINDOW_DAYS = 30;
-
-// Reposición sugerida. Ritmo diario = unidades vendidas en la ventana ÷ días con el producto
-// disponible en esa ventana (un producto nuevo no se diluye entre 30 días que no existía).
-// Pedir = ⌈ritmo diario × 20 días de cobertura − existencia actual⌉. Solo productos activos con
-// control de stock que vendieron algo. Se descuenta lo ya pedido y aún no recibido no existe en
-// el sistema, así que la cifra es una sugerencia, no una orden.
+// Reposición sugerida: solo productos activos con control de stock que vendieron algo en 30 días.
+// Es una sugerencia, no una orden: lo ya pedido y aún no recibido no existe en el sistema.
 export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]> {
   const { companyId, branchId } = await requireManager();
   const since = new Date(Date.now() - RESTOCK_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   return withTenant(companyId, async (tx) => {
-    const rows = await tx.$queryRaw<{ id: string; name: string; stock: number; cost: number | null; sold: bigint; active_days: number }[]>`
-      SELECT pr.id, pr."name" AS name, pr."stock" AS stock, pr."costCents" AS cost, SUM(si."quantity")::bigint AS sold,
+    const rows = await tx.$queryRaw<{ id: string; name: string; stock: number; cost: number | null; min_stock: number; sold: bigint; active_days: number }[]>`
+      SELECT pr.id, pr."name" AS name, pr."stock" AS stock, pr."costCents" AS cost, pr."lowStockThreshold" AS min_stock, SUM(si."quantity")::bigint AS sold,
              LEAST(${RESTOCK_WINDOW_DAYS}, GREATEST(1, CEIL(EXTRACT(EPOCH FROM (NOW() - GREATEST(${since}::timestamptz, pr."createdAt"))) / 86400.0)))::float AS active_days
       FROM "Product" pr
       JOIN "SaleItem" si ON si."productId" = pr.id
@@ -449,19 +452,23 @@ export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]
         ${branchId ? Prisma.sql`AND pr."branchId" = ${branchId}` : Prisma.empty}
         AND pr."isActive" = true AND pr."trackStock" = true
         AND s."voided" = false AND s."createdAt" >= ${since}
-      GROUP BY pr.id, pr."name", pr."stock", pr."costCents", pr."createdAt"
+      GROUP BY pr.id, pr."name", pr."stock", pr."costCents", pr."lowStockThreshold", pr."createdAt"
     `;
     return rows
       .map((r) => {
-        const perDay = Number(r.sold) / Math.max(1, r.active_days);
-        const need = Math.ceil(perDay * RESTOCK_COVER_DAYS - r.stock);
+        const sold = Number(r.sold);
+        const plan = restockPlan({ sold, activeDays: r.active_days, stock: r.stock, minStock: r.min_stock });
         return {
           id: r.id,
           name: r.name,
           stock: r.stock,
-          daysLeft: perDay > 0 ? Math.floor(Math.max(0, r.stock) / perDay) : null,
-          suggestedQty: need,
-          estimatedCostCents: r.cost != null ? need * r.cost : null,
+          daysLeft: plan.perDay > 0 ? Math.floor(Math.max(0, r.stock) / plan.perDay) : null,
+          suggestedQty: plan.need,
+          estimatedCostCents: r.cost != null ? plan.need * r.cost : null,
+          soldInWindow: sold,
+          perDay: plan.perDay,
+          idealQty: plan.ideal,
+          minStock: r.min_stock,
         };
       })
       .filter((x) => x.suggestedQty > 0)

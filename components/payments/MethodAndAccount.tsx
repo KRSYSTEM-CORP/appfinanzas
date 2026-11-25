@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import { BanknoteIcon, CheckIcon, CreditCardIcon, LandmarkIcon, SmartphoneIcon, WalletIcon } from "lucide-react";
 import { bankLogoSrc } from "@/lib/payment-accounts";
-import { accountsForMethod } from "@/lib/payment-method-accounts";
+import { accountsForMethod, defaultAccountFor } from "@/lib/payment-method-accounts";
 import { formatAccountMoney } from "@/components/accounts/AddFundsDialog";
 import { cn } from "@/lib/utils";
 import type { PaymentMethod } from "@prisma/client";
@@ -92,10 +93,16 @@ export function MethodAndAccount({
   accountLabel?: string;
 }) {
   const options = accountsForMethod(method, accounts);
+  // Las cuentas pueden llegar después de montar el selector (carga asíncrona): si el método ya tiene cuentas y
+  // ninguna está elegida, se preselecciona para que el pago siempre descuente de una cuenta.
+  const hasChoice = options.some((a) => a.id === accountId);
+  useEffect(() => {
+    if (options.length > 0 && !hasChoice) onAccount(defaultAccountFor(method, accounts));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options.length, hasChoice, method]);
   function pick(m: PaymentMethod) {
     onMethod(m);
-    const next = accountsForMethod(m, accounts);
-    onAccount(next.length === 1 ? next[0].id : "");
+    onAccount(defaultAccountFor(m, accounts));
   }
   return (
     <div className="flex flex-col gap-2.5">
