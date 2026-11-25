@@ -199,7 +199,7 @@ export function ImportProductsForm() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx"
+            accept=".xlsx,.csv"
             onChange={handleFile}
             className="hidden"
           />

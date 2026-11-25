@@ -95,6 +95,8 @@ export async function savePaymentAccount(input: unknown, id?: string): Promise<A
   });
   revalidatePath("/settings");
   revalidatePath("/pos");
+  revalidatePath("/accounting/accounts");
+  revalidatePath("/purchases");
   return { success: true };
 }
 

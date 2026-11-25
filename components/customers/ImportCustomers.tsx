@@ -44,7 +44,7 @@ export function ImportCustomers() {
 
   return (
     <>
-      <input ref={fileRef} type="file" accept=".xlsx" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+      <input ref={fileRef} type="file" accept=".xlsx,.csv" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
       <Button type="button" variant="outline" disabled={busy || pending} onClick={() => fileRef.current?.click()}>
         Importar Excel
       </Button>

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MethodTiles } from "@/components/payments/MethodAndAccount";
 import { formatAccountMoney } from "@/components/accounts/AddFundsDialog";
-import { accountsForMethod } from "@/lib/payment-method-accounts";
+import { accountsForMethod, defaultAccountFor } from "@/lib/payment-method-accounts";
 import { cn } from "@/lib/utils";
 import {
   PAYMENT_METHODS_REQUIRING_REFERENCE,
@@ -235,8 +235,7 @@ export function PaymentSplitBuilder({
                 <MethodTiles
                   value={row.paymentMethod}
                   onChange={(method) => {
-                    const next = accounts ? accountsForMethod(method, accounts) : [];
-                    updateRow(i, { paymentMethod: method, paymentAccountId: next.length === 1 ? next[0].id : "" });
+                    updateRow(i, { paymentMethod: method, paymentAccountId: accounts ? defaultAccountFor(method, accounts) : "" });
                   }}
                 />
               </div>

@@ -33,3 +33,13 @@ export function scaleLinesToTotal<T extends ScaledLine>(lines: T[], scale: numbe
 export function baseUnitCost(baseCents: number, quantity: number): number {
   return quantity > 0 ? Math.round(baseCents / quantity) : 0;
 }
+
+// Moneda declarada en la importación de compras: «Bs»/«VES»/el código local = moneda local; «USD»/«$»/«EUR»/«€»/
+// «divisa» o la de referencia = moneda de referencia; vacío = referencia. Cualquier otra cosa se rechaza.
+export function resolveImportCurrency(raw: string | undefined, localCode: string, referenceCode: string): "LOCAL" | "REFERENCE" {
+  if (raw == null || raw.trim() === "") return "REFERENCE";
+  const v = raw.trim().toUpperCase().replace(/\./g, "");
+  if (v === "BS" || v === "BSD" || v === "VES" || v === localCode.toUpperCase()) return "LOCAL";
+  if (v === "$" || v === "USD" || v === "€" || v === "EUR" || v === "DIVISA" || v === referenceCode.toUpperCase()) return "REFERENCE";
+  throw new Error(`Moneda «${raw}» no válida: usa ${[...new Set([`${localCode} (Bs)`, referenceCode, "USD"])].join(", ")}`);
+}
