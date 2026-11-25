@@ -132,6 +132,6 @@ export async function assertDayNotClosed(
     tx.cashOpening.findMany({ where: { companyId, branchId, date }, select: { shiftNumber: true } }),
   ]);
   if (isDayClosed(openings, closings)) {
-    throw new Error("La caja de ese día ya fue cerrada. Abre un nuevo turno para seguir.");
+    throw new Error("Esta venta es de un día cuya caja ya tiene Corte Z, así que no se puede anular ni cambiar. Para corregirla, registra la devolución como una salida en la Caja Chica del turno actual.");
   }
 }

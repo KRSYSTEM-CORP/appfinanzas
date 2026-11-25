@@ -8,6 +8,8 @@ import { branchLimitError } from "@/lib/plan-limits";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { consumeAttempt, clearAttempts, rateLimitMessage } from "@/lib/rate-limit";
 import { dayBoundsUtc, todayDateString } from "@/lib/report-types";
+import { closedDayWindows } from "@/lib/closed-days";
+import { Prisma } from "@prisma/client";
 import type { ActionResult } from "@/lib/types";
 
 export async function listBranches() {
@@ -180,7 +182,14 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
     ]);
     const summaries = await Promise.all(
       branches.map(async (b) => {
-        const [sales, products, users, month, low, cogs, expenses, commissions] = await Promise.all([
+        // Mes: solo días con cierre de caja, igual que Inicio, Estadísticas y Administración,
+        // para que las cifras de la sede cuadren con las del resto del sistema.
+        const monthWindows = await closedDayWindows(tx, companyId, b.id, [{ start: monthStart, end }]);
+        const inMonth = (col: string) =>
+          monthWindows.length === 0
+            ? Prisma.sql`FALSE`
+            : Prisma.sql`(${Prisma.join(monthWindows.map((w) => Prisma.sql`(${Prisma.raw(col)} >= ${w.start} AND ${Prisma.raw(col)} < ${w.end})`), " OR ")})`;
+        const [sales, products, users, month, low, cogs, expenses, commissions, net] = await Promise.all([
           tx.sale.aggregate({
             where: { companyId, branchId: b.id, voided: false, createdAt: { gte: start, lt: end } },
             _sum: { totalCents: true },
@@ -188,11 +197,13 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
           }),
           tx.product.count({ where: { companyId, branchId: b.id } }),
           tx.user.count({ where: { companyId, branchId: b.id, status: "ACTIVE" } }),
-          tx.sale.aggregate({
-            where: { companyId, branchId: b.id, voided: false, createdAt: { gte: monthStart, lt: end } },
-            _sum: { totalCents: true },
-            _count: true,
-          }),
+          monthWindows.length === 0
+            ? Promise.resolve({ _sum: { totalCents: 0 }, _count: 0 })
+            : tx.sale.aggregate({
+                where: { companyId, branchId: b.id, voided: false, OR: monthWindows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })) },
+                _sum: { totalCents: true },
+                _count: true,
+              }),
           tx.$queryRaw<{ n: bigint }[]>`
             SELECT COUNT(*)::bigint AS n FROM "Product"
             WHERE "companyId" = ${companyId} AND "branchId" = ${b.id} AND "isActive" = true
@@ -203,7 +214,7 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
             JOIN "Sale" s ON s.id = si."saleId"
             JOIN "Product" p ON p.id = si."productId"
             WHERE s."companyId" = ${companyId} AND s."branchId" = ${b.id} AND s."voided" = false
-              AND s."createdAt" >= ${monthStart} AND s."createdAt" < ${end} AND p."costCents" IS NOT NULL`,
+              AND ${inMonth('s."createdAt"')} AND p."costCents" IS NOT NULL`,
           tx.expense.aggregate({
             _sum: { amountCents: true },
             where: { companyId, branchId: b.id, spentAt: { gte: monthStart, lt: end } },
@@ -215,7 +226,14 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
             JOIN "User" u ON u.id = s."sellerId"
             WHERE s."companyId" = ${companyId} AND s."branchId" = ${b.id} AND s."voided" = false
               AND u."commissionPercent" IS NOT NULL
-              AND s."createdAt" >= ${monthStart} AND s."createdAt" < ${end}`,
+              AND ${inMonth('s."createdAt"')}`,
+          // Ventas netas (sin IVA): la base de la utilidad, como en Administración.
+          tx.$queryRaw<{ n: bigint | null }[]>`
+            SELECT COALESCE(SUM(si."baseCents"), 0)::bigint AS n
+            FROM "SaleItem" si
+            JOIN "Sale" s ON s.id = si."saleId"
+            WHERE s."companyId" = ${companyId} AND s."branchId" = ${b.id} AND s."voided" = false
+              AND ${inMonth('s."createdAt"')}`,
         ]);
         const cogsCents = Number(cogs[0]?.c ?? 0);
         const expensesCents = expenses._sum.amountCents ?? 0;
@@ -231,7 +249,7 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
           salesMonth: month._count,
           salesMonthCents: month._sum.totalCents ?? 0,
           lowStock: Number(low[0]?.n ?? 0),
-          profitMonthCents: (month._sum.totalCents ?? 0) - cogsCents - expensesCents - commissionsCents,
+          profitMonthCents: Number(net[0]?.n ?? 0) - cogsCents - expensesCents - commissionsCents,
           cogsMonthCents: cogsCents,
           expensesMonthCents: expensesCents,
           commissionsMonthCents: commissionsCents,
