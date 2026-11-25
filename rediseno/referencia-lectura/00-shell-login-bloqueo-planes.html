@@ -201,9 +201,9 @@ var MODS=[
 var ALIAS={cob:'adm'};
 var cur=null,theme='auto';
 var SP=[
- {id:'emp',n:'Emprende',tg:'Todo el sistema para empezar',p:12.99,np:10,u:3,pr:200,ia:0,f:['Todos los módulos excepto Contabilidad','3 usuarios: dueño o gerente y 2 vendedores','Hasta 200 productos en el inventario','Asistente IA: consultar es gratis']},
- {id:'neg',n:'Pyme',tg:'Más equipo, más inventario y IA',p:23.99,u:5,pr:500,ia:100,f:['Todo lo de Emprende','Módulo de Contabilidad incluido','100 créditos de Asistente IA','5 usuarios','Hasta 500 productos en el inventario']},
- {id:'red',n:'Corporativo',tg:'Para equipos grandes y a tu medida',p:44.99,u:10,pr:99999,ia:200,f:['Todo lo de Pyme','200 créditos de Asistente IA','10 usuarios','Productos ilimitados','Creación de un módulo personalizado adaptado a tu empresa. Una creación por mes']}];
+ {id:'emp',n:'Emprende',tg:'Todo el sistema para empezar',p:12.99,np:10,u:5,pr:200,ia:0,f:['Todos los módulos excepto Contabilidad','Hasta 5 usuarios (perfiles de trabajadores)','Hasta 200 productos en el inventario','Asistente IA: consultar es gratis']},
+ {id:'neg',n:'Pyme',tg:'Más equipo, más inventario y IA',p:23.99,u:30,pr:500,ia:100,f:['Todo lo de Emprende','Módulo de Contabilidad incluido','100 créditos de Asistente IA','Hasta 30 usuarios (perfiles de trabajadores)','Hasta 500 productos en el inventario']},
+ {id:'red',n:'Corporativo',tg:'Para equipos grandes y a tu medida',p:44.99,u:99999,pr:99999,ia:200,f:['Todo lo de Pyme','200 créditos de Asistente IA','Usuarios ilimitados','Productos ilimitados','Creación de un módulo personalizado adaptado a tu empresa. Una creación por mes']}];
 var PLAN=null,CREDX=0;
 function spl(id){return SP.filter(function(x){return x.id===id})[0]}
 function showGate(){document.getElementById('gplans').innerHTML=SP.map(function(p){var rec=p.id==='neg';return '<article class="gp3'+(rec?' rec':'')+'">'+(rec?'<span class="rib">Más elegido</span>':'')+'<h2>'+p.n+'</h2><p class="tg">'+p.tg+'</p><div class="pr">'+(p.np?'<s style="opacity:.55;font-size:.6em;margin-right:6px">$'+p.p.toFixed(2).replace('.',',')+'</s><b>$'+p.np+'</b>':'<b>$'+p.p.toFixed(2).replace('.',',')+'</b>')+'<span>/ mes</span></div>'+(p.np?'<span class="pill ok" style="align-self:flex-start;margin:-2px 0 6px">Solo el primer mes · luego $12,99 / mes</span>':'')+'<ul>'+p.f.map(function(f){return '<li>'+ic('check',3)+f+'</li>'}).join('')+'</ul><button type="button" class="cta" data-plan="'+p.id+'">Empezar con '+p.n+'</button></article>'}).join('');document.getElementById('gate').hidden=false}

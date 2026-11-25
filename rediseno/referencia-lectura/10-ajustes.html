@@ -422,7 +422,7 @@ var PRE=[['Identidad del logo','#433ddd','#0f9d9a'],['Contraste cálido','#c2410
 /* ---- plan / suscripción ---- */
 var SUBS={view:'home',plan:null,met:'pm',step:1,coupon:'',off:0,ref:'',stat:0,active:false,trialLeft:15,hist:[],lock:null,ok:false,rol:'Dueño'};
 var PLANS=[
- {id:'emp',n:'Emprende',tag:'Para empezar ordenado',p:19,u:3,s:1,pr:300,ia:20,f:['Punto de venta y cobros en Bs y divisas','Inventario con alertas de stock','Clientes y cuentas por cobrar','Caja con apertura y Corte Z','Tickets 58/80 mm, carta, PDF y WhatsApp']},
+ {id:'emp',n:'Emprende',tag:'Para empezar ordenado',p:19,u:5,s:1,pr:300,ia:20,f:['Punto de venta y cobros en Bs y divisas','Inventario con alertas de stock','Clientes y cuentas por cobrar','Caja con apertura y Corte Z','Tickets 58/80 mm, carta, PDF y WhatsApp']},
  {id:'neg',n:'Negocio',tag:'Todo el control del local',p:39,u:8,s:1,pr:2000,ia:60,f:['Todo lo de Emprende','Administración, Balance y ganancia neta estimada','Compras, proveedores y presupuestos','Libros fiscales y Contabilidad con Nómina','Estadísticas y mapa de calor de ventas']},
  {id:'red',n:'Red',tag:'Varias sedes bajo control',p:69,u:15,s:3,pr:99999,ia:150,f:['Todo lo de Negocio','Sucursales con clave de administrador','Traspasos entre sedes y comparativa','Casa Matriz e inventario compartido','Asistente IA con más créditos']}];
 var PAYM={pm:{n:'Pago Móvil',bs:1,ic:'card',d:[['Banco','Banco de ejemplo (0000)'],['Teléfono','0412-000-0000'],['Cédula / RIF','J-00000000-0']]},bn:{n:'Binance (USDT)',bs:0,ic:'coin',d:[['Binance ID','000000000'],['Red','Binance Pay (sin comisión)']]},tr:{n:'Transferencia bancaria',bs:1,ic:'store',d:[['Banco','Banco de ejemplo'],['Cuenta','0000-0000-00-0000000000'],['Titular','KR System, C.A.'],['RIF','J-00000000-0']]},zl:{n:'Zelle',bs:0,ic:'wa',d:[['Correo Zelle','pagos@ejemplo.com'],['Titular','KR System LLC']]}};
@@ -568,9 +568,9 @@ Object.assign(act,{
 IC.mail='<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 8 8 6 8-6"/>';
 var MODL='POS, Inventario, Presupuestos, Caja Chica, Estadísticas y Administración';
 PLANS.splice(0,PLANS.length,
- {id:'emp',n:'Emprende',tag:'Todo el sistema para empezar',p:12.99,np:10,u:3,pr:200,ia:0,f:['Todos los módulos excepto Contabilidad','Sucursales, Learning y Asistente IA (consultar es gratis)','3 usuarios: el dueño o gerente y 2 vendedores','Hasta 200 productos en el inventario']},
- {id:'neg',n:'Pyme',tag:'Más equipo, más inventario y IA',p:23.99,u:5,pr:500,ia:100,f:['Todo lo de Emprende','Módulo de Contabilidad incluido','100 créditos de Asistente IA incluidos','5 usuarios','Hasta 500 productos en el inventario']},
- {id:'red',n:'Corporativo',tag:'Para equipos grandes y a tu medida',p:44.99,u:10,pr:99999,ia:200,f:['Todo lo de Pyme','200 créditos de Asistente IA incluidos','10 usuarios','Productos ilimitados en el inventario','Creación de un módulo personalizado adaptado a tu empresa. Una creación por mes']});
+ {id:'emp',n:'Emprende',tag:'Todo el sistema para empezar',p:12.99,np:10,u:5,pr:200,ia:0,f:['Todos los módulos excepto Contabilidad','Sucursales, Learning y Asistente IA (consultar es gratis)','Hasta 5 usuarios (perfiles de trabajadores)','Hasta 200 productos en el inventario']},
+ {id:'neg',n:'Pyme',tag:'Más equipo, más inventario y IA',p:23.99,u:30,pr:500,ia:100,f:['Todo lo de Emprende','Módulo de Contabilidad incluido','100 créditos de Asistente IA incluidos','Hasta 30 usuarios (perfiles de trabajadores)','Hasta 500 productos en el inventario']},
+ {id:'red',n:'Corporativo',tag:'Para equipos grandes y a tu medida',p:44.99,u:99999,pr:99999,ia:200,f:['Todo lo de Pyme','200 créditos de Asistente IA incluidos','Usuarios ilimitados','Productos ilimitados en el inventario','Creación de un módulo personalizado adaptado a tu empresa. Una creación por mes']});
 var PACKS=[{id:'k50',c:50,p:5},{id:'k100',c:100,p:9,s:'Ahorra 10 %'},{id:'k250',c:250,p:20,s:'Ahorra 20 %',pop:1},{id:'k500',c:500,p:35,s:'Ahorra 30 %'},{id:'k1000',c:1000,p:60,s:'Mejor valor · −40 %'}];
 PACKS.forEach(function(k){k.n='Recarga de '+k.c+' créditos';k.pack=1});
 var _plan=plan;plan=function(id){return _plan(id)||PACKS.filter(function(k){return k.id===id})[0]};

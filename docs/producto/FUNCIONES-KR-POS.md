@@ -41,7 +41,7 @@ Convenciones: las acciones de servidor viven en `lib/actions/*.ts` (`"use server
 Ver la sección «Cuentas y dinero» (abajo). Pantalla `app/accounting/accounts/page.tsx`, componente `components/accounting/BankAccountsView.tsx`.
 
 ## 9. Planes, suscripción y prueba
-- Planes: `lib/plans.ts` (`PLANS`: topes de usuarios, productos, sucursales, créditos IA, Contabilidad solo Pyme y Corporativo). Emprende: primer mes $9,99, luego $12,99.
+- Planes: `lib/plans.ts` (`PLANS`: topes de usuarios, productos, sucursales, créditos IA, Contabilidad solo Pyme y Corporativo). Emprende: primer mes $9,99, luego $12,99. **Usuarios (perfiles de trabajadores) por plan, desde 2026-11-25:** Emprende hasta 5, Pyme hasta 30, Corporativo ilimitado (`maxUsers: null`; usar `usersText(plan)` y comprobar `maxUsers == null` en cualquier tope nuevo). Productos: 100 / 500 / ilimitados. Sucursales: 1 / sin límite / sin límite.
 - **Prueba de 15 días**: `TRIAL_DAYS = 15` en `lib/billing.ts`. La prueba no tiene fecha propia: es `Company.nextPaymentDueDate` de una empresa que aún no ha pagado nada (`lib/trial.ts`).
 - **Bloqueo**: `isCompanyBlocked` (`lib/billing.ts`, `GRACE_DAYS = 0`): pasada la fecha de vencimiento la empresa va a `app/blocked` y debe pagar en `app/billing` (misma pantalla que «Mi plan»). Pagos con mes extra: `monthsCoveredWithBonus` (pagar 12 meses exactos regala 2).
 - **Reporte de pago por WhatsApp**: el cliente genera un reporte de pago; hay página `app/pago/[id]/page.tsx` (visor del PDF con «Regresar a KR POS») y API pública `app/api/public/pagos/[id]/route.ts`; el enlace público al PDF va firmado con HMAC (`lib/payment-link.ts`) y el mensaje predeterminado lo arma la pantalla de pago. El equipo aprueba el pago en `/admin/pagos`.
