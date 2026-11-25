@@ -1,11 +1,34 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRightIcon, XIcon } from "lucide-react";
 
 // Las filas fuera de pantalla no se maquetan ni pintan: listas largas sin tirones al deslizar.
 const ROW_CV = { contentVisibility: "auto", containIntrinsicSize: "auto 64px" } as const;
+
+// Filas que se pintan de entrada; al llegar al final de la lista se agregan otras tantas.
+// Con miles de registros (inventario, clientes, ventas) pintar todas congelaba la pantalla.
+const ROW_BATCH = 80;
+
+// Marca de fin de lista: cuando entra en pantalla pide más filas (o se pulsa el botón).
+function MoreRows({ remaining, onMore }: { remaining: number; onMore: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) onMore();
+    }, { rootMargin: "400px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onMore, remaining]);
+  return (
+    <button ref={ref} type="button" onClick={onMore} className="min-h-11 w-full border-t text-sm font-bold text-muted-foreground">
+      Mostrar más ({remaining})
+    </button>
+  );
+}
 
 // Shared "list + detail" layout.
 // - Desktop (md and up): a compact list on the left and the selected item's
@@ -46,6 +69,8 @@ export function MasterDetail<T extends { id: string }>({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [rowLimit, setRowLimit] = useState(ROW_BATCH);
+  const showMore = useCallback(() => setRowLimit((l) => l + ROW_BATCH), []);
 
   // The sheet shows exactly the tapped item; if it disappears (e.g. it was
   // deleted from inside the sheet) the sheet closes by itself.
@@ -125,7 +150,7 @@ export function MasterDetail<T extends { id: string }>({
       <div className="md:hidden overflow-hidden rounded-xl border bg-card shadow-xs">
         {header}
         <div role="listbox" aria-label={label} aria-orientation="vertical">
-          {items.map((item) => (
+          {items.slice(0, rowLimit).map((item) => (
             <div key={item.id} className="flex items-center border-b last:border-b-0" style={ROW_CV}>
               {renderLead && <div className="shrink-0 pl-3">{renderLead(item)}</div>}
               <button
@@ -144,6 +169,7 @@ export function MasterDetail<T extends { id: string }>({
             </div>
           ))}
         </div>
+        {items.length > rowLimit && <MoreRows remaining={items.length - rowLimit} onMore={showMore} />}
         {footer}
       </div>
 
@@ -186,7 +212,7 @@ export function MasterDetail<T extends { id: string }>({
         <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
           {header}
           <div role="listbox" aria-label={label}>
-            {items.map((item) => {
+            {items.slice(0, rowLimit).map((item) => {
               const active = item.id === selected.id;
               return (
                 <div
@@ -210,6 +236,7 @@ export function MasterDetail<T extends { id: string }>({
               );
             })}
           </div>
+          {items.length > rowLimit && <MoreRows remaining={items.length - rowLimit} onMore={showMore} />}
           {footer}
         </div>
         <aside className="sticky top-4 flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-xs">

@@ -33,14 +33,15 @@ async function send(
     </div>
   `;
   if (!resend) {
-    console.log(`[email] RESEND_API_KEY not set — would send to ${to}: ${subject}\n${html}`);
+    // Sin llave no se envía; no se imprime el cuerpo (puede traer enlaces de restablecimiento) ni el correo completo.
+    console.log(`[email] RESEND_API_KEY no configurada: no se envió "${subject}" a ${maskEmail(to)}`);
     return true;
   }
   try {
     await resend.emails.send({ from: FROM, to, subject, html, ...(attachments?.length ? { attachments } : {}) });
     return true;
   } catch (err) {
-    console.error(`[email] failed to send to ${to}:`, err);
+    console.error(`[email] no se pudo enviar a ${maskEmail(to)}:`, err instanceof Error ? err.message : "error");
     return false;
   }
 }
@@ -207,4 +208,11 @@ export async function sendPasswordResetEmail(to: string, token: string): Promise
 // Reporte semanal de ventas (cuerpo ya armado por lib/weekly-report.ts).
 export async function sendWeeklyReportEmail(to: string, subject: string, bodyHtml: string): Promise<boolean> {
   return send(to, subject, bodyHtml);
+}
+
+// "maria@correo.com" -> "m***@correo.com": los registros del servidor no guardan correos completos.
+export function maskEmail(to: string | string[]): string {
+  const one = Array.isArray(to) ? to[0] ?? "" : to;
+  const [user, domain] = one.split("@");
+  return domain ? `${user.slice(0, 1)}***@${domain}` : "***";
 }

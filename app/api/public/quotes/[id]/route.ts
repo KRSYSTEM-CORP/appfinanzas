@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withSuperAdmin } from "@/lib/tenant-db";
 import { buildQuotePDF, quoteControlNumberLabel } from "@/lib/quote-pdf";
+import { pickClientIp } from "@/lib/request-ip";
 import { checkRateLimit, recordFailedAttempt } from "@/lib/rate-limit";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 
@@ -8,7 +9,7 @@ import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 // WhatsApp/QR — see app/api/public/sales/[id]/route.ts for the trust model
 // (unguessable id, no listing endpoint, read-only).
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = pickClientIp(request.headers.get("x-real-ip"), request.headers.get("x-forwarded-for"));
   const rl = await checkRateLimit("public-quote-pdf", ip, 30, 60_000);
   if (!rl.allowed) return new NextResponse("Demasiadas solicitudes, intenta de nuevo en un momento", { status: 429 });
   await recordFailedAttempt("public-quote-pdf", ip);
