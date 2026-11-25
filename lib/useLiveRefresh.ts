@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient, type SupabaseClient, type RealtimeChannel } from "@supabase/supabase-js";
+import type { SupabaseClient, RealtimeChannel } from "@supabase/supabase-js";
 import { createRefreshGate } from "@/lib/refresh-gate";
 
 // Se suscribe a un canal de Supabase Realtime y refresca la ruta cuando llega un
@@ -28,14 +28,27 @@ type Entry = {
 };
 
 let client: SupabaseClient | null = null;
+let createClientFn: typeof import("@supabase/supabase-js").createClient | null = null;
 const entries = new Map<string, Entry>();
+
+// El SDK de Supabase (~200 KB sin comprimir) se descarga después de pintar la
+// pantalla, no dentro del JS inicial de cada ruta.
+let loading: Promise<void> | null = null;
+function loadSupabase(): Promise<void> {
+  if (createClientFn) return Promise.resolve();
+  loading ??= import("@supabase/supabase-js").then((m) => {
+    createClientFn = m.createClient;
+  });
+  return loading;
+}
 
 function getClient(): SupabaseClient | null {
   if (client) return client;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
-  client = createClient(url, key);
+  if (!createClientFn) return null;
+  client = createClientFn(url, key);
   return client;
 }
 
@@ -94,20 +107,31 @@ export function useLiveRefresh(channel: string | null, event: string) {
 
   useEffect(() => {
     if (!channel) return;
-    const entry = acquire(channel);
-    if (!entry) return;
-    const id = Symbol(event);
-    let listeners = entry.routers.get(router);
-    if (!listeners) {
-      listeners = new Map();
-      entry.routers.set(router, listeners);
-    }
-    listeners.set(id, event);
+    let cancelled = false;
+    let undo: (() => void) | null = null;
+    loadSupabase()
+      .then(() => {
+        if (cancelled) return;
+        const entry = acquire(channel);
+        if (!entry) return;
+        const id = Symbol(event);
+        let listeners = entry.routers.get(router);
+        if (!listeners) {
+          listeners = new Map();
+          entry.routers.set(router, listeners);
+        }
+        listeners.set(id, event);
+        undo = () => {
+          const l = entry.routers.get(router);
+          l?.delete(id);
+          if (l && l.size === 0) entry.routers.delete(router);
+          release(channel);
+        };
+      })
+      .catch(() => {});
     return () => {
-      const l = entry.routers.get(router);
-      l?.delete(id);
-      if (l && l.size === 0) entry.routers.delete(router);
-      release(channel);
+      cancelled = true;
+      undo?.();
     };
   }, [channel, event, router]);
 }
