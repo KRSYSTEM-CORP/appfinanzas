@@ -124,7 +124,7 @@ export function SalesMasterDetail({
                   )}
                 </dd>
               </div>
-              {s.paymentStatus === "CREDIT" && remaining !== s.totalCents && (
+              {!s.voided && s.paymentStatus === "CREDIT" && remaining !== s.totalCents && (
                 <div className="col-span-2 flex flex-col gap-0.5">
                   <dt className="text-xs text-muted-foreground">Saldo pendiente</dt>
                   <dd className="font-medium text-warning">

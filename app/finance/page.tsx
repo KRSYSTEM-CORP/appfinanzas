@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getIvaSettings } from "@/lib/actions/settings";
 import { listPendingClosings } from "@/lib/actions/cash-closing";
 import { formatCurrencyTotals } from "@/lib/currency-breakdown";
 import { requireAccountingPlan, requirePermission } from "@/lib/session";
@@ -101,6 +102,7 @@ export default async function FinancePage({
     netSales,
     netUncosted,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
+    { ivaEnabled },
   ] = await Promise.all([
     revenueTotals(range),
     receivablesTotals(),
@@ -130,6 +132,7 @@ export default async function FinancePage({
     netSalesCents(range),
     netSalesWithoutCost(range),
     getExchangeRateInfo(),
+    getIvaSettings(),
   ]);
 
   const unclosedDays = (await listPendingClosings(range)).length;
@@ -251,7 +254,7 @@ export default async function FinancePage({
       </StatsCard>
 
       <div className={`${s.grid} ${s.g2}`}>
-        <StatsCard title="Cascada de utilidad" sub="Ventas netas (sin IVA) − costo de la mercancía − gastos − comisiones = utilidad">
+        <StatsCard title="Cascada de utilidad" sub={`${ivaEnabled ? "Ventas netas (sin IVA)" : "Ventas"} − costo de la mercancía − gastos − comisiones = utilidad`}>
           {netSales <= 0 ? (
             <p className={s.empty}>Sin ventas en este período.</p>
           ) : (
@@ -296,7 +299,7 @@ export default async function FinancePage({
         <StatsCard title="Distribución de ventas" sub={`Ventas por monto de compra · ${label}`}>
           <TicketHistogramChart rows={tickets} symbol={currencySymbol(cur)} />
         </StatsCard>
-        <StatsCard title="Ventas por categoría" sub={`${label} · ${money(catTotal)} sin IVA`}>
+        <StatsCard title="Ventas por categoría" sub={`${label} · ${money(catTotal)}${ivaEnabled ? " sin IVA" : ""}`}>
           {catRows.length === 0 ? (
             <p className={s.empty}>Sin ventas en este período.</p>
           ) : (

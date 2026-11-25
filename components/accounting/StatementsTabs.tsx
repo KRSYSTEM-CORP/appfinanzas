@@ -187,7 +187,7 @@ function IncomeStatement({ s, m, islr, periodLabel }: { s: Statements; m: M; isl
     router.replace(`?${next.toString()}`);
   }
   const lines: { k: string; label: string; v: number; bold?: boolean }[] = [
-    { k: "income", label: "Ventas netas", v: s.income },
+    { k: "income", label: s.ivaEnabled ? "Ventas netas" : "Ventas", v: s.income },
     { k: "cogs", label: "Costo de ventas", v: -s.cogs },
     { k: "gross", label: "Utilidad bruta", v: s.gross, bold: true },
     { k: "sales", label: "Gastos de ventas", v: -s.salesExpenses },
@@ -224,7 +224,7 @@ function IncomeStatement({ s, m, islr, periodLabel }: { s: Statements; m: M; isl
                     <tr>
                       <td colSpan={3} className="px-3.5 pb-2.5">
                         <p className="rounded-[12px] bg-accent p-2.5 text-[13px] text-foreground">
-                          {HELP[l.k]}
+                          {l.k === "income" && !s.ivaEnabled ? "Lo que vendiste en el periodo, sin contar ventas anuladas." : HELP[l.k]}
                           {l.k === "islr" && (
                             <span className="mt-2 flex items-center gap-2">
                               Tasa de ISLR

@@ -84,3 +84,21 @@ describe("resumen de sucursales", () => {
     expect(summaries.some((s) => s.id === otherBranchId)).toBe(true);
   });
 });
+
+describe("cifras del mes en Sucursales", () => {
+  it("el mes solo cuenta días con cierre de caja; «hoy» cuenta todo lo vendido", async () => {
+    await owner.sale.deleteMany({ where: { branchId: otherBranchId } });
+    const sale = await owner.sale.create({ data: { companyId: ctx.companyId, branchId: otherBranchId, totalCents: 5000 } });
+    try {
+      const { summaries } = await branchOverview();
+      const row = summaries.find((x) => x.id === otherBranchId)!;
+      expect(row.salesToday).toBe(1);
+      expect(row.salesTodayCents).toBe(5000);
+      // Sin cierre de caja ese día, igual que Inicio, Estadísticas y Administración, no entra al mes.
+      expect(row.salesMonth).toBe(0);
+      expect(row.salesMonthCents).toBe(0);
+    } finally {
+      await owner.sale.delete({ where: { id: sale.id } });
+    }
+  });
+});
