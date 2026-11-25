@@ -1,7 +1,7 @@
 "use server";
 
 import { requireAccountingPlan } from "@/lib/session";
-import { withTenant } from "@/lib/tenant-db";
+import { outsideScope, withTenant } from "@/lib/tenant-db";
 import { incomeStatement, ivaPosition, purchasesCost } from "@/lib/statements-math";
 import { caracasDateString, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { receivablesTotals } from "@/lib/actions/reports";
@@ -59,7 +59,7 @@ export async function getStatements(range: DateRangeSelection, islrPercent: numb
     getPurchasesTaxBook(range),
     ivaEnabled ? getCreditNotesTaxBook(range) : Promise.resolve([] as Awaited<ReturnType<typeof getCreditNotesTaxBook>>),
     ivaEnabled ? getDebitNotesTaxBook(range) : Promise.resolve([] as Awaited<ReturnType<typeof getDebitNotesTaxBook>>),
-    getAccountBalances().catch(() => []),
+    outsideScope(() => getAccountBalances()).catch(() => []),
   ]);
 
   const extra = await withTenant(companyId, async (tx) => {

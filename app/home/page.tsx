@@ -1,4 +1,4 @@
-import { withTenantScope } from "@/lib/tenant-db";
+import { outsideScope, withTenantScope } from "@/lib/tenant-db";
 import Link from "@/components/ui/nav-link";
 import { aggregateByCurrency, formatCurrencyTotals } from "@/lib/currency-breakdown";
 import {
@@ -95,7 +95,7 @@ export default async function BusinessHome({
     await withTenantScope(session.companyId, () => Promise.all([
       getExchangeRateInfo(),
       revenueTotals(range),
-      netSalesCents(range).catch(() => null),
+      outsideScope(() => netSalesCents(range)).catch(() => null),
       costOfGoodsSold(range),
       expensesTotal(range),
       commissionsTotal(range),

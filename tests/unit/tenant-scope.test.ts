@@ -12,7 +12,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { scopeMemo, withTenant, withTenantScope } from "@/lib/tenant-db";
+import { outsideScope, scopeMemo, withTenant, withTenantScope } from "@/lib/tenant-db";
 
 describe("withTenantScope", () => {
   it("reutiliza una sola transacción para la misma empresa", async () => {
@@ -48,5 +48,20 @@ describe("withTenantScope", () => {
       await scopeMemo("k", async () => ++n);
     });
     expect(n).toBe(1);
+  });
+
+  it("outsideScope abre su propia transacción: un error atrapado ahí no toca la del scope", async () => {
+    transactions.length = 0;
+    const r = await withTenantScope("c1", async () => {
+      const failed = await outsideScope(() =>
+        withTenant("c1", async () => {
+          throw new Error("falla de consulta");
+        })
+      ).catch(() => "atrapado");
+      const next = await withTenant("c1", async () => "sigue viva");
+      return [failed, next];
+    });
+    expect(r).toEqual(["atrapado", "sigue viva"]);
+    expect(transactions).toHaveLength(2);
   });
 });

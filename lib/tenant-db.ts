@@ -34,6 +34,13 @@ export function scopeMemo<T>(key: string, fn: () => Promise<T>): Promise<T> {
 // (BEGIN, set_config y COMMIT: 3 viajes de más cada vez). Dentro de withTenantScope todas las
 // llamadas a withTenant de la MISMA empresa reutilizan una sola transacción; la seguridad RLS es
 // la misma (el set_config de la empresa ya está hecho) y las cifras no cambian.
+// Ejecuta fn FUERA del scope compartido (con su propia transacción). Obligatorio para toda lectura cuyo error
+// se atrape con .catch/try dentro de un scope: un error de consulta aborta la transacción de Postgres y las
+// siguientes lecturas del scope fallarían con «current transaction is aborted».
+export function outsideScope<T>(fn: () => Promise<T>): Promise<T> {
+  return scope.run(undefined as unknown as NonNullable<ReturnType<typeof scope.getStore>>, fn);
+}
+
 export function withTenantScope<T>(companyId: string, fn: () => Promise<T>): Promise<T> {
   // KR_NO_TENANT_SCOPE=1 apaga el reuso (sirve para comparar cifras antes/después en las pruebas).
   if (process.env.KR_NO_TENANT_SCOPE === "1") return fn();

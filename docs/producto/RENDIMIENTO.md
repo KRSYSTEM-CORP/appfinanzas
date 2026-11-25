@@ -84,7 +84,19 @@ Consultas por pantalla (segunda pasada, `KR_QUERY_LOG=1`):
 
 Equivalencia: con la sesión de gerente se descargó el texto de las 5 pantallas con y sin el reuso (`KR_NO_TENANT_SCOPE=1`) y es idéntico carácter por carácter (en `/finance` solo cambió «día 24 de 30» por el cambio de fecha entre dos corridas; repetido el mismo día, idéntico). Prueba unitaria `tests/unit/tenant-scope.test.ts` (una transacción por empresa, otra empresa abre la suya, memo solo dentro del scope).
 
-Pendiente, con su causa:
+Tercera pasada: sin riesgo de transacción abortada, movimientos por lote y layout en una transacción.
 
-- No se llegó a menos de 30 consultas. De las que quedan, 7 a 10 pares BEGIN/COMMIT son del layout raíz (sesión, sedes, avisos, tasa del menú) y de guardas que corren fuera del scope; el resto son lecturas distintas de verdad. En `/accounting/accounts` y `/accounting/statements` queda un bucle por cuenta en `accountMovementsList` (compras, nómina, gastos y salidas por cada cuenta): agruparlo como se hizo con los saldos exige reescribir esa función, y con pocas cuentas (la empresa de pruebas) pesa poco.
-- Dentro del scope, una consulta que falle aborta la transacción de la pantalla completa (antes solo esa lectura; hay `.catch` en `/home` y `/accounting/statements`).
+- Todo `.catch`/`try` que envuelve una lectura dentro de un scope usa `outsideScope()` (su propia transacción): `getAccountBalances` en Estados, `netSalesCents` en Inicio, avisos y estado de pago del layout, y la escritura de la tasa BCV en `computeExchangeRateInfo`. Los demás `try` de `lib/actions` son de acciones de escritura, que no corren dentro de un scope. Prueba: `tests/unit/tenant-scope.test.ts` («outsideScope abre su propia transacción…»).
+- `accountMovementsMany()` (lib/account-movements.ts) trae los movimientos de todas las cuentas con 6 consultas y los reparte por cuenta con el mismo constructor (`buildMovements`) que `accountMovementsList`; lo usan `getAccountsPeriodReport` y `getAccountsPeriodMovements`.
+- El layout raíz lee branding, sedes, tasa del menú, avisos y estado de pago dentro de un scope (una transacción en vez de 4 a 5).
+- Cifras: texto de las 5 pantallas idéntico con y sin `KR_NO_TENANT_SCOPE=1`.
+
+| Pantalla | Original | Con scope y lote |
+| --- | --- | --- |
+| `/finance` | 139 | 51 |
+| `/accounting/statements` | 96 | 64 |
+| `/accounting/accounts` | 77 | 48 |
+| `/settings` | 75 | 45 |
+| `/home` | 81 | 41 |
+
+Pendiente: seguir bajando de 30 exige unificar lecturas distintas en consultas agrupadas (por ejemplo los agregados de `lib/actions/finance.ts` en un solo SQL); no se hizo.

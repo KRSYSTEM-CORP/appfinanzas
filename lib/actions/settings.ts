@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession, requireSession, requireManager, setSessionCookie } from "@/lib/session";
-import { scopeMemo, withTenant } from "@/lib/tenant-db";
+import { outsideScope, scopeMemo, withTenant } from "@/lib/tenant-db";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { fetchBcvRate } from "@/lib/bcv-rate";
@@ -78,11 +78,15 @@ async function computeExchangeRateInfo(companyId: string): Promise<ExchangeRateI
     try {
       const freshRate = await fetchBcvRate(company.referenceCurrency);
       updatedAt = new Date();
-      await withTenant(companyId, (tx) =>
-        tx.company.update({
-          where: { id: companyId },
-          data: { exchangeRate: freshRate, exchangeRateUpdatedAt: updatedAt as Date },
-        })
+      // Fuera del scope compartido: si esta escritura falla, su error se atrapa abajo y no debe abortar
+      // la transacción de la pantalla.
+      await outsideScope(() =>
+        withTenant(companyId, (tx) =>
+          tx.company.update({
+            where: { id: companyId },
+            data: { exchangeRate: freshRate, exchangeRateUpdatedAt: updatedAt as Date },
+          })
+        )
       );
       rate = freshRate;
     } catch {
