@@ -100,3 +100,24 @@ Tercera pasada: sin riesgo de transacción abortada, movimientos por lote y layo
 | `/home` | 81 | 41 |
 
 Pendiente: seguir bajando de 30 exige unificar lecturas distintas en consultas agrupadas (por ejemplo los agregados de `lib/actions/finance.ts` en un solo SQL); no se hizo.
+
+## Medición en el servidor propio (2026-11-25)
+
+Instancia de prueba aislada en el VPS: imagen `kr-pos:latest` (la de producción) en el contenedor `kr-app-medicion`, ligada a `127.0.0.1:3100` (sin salida a internet), con la base `kr_test` del contenedor `kr-test-pg` (rol `app_runtime`, RLS real, latencia a la base de ~1 ms) y sin claves de correo, pagos, Redis, Sentry, IA ni R2. Se accedió desde la Mac por túnel SSH; chromium propio (playwright) con sesión del gerente, 42 rutas, 2 cargas por ruta (se toma la segunda), móvil 390x844 táctil y escritorio 1440x900, con y sin CPU 4x. El túnel agrega ~90 ms de ida y vuelta a cada petición. La instancia y su env se borraron al terminar.
+
+| Perfil | TTFB mediana / máx. | FCP mediana / máx. | Interactivo (aprox.) mediana / máx. | Tarea larga máx. | Peticiones |
+| --- | --- | --- | --- | --- | --- |
+| Móvil, sin throttle | 143 ms / 343 ms | 368 ms / 588 ms | 368 ms / 923 ms | 67 ms | 25 a 32 |
+| Móvil, CPU 4x | 162 ms / 808 ms | 780 ms / 1 424 ms | 1 606 ms / 2 529 ms | 344 ms (`/reports`) | 25 a 32 |
+| Escritorio, sin throttle | 140 ms / 311 ms | 384 ms / 800 ms | 392 ms / 993 ms | 267 ms | 25 a 32 |
+| Escritorio, CPU 4x | 200 ms / 944 ms | 796 ms / 1 584 ms | 1 794 ms / 3 286 ms | 533 ms (`/settings`) | 25 a 32 |
+
+(«Interactivo» = fin de la última tarea larga tras el primer contenido.)
+
+Contra la medición por túnel a la base (FCP de 2,0 a 3,2 s): en el VPS ninguna ruta pasa de 1,6 s de primer contenido, ni siquiera con CPU 4x; sin throttle todas están bajo 1 s. Ninguna ruta tiene tarea larga de 1 s (el máximo es 533 ms, hidratación con CPU 4x). Desbordamiento horizontal: 0 en todas.
+
+Rutas > 2 s de interactivo solo con CPU 4x (hidratación en CPU lenta, no servidor): móvil `/home`, `/quotes`, `/reports`, `/documents`, `/tax-book`, `/finance`, `/settings`; escritorio además `/pos`, `/inventory`, `/customers`, `/branches`, `/assistant`, `/inventory/import`, `/pos/offline`. Sin throttle, ninguna.
+
+Tiempo de servidor puro (curl dentro del VPS, 3 corridas, primer byte): 25 a 100 ms en casi todas; `/reports` ~70 ms, `/accounting/statements` ~70 ms, `/home` ~100 ms, `/finance` ~200 ms (la más pesada; la reduce otro frente, no se tocó aquí). Ninguna causa de lentitud que corregir en el código.
+
+Límites: la base de pruebas tiene pocos datos (222 ventas); con una empresa grande, `/reports`, `/finance` y `/tax-book` serán las primeras en crecer. Realtime (Supabase) y Sentry se bloquearon en el navegador de medición para no tocar servicios reales. Algunas cargas de la segunda pasada no llegaron a «red inactiva» en 20 s (artefacto de los websockets bloqueados).
