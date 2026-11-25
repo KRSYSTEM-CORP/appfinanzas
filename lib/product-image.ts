@@ -4,7 +4,7 @@ import type { Product } from "@prisma/client";
 // purchases, bulk update, offline snapshot). Product photos are NOT part of
 // these lists any more — see productImageUrl — so the payload stays small
 // enough for this to be large.
-export const PRODUCT_LIST_LIMIT = 500;
+export const PRODUCT_LIST_LIMIT = 5000;
 
 // A product as served by the list endpoints: everything except the base64
 // photo (which can weigh tens of KB each), plus a flag saying whether one

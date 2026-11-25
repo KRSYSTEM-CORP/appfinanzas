@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PlusIcon, SearchIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { PaymentStatus } from "@prisma/client";
@@ -125,7 +125,7 @@ function PosSession({
     paymentAccounts,
     shiftOpen,
   });
-  const productById = new Map(products.map((p) => [p.id, p]));
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const initialLines: CartLine[] = (initialQuote?.lines ?? [])
     .map((l): CartLine | null => {
       const product = productById.get(l.productId);
