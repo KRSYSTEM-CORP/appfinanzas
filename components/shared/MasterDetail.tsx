@@ -9,10 +9,10 @@ const ROW_CV = { contentVisibility: "auto", containIntrinsicSize: "auto 64px" } 
 
 // Filas que se pintan de entrada; al llegar al final de la lista se agregan otras tantas.
 // Con miles de registros (inventario, clientes, ventas) pintar todas congelaba la pantalla.
-const ROW_BATCH = 80;
+export const ROW_BATCH = 80;
 
 // Marca de fin de lista: cuando entra en pantalla pide más filas (o se pulsa el botón).
-function MoreRows({ remaining, onMore }: { remaining: number; onMore: () => void }) {
+export function MoreRows({ remaining, onMore }: { remaining: number; onMore: () => void }) {
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const el = ref.current;
