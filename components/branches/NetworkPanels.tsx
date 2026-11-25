@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { useState } from "react";
 import { ArrowRightLeftIcon, TruckIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";

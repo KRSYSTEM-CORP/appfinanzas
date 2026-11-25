@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { MoreVerticalIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 

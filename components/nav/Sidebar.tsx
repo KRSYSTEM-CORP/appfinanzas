@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { usePathname } from "next/navigation";
 import { EllipsisIcon, LockIcon, LogOutIcon, SearchIcon, XIcon } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
@@ -183,7 +183,7 @@ export function Sidebar({
                 {items.map((item) => {
                   const active = isLinkActive(pathname, item.href);
                   return (
-                    <Link
+                    <Link prefetch={false}
                       key={item.key}
                       href={item.href}
                       data-kr="nav-item"
@@ -203,7 +203,7 @@ export function Sidebar({
 
         <div className="mt-auto flex flex-col gap-1.5 px-1.5 pt-2">
           {planLabel && (
-            <Link href="/settings" className={pillCls}>
+            <Link prefetch={false} href="/settings" className={pillCls}>
               Plan {planLabel} · {planMaxUsers} usuarios
             </Link>
           )}
@@ -243,7 +243,7 @@ export function Sidebar({
             const center = tab.key === "pos";
             return (
               <li key={tab.key} className={center ? "-mt-[22px]" : ""}>
-                <Link
+                <Link prefetch={false}
                   href={tab.href}
                   aria-current={active ? "page" : undefined}
                   className={`flex flex-col items-center gap-0.5 rounded-[14px] px-0.5 py-1.5 text-[11px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}
@@ -300,7 +300,7 @@ export function Sidebar({
               {visible.map((item) => {
                 const active = isLinkActive(pathname, item.href);
                 return (
-                  <Link
+                  <Link prefetch={false}
                     key={item.key}
                     href={item.href}
                     onClick={() => setMoreOpen(false)}

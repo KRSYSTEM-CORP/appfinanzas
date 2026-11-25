@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { PackageIcon, PackageSearchIcon } from "lucide-react";
 import type { ReferenceCurrency } from "@prisma/client";
 import { productImageUrl, type ListedProduct } from "@/lib/product-image";

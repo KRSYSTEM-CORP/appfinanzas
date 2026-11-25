@@ -1,3 +1,4 @@
+import { scopeMemo } from "@/lib/tenant-db";
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { isDayClosed } from "@/lib/cash-shifts";
@@ -50,7 +51,19 @@ function walkDays(windows: { start: Date; end: Date }[]): Day[] {
   return days;
 }
 
-async function closedDateSet(
+function closedDateSet(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  branchId: string | null,
+  days: Day[]
+): Promise<Set<string>> {
+  // Una pantalla pide los mismos días cerrados para cada métrica: se consulta una vez por lectura.
+  return scopeMemo(`closed:${companyId}:${branchId ?? "-"}:${days.map((d) => d.dateStr).join(",")}`, () =>
+    closedDateSetQuery(tx, companyId, branchId, days)
+  );
+}
+
+async function closedDateSetQuery(
   tx: Prisma.TransactionClient,
   companyId: string,
   branchId: string | null,

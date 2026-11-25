@@ -6,7 +6,20 @@ import { Redis } from "@upstash/redis";
 // SDK's default JSON.parse silently turn every cached Date into a plain
 // string, which breaks any code downstream that calls a Date method
 // (Intl.DateTimeFormat, .getTime(), etc.) on what it still thinks is a Date.
-const redis = Redis.fromEnv({ automaticDeserialization: false });
+// Sin credenciales de Upstash (VPS propio, pruebas) el cliente no se crea: el
+// SDK reintentaba ~10 s por llamada contra una URL indefinida y cada pantalla
+// con caché pagaba ese tiempo. Con credenciales, un solo reintento corto.
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+const redis =
+  redisUrl && redisToken
+    ? new Redis({
+        url: redisUrl,
+        token: redisToken,
+        automaticDeserialization: false,
+        retry: { retries: 1, backoff: () => 100 },
+      })
+    : null;
 
 // ISO 8601 date-time, e.g. "2026-08-29T14:32:00.000Z" — exactly what
 // JSON.stringify produces for a Date via its toJSON(), so this only ever
@@ -33,6 +46,7 @@ export async function getOrSetCache<T>(
   fetcher: () => Promise<T>
 ): Promise<T> {
   const fullKey = PREFIX + key;
+  if (!redis) return fetcher();
   try {
     const raw = await redis.get<string>(fullKey);
     if (raw != null) return JSON.parse(raw, reviveDates) as T;
@@ -54,7 +68,7 @@ export async function getOrSetCache<T>(
 // Call alongside revalidatePath() in any action that mutates data a cached
 // key above depends on.
 export async function invalidateCache(...keys: string[]): Promise<void> {
-  if (keys.length === 0) return;
+  if (keys.length === 0 || !redis) return;
   try {
     await redis.del(...keys.map((k) => PREFIX + k));
   } catch (err) {

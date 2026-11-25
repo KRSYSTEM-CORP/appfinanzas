@@ -32,6 +32,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Solo para la imagen Docker del servidor propio (BUILD_STANDALONE=1). En Vercel no cambia nada.
   output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
+  // Redirecciones de ruta fija en la configuración: un redirect() dentro de la página llega ya con loading.tsx
+  // en curso, así que respondía 200 y recargaba la pantalla destino (dos cargas completas).
+  async redirects() {
+    return [{ source: "/customers/receivables", destination: "/accounting/receivables", permanent: false }];
+  },
   async headers() {
     // Only the headers proven safe with Cloudflare Turnstile on /login: the
     // CSP, X-Frame-Options and Permissions-Policy broke the login challenge

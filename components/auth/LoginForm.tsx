@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { ChevronRightIcon, MailIcon } from "lucide-react";
 import { WhatsappIcon } from "@/components/ui/whatsapp-icon";
 import { Button, buttonVariants } from "@/components/ui/button";

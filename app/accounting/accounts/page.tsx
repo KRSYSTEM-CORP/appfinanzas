@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { withTenantScope } from "@/lib/tenant-db";
 import { requireAccountingPlan, requirePermission, isManagerSession } from "@/lib/session";
 import { getAccountBalances, listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
@@ -20,15 +21,15 @@ export default async function AccountsPage({
   const me = await requirePermission("admin");
   // Solo el gerente agrega fondos o cambia cuentas (lo exige también el servidor).
   const canWrite = isManagerSession(me);
-  await requireAccountingPlan();
+  const planSession = await requireAccountingPlan();
   const params = await searchParams;
   const seg = parseSegMode(params.seg);
   const selection = parseDateRangeSelection(params, { kind: "preset", preset: "today" });
-  const [balances, accounts, { rate, exchangeRateEnabled, referenceCurrency }] = await Promise.all([
+  const [balances, accounts, { rate, exchangeRateEnabled, referenceCurrency }] = await withTenantScope(planSession.companyId, () => Promise.all([
     getAccountBalances(),
     listPaymentAccounts(),
     getExchangeRateInfo(),
-  ]);
+  ]));
   const byId = new Map(balances.map((b) => [b.id, b]));
   const rows: BankAccount[] = accounts.flatMap((a) => {
     const b = byId.get(a.id);

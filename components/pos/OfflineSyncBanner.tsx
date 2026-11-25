@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { Button } from "@/components/ui/button";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
 import { syncBackoffMs } from "@/lib/offline/backoff";

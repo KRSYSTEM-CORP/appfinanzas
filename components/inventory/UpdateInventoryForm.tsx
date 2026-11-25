@@ -214,7 +214,7 @@ export function UpdateInventoryForm() {
           producto internamente). El SKU es opcional, igual que al crear o editar un producto a
           mano. Las fotos no se cargan desde el Excel: súbelas en cada producto desde Inventario. Deja una columna en blanco para conservar el valor actual de ese campo.
         </p>
-        <div className="flex gap-2 mt-2">
+        <div className="flex flex-wrap gap-2 mt-2">
           <Button type="button" variant="outline" disabled={isExporting} onClick={handleExport}>
             {isExporting ? "Descargando..." : "Descargar inventario actual"}
           </Button>
@@ -234,7 +234,7 @@ export function UpdateInventoryForm() {
 
       {rows.length > 0 && (
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm">
               {validRows.length} fila{validRows.length === 1 ? "" : "s"} lista
               {validRows.length === 1 ? "" : "s"} para actualizar

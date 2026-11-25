@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { BellRingIcon, XIcon } from "lucide-react";
 
 const KEY = "kr-pos-renewal-dismissed";

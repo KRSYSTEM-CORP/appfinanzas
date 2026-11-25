@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { outsideScope, withTenantScope } from "@/lib/tenant-db";
+import Link from "@/components/ui/nav-link";
 import { aggregateByCurrency, formatCurrencyTotals } from "@/lib/currency-breakdown";
 import {
   AlertTriangleIcon,
@@ -91,10 +92,10 @@ export default async function BusinessHome({
   const session = await requireManager();
   const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
   const [{ rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency }, totals, netSales, cogsCents, expensesCents, commissionsCents, receivables, bestSellers, income, tasks, hours, latest, goalCents] =
-    await Promise.all([
+    await withTenantScope(session.companyId, () => Promise.all([
       getExchangeRateInfo(),
       revenueTotals(range),
-      netSalesCents(range).catch(() => null),
+      outsideScope(() => netSalesCents(range)).catch(() => null),
       costOfGoodsSold(range),
       expensesTotal(range),
       commissionsTotal(range),
@@ -105,7 +106,7 @@ export default async function BusinessHome({
       salesByHourToday(),
       latestSales(5),
       getProfitGoal(),
-    ]);
+    ]));
 
   const money = (c: number) => formatCurrencyCents(referenceCurrency, c);
   const revenue = totals.totalEurCents;

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { cn } from "@/lib/utils";
 
 // Fila de tarjetas de grupo de la preview (.groups / .gp): icono de marca 22px, título 16px/700 y

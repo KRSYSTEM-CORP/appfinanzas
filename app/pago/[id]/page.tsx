@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { notFound } from "next/navigation";
 import { verifyPaymentReportToken } from "@/lib/payment-link";
 import { PaymentPdfFrame } from "@/components/billing/PaymentPdfFrame";

@@ -62,47 +62,82 @@ export async function assertReceivingAccounts(tx: Tx, companyId: string, payment
 }
 
 export async function accountBalance(tx: Tx, companyId: string, a: AccountForBalance, currentRate: number | null): Promise<AccountBalance> {
-  // Cobros: los que se recibieron EN esta cuenta + los anteriores sin cuenta del método vinculado.
-  const pays = await tx.salePayment.findMany({
-    where: { ...collectedWhere(companyId, a), createdAt: { gte: a.balanceSince } },
-    select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
-  });
-  const collected = pays.reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0);
-  const [fundings, purchaseOut, payrollOut, expenseOut, outflowOut] = await Promise.all([
-    tx.accountFunding.aggregate({ where: { paymentAccountId: a.id, createdAt: { gte: a.balanceSince } }, _sum: { amountCents: true } }),
+  return (await accountBalances(tx, companyId, [a], currentRate)).get(a.id)!;
+}
+
+// Saldos de varias cuentas con 6 consultas en total (antes 6 por cuenta, una tras otra dentro de la transacción).
+// Trae las filas desde la fecha de inicio más antigua y reparte cada una en JS con el mismo criterio por cuenta
+// (balanceSince, método vinculado), así el resultado es idéntico al cálculo cuenta por cuenta.
+export async function accountBalances(
+  tx: Tx,
+  companyId: string,
+  accounts: AccountForBalance[],
+  currentRate: number | null
+): Promise<Map<string, AccountBalance>> {
+  const result = new Map<string, AccountBalance>();
+  if (accounts.length === 0) return result;
+  const ids = accounts.map((a) => a.id);
+  const since = new Date(Math.min(...accounts.map((a) => a.balanceSince.getTime())));
+  const methods = [...new Set(accounts.flatMap((a) => (a.linkedMethod ? [a.linkedMethod] : [])))];
+  const [pays, fundings, purchaseOut, payrollOut, expenseOut, outflowOut] = await Promise.all([
+    tx.salePayment.findMany({
+      where: {
+        sale: { companyId, OR: [{ voided: false }, { voided: true, cashOutflows: { some: {} } }] },
+        OR: [{ paymentAccountId: { in: ids } }, ...(methods.length ? [{ paymentAccountId: null, paymentMethod: { in: methods } }] : [])],
+        createdAt: { gte: since },
+      },
+      select: { paymentAccountId: true, paymentMethod: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
+    }),
+    tx.accountFunding.findMany({
+      where: { paymentAccountId: { in: ids }, createdAt: { gte: since } },
+      select: { paymentAccountId: true, createdAt: true, amountCents: true },
+    }),
     tx.purchasePayment.findMany({
-      where: { paymentAccountId: a.id, purchase: { companyId, voided: false }, createdAt: { gte: a.balanceSince } },
-      select: { amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
+      where: { paymentAccountId: { in: ids }, purchase: { companyId, voided: false }, createdAt: { gte: since } },
+      select: { paymentAccountId: true, createdAt: true, amountCurrencyCents: true, amountEurCents: true, currencyCode: true, exchangeRate: true },
     }),
     tx.payrollPayment.findMany({
-      where: { paymentAccountId: a.id, companyId, createdAt: { gte: a.balanceSince } },
-      select: { accountDebitCents: true, paidCents: true },
+      where: { paymentAccountId: { in: ids }, companyId, createdAt: { gte: since } },
+      select: { paymentAccountId: true, createdAt: true, accountDebitCents: true, paidCents: true },
     }),
     tx.expense.findMany({
-      where: { paymentAccountId: a.id, companyId, createdAt: { gte: a.balanceSince } },
-      select: { amountCents: true, localAmountCents: true, enteredInLocal: true },
+      where: { paymentAccountId: { in: ids }, companyId, createdAt: { gte: since } },
+      select: { paymentAccountId: true, createdAt: true, amountCents: true, localAmountCents: true, enteredInLocal: true },
     }),
     tx.cashOutflow.findMany({
-      where: { paymentAccountId: a.id, companyId, createdAt: { gte: a.balanceSince } },
-      select: { amountCents: true, amountCurrencyCents: true, currencyCode: true, exchangeRate: true },
+      where: { paymentAccountId: { in: ids }, companyId, createdAt: { gte: since } },
+      select: { paymentAccountId: true, createdAt: true, amountCents: true, amountCurrencyCents: true, currencyCode: true, exchangeRate: true },
     }),
   ]);
-  const funded = fundings._sum.amountCents ?? 0;
-  const purchases = purchaseOut.reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0);
-  const payroll = payrollOut.reduce((n, p) => n + payrollDebitCents(p, a.currency, currentRate), 0);
-  const expenses = expenseOut.reduce((n, e) => n + expenseDebitCents(e, a.currency, currentRate), 0);
-  const outflows = outflowOut.reduce((n, o) => n + outflowDebitCents(o, a.currency, currentRate), 0);
-  const paidOut = purchases + payroll + expenses + outflows;
-  return {
-    collectedCents: collected,
-    fundedCents: funded,
-    purchasesOutCents: purchases,
-    payrollOutCents: payroll,
-    expensesOutCents: expenses,
-    outflowsOutCents: outflows,
-    paidOutCents: paidOut,
-    balanceCents: a.openingCents + collected + funded - paidOut,
-  };
+  for (const a of accounts) {
+    const from = a.balanceSince.getTime();
+    const mine = <T extends { paymentAccountId: string | null; createdAt: Date }>(rows: T[]) =>
+      rows.filter((r) => r.paymentAccountId === a.id && r.createdAt.getTime() >= from);
+    const collected = pays
+      .filter(
+        (p) =>
+          p.createdAt.getTime() >= from &&
+          (p.paymentAccountId === a.id || (p.paymentAccountId === null && !!a.linkedMethod && p.paymentMethod === a.linkedMethod))
+      )
+      .reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0);
+    const funded = mine(fundings).reduce((n, f) => n + f.amountCents, 0);
+    const purchases = mine(purchaseOut).reduce((n, p) => n + lineInAccountCurrency(p, a.currency, currentRate), 0);
+    const payroll = mine(payrollOut).reduce((n, p) => n + payrollDebitCents(p, a.currency, currentRate), 0);
+    const expenses = mine(expenseOut).reduce((n, e) => n + expenseDebitCents(e, a.currency, currentRate), 0);
+    const outflows = mine(outflowOut).reduce((n, o) => n + outflowDebitCents(o, a.currency, currentRate), 0);
+    const paidOut = purchases + payroll + expenses + outflows;
+    result.set(a.id, {
+      collectedCents: collected,
+      fundedCents: funded,
+      purchasesOutCents: purchases,
+      payrollOutCents: payroll,
+      expensesOutCents: expenses,
+      outflowsOutCents: outflows,
+      paidOutCents: paidOut,
+      balanceCents: a.openingCents + collected + funded - paidOut,
+    });
+  }
+  return result;
 }
 
 function fmtAccountMoney(currency: string, cents: number): string {

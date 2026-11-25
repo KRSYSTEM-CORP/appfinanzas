@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon, ArrowDownIcon, ArrowUpIcon, RotateCcwIcon } from "lucide-react";
 import { getProductStockMovements } from "@/lib/actions/products";
