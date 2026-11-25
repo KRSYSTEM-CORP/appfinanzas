@@ -5,6 +5,7 @@ import { userErrorMessage } from "@/lib/user-error";
 import { z } from "zod";
 import { assertBranchAllowed, requireManager } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { bq, jsDate } from "@/lib/batch-sql";
 import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateCache } from "@/lib/cache";
 import type { ActionResult } from "@/lib/types";
@@ -37,14 +38,18 @@ export async function listTransferableProducts(branchId: string): Promise<Transf
 
 export async function listTransfers(limit = 50): Promise<TransferRow[]> {
   const { companyId } = await requireManager();
-  const rows = await withTenant(companyId, (tx) =>
-    tx.branchTransfer.findMany({
-      where: { companyId },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      include: { fromBranch: { select: { name: true } }, toBranch: { select: { name: true } }, items: true },
-    })
+  const rowsRaw = await withTenant(companyId, (tx) =>
+    bq<{ id: string; createdAt: string; note: string | null; createdByName: string; fromName: string; toName: string; items: { id: string; productName: string; quantity: number }[] }>(tx)`
+      SELECT t."id", t."createdAt", t."note", t."createdByName", fb."name" AS "fromName", tb."name" AS "toName",
+             COALESCE((SELECT json_agg(json_build_object('id', i."id", 'productName', i."productName", 'quantity', i."quantity") ORDER BY i."id")
+                       FROM "BranchTransferItem" i WHERE i."transferId" = t."id"), '[]'::json) AS "items"
+      FROM "BranchTransfer" t
+      JOIN "Branch" fb ON fb."id" = t."fromBranchId" JOIN "Branch" tb ON tb."id" = t."toBranchId"
+      WHERE t."companyId" = ${companyId}
+      ORDER BY t."createdAt" DESC
+      LIMIT ${limit}`
   );
+  const rows = rowsRaw.map((t) => ({ ...t, createdAt: jsDate(t.createdAt), fromBranch: { name: t.fromName }, toBranch: { name: t.toName } }));
   return rows.map((t) => ({
     id: t.id,
     createdAt: t.createdAt,
@@ -200,9 +205,7 @@ export type TransferSuggestion = {
 export async function listTransferSuggestions(): Promise<TransferSuggestion[]> {
   const { companyId } = await requireManager();
   const rows = await withTenant(companyId, (tx) =>
-    tx.$queryRaw<
-      { name: string; qty: number; from_name: string; to_name: string; from_stock: number; to_stock: number }[]
-    >`
+    bq<{ name: string; qty: number; from_name: string; to_name: string; from_stock: number; to_stock: number }>(tx)`
       SELECT p_to."name" AS name,
              LEAST(p_to."lowStockThreshold" * 2 - p_to."stock", p_from."stock" - p_from."lowStockThreshold")::int AS qty,
              b_from."name" AS from_name, b_to."name" AS to_name,

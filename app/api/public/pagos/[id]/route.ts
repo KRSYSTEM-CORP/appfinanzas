@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withSuperAdmin } from "@/lib/tenant-db";
+import { pickClientIp } from "@/lib/request-ip";
 import { checkRateLimit, recordFailedAttempt } from "@/lib/rate-limit";
 import { verifyPaymentReportToken } from "@/lib/payment-link";
 import { buildPaymentPDF } from "@/lib/payment-pdf";
@@ -9,7 +10,7 @@ import { PAYMENT_METHOD_LABEL, paymentConcept, paymentShortCode } from "@/lib/pa
 // del correo. A diferencia de las cotizaciones, además del id lleva una firma HMAC (?t=) porque incluye
 // datos de contacto y el comprobante; sin firma válida responde 404 como si no existiera.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = pickClientIp(request.headers.get("x-real-ip"), request.headers.get("x-forwarded-for"));
   const rl = await checkRateLimit("public-payment-pdf", ip, 30, 60_000);
   if (!rl.allowed) return new NextResponse("Demasiadas solicitudes, intenta de nuevo en un momento", { status: 429 });
   await recordFailedAttempt("public-payment-pdf", ip);

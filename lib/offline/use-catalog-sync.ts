@@ -41,6 +41,22 @@ function writeLastBranch(info: LastBranchInfo) {
 // router.refresh() from useLiveRefresh) — NOT on every local cart edit,
 // since those never touch these prop references. Best-effort, no loading
 // state or error surfaced to the user, same posture as queueSale.
+// Firma barata (FNV-1a) de lo que se guarda: productos (id, existencias, precio, versión) y el resto de campos.
+function catalogSignature(snap: CatalogSnapshot): string {
+  const { products, savedAt: _savedAt, ...rest } = snap;
+  void _savedAt;
+  let h = 0x811c9dc5;
+  const feed = (str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+  };
+  for (const p of products) feed(`${p.id}|${p.stock}|${p.priceCents}|${p.isActive}|${new Date(p.updatedAt).getTime()};`);
+  feed(JSON.stringify(rest));
+  return `${products.length}:${(h >>> 0).toString(36)}`;
+}
+
 export function useCatalogSync(params: {
   branchId: string | null;
   branchName: string | null;
@@ -91,7 +107,21 @@ export function useCatalogSync(params: {
     // El volcado a IndexedDB clona todo el catálogo: se hace cuando el navegador está libre,
     // no durante la hidratación (en teléfonos de gama baja era una tarea larga al abrir el POS).
     const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void };
-    const save = () => putCatalogSnapshot(snapshot);
+    // Si nada cambió desde el último volcado (misma firma, hace menos de 6 h) no se vuelve a
+    // clonar el catálogo completo: con miles de productos esa copia era una tarea larga en cada recarga.
+    const sigKey = `kr-pos-catalog-sig:${branchId}`;
+    const sig = catalogSignature(snapshot);
+    const save = () => {
+      try {
+        const prev = JSON.parse(localStorage.getItem(sigKey) ?? "null") as { sig: string; at: number } | null;
+        if (prev && prev.sig === sig && Date.now() - prev.at < 6 * 3600_000) return;
+      } catch {}
+      return putCatalogSnapshot(snapshot).then(() => {
+        try {
+          localStorage.setItem(sigKey, JSON.stringify({ sig, at: Date.now() }));
+        } catch {}
+      });
+    };
     if (w.requestIdleCallback) {
       const h = w.requestIdleCallback(save, { timeout: 4000 });
       return () => w.cancelIdleCallback?.(h);

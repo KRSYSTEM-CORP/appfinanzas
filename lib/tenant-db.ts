@@ -18,7 +18,15 @@ import { prisma } from "@/lib/prisma";
 // bulkImportProducts, so both are widened here.
 const TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 20_000 };
 
-const scope = new AsyncLocalStorage<{ companyId: string; tx: Prisma.TransactionClient; memo: Map<string, Promise<unknown>> }>();
+type ScopeStore = {
+  companyId: string;
+  memo: Map<string, Promise<unknown>>;
+  // La transacción se abre al primer withTenant de la empresa (si la pantalla no lee nada, no cuesta nada).
+  tx?: Promise<Prisma.TransactionClient>;
+  finish?: (error?: unknown) => Promise<void>;
+};
+
+const scope = new AsyncLocalStorage<ScopeStore>();
 
 // Dentro de withTenantScope (una sola lectura de pantalla) repite una consulta idéntica una sola vez.
 // Fuera del scope no memoriza nada.
@@ -41,10 +49,44 @@ export function outsideScope<T>(fn: () => Promise<T>): Promise<T> {
   return scope.run(undefined as unknown as NonNullable<ReturnType<typeof scope.getStore>>, fn);
 }
 
-export function withTenantScope<T>(companyId: string, fn: () => Promise<T>): Promise<T> {
+// Abre la transacción de la empresa y la deja abierta hasta que se llame a finish() (COMMIT) o finish(error) (ROLLBACK).
+function openSharedTx(st: ScopeStore): Promise<Prisma.TransactionClient> {
+  return new Promise<Prisma.TransactionClient>((resolveTx, rejectTx) => {
+    let release!: (error?: unknown) => void;
+    const done = new Promise<void>((res, rej) => {
+      release = (error?: unknown) => (error === undefined ? res() : rej(error));
+    });
+    const closed = prisma
+      .$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.company_id', ${st.companyId}, true)`;
+        resolveTx(tx);
+        await done;
+      }, TRANSACTION_OPTIONS)
+      .catch((e) => {
+        rejectTx(e);
+        throw e;
+      });
+    closed.catch(() => undefined);
+    st.finish = async (error?: unknown) => {
+      release(error);
+      await closed.catch(() => undefined);
+    };
+  });
+}
+
+export async function withTenantScope<T>(companyId: string, fn: () => Promise<T>): Promise<T> {
   // KR_NO_TENANT_SCOPE=1 apaga el reuso (sirve para comparar cifras antes/después en las pruebas).
   if (process.env.KR_NO_TENANT_SCOPE === "1") return fn();
-  return withTenant(companyId, (tx) => scope.run({ companyId, tx, memo: new Map() }, fn));
+  const st: ScopeStore = { companyId, memo: new Map() };
+  let result: T;
+  try {
+    result = await scope.run(st, fn);
+  } catch (e) {
+    if (st.finish) await st.finish(e instanceof Error ? e : new Error(String(e)));
+    throw e;
+  }
+  if (st.finish) await st.finish();
+  return result;
 }
 
 export async function withTenant<T>(
@@ -52,7 +94,10 @@ export async function withTenant<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>
 ): Promise<T> {
   const shared = scope.getStore();
-  if (shared && shared.companyId === companyId) return fn(shared.tx);
+  if (shared && shared.companyId === companyId) {
+    shared.tx ??= openSharedTx(shared);
+    return fn(await shared.tx);
+  }
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
     return fn(tx);

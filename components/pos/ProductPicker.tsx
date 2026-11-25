@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { productImageUrl, type ListedProduct } from "@/lib/product-image";
 import { SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,93 @@ import type { ReferenceCurrency } from "@prisma/client";
 
 const PAGE_SIZE = 90;
 const ALL_CATEGORIES = "__all__";
+
+// Tarjeta memoizada: al teclear en el buscador o cambiar el carrito solo se vuelven
+// a pintar las tarjetas cuyo producto o cantidad cambió, no las 90 visibles.
+const ProductCard = memo(function ProductCard({
+  p,
+  q,
+  allowOutOfStock,
+  referenceCurrency,
+  rate,
+  currencyCode,
+  exchangeRateEnabled,
+  onAdd,
+}: {
+  p: ListedProduct;
+  q: number;
+  allowOutOfStock: boolean;
+  referenceCurrency: ReferenceCurrency;
+  rate: number | null;
+  currencyCode: string;
+  exchangeRateEnabled: boolean;
+  onAdd: (product: ListedProduct) => void;
+}) {
+  const outOfStock = !allowOutOfStock && p.trackStock && p.stock <= 0;
+  const tint = `var(--chart-${(p.name.charCodeAt(0) % 5) + 1})`;
+  return (
+    <button
+      key={p.id}
+      type="button"
+      disabled={outOfStock}
+      onClick={() => onAdd(p)}
+      aria-label={`Agregar ${p.name}`}
+      style={{ contentVisibility: "auto", containIntrinsicSize: "auto 150px" }}
+      className={`relative flex flex-col items-start gap-1.5 rounded-[19px] border-2 bg-card p-3 text-left shadow-(--shadow-card) transition-[transform,border-color] duration-150 hover:-translate-y-0.5 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:active:scale-100 ${
+        q ? "border-primary" : "border-transparent"
+      }`}
+    >
+      {p.hasImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={productImageUrl(p) ?? undefined}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="size-11 flex-none rounded-[14px] object-cover"
+        />
+      ) : (
+        <span
+          className="grid size-11 flex-none place-items-center rounded-[14px] text-[17px] font-extrabold text-foreground"
+          style={{ background: `color-mix(in oklab, ${tint} 22%, var(--card))` }}
+          aria-hidden
+        >
+          {p.name.slice(0, 1).toUpperCase()}
+        </span>
+      )}
+      {q > 0 && (
+        <span className="absolute top-2.5 right-2.5 grid h-[26px] min-w-[26px] place-items-center rounded-full bg-primary px-[7px] text-[13px] font-extrabold text-primary-foreground">
+          {q}
+        </span>
+      )}
+      <b className="line-clamp-2 block min-h-9 text-sm leading-[1.25] font-bold">{p.name}</b>
+      <span className="flex flex-col">
+        <span className="text-[17px] font-extrabold tabular-nums">{formatCurrencyCents(referenceCurrency, p.priceCents)}</span>
+        {exchangeRateEnabled && rate != null && (
+          <small className="text-xs text-muted-foreground tabular-nums">
+            {formatLocalCurrency(eurCentsToLocal(p.priceCents, rate), currencyCode)}
+          </small>
+        )}
+      </span>
+      {p.trackStock && !outOfStock && (
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-xs font-bold ${
+            isLowStock(p) ? "bg-warning/18 text-warning" : "bg-success/14 text-success"
+          }`}
+        >
+          <span className="inline-block size-1.5 rounded-full bg-current" aria-hidden />
+          {p.stock} und.
+        </span>
+      )}
+      {outOfStock && (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/12 px-2.5 py-[3px] text-xs font-bold text-destructive">
+          <span className="inline-block size-1.5 rounded-full bg-current" aria-hidden />
+          Agotado
+        </span>
+      )}
+    </button>
+  );
+});
 
 export function ProductPicker({
   products,
@@ -48,6 +135,11 @@ export function ProductPicker({
   const deferredQuery = useDeferredValue(query);
   const [scanNotice, setScanNotice] = useState<ScanFeedback | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const onAddRef = useRef(onAdd);
+  useEffect(() => {
+    onAddRef.current = onAdd;
+  });
+  const stableAdd = useCallback((product: ListedProduct) => onAddRef.current(product), []);
 
   // Sin foco al entrar (en táctil taparía los productos); la tecla «/» enfoca el buscador.
   useEffect(() => {
@@ -61,15 +153,17 @@ export function ProductPicker({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Texto en minúsculas de cada producto, calculado una vez por catálogo y no en cada tecla.
+  const haystacks = useMemo(() => products.map((p) => `${p.name}\u0000${p.sku ?? ""}`.toLowerCase()), [products]);
   const filtered = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
-    return products.filter((p) => {
-      const matchesQuery =
-        !q || p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q);
+    if (!q && category === ALL_CATEGORIES) return products;
+    return products.filter((p, i) => {
+      const matchesQuery = !q || haystacks[i].includes(q);
       const matchesCategory = category === ALL_CATEGORIES || p.category === category;
       return matchesQuery && matchesCategory;
     });
-  }, [products, deferredQuery, category]);
+  }, [products, haystacks, deferredQuery, category]);
   const visible = useMemo(() => filtered.slice(0, limit), [filtered, limit]);
 
   // Adds a product found by scan or by Enter in the search box. Scanning must
@@ -168,73 +262,19 @@ export function ProductPicker({
         </div>
       )}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,158px),1fr))] gap-2.5 overflow-y-auto pr-1">
-        {visible.map((p) => {
-          const outOfStock = !allowOutOfStock && p.trackStock && p.stock <= 0;
-          const q = quantities?.[p.id] ?? 0;
-          const tint = `var(--chart-${(p.name.charCodeAt(0) % 5) + 1})`;
-          return (
-            <button
-              key={p.id}
-              type="button"
-              disabled={outOfStock}
-              onClick={() => onAdd(p)}
-              aria-label={`Agregar ${p.name}`}
-              style={{ contentVisibility: "auto", containIntrinsicSize: "auto 150px" }}
-              className={`relative flex flex-col items-start gap-1.5 rounded-[19px] border-2 bg-card p-3 text-left shadow-(--shadow-card) transition-[transform,border-color] duration-150 hover:-translate-y-0.5 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:active:scale-100 ${
-                q ? "border-primary" : "border-transparent"
-              }`}
-            >
-              {p.hasImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={productImageUrl(p) ?? undefined}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  className="size-11 flex-none rounded-[14px] object-cover"
-                />
-              ) : (
-                <span
-                  className="grid size-11 flex-none place-items-center rounded-[14px] text-[17px] font-extrabold text-foreground"
-                  style={{ background: `color-mix(in oklab, ${tint} 22%, var(--card))` }}
-                  aria-hidden
-                >
-                  {p.name.slice(0, 1).toUpperCase()}
-                </span>
-              )}
-              {q > 0 && (
-                <span className="absolute top-2.5 right-2.5 grid h-[26px] min-w-[26px] place-items-center rounded-full bg-primary px-[7px] text-[13px] font-extrabold text-primary-foreground">
-                  {q}
-                </span>
-              )}
-              <b className="line-clamp-2 block min-h-9 text-sm leading-[1.25] font-bold">{p.name}</b>
-              <span className="flex flex-col">
-                <span className="text-[17px] font-extrabold tabular-nums">{formatCurrencyCents(referenceCurrency, p.priceCents)}</span>
-                {exchangeRateEnabled && rate != null && (
-                  <small className="text-xs text-muted-foreground tabular-nums">
-                    {formatLocalCurrency(eurCentsToLocal(p.priceCents, rate), currencyCode)}
-                  </small>
-                )}
-              </span>
-              {p.trackStock && !outOfStock && (
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-xs font-bold ${
-                    isLowStock(p) ? "bg-warning/18 text-warning" : "bg-success/14 text-success"
-                  }`}
-                >
-                  <span className="inline-block size-1.5 rounded-full bg-current" aria-hidden />
-                  {p.stock} und.
-                </span>
-              )}
-              {outOfStock && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/12 px-2.5 py-[3px] text-xs font-bold text-destructive">
-                  <span className="inline-block size-1.5 rounded-full bg-current" aria-hidden />
-                  Agotado
-                </span>
-              )}
-            </button>
-          );
-        })}
+        {visible.map((p) => (
+          <ProductCard
+            key={p.id}
+            p={p}
+            q={quantities?.[p.id] ?? 0}
+            allowOutOfStock={allowOutOfStock}
+            referenceCurrency={referenceCurrency}
+            rate={rate}
+            currencyCode={currencyCode}
+            exchangeRateEnabled={exchangeRateEnabled}
+            onAdd={stableAdd}
+          />
+        ))}
         {filtered.length > visible.length && (
           <button
             type="button"

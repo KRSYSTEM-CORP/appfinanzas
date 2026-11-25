@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BrowserMultiFormatReader, type IScannerControls } from "@zxing/browser";
-import { BarcodeFormat, DecodeHintType } from "@zxing/library";
+import type { IScannerControls } from "@zxing/browser";
+import type { DecodeHintType } from "@zxing/library";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,17 +19,20 @@ import {
 export type ScanFeedback = { ok: boolean; message: string };
 
 // Only the formats retail products actually carry — decoding fewer formats is
-// faster and gives fewer false reads than trying everything.
-const FORMATS = [
-  BarcodeFormat.EAN_13,
-  BarcodeFormat.EAN_8,
-  BarcodeFormat.UPC_A,
-  BarcodeFormat.UPC_E,
-  BarcodeFormat.CODE_128,
-  BarcodeFormat.CODE_39,
-  BarcodeFormat.ITF,
-  BarcodeFormat.QR_CODE,
-];
+// faster and gives fewer false reads than trying everything. zxing (~480 KB) se
+// carga solo al abrir la cámara, no con el POS ni el formulario de producto.
+function scanFormats(BarcodeFormat: typeof import("@zxing/library").BarcodeFormat) {
+  return [
+    BarcodeFormat.EAN_13,
+    BarcodeFormat.EAN_8,
+    BarcodeFormat.UPC_A,
+    BarcodeFormat.UPC_E,
+    BarcodeFormat.CODE_128,
+    BarcodeFormat.CODE_39,
+    BarcodeFormat.ITF,
+    BarcodeFormat.QR_CODE,
+  ];
+}
 
 // A code held in front of the camera is decoded many times a second. Accept it
 // once, and accept the same code again only after the camera has NOT seen it
@@ -146,8 +149,13 @@ export function BarcodeScannerDialog({
           return;
         }
 
+        const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([
+          import("@zxing/browser"),
+          import("@zxing/library"),
+        ]);
+        if (cancelled) return;
         const hints = new Map<DecodeHintType, unknown>([
-          [DecodeHintType.POSSIBLE_FORMATS, FORMATS],
+          [DecodeHintType.POSSIBLE_FORMATS, scanFormats(BarcodeFormat)],
           [DecodeHintType.TRY_HARDER, true],
         ]);
         const reader = new BrowserMultiFormatReader(hints as Map<DecodeHintType, never>, {

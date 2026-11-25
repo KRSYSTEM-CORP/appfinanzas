@@ -14,6 +14,7 @@ import { getRequireCustomerOnSale } from "@/lib/actions/marketing";
 import { getDailyClosingSummary } from "@/lib/actions/cash-closing";
 import { CashClosedAlert } from "@/components/pos/CashClosedAlert";
 import { todayDateString } from "@/lib/report-types";
+import { outsideScope, withTenantScope } from "@/lib/tenant-db";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function PosPage({
     paymentAccounts,
     todaySummary,
     requireCustomer,
-  ] = await Promise.all([
+  ] = await withTenantScope(me.companyId, () => Promise.all([
     requireSession(),
     listActiveProducts(),
     getExchangeRateInfo(),
@@ -46,11 +47,23 @@ export default async function PosPage({
     getFiscalData(),
     getIvaSettings(),
     listPaymentAccounts(true),
-    getDailyClosingSummary(todayDateString()).catch(() => null),
-    getRequireCustomerOnSale().catch(() => false),
-  ]);
+    // Lecturas que se atrapan con .catch: su propia transacción, para que un error no aborte la de la pantalla.
+    outsideScope(() => getDailyClosingSummary(todayDateString())).catch(() => null),
+    outsideScope(() => getRequireCustomerOnSale()).catch(() => false),
+  ]));
   const { general: ivaGeneralRatePercent, reduced: ivaReducedRatePercent } = effectiveIvaRates(ivaEnabled, rawIvaGeneral, rawIvaReduced);
-  const shiftOpen: boolean | null = todaySummary && branchId ? todaySummary.shiftOpen : null;
+  // Turno nocturno: un turno de ayer que sigue abierto también deja vender hoy (igual que el servidor en completeSale).
+  let shiftOpen: boolean | null = todaySummary && branchId ? todaySummary.shiftOpen : null;
+  let overnightShift = false;
+  if (shiftOpen === false) {
+    const [y, m, d] = todayDateString().split("-").map(Number);
+    const yesterday = new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+    const yesterdaySummary = await getDailyClosingSummary(yesterday).catch(() => null);
+    if (yesterdaySummary?.shiftOpen) {
+      shiftOpen = true;
+      overnightShift = true;
+    }
+  }
   const company = { name: companyName, logoDataUrl, ...fiscalData };
 
   const quoteConversion = fromQuote ? await getQuoteForConversion(fromQuote) : null;
@@ -72,8 +85,8 @@ export default async function PosPage({
               </span>
             )}
             {todaySummary && (
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${todaySummary.shiftOpen ? "bg-success/14 text-success" : todaySummary.closed ? "bg-muted text-muted-foreground" : "bg-warning/18 text-warning"}`}>
-                {todaySummary.shiftOpen ? "Caja abierta" : todaySummary.closed ? "Caja cerrada" : "Caja sin abrir"}
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${todaySummary.shiftOpen || overnightShift ? "bg-success/14 text-success" : todaySummary.closed ? "bg-muted text-muted-foreground" : "bg-warning/18 text-warning"}`}>
+                {todaySummary.shiftOpen ? "Caja abierta" : overnightShift ? "Turno de ayer abierto" : todaySummary.closed ? "Caja cerrada" : "Caja sin abrir"}
               </span>
             )}
             <PosSalesSheet referenceCurrency={referenceCurrency} />

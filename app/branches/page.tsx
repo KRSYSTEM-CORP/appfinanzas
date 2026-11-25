@@ -4,6 +4,7 @@ import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { BranchCards } from "@/components/branches/BranchCards";
 import { branchOverview } from "@/lib/actions/branches";
 import { requireManagerPermission } from "@/lib/session";
+import { withTenantScope } from "@/lib/tenant-db";
 import { branchLimitMessage, getPlan } from "@/lib/plans";
 import Link from "@/components/ui/nav-link";
 import { PlusIcon } from "lucide-react";
@@ -15,12 +16,12 @@ export const dynamic = "force-dynamic";
 
 export default async function BranchesPage() {
   const session = await requireManagerPermission("branches");
-  const [{ summaries, currency }, suggestions, transfers, { exchangeRateEnabled }] = await Promise.all([
+  const [{ summaries, currency }, suggestions, transfers, { exchangeRateEnabled }] = await withTenantScope(session.companyId, () => Promise.all([
     branchOverview(),
     listTransferSuggestions(),
     listTransfers(5),
     getExchangeRateInfo(),
-  ]);
+  ]));
   const planDef = getPlan(session.plan);
   const atLimit = !session.isSuperAdmin && planDef.maxBranches != null && summaries.length >= planDef.maxBranches;
   const now = new Date();

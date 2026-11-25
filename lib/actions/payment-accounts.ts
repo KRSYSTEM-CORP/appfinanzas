@@ -9,6 +9,7 @@ import type { PaymentAccountKind } from "@prisma/client";
 import { defaultCurrencyForKind } from "@/lib/account-money";
 import { accountMovementsList, type AccountMovement } from "@/lib/account-movements";
 import { accountBalances, currentRateOf } from "@/lib/account-balance";
+import { loadPaymentAccounts } from "@/lib/account-queries";
 import { normalizeBankSiteUrl } from "@/lib/bank-sites";
 
 export type PaymentAccountRow = {
@@ -38,16 +39,13 @@ const AccountSchema = z.object({
 // Todos los usuarios de la empresa los ven (el POS los muestra al cobrar).
 export async function listPaymentAccounts(onlyActive = true): Promise<PaymentAccountRow[]> {
   const { companyId } = await requireSession();
-  return withTenant(companyId, (tx) =>
-    tx.paymentAccount.findMany({
-      where: { companyId, ...(onlyActive ? { active: true } : {}) },
-      orderBy: [{ active: "desc" }, { createdAt: "asc" }],
-      select: {
-        id: true, kind: true, bankKey: true, bankName: true, holder: true,
-        accountNumber: true, docId: true, note: true, active: true, websiteUrl: true,
-      },
-    })
-  );
+  return withTenant(companyId, async (tx) => {
+    const rows = await loadPaymentAccounts(tx, companyId, { onlyActive });
+    return rows.map((a) => ({
+      id: a.id, kind: a.kind, bankKey: a.bankKey, bankName: a.bankName, holder: a.holder,
+      accountNumber: a.accountNumber, docId: a.docId, note: a.note, active: a.active, websiteUrl: a.websiteUrl,
+    }));
+  });
 }
 
 export type SourceAccountRow = { id: string; label: string; currency: string; kind: PaymentAccountKind; balanceCents: number };
@@ -57,8 +55,7 @@ export type SourceAccountRow = { id: string; label: string; currency: string; ki
 export async function listSourceAccounts(includePos = false): Promise<SourceAccountRow[]> {
   const { companyId } = await requireManagerOrPermission("admin", "purchases");
   return withTenant(companyId, async (tx) => {
-    const rate = await currentRateOf(tx, companyId);
-    const rows = await tx.paymentAccount.findMany({ where: { companyId, active: true, ...(includePos ? {} : { kind: { not: "PUNTO_DE_VENTA" as const } }) }, orderBy: { createdAt: "asc" } });
+    const [rate, rows] = await Promise.all([currentRateOf(tx, companyId), loadPaymentAccounts(tx, companyId, { excludePos: !includePos })]);
     const out: SourceAccountRow[] = [];
     const balances = await accountBalances(tx, companyId, rows, rate);
     for (const a of rows) {
@@ -149,8 +146,7 @@ export type AccountBalanceRow = {
 export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
   const { companyId } = await requireManagerOrPermission("admin");
   return withTenant(companyId, async (tx) => {
-    const accounts = await tx.paymentAccount.findMany({ where: { companyId, active: true }, orderBy: { createdAt: "asc" } });
-    const currentRate = await currentRateOf(tx, companyId);
+    const [accounts, currentRate] = await Promise.all([loadPaymentAccounts(tx, companyId), currentRateOf(tx, companyId)]);
     const rows: AccountBalanceRow[] = [];
     const balances = await accountBalances(tx, companyId, accounts, currentRate);
     for (const a of accounts) {

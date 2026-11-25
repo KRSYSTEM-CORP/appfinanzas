@@ -1,4 +1,5 @@
 import { requireAdminAccess } from "@/lib/session";
+import { withTenantScope } from "@/lib/tenant-db";
 import { BookOpenIcon, PackageIcon, PercentIcon, ReceiptTextIcon } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PurchasesBookList, SalesBookList } from "@/components/finance/TaxBookLists";
@@ -21,18 +22,18 @@ export default async function TaxBookPage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string; from?: string; to?: string; libro?: string }>;
 }) {
-  await requireAdminAccess();
+  const me = await requireAdminAccess();
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
 
-  const [sales, purchases, creditNotes, debitNotes, { referenceCurrency }, { ivaEnabled }] = await Promise.all([
+  const [sales, purchases, creditNotes, debitNotes, { referenceCurrency }, { ivaEnabled }] = await withTenantScope(me.companyId, () => Promise.all([
     getSalesTaxBook(range),
     getPurchasesTaxBook(range),
     getCreditNotesTaxBook(range),
     getDebitNotesTaxBook(range),
     getExchangeRateInfo(),
     getIvaSettings(),
-  ]);
+  ]));
 
   const salesTotals = sales.reduce(
     (acc, s) => ({

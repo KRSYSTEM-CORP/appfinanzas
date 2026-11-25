@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireManager, requireSession, setSessionCookie } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { bq } from "@/lib/batch-sql";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { branchLimitError } from "@/lib/plan-limits";
 import { hashPassword, verifyPassword } from "@/lib/password";
@@ -176,9 +177,10 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
   const { start, end } = dayBoundsUtc(todayDateString());
   const monthStart = dayBoundsUtc(`${todayDateString().slice(0, 7)}-01`).start;
   return withTenant(companyId, async (tx) => {
-    const [branches, company] = await Promise.all([
-      tx.branch.findMany({ where: { companyId }, orderBy: { createdAt: "asc" } }),
-      tx.company.findUnique({ where: { id: companyId }, select: { referenceCurrency: true } }),
+    const [branches, [company]] = await Promise.all([
+      bq<{ id: string; name: string; isActive: boolean; monthlyGoalCents: number | null }>(tx)`
+        SELECT "id", "name", "isActive", "monthlyGoalCents" FROM "Branch" WHERE "companyId" = ${companyId} ORDER BY "createdAt" ASC`,
+      bq<{ referenceCurrency: string }>(tx)`SELECT "referenceCurrency"::text AS "referenceCurrency" FROM "Company" WHERE "id" = ${companyId}`,
     ]);
     const summaries = await Promise.all(
       branches.map(async (b) => {
@@ -189,38 +191,33 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
           monthWindows.length === 0
             ? Prisma.sql`FALSE`
             : Prisma.sql`(${Prisma.join(monthWindows.map((w) => Prisma.sql`(${Prisma.raw(col)} >= ${w.start} AND ${Prisma.raw(col)} < ${w.end})`), " OR ")})`;
-        const [sales, products, users, month, low, cogs, expenses, commissions, net] = await Promise.all([
-          tx.sale.aggregate({
-            where: { companyId, branchId: b.id, voided: false, createdAt: { gte: start, lt: end } },
-            _sum: { totalCents: true },
-            _count: true,
-          }),
-          tx.product.count({ where: { companyId, branchId: b.id } }),
-          tx.user.count({ where: { companyId, branchId: b.id, status: "ACTIVE" } }),
+        const [salesRows, [{ products }], [{ users }], monthRows, low, cogs, expenseRows, commissions, net] = await Promise.all([
+          bq<{ total: number | null; n: number }>(tx)`
+            SELECT SUM("totalCents")::bigint AS total, COUNT(*)::bigint AS n FROM "Sale"
+            WHERE "companyId" = ${companyId} AND "branchId" = ${b.id} AND "voided" = false AND "createdAt" >= ${start} AND "createdAt" < ${end}`,
+          bq<{ products: number }>(tx)`SELECT COUNT(*)::int AS products FROM "Product" WHERE "companyId" = ${companyId} AND "branchId" = ${b.id}`,
+          bq<{ users: number }>(tx)`SELECT COUNT(*)::int AS users FROM "User" WHERE "companyId" = ${companyId} AND "branchId" = ${b.id} AND "status"::text = 'ACTIVE'`,
           monthWindows.length === 0
-            ? Promise.resolve({ _sum: { totalCents: 0 }, _count: 0 })
-            : tx.sale.aggregate({
-                where: { companyId, branchId: b.id, voided: false, OR: monthWindows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })) },
-                _sum: { totalCents: true },
-                _count: true,
-              }),
-          tx.$queryRaw<{ n: bigint }[]>`
+            ? Promise.resolve([{ total: 0 as number | null, n: 0 }])
+            : bq<{ total: number | null; n: number }>(tx)`
+                SELECT SUM("totalCents")::bigint AS total, COUNT(*)::bigint AS n FROM "Sale"
+                WHERE "companyId" = ${companyId} AND "branchId" = ${b.id} AND "voided" = false AND ${inMonth('"createdAt"')}`,
+          bq<{ n: bigint }>(tx)`
             SELECT COUNT(*)::bigint AS n FROM "Product"
             WHERE "companyId" = ${companyId} AND "branchId" = ${b.id} AND "isActive" = true
               AND "trackStock" = true AND "stock" <= "lowStockThreshold"`,
-          tx.$queryRaw<{ c: bigint | null }[]>`
+          bq<{ c: bigint | null }>(tx)`
             SELECT COALESCE(SUM(si."quantity" * p."costCents"), 0)::bigint AS c
             FROM "SaleItem" si
             JOIN "Sale" s ON s.id = si."saleId"
             JOIN "Product" p ON p.id = si."productId"
             WHERE s."companyId" = ${companyId} AND s."branchId" = ${b.id} AND s."voided" = false
               AND ${inMonth('s."createdAt"')} AND p."costCents" IS NOT NULL`,
-          tx.expense.aggregate({
-            _sum: { amountCents: true },
-            where: { companyId, branchId: b.id, spentAt: { gte: monthStart, lt: end } },
-          }),
+          bq<{ total: number | null }>(tx)`
+            SELECT SUM("amountCents")::bigint AS total FROM "Expense"
+            WHERE "companyId" = ${companyId} AND "branchId" = ${b.id} AND "spentAt" >= ${monthStart} AND "spentAt" < ${end}`,
           // Comisiones de vendedores sobre las ventas del mes en esta sede.
-          tx.$queryRaw<{ c: number | null }[]>`
+          bq<{ c: number | null }>(tx)`
             SELECT COALESCE(SUM(s."totalCents" * u."commissionPercent" / 100), 0)::float8 AS c
             FROM "Sale" s
             JOIN "User" u ON u.id = s."sellerId"
@@ -228,13 +225,16 @@ export async function branchOverview(): Promise<{ summaries: BranchSummary[]; cu
               AND u."commissionPercent" IS NOT NULL
               AND ${inMonth('s."createdAt"')}`,
           // Ventas netas (sin IVA): la base de la utilidad, como en Administración.
-          tx.$queryRaw<{ n: bigint | null }[]>`
+          bq<{ n: bigint | null }>(tx)`
             SELECT COALESCE(SUM(si."baseCents"), 0)::bigint AS n
             FROM "SaleItem" si
             JOIN "Sale" s ON s.id = si."saleId"
             WHERE s."companyId" = ${companyId} AND s."branchId" = ${b.id} AND s."voided" = false
               AND ${inMonth('s."createdAt"')}`,
         ]);
+        const sales = { _count: Number(salesRows[0]?.n ?? 0), _sum: { totalCents: Number(salesRows[0]?.total ?? 0) } };
+        const month = { _count: Number(monthRows[0]?.n ?? 0), _sum: { totalCents: Number(monthRows[0]?.total ?? 0) } };
+        const expenses = { _sum: { amountCents: Number(expenseRows[0]?.total ?? 0) } };
         const cogsCents = Number(cogs[0]?.c ?? 0);
         const expensesCents = expenses._sum.amountCents ?? 0;
         const commissionsCents = Math.round(Number(commissions[0]?.c ?? 0));

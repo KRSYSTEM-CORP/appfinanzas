@@ -3,7 +3,8 @@
 import { Prisma } from "@prisma/client";
 import { requireManager, requireManagerOrPermission } from "@/lib/session";
 import { RESTOCK_WINDOW_DAYS, restockPlan } from "@/lib/restock";
-import { withTenant } from "@/lib/tenant-db";
+import { bq } from "@/lib/batch-sql";
+import { scopeMemo, withTenant } from "@/lib/tenant-db";
 import { closedDayWindows } from "@/lib/closed-days";
 import {
   comparisonWindows,
@@ -27,12 +28,17 @@ function windowsSql(column: string, windows: { start: Date; end: Date }[]): Pris
   return Prisma.sql`(${Prisma.join(parts, " OR ")})`;
 }
 
-async function getCurrentRate(tx: Prisma.TransactionClient, companyId: string): Promise<number> {
-  const company = await tx.company.findUnique({
-    where: { id: companyId },
-    select: { exchangeRate: true },
+// Tasa actual de la empresa (0 si no hay). Una lectura por pantalla y viaja agrupada con las demás.
+function getCurrentRate(tx: Prisma.TransactionClient, companyId: string): Promise<number> {
+  return scopeMemo(`crate:${companyId}`, async () => {
+    const [row] = await bq<{ rate: number | null }>(tx)`SELECT "exchangeRate"::float8 AS rate FROM "Company" WHERE "id" = ${companyId}`;
+    return row?.rate != null ? Number(row.rate) : 0;
   });
-  return company?.exchangeRate != null ? Number(company.exchangeRate) : 0;
+}
+
+// Misma tasa como subconsulta, para las consultas que la usan dentro del SQL (sin esperar a leerla antes).
+function rateSql(companyId: string): Prisma.Sql {
+  return Prisma.sql`(SELECT COALESCE("exchangeRate"::float8, 0) FROM "Company" WHERE "id" = ${companyId})`;
 }
 
 export async function revenueTotals(range: DateRangeSelection) {
@@ -45,38 +51,26 @@ export async function revenueTotals(range: DateRangeSelection) {
       return { totalEurCents: 0, totalVES: 0, count: 0, avgEurCents: 0 };
     }
 
-    const currentRate = await getCurrentRate(tx, companyId);
-
-    const result = await tx.sale.aggregate({
-      _sum: { totalCents: true },
-      _count: true,
-      where: {
-        companyId,
-        ...(branchId ? { branchId } : {}),
-        OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
-        voided: false,
-      },
-    });
-    const totalEurCents = result._sum.totalCents ?? 0;
-    const count = result._count;
-
     // Sums each sale's own historical rate — except a credit sale that has
     // since been collected, which uses the rate in effect on the day it was
     // actually paid (paidExchangeRate), so this total stays reconciled with
     // what was actually collected instead of the stale rate at sale time.
     // Falls back to the company's current rate for pre-feature sales with no
-    // snapshot at all.
-    const [vesRow] = await tx.$queryRaw<{ ves_total: number | null }[]>`
-      SELECT COALESCE(SUM("totalCents"::numeric * COALESCE("paidExchangeRate", "exchangeRate", ${currentRate}) / 100), 0) AS ves_total
+    // snapshot at all. Total, cantidad y bolívares en una sola pasada por las ventas.
+    const [row] = await bq<{ total: number | null; n: number; ves_total: number | null }>(tx)`
+      SELECT SUM("totalCents")::bigint AS total, COUNT(*)::bigint AS n,
+             COALESCE(SUM("totalCents"::numeric * COALESCE("paidExchangeRate", "exchangeRate", ${rateSql(companyId)}) / 100), 0) AS ves_total
       FROM "Sale"
       WHERE "companyId" = ${companyId}
         ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
         AND ${windowsSql('"createdAt"', windows)} AND "voided" = false
     `;
+    const totalEurCents = Number(row?.total ?? 0);
+    const count = Number(row?.n ?? 0);
 
     return {
       totalEurCents,
-      totalVES: Number(vesRow?.ves_total ?? 0),
+      totalVES: Number(row?.ves_total ?? 0),
       count,
       avgEurCents: count > 0 ? Math.round(totalEurCents / count) : 0,
     };
@@ -97,17 +91,14 @@ export async function revenueComparison(range: DateRangeSelection) {
     async function closedRevenue(windows: { start: Date; end: Date }[]) {
       const closed = await closedDayWindows(tx, companyId, branchId, windows);
       if (closed.length === 0) return { cents: 0, count: 0, days: 0 };
-      const result = await tx.sale.aggregate({
-        _sum: { totalCents: true },
-        _count: true,
-        where: {
-          companyId,
-          ...(branchId ? { branchId } : {}),
-          OR: closed.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
-          voided: false,
-        },
-      });
-      return { cents: result._sum.totalCents ?? 0, count: result._count, days: closed.length };
+      const [row] = await bq<{ total: number | null; n: number }>(tx)`
+        SELECT SUM("totalCents")::bigint AS total, COUNT(*)::bigint AS n
+        FROM "Sale"
+        WHERE "companyId" = ${companyId}
+          ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+          AND ${windowsSql('"createdAt"', closed)} AND "voided" = false
+      `;
+      return { cents: Number(row?.total ?? 0), count: Number(row?.n ?? 0), days: closed.length };
     }
     const [current, previous] = await Promise.all([closedRevenue(currentWindows), closedRevenue(comparison.windows)]);
     return {
@@ -126,16 +117,17 @@ export async function receivablesTotals() {
   const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
 
   return withTenant(companyId, async (tx) => {
-    const currentRate = await getCurrentRate(tx, companyId);
-
-    const creditWhere = { companyId, ...(branchId ? { branchId } : {}), voided: false, paymentStatus: "CREDIT" as const };
-    const [result, paid] = await Promise.all([
-      tx.sale.aggregate({ _sum: { totalCents: true }, _count: true, where: creditWhere }),
-      // Lo que ya se abonó a esas ventas: «por cobrar» es el saldo pendiente, igual que en Cuentas por cobrar.
-      tx.salePayment.aggregate({ _sum: { amountEurCents: true }, where: { sale: creditWhere } }),
-    ]);
-    const totalEurCents = Math.max(0, (result._sum.totalCents ?? 0) - (paid._sum.amountEurCents ?? 0));
-    const count = result._count;
+    // Ventas a crédito pendientes y lo ya abonado a ellas («por cobrar» es el saldo pendiente, igual que
+    // en Cuentas por cobrar): las dos sumas en una sola sentencia.
+    const branchSql = branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty;
+    const [currentRate, [row]] = await Promise.all([getCurrentRate(tx, companyId), bq<{ total: number | null; n: number; paid: number | null }>(tx)`
+      SELECT (SELECT SUM(s."totalCents") FROM "Sale" s WHERE s."companyId" = ${companyId} ${branchSql} AND s."voided" = false AND s."paymentStatus"::text = 'CREDIT')::bigint AS total,
+             (SELECT COUNT(*) FROM "Sale" s WHERE s."companyId" = ${companyId} ${branchSql} AND s."voided" = false AND s."paymentStatus"::text = 'CREDIT')::bigint AS n,
+             (SELECT SUM(sp."amountEurCents") FROM "SalePayment" sp JOIN "Sale" s ON s."id" = sp."saleId"
+               WHERE s."companyId" = ${companyId} ${branchSql} AND s."voided" = false AND s."paymentStatus"::text = 'CREDIT')::bigint AS paid
+    `]);
+    const totalEurCents = Math.max(0, Number(row?.total ?? 0) - Number(row?.paid ?? 0));
+    const count = Number(row?.n ?? 0);
 
     // Unlike settled sales, an outstanding credit balance isn't worth a fixed
     // amount of bolívares until it's collected — always value it at today's
@@ -158,16 +150,12 @@ export async function salesByDay(range: DateRangeSelection): Promise<SalesByDayP
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return [];
 
-    const currentRate = await getCurrentRate(tx, companyId);
-
     // "createdAt" is stored as a naive UTC timestamp; convert to the shop's local
     // timezone before truncating so a day bucket matches the shop's actual business day.
-    return tx.$queryRaw<
-      { day: Date; totalEurCents: bigint; totalVES: number; count: bigint }[]
-    >`
+    return bq<{ day: string; totalEurCents: number; totalVES: number; count: number }>(tx)`
       SELECT DATE_TRUNC('day', "createdAt" AT TIME ZONE 'UTC' AT TIME ZONE ${SHOP_TIME_ZONE})::date AS day,
              SUM("totalCents")::bigint AS "totalEurCents",
-             COALESCE(SUM("totalCents"::numeric * COALESCE("paidExchangeRate", "exchangeRate", ${currentRate}) / 100), 0) AS "totalVES",
+             COALESCE(SUM("totalCents"::numeric * COALESCE("paidExchangeRate", "exchangeRate", ${rateSql(companyId)}) / 100), 0) AS "totalVES",
              COUNT(*)::bigint AS count
       FROM "Sale"
       WHERE "companyId" = ${companyId}
@@ -179,11 +167,8 @@ export async function salesByDay(range: DateRangeSelection): Promise<SalesByDayP
   });
 
   return rows.map((r) => ({
-    // `date` columns come back as a UTC-midnight JS Date; read the Y-M-D with
-    // UTC getters to avoid re-shifting the day in the server/client's own timezone.
-    day: `${r.day.getUTCFullYear()}-${String(r.day.getUTCMonth() + 1).padStart(2, "0")}-${String(
-      r.day.getUTCDate()
-    ).padStart(2, "0")}`,
+    // La columna `date` llega como «YYYY-MM-DD».
+    day: r.day.slice(0, 10),
     totalEurCents: Number(r.totalEurCents),
     totalVES: Number(r.totalVES),
     count: Number(r.count),
@@ -207,7 +192,7 @@ export async function incomeByCurrency(range: DateRangeSelection): Promise<Curre
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return [];
 
-    const rows = await tx.$queryRaw<{ currency: string; total_cents: bigint }[]>`
+    const rows = await bq<{ currency: string; total_cents: bigint }>(tx)`
       SELECT COALESCE(
                sp."currencyCode",
                CASE WHEN sp."paymentMethod"::text IN ('ZELLE', 'BINANCE', 'PAYPAL') THEN 'USD' ELSE 'EUR' END
@@ -232,27 +217,25 @@ export async function topProducts(range: DateRangeSelection, limit = 10): Promis
   const grouped = await withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return [];
-    return tx.saleItem.groupBy({
-      by: ["productId", "productName", "category"],
-      where: {
-        sale: {
-          companyId,
-          ...(branchId ? { branchId } : {}),
-          OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
-          voided: false,
-        },
-      },
-      _sum: { quantity: true, subtotalCents: true },
-      orderBy: { _sum: { quantity: "desc" } },
-      take: limit,
-    });
+    return bq<{ productId: string | null; productName: string; category: string | null; quantity: number; revenue: number }>(tx)`
+      SELECT si."productId", si."productName", si."category",
+             SUM(si."quantity")::bigint AS quantity, SUM(si."subtotalCents")::bigint AS revenue
+      FROM "SaleItem" si
+      JOIN "Sale" s ON s."id" = si."saleId"
+      WHERE s."companyId" = ${companyId}
+        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+        AND ${windowsSql('s."createdAt"', windows)} AND s."voided" = false
+      GROUP BY si."productId", si."productName", si."category"
+      ORDER BY SUM(si."quantity") DESC
+      LIMIT ${limit}
+    `;
   });
   return grouped.map((g) => ({
     productId: g.productId,
     productName: g.productName,
     category: g.category,
-    quantity: g._sum.quantity ?? 0,
-    revenueCents: g._sum.subtotalCents ?? 0,
+    quantity: Number(g.quantity),
+    revenueCents: Number(g.revenue),
   }));
 }
 
@@ -272,7 +255,7 @@ export async function bottomProducts(range: DateRangeSelection, limit = 10): Pro
     // all of them, same as if none had sold.
     const saleMatch = windows.length === 0 ? Prisma.sql`FALSE` : windowsSql('"createdAt"', windows);
 
-    return tx.$queryRaw<{ id: string; name: string; category: string | null; quantity: bigint }[]>`
+    return bq<{ id: string; name: string; category: string | null; quantity: bigint }>(tx)`
       SELECT p.id, p.name, p.category,
              COALESCE(SUM(si.quantity), 0)::bigint AS quantity
       FROM "Product" p
@@ -304,7 +287,7 @@ export async function salesByPaymentMethod(range: DateRangeSelection): Promise<P
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return [];
-    const rows = await tx.$queryRaw<{ method: string; total: bigint; n: bigint }[]>`
+    const rows = await bq<{ method: string; total: bigint; n: bigint }>(tx)`
       SELECT sp."paymentMethod"::text AS method,
              SUM(sp."amountEurCents")::bigint AS total,
              COUNT(*)::bigint AS n
@@ -330,7 +313,7 @@ export async function mostPurchasedProducts(range: DateRangeSelection, limit = 1
   const windows = selectionToWindows(range);
   if (windows.length === 0) return [];
   return withTenant(companyId, async (tx) => {
-    const rows = await tx.$queryRaw<{ name: string; qty: bigint; cents: bigint }[]>`
+    const rows = await bq<{ name: string; qty: bigint; cents: bigint }>(tx)`
       SELECT pi."productName" AS name,
              SUM(pi."quantity")::bigint AS qty,
              SUM(pi."subtotalCents")::bigint AS cents
@@ -359,7 +342,7 @@ export async function inventoryRotation(range: DateRangeSelection, limit = 10): 
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return [];
-    const rows = await tx.$queryRaw<{ name: string; sold: bigint; stock: number }[]>`
+    const rows = await bq<{ name: string; sold: bigint; stock: number }>(tx)`
       SELECT pr."name" AS name, SUM(si."quantity")::bigint AS sold, pr."stock" AS stock
       FROM "Product" pr
       JOIN "SaleItem" si ON si."productId" = pr.id
@@ -390,7 +373,7 @@ export async function customerMix(range: DateRangeSelection): Promise<CustomerMi
   const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const windows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
-    const rows = await tx.$queryRaw<{ new_n: bigint; ret_n: bigint }[]>`
+    const rows = await bq<{ new_n: bigint; ret_n: bigint }>(tx)`
       WITH inrange AS (
         SELECT DISTINCT s."customerId"
         FROM "Sale" s
@@ -442,7 +425,7 @@ export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]
   const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const since = new Date(Date.now() - RESTOCK_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   return withTenant(companyId, async (tx) => {
-    const rows = await tx.$queryRaw<{ id: string; name: string; stock: number; cost: number | null; min_stock: number; sold: bigint; active_days: number }[]>`
+    const rows = await bq<{ id: string; name: string; stock: number; cost: number | null; min_stock: number; sold: bigint; active_days: number }>(tx)`
       SELECT pr.id, pr."name" AS name, pr."stock" AS stock, pr."costCents" AS cost, pr."lowStockThreshold" AS min_stock, SUM(si."quantity")::bigint AS sold,
              LEAST(${RESTOCK_WINDOW_DAYS}, GREATEST(1, CEIL(EXTRACT(EPOCH FROM (NOW() - GREATEST(${since}::timestamptz, pr."createdAt"))) / 86400.0)))::float AS active_days
       FROM "Product" pr
@@ -490,28 +473,28 @@ export async function periodExtras(range: DateRangeSelection): Promise<PeriodExt
     const closed = await closedDayWindows(tx, companyId, branchId, comparison.windows);
     const [sales, expenses] = await Promise.all([
       closed.length === 0
-        ? Promise.resolve({ _sum: { totalCents: 0 as number | null }, _count: 0 })
-        : tx.sale.aggregate({
-            _sum: { totalCents: true },
-            _count: true,
-            where: {
-              companyId,
-              ...(branchId ? { branchId } : {}),
-              OR: closed.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
-              voided: false,
-            },
-          }),
-      tx.expense.aggregate({
-        _sum: { amountCents: true },
-        where: { companyId, ...(branchId ? { branchId } : {}), OR: comparison.windows.map((w) => ({ spentAt: { gte: w.start, lt: w.end } })) },
-      }),
+        ? Promise.resolve([{ total: 0 as number | null, n: 0 }])
+        : bq<{ total: number | null; n: number }>(tx)`
+            SELECT SUM("totalCents")::bigint AS total, COUNT(*)::bigint AS n
+            FROM "Sale"
+            WHERE "companyId" = ${companyId}
+              ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+              AND ${windowsSql('"createdAt"', closed)} AND "voided" = false
+          `,
+      bq<{ total: number | null }>(tx)`
+        SELECT SUM("amountCents")::bigint AS total
+        FROM "Expense"
+        WHERE "companyId" = ${companyId}
+          ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+          AND ${windowsSql('"spentAt"', comparison.windows)}
+      `,
     ]);
-    const count = sales._count;
-    const cents = sales._sum.totalCents ?? 0;
+    const count = Number(sales[0]?.n ?? 0);
+    const cents = Number(sales[0]?.total ?? 0);
     return {
       prevCount: count,
       prevAvgCents: count > 0 ? Math.round(cents / count) : 0,
-      prevExpensesCents: expenses._sum.amountCents ?? 0,
+      prevExpensesCents: Number(expenses[0]?.total ?? 0),
       prevDays: closed.length,
       label: comparison.label,
     };
@@ -540,21 +523,23 @@ export async function weeklyReports(): Promise<WeeklyRow[]> {
       const to = addDaysStr(from, 6);
       return { from, to };
     });
+    // Las 4 semanas en una sola sentencia agrupada.
     return Promise.all(
       weeks.map(async (w) => {
         const start = dayBoundsUtc(w.from).start;
         const end = dayBoundsUtc(w.to).end;
-        const r = await tx.sale.aggregate({
-          _sum: { totalCents: true },
-          _count: true,
-          where: { companyId, ...(branchId ? { branchId } : {}), voided: false, createdAt: { gte: start, lt: end } },
-        });
+        const [r] = await bq<{ total: number | null; n: number }>(tx)`
+          SELECT SUM("totalCents")::bigint AS total, COUNT(*)::bigint AS n
+          FROM "Sale"
+          WHERE "companyId" = ${companyId} ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+            AND "voided" = false AND "createdAt" >= ${start} AND "createdAt" < ${end}
+        `;
         return {
           from: w.from,
           to: w.to,
           label: `${fmt.format(new Date(`${w.from}T12:00:00Z`))} al ${fmt.format(new Date(`${w.to}T12:00:00Z`))}`,
-          cents: r._sum.totalCents ?? 0,
-          count: r._count,
+          cents: Number(r?.total ?? 0),
+          count: Number(r?.n ?? 0),
         };
       })
     );
@@ -563,8 +548,8 @@ export async function weeklyReports(): Promise<WeeklyRow[]> {
 
 export async function getWeeklyReportEnabled(): Promise<boolean> {
   const { companyId } = await requireManagerOrPermission("stats", "admin");
-  const c = await withTenant(companyId, (tx) => tx.company.findUnique({ where: { id: companyId }, select: { weeklyReportEnabled: true } }));
-  return c?.weeklyReportEnabled ?? false;
+  const [c] = await withTenant(companyId, (tx) => bq<{ on: boolean }>(tx)`SELECT "weeklyReportEnabled" AS "on" FROM "Company" WHERE "id" = ${companyId}`);
+  return c?.on ?? false;
 }
 
 export async function setWeeklyReportEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }> {
@@ -585,7 +570,7 @@ export async function ticketDistribution(range: DateRangeSelection): Promise<Tic
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return [];
-    const rows = await tx.$queryRaw<{ b: number; n: bigint }[]>`
+    const rows = await bq<{ b: number; n: bigint }>(tx)`
       SELECT CASE
                WHEN "totalCents" < 1000 THEN 0
                WHEN "totalCents" < 2000 THEN 1

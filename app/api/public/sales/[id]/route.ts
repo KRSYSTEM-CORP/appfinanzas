@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { withSuperAdmin } from "@/lib/tenant-db";
+import { pickClientIp } from "@/lib/request-ip";
 import { checkRateLimit, recordFailedAttempt } from "@/lib/rate-limit";
 import {
   buildDeliveryNotePDF,
@@ -17,7 +18,7 @@ import {
 // unguessable, same trust model as e.g. a Stripe/Mercado Pago receipt link:
 // read-only, one document at a time, no listing endpoint exists anywhere.
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = pickClientIp(request.headers.get("x-real-ip"), request.headers.get("x-forwarded-for"));
   const rl = await checkRateLimit("public-sale-pdf", ip, 30, 60_000);
   if (!rl.allowed) return new NextResponse("Demasiadas solicitudes, intenta de nuevo en un momento", { status: 429 });
   await recordFailedAttempt("public-sale-pdf", ip);

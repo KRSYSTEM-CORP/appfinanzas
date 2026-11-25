@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { MoreRows, ROW_BATCH } from "@/components/shared/MasterDetail";
 import Link from "@/components/ui/nav-link";
 import { MoreVerticalIcon } from "lucide-react";
 import type { ReferenceCurrency } from "@prisma/client";
@@ -65,6 +66,8 @@ export function InventoryDesktopTable({
 }) {
   const [toDelete, setToDelete] = useState<ListedProduct | null>(null);
   const [toAdjust, setToAdjust] = useState<ListedProduct | null>(null);
+  const [rowLimit, setRowLimit] = useState(ROW_BATCH);
+  const showMore = useCallback(() => setRowLimit((l) => l + ROW_BATCH), []);
 
   return (
     <>
@@ -83,7 +86,7 @@ export function InventoryDesktopTable({
             </tr>
           </thead>
           <tbody>
-            {products.map((p) => {
+            {products.slice(0, rowLimit).map((p) => {
               const st = statusOf(p);
               const ui = STATUS_UI[st];
               const img = productImageUrl(p);
@@ -170,6 +173,15 @@ export function InventoryDesktopTable({
               );
             })}
           </tbody>
+          {products.length > rowLimit && (
+            <tfoot>
+              <tr>
+                <td colSpan={9}>
+                  <MoreRows remaining={products.length - rowLimit} onMore={showMore} />
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 

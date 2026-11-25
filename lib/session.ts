@@ -96,6 +96,15 @@ export type Session = {
 // queries — ~9 round trips per page load for the same answer.
 export const getSession = cache(readSession);
 
+type SessionRow = {
+  id: string; email: string; companyId: string; branchId: string | null; status: string; isSuperAdmin: boolean;
+  firstName: string | null; lastName: string | null; role: string; allowedSections: string[]; hasSeenTour: boolean;
+  hasPin: boolean; tokenVersion: number; isExempt: boolean; monthlyFeeUsdCents: number | null;
+  nextPaymentDueDate: Date | null; localCurrencyCode: string; enabledFeatures: string[]; plan: string; planChosen: boolean;
+  paymentCount: number; roleName: string | null; rolePermissions: string[] | null; roleLockMinutes: number | null;
+  branchOkId: string | null; branchName: string | null;
+};
+
 async function readSession(): Promise<Session | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE_NAME)?.value;
@@ -107,55 +116,40 @@ async function readSession(): Promise<Session | null> {
   // Re-validate against the DB on every call so a deleted user/company, or a
   // user suspended by a platform admin mid-session, is caught immediately
   // instead of trusting a still-valid signed cookie until it expires.
-  const user = await prisma.user.findUnique({
-    where: { id: payload.uid },
-    // The photo is only for the profiles screen; don't carry it on every request.
-    omit: { photoDataUrl: true },
-    include: {
-      company: {
-        select: {
-          isExempt: true,
-          monthlyFeeUsdCents: true,
-          nextPaymentDueDate: true,
-          localCurrencyCode: true,
-          enabledFeatures: true,
-          plan: true,
-          planChosen: true,
-          _count: { select: { payments: true } },
-        },
-      },
-    },
-  });
-  if (!user || user.companyId !== payload.cid || user.status !== "ACTIVE") return null;
+  // Una sola consulta (usuario, empresa, rol y sede) dentro de una sola transacción de la empresa de la
+  // cookie firmada: antes eran 2 lecturas del usuario y hasta 3 transacciones más (sede, rol, nombre de sede).
+  // A pinned VENDEDOR always uses their own branch, regardless of cookie contents; a GERENTE/owner
+  // (user.branchId null) uses whatever branch the cookie says they last picked/switched to — but only
+  // if that branch still exists, is active, and belongs to this same company.
+  const cookieBid = payload.bid ?? null;
+  const rows = await withTenant(payload.cid, (tx) =>
+    tx.$queryRaw<SessionRow[]>`
+      SELECT u."id", u."email", u."companyId", u."branchId", u."status"::text AS "status", u."isSuperAdmin",
+             u."firstName", u."lastName", u."role"::text AS "role", u."allowedSections", u."hasSeenTour",
+             (u."pinHash" IS NOT NULL) AS "hasPin", u."tokenVersion",
+             c."isExempt", c."monthlyFeeUsdCents", c."nextPaymentDueDate", c."localCurrencyCode", c."enabledFeatures",
+             c."plan"::text AS "plan", c."planChosen",
+             (SELECT COUNT(*) FROM "Payment" p WHERE p."companyId" = c."id")::int AS "paymentCount",
+             r."name" AS "roleName", r."permissions" AS "rolePermissions", r."lockMinutes" AS "roleLockMinutes",
+             b."id" AS "branchOkId", b."name" AS "branchName"
+      FROM "User" u
+      JOIN "Company" c ON c."id" = u."companyId"
+      LEFT JOIN "CompanyRole" r ON r."id" = u."roleId"
+      LEFT JOIN "Branch" b ON b."id" = COALESCE(u."branchId", ${cookieBid}::text)
+        AND b."companyId" = u."companyId" AND (u."branchId" IS NOT NULL OR b."isActive")
+      WHERE u."id" = ${payload.uid} AND u."companyId" = ${payload.cid}
+    `
+  );
+  const user = rows[0];
+  if (!user || user.status !== "ACTIVE") return null;
   // Revoked by a password change/reset after this cookie was issued.
   if ((payload.tv ?? 0) !== user.tokenVersion) return null;
 
-  const isExempt = user.company.isExempt;
-  const nextPaymentDueDate = user.company.nextPaymentDueDate;
-
-  // A pinned VENDEDOR always uses their own branch, regardless of cookie
-  // contents; a GERENTE/owner (user.branchId null) uses whatever branch the
-  // cookie says they last picked/switched to — but only if that branch still
-  // exists, is active, and belongs to this same company.
-  let branchId = user.branchId;
-  const cookieBid = payload.bid;
-  if (!branchId && cookieBid) {
-    const branch = await withTenant(user.companyId, (tx) =>
-      tx.branch.findFirst({
-        where: { id: cookieBid, companyId: user.companyId, isActive: true },
-        select: { id: true },
-      })
-    );
-    branchId = branch?.id ?? null;
-  }
-  const customRole = user.roleId
-    ? await withTenant(user.companyId, (tx) =>
-        tx.companyRole.findUnique({ where: { id: user.roleId as string }, select: { name: true, permissions: true, lockMinutes: true } })
-      )
-    : null;
-  const branch = branchId
-    ? await withTenant(user.companyId, (tx) => tx.branch.findUnique({ where: { id: branchId }, select: { name: true } }))
-    : null;
+  const isExempt = user.isExempt;
+  const nextPaymentDueDate = user.nextPaymentDueDate;
+  const branchId = user.branchOkId ?? null;
+  const customRole = user.roleName != null ? { name: user.roleName, permissions: user.rolePermissions ?? [], lockMinutes: user.roleLockMinutes } : null;
+  const branch = branchId ? { name: user.branchName } : null;
 
   return {
     userId: user.id,
@@ -166,25 +160,25 @@ async function readSession(): Promise<Session | null> {
     // is never gated by a billing cycle.
     billingBlocked: user.isSuperAdmin ? false : isCompanyBlocked({ isExempt, nextPaymentDueDate }),
     isExempt,
-    monthlyFeeUsdCents: user.company.monthlyFeeUsdCents,
-    localCurrencyCode: user.company.localCurrencyCode,
+    monthlyFeeUsdCents: user.monthlyFeeUsdCents,
+    localCurrencyCode: user.localCurrencyCode,
     nextPaymentDueDate,
-    inTrial: !isExempt && user.company._count.payments === 0,
-    role: user.role,
+    inTrial: !isExempt && user.paymentCount === 0,
+    role: user.role as Role,
     sellerName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email,
     allowedSections: user.allowedSections,
     permissions: customRole ? customRole.permissions : null,
     roleName: customRole?.name ?? null,
     lockMinutes: customRole?.lockMinutes ?? (customRole ? DEFAULT_LOCK_MINUTES[customRole.name] ?? null : null),
-    enabledFeatures: user.company.enabledFeatures.filter(isKnownFeature),
-    plan: user.company.plan,
-    needsPlanChoice: !user.company.planChosen && user.role === "GERENTE",
+    enabledFeatures: user.enabledFeatures.filter(isKnownFeature),
+    plan: user.plan as PlanId,
+    needsPlanChoice: !user.planChosen && user.role === "GERENTE",
     branchId,
     branchName: branch?.name ?? null,
     pinnedBranchId: user.branchId ?? null,
     hasSeenTour: user.hasSeenTour,
     locked: payload.lk === true,
-    hasPin: user.pinHash != null,
+    hasPin: user.hasPin,
   };
 }
 

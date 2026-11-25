@@ -18,6 +18,8 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "form-action 'self' https://accounts.google.com",
   "frame-ancestors 'none'",
+  // Cada bloqueo llega a /api/csp-report (una línea en el registro del servidor, sin datos personales).
+  "report-uri /api/csp-report",
 ].join("; ");
 
 const securityHeaders = [

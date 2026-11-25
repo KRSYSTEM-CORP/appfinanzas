@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { bq, jsDate } from "@/lib/batch-sql";
 import {
   getPlan,
   parsePlanRequest,
@@ -67,20 +68,24 @@ export async function getPlanUsage(): Promise<PlanUsage> {
   const { companyId } = session;
   const [counts, status, billing, creditRequests] = await Promise.all([
     withTenant(companyId, async (tx) => {
-      const [users, products, branches, report, approved, reports] = await Promise.all([
-        tx.user.count({ where: { companyId, status: "ACTIVE" } }),
-        tx.product.count({ where: { companyId } }),
-        tx.branch.count({ where: { companyId, isActive: true } }),
-        tx.paymentReport.findFirst({ where: { companyId }, orderBy: { createdAt: "desc" }, select: { status: true, createdAt: true } }),
-        tx.paymentReport.count({ where: { companyId, status: "APPROVED" } }),
-        tx.paymentReport.findMany({
-          where: { companyId },
-          orderBy: { createdAt: "desc" },
-          take: 20,
-          select: { id: true, status: true, createdAt: true, note: true, lines: { select: { amountUsdCents: true, reference: true, paymentMethod: true } } },
-        }),
+      // Conteos, último reporte e historial en una sola sentencia agrupada (lib/batch-sql.ts).
+      const [[c], [last], reportRows] = await Promise.all([
+        bq<{ users: number; products: number; branches: number; approved: number }>(tx)`
+          SELECT (SELECT COUNT(*) FROM "User" WHERE "companyId" = ${companyId} AND "status"::text = 'ACTIVE')::int AS users,
+                 (SELECT COUNT(*) FROM "Product" WHERE "companyId" = ${companyId})::int AS products,
+                 (SELECT COUNT(*) FROM "Branch" WHERE "companyId" = ${companyId} AND "isActive" = true)::int AS branches,
+                 (SELECT COUNT(*) FROM "PaymentReport" WHERE "companyId" = ${companyId} AND "status"::text = 'APPROVED')::int AS approved`,
+        bq<{ status: string; createdAt: string }>(tx)`
+          SELECT "status"::text AS "status", "createdAt" FROM "PaymentReport" WHERE "companyId" = ${companyId} ORDER BY "createdAt" DESC LIMIT 1`,
+        bq<{ id: string; status: string; createdAt: string; note: string | null; lines: { amountUsdCents: number; reference: string | null; paymentMethod: string }[] }>(tx)`
+          SELECT r."id", r."status"::text AS "status", r."createdAt", r."note",
+                 COALESCE((SELECT json_agg(json_build_object('amountUsdCents', l."amountUsdCents", 'reference', l."reference", 'paymentMethod', l."paymentMethod"::text) ORDER BY l."id")
+                           FROM "PaymentReportLine" l WHERE l."paymentReportId" = r."id"), '[]'::json) AS "lines"
+          FROM "PaymentReport" r WHERE r."companyId" = ${companyId} ORDER BY r."createdAt" DESC LIMIT 20`,
       ]);
-      return { users, products, branches, report, approved, reports };
+      const report = last ? { status: last.status as "PENDING" | "APPROVED" | "REJECTED", createdAt: jsDate(last.createdAt) } : null;
+      const reports = reportRows.map((r) => ({ ...r, createdAt: jsDate(r.createdAt) }));
+      return { users: c?.users ?? 0, products: c?.products ?? 0, branches: c?.branches ?? 0, report, approved: c?.approved ?? 0, reports };
     }),
     getAssistantStatus(),
     getBillingInfo(),

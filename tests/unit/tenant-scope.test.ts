@@ -26,8 +26,31 @@ describe("withTenantScope", () => {
 
   it("otra empresa dentro del scope abre su propia transacción (RLS)", async () => {
     transactions.length = 0;
-    await withTenantScope("c1", () => withTenant("c2", async () => 1));
+    await withTenantScope("c1", async () => {
+      await withTenant("c1", async () => 1);
+      await withTenant("c2", async () => 1);
+    });
     expect(transactions).toHaveLength(2);
+  });
+
+  it("la transacción del scope se abre al primer uso: una pantalla que no lee nada no abre ninguna", async () => {
+    transactions.length = 0;
+    await withTenantScope("c1", async () => 1);
+    expect(transactions).toHaveLength(0);
+    await withTenantScope("c1", async () => {
+      await Promise.all([withTenant("c1", async () => 1), withTenant("c1", async () => 2)]);
+    });
+    expect(transactions).toHaveLength(1);
+  });
+
+  it("si la pantalla falla, la transacción del scope se cierra con error (ROLLBACK) y el error sale intacto", async () => {
+    transactions.length = 0;
+    await expect(
+      withTenantScope("c1", async () => {
+        await withTenant("c1", async () => 1);
+        throw new Error("falla de pantalla");
+      })
+    ).rejects.toThrow("falla de pantalla");
   });
 
   it("sin scope cada withTenant abre la suya y scopeMemo no memoriza", async () => {

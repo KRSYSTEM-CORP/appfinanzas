@@ -31,7 +31,7 @@
 // itself, so every open tab falls back to the old plain network-passthrough
 // behavior on its next load without anyone needing to clear site data by
 // hand.
-const CACHE_VERSION = "v8";
+const CACHE_VERSION = "v9";
 const CACHE_NAME = `kr-pos-shell-${CACHE_VERSION}`;
 const OFFLINE_SHELL_PATH = "/pos/offline";
 // Any failed navigation to one of these paths is redirected to the offline
@@ -58,6 +58,17 @@ function fetchWithTimeout(request, ms) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   return fetch(request, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
+// Tope de fotos de producto guardadas: sin límite el caché crece con cada foto
+// vista (y con cada cambio de ?v=). Al pasarlo se borran las más antiguas
+// (cache.keys() devuelve el orden de inserción).
+const MAX_PRODUCT_IMAGES = 400;
+async function cachePutImage(cache, request, response) {
+  await cachePut(cache, request, response);
+  const keys = (await cache.keys()).filter((k) => /^\/api\/products\/[^/]+\/image$/.test(new URL(k.url).pathname));
+  const extra = keys.length - MAX_PRODUCT_IMAGES;
+  for (let i = 0; i < extra; i++) await cache.delete(keys[i]);
 }
 
 self.addEventListener("install", (event) => {
@@ -196,7 +207,7 @@ self.addEventListener("fetch", (event) => {
         (cached) =>
           cached ||
           fetch(request).then((res) => {
-            if (res.ok) caches.open(CACHE_NAME).then((c) => cachePut(c, request, res.clone()));
+            if (res.ok) caches.open(CACHE_NAME).then((c) => cachePutImage(c, request, res.clone()));
             return res;
           })
       )

@@ -14,6 +14,7 @@ import { canOperateCash, requireSectionAccess } from "@/lib/session";
 import { listRecentSales } from "@/lib/actions/sales";
 import { getDailyClosingSummary, listPendingClosings, listRecentClosings } from "@/lib/actions/cash-closing";
 import { parseDateRangeSelection, selectionToWindows, todayDateString } from "@/lib/report-types";
+import { withTenantScope } from "@/lib/tenant-db";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export default async function ReportsPage({
     todaySummary,
     pendingClosings,
     recentClosings,
-  ] = await Promise.all([
+  ] = await withTenantScope(session.companyId, () => Promise.all([
     listRecentSales(salesLimit, selectionToWindows(range), statusFilter || undefined),
     getExchangeRateInfo(),
     getBranding(),
@@ -47,7 +48,7 @@ export default async function ReportsPage({
     getDailyClosingSummary(todayStr),
     listPendingClosings(range),
     listRecentClosings(60),
-  ]);
+  ]));
   const salesShown = channelFilter ? recentSales.filter((x) => x.channel === channelFilter) : recentSales;
   const company = { name: session.companyName, logoDataUrl, ...fiscalData };
   // Closing the register and voiding/deleting sales are manager-only on the

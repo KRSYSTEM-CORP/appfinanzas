@@ -13,6 +13,7 @@ import { bsOf, money } from "@/lib/money-display";
 import { selectionLabel } from "@/lib/period-label";
 import { recurringExpenses } from "@/lib/recurring-expenses";
 import { parseDateRangeSelection, todayDateString } from "@/lib/report-types";
+import { withTenantScope } from "@/lib/tenant-db";
 
 export const dynamic = "force-dynamic";
 
@@ -29,17 +30,17 @@ export default async function GastosPage({
   searchParams: Promise<{ range?: string; year?: string; months?: string; from?: string; to?: string; cat?: string }>;
 }) {
   await requirePermission("admin");
-  await requireAccountingPlan();
+  const planSession = await requireAccountingPlan();
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const today = todayDateString();
   const cat = typeof params.cat === "string" ? params.cat.slice(0, 60) : "";
-  const [all, monthTotal, history, { referenceCurrency, localCurrencyCode, rate, exchangeRateEnabled }] = await Promise.all([
+  const [all, monthTotal, history, { referenceCurrency, localCurrencyCode, rate, exchangeRateEnabled }] = await withTenantScope(planSession.companyId, () => Promise.all([
     listExpenses(range),
     expensesTotal({ kind: "preset", preset: "month" }),
     listExpenses({ kind: "range", from: daysAgo(today, 120), to: today }),
     getExchangeRateInfo(),
-  ]);
+  ]));
   const categories = [...new Set([...EXPENSE_CATEGORIES, ...all.map((e) => e.category ?? "Otros")])];
   const shown = cat ? all.filter((e) => (e.category ?? "Otros") === cat) : all;
   const total = shown.reduce((n, e) => n + e.amountCents, 0);

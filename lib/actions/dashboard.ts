@@ -1,6 +1,7 @@
 "use server";
 
 import { requireManager } from "@/lib/session";
+import { bq } from "@/lib/batch-sql";
 import { withTenant } from "@/lib/tenant-db";
 import { listPendingClosings } from "@/lib/actions/cash-closing";
 import { Prisma } from "@prisma/client";
@@ -10,14 +11,14 @@ export async function getDashboardTasks() {
   const [lowStock, pendingQuotes, pendingClosings] = await Promise.all([
     withTenant(companyId, async (tx) => {
       const [count, products] = await Promise.all([
-        tx.$queryRaw<{ count: bigint }[]>`
+        bq<{ count: bigint }>(tx)`
           SELECT COUNT(*)::bigint AS count FROM "Product"
           WHERE "companyId" = ${companyId}
             ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
             AND "trackStock" = true AND "stock" <= "lowStockThreshold"
             AND ("isActive" = true OR "stock" = 0)
         `,
-        tx.$queryRaw<{ id: string; name: string; stock: number; lowStockThreshold: number }[]>`
+        bq<{ id: string; name: string; stock: number; lowStockThreshold: number }>(tx)`
           SELECT "id", "name", "stock", "lowStockThreshold" FROM "Product"
           WHERE "companyId" = ${companyId}
             ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
