@@ -1,5 +1,14 @@
 krpos.krsystem-corp.com {
 	encode zstd gzip
+
+	# Cache-Control por tipo de archivo. Next ya manda "immutable" en /_next/static;
+	# se repite aqui para que no dependa de la version. sw.js NO se toca (el navegador
+	# lo revisa siempre) y las paginas dinamicas tampoco.
+	@hashed path /_next/static/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@logos path /banks/* /brand/* /icons/* /apple-icon.png /icon.png
+	header @logos Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
+
 	reverse_proxy app:3000 {
 		health_uri /api/health
 		health_interval 30s
