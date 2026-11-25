@@ -1,10 +1,10 @@
 "use server";
 
 import type { Prisma } from "@prisma/client";
-import { requireManager } from "@/lib/session";
+import { requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { currentRateOf } from "@/lib/account-balance";
-import { accountMovementsList, type AccountMovement, type TimeWindow } from "@/lib/account-movements";
+import { accountMovementsMany, type AccountMovement, type TimeWindow } from "@/lib/account-movements";
 import { shiftWindow } from "@/lib/cash-shifts";
 import { closingDateFromString } from "@/lib/closed-days";
 import { buildShiftOptions, parseShiftValue, pickShift, type SegMode, type ShiftInfo, type ShiftOption } from "@/lib/accounts-segmentation";
@@ -88,7 +88,7 @@ async function resolveWindows(tx: Tx, companyId: string, branchId: string | null
 // Ingresos (cobros + fondos) y egresos (compras, nómina, gastos) de cada cuenta activa dentro del período,
 // en la moneda de la cuenta.
 export async function getAccountsPeriodReport(spec: PeriodSpec): Promise<AccountsPeriodReport> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("admin");
   return withTenant(companyId, async (tx) => {
     const r = await resolveWindows(tx, companyId, branchId ?? null, spec);
     const base = { seg: spec.seg, needsBranch: r.needsBranch, shifts: r.shifts, selectedShift: r.selectedShift, from: r.from, to: r.to, label: r.label };
@@ -96,8 +96,9 @@ export async function getAccountsPeriodReport(spec: PeriodSpec): Promise<Account
     const rate = await currentRateOf(tx, companyId);
     const accounts = await tx.paymentAccount.findMany({ where: { companyId, active: true }, orderBy: { createdAt: "asc" } });
     const rows: AccountPeriodRow[] = [];
+    const movements = await accountMovementsMany(tx, companyId, accounts, rate, r.windows);
     for (const a of accounts) {
-      const mv = await accountMovementsList(tx, companyId, a, rate, null, r.windows);
+      const mv = movements.get(a.id) ?? [];
       const income = mv.filter((m) => m.amountCents > 0).reduce((n, m) => n + m.amountCents, 0);
       const expense = mv.filter((m) => m.amountCents < 0).reduce((n, m) => n - m.amountCents, 0);
       rows.push({ id: a.id, kind: a.kind, bankKey: a.bankKey, bankName: a.bankName, accountNumber: a.accountNumber, currency: a.currency, incomeCents: income, expenseCents: expense, netCents: income - expense, count: mv.length });
@@ -110,15 +111,16 @@ export type PeriodMovement = AccountMovement & { accountId: string };
 
 // Historial completo del período: de una cuenta o (accountId null) de todas.
 export async function getAccountsPeriodMovements(spec: PeriodSpec, accountId: string | null): Promise<PeriodMovement[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("admin");
   return withTenant(companyId, async (tx) => {
     const r = await resolveWindows(tx, companyId, branchId ?? null, spec);
     if (r.windows.length === 0) return [];
     const rate = await currentRateOf(tx, companyId);
     const accounts = await tx.paymentAccount.findMany({ where: { companyId, active: true, ...(accountId ? { id: accountId } : {}) }, orderBy: { createdAt: "asc" } });
     const out: PeriodMovement[] = [];
+    const movements = await accountMovementsMany(tx, companyId, accounts, rate, r.windows);
     for (const a of accounts) {
-      const mv = await accountMovementsList(tx, companyId, a, rate, null, r.windows);
+      const mv = movements.get(a.id) ?? [];
       out.push(...mv.map((m) => ({ ...m, accountId: a.id })));
     }
     return out.sort((x, y) => (x.at < y.at ? 1 : -1));

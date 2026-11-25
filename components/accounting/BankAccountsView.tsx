@@ -61,13 +61,20 @@ export function Logo({ a, size = 44 }: { a: Pick<BankAccount, "bankKey" | "kind"
 
 // Administración → Cuentas Bancarias (preview): saldo por cuenta con logo, «Datos para cobrar»,
 // «Agregar cuenta» y «Vincular métodos de pago a cuentas».
-export function BankAccountsView({ accounts, rate, referenceCurrency }: { accounts: BankAccount[]; rate: number | null; referenceCurrency: string }) {
+export function BankAccountsView({ accounts: serverAccounts, rate, referenceCurrency, canWrite = true }: { accounts: BankAccount[]; rate: number | null; referenceCurrency: string; canWrite?: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [adding, setAdding] = useState(false);
   const [detail, setDetail] = useState<BankAccount | null>(null);
   const [funding, setFunding] = useState<BankAccount | null>(null);
   const [movements, setMovements] = useState<BankAccount | null>(null);
+  // Cuentas recién guardadas: se muestran al instante (saldo 0) mientras el servidor recalcula la pantalla; en cuanto
+  // llega la lista real con esa cuenta, la copia local deja de usarse.
+  const [justAdded, setJustAdded] = useState<BankAccount[]>([]);
+  const accounts = [
+    ...serverAccounts,
+    ...justAdded.filter((j) => !serverAccounts.some((a) => a.kind === j.kind && a.accountNumber === j.accountNumber && a.bankKey === j.bankKey)),
+  ];
   const totalRef = accounts.reduce((n, a) => n + (a.currency === "VES" ? (rate ? Math.round(a.balanceCents / rate) : 0) : a.balanceCents), 0);
 
   function link(a: BankAccount, method: string) {
@@ -85,9 +92,11 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
           {accounts.length} cuentas · total <b className="text-foreground">{money(referenceCurrency, totalRef)}</b>
           {rate ? ` · ${money("VES", Math.round(totalRef * rate), 0)}` : ""}
         </p>
-        <Button onClick={() => setAdding(true)}>
-          <PlusIcon aria-hidden /> Agregar cuenta
-        </Button>
+        {canWrite && (
+          <Button onClick={() => setAdding(true)}>
+            <PlusIcon aria-hidden /> Agregar cuenta
+          </Button>
+        )}
       </div>
 
       {accounts.length === 0 ? (
@@ -119,9 +128,11 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
                 </small>
               )}
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <Button type="button" size="sm" onClick={() => setFunding(a)}>
-                  <PlusIcon aria-hidden className="size-4" /> Agregar fondos
-                </Button>
+                {canWrite && (
+                  <Button type="button" size="sm" onClick={() => setFunding(a)}>
+                    <PlusIcon aria-hidden className="size-4" /> Agregar fondos
+                  </Button>
+                )}
                 <Button type="button" size="sm" variant="outline" onClick={() => setMovements(a)}>
                   Movimientos
                 </Button>
@@ -130,9 +141,11 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
                   return url ? <BankSiteButton url={url} bankName={a.bankName ?? ACCOUNT_KIND_LABELS[a.kind]} /> : null;
                 })()}
               </div>
-              <button type="button" onClick={() => setDetail(a)} className="mt-2 self-center rounded-full px-2 py-1.5 text-[13px] font-semibold text-primary hover:bg-muted">
-                Datos para cobrar
-              </button>
+              {canWrite && (
+                <button type="button" onClick={() => setDetail(a)} className="mt-2 self-center rounded-full px-2 py-1.5 text-[13px] font-semibold text-primary hover:bg-muted">
+                  Datos para cobrar
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -172,7 +185,7 @@ export function BankAccountsView({ accounts, rate, referenceCurrency }: { accoun
         </SectionCard>
       )}
 
-      {adding && <AddAccountSheet onClose={() => setAdding(false)} onSaved={() => { setAdding(false); router.refresh(); }} />}
+      {adding && <AddAccountSheet onClose={() => setAdding(false)} onSaved={(draft) => { setAdding(false); setJustAdded((j) => [...j, draft]); router.refresh(); }} />}
       {funding && (
         <AddFundsDialog
           account={{ id: funding.id, label: [funding.bankName ?? ACCOUNT_KIND_LABELS[funding.kind], funding.accountNumber].join(" · "), currency: funding.currency }}
@@ -232,7 +245,7 @@ function MovementsDialog({ a, onClose }: { a: BankAccount; onClose: () => void }
   );
 }
 
-function AddAccountSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function AddAccountSheet({ onClose, onSaved }: { onClose: () => void; onSaved: (draft: BankAccount) => void }) {
   const [kind, setKind] = useState<AccountKind>("PAGO_MOVIL");
   const [bankKey, setBankKey] = useState(BANKS[0].key);
   const [holder, setHolder] = useState("");
@@ -247,7 +260,19 @@ function AddAccountSheet({ onClose, onSaved }: { onClose: () => void; onSaved: (
       if (!r.success) toast.error(r.error);
       else {
         toast.success("Cuenta agregada");
-        onSaved();
+        onSaved({
+          id: `nueva-${Date.now()}`,
+          kind,
+          bankKey: key || null,
+          bankName: bankLabel(key) ?? null,
+          holder: holder || null,
+          accountNumber,
+          docId: docId || null,
+          currency: kind === "PAGO_MOVIL" || kind === "TRANSFER" || kind === "PUNTO_DE_VENTA" ? "VES" : "USD",
+          linkedMethod: null,
+          openingCents: 0,
+          balanceCents: 0,
+        });
       }
     });
   }

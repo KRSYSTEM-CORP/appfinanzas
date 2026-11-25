@@ -126,7 +126,7 @@ export function BranchCards({
   const monthOrders = active.reduce((t, x) => t + x.salesMonth, 0);
   const bestMonth = active.reduce<BranchSummary | null>((b, x) => (b == null || x.salesMonthCents > b.salesMonthCents ? x : b), null);
   const kpis = [
-    { label: "Ventas de la red", value: formatCurrencyCents(currency, monthSales), sub: "Mes en curso · sedes activas", Icon: BanknoteIcon, chip: "bg-primary/12 text-primary" },
+    { label: "Ventas de la red", value: formatCurrencyCents(currency, monthSales), sub: "Mes en curso · días con cierre de caja", Icon: BanknoteIcon, chip: "bg-primary/12 text-primary" },
     { label: "Ganancia neta estimada", value: formatCurrencyCents(currency, monthProfit), sub: monthSales > 0 ? `${pct(monthProfit, monthSales)} de margen` : "Sin ventas este mes", Icon: TrendingUpIcon, chip: "bg-success/14 text-success" },
     { label: "Pedidos", value: String(monthOrders), sub: `${active.length} ${active.length === 1 ? "sede activa" : "sedes activas"}`, Icon: ShoppingCartIcon, chip: "bg-warning/18 text-warning" },
     { label: "Mejor sede", value: bestMonth && bestMonth.salesMonthCents > 0 ? bestMonth.name : "—", sub: bestMonth && bestMonth.salesMonthCents > 0 ? formatCurrencyCents(currency, bestMonth.salesMonthCents) : "Aún sin ventas", Icon: StarIcon, chip: "bg-primary/12 text-primary" },
@@ -223,7 +223,7 @@ export function BranchCards({
                 <div className="mt-1.5">
                   <small className="block text-xs font-semibold text-muted-foreground">Ventas · mes</small>
                   <b className="block text-[28px] font-extrabold leading-[1.1] tracking-[-0.03em] tabular-nums">{formatCurrencyCents(currency, s.salesMonthCents)}</b>
-                  <small className="block text-xs font-semibold text-muted-foreground">Hoy {formatCurrencyCents(currency, s.salesTodayCents)} · {s.salesToday} {s.salesToday === 1 ? "venta" : "ventas"}</small>
+                  <small className="block text-xs font-semibold text-muted-foreground">Hoy (todos los turnos) {formatCurrencyCents(currency, s.salesTodayCents)} · {s.salesToday} {s.salesToday === 1 ? "venta" : "ventas"}</small>
                 </div>
                 <div className="mt-2.5 grid grid-cols-2 items-center gap-2.5">
                   <div>

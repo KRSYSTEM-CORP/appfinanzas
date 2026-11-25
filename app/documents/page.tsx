@@ -1,3 +1,4 @@
+import Link from "@/components/ui/nav-link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DocumentsTable } from "@/components/documents/DocumentsTable";
 import { listRecentSales } from "@/lib/actions/sales";
@@ -7,7 +8,13 @@ import { requireSectionAccess } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function DocumentsPage() {
+const PAGE_STEP = 150;
+const PAGE_MAX = 2000;
+
+// Carga inicial acotada (cada fila trae partidas y pagos): «Cargar más» pide otras 150 de cada tipo.
+export default async function DocumentsPage({ searchParams }: { searchParams: Promise<{ n?: string }> }) {
+  const { n } = await searchParams;
+  const limit = Math.min(PAGE_MAX, Math.max(PAGE_STEP, Math.floor(Number(n) / PAGE_STEP) * PAGE_STEP || PAGE_STEP));
   const [
     { companyName },
     sales,
@@ -17,8 +24,8 @@ export default async function DocumentsPage() {
     fiscalData,
   ] = await Promise.all([
     requireSectionAccess("documents"),
-    listRecentSales(500),
-    listQuotes(500),
+    listRecentSales(limit),
+    listQuotes(limit),
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
@@ -61,6 +68,18 @@ export default async function DocumentsPage() {
             referenceCurrency={referenceCurrency}
             printPaperSize={printPaperSize}
           />
+          {(sales.length >= limit || quotes.length >= limit) && limit < PAGE_MAX && (
+            <div className="mt-4 text-center">
+              <Link
+                href={`/documents?n=${limit + PAGE_STEP}`}
+                scroll={false}
+                prefetch={false}
+                className="text-sm font-semibold text-primary underline underline-offset-4"
+              >
+                Cargar documentos anteriores
+              </Link>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

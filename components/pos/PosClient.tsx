@@ -21,7 +21,7 @@ import { SALE_CHANNEL_LABELS } from "@/lib/format";
 import type { QuoteForConversion } from "@/lib/actions/quotes";
 import { computeItemDiscountCents } from "@/lib/discount";
 import { useOnlineStatus } from "@/lib/offline/use-online-status";
-import { queueSale, type PendingSaleInput } from "@/lib/offline/sync";
+import { queueSale, SALE_SYNCED_EVENT, type PendingSaleInput } from "@/lib/offline/sync";
 import { useCatalogSync } from "@/lib/offline/use-catalog-sync";
 import { buildPendingReceipt } from "@/lib/offline/pending-receipt";
 import { useCart } from "@/lib/pos/use-cart";
@@ -199,7 +199,30 @@ const [step, setStep] = useState<Step>("cart");
   // ReceiptView since they share the same shape.
   const [completedSale, setCompletedSale] = useState<SaleWithItems | null>(null);
   const [pendingSync, setPendingSync] = useState(false);
+  // Clave de la venta en cola cuyo comprobante está en pantalla: al sincronizar
+  // se reemplaza por la venta real (con su número de control).
+  const pendingLocalId = useRef<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Al volver el internet y sincronizarse la venta en cola, el comprobante
+  // pasa de «pendiente» al número real.
+  useEffect(() => {
+    function onSynced(e: Event) {
+      const d = (e as CustomEvent<{ localId: string; saleId: string }>).detail;
+      if (!d || pendingLocalId.current !== d.localId) return;
+      pendingLocalId.current = null;
+      void getSaleReceipt(d.saleId)
+        .then((sale) => {
+          if (sale) {
+            setCompletedSale(sale);
+            setPendingSync(false);
+          }
+        })
+        .catch(() => {});
+    }
+    window.addEventListener(SALE_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(SALE_SYNCED_EVENT, onSynced);
+  }, []);
 
   const rawTotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
   const discountValue = Math.min(100, Math.max(0, Number(discountPercent) || 0));
@@ -373,7 +396,7 @@ const [step, setStep] = useState<Step>("cart");
     };
 
     async function queueOfflineSale(customerInfo: CustomerInfo) {
-      await queueSale({ ...saleInput, offlineExchangeRate: rate ?? undefined, queuedBranchId: branchId ?? undefined }, {
+      const queued = await queueSale({ ...saleInput, offlineExchangeRate: rate ?? undefined, queuedBranchId: branchId ?? undefined }, {
         totalCents: total,
         items: lines.map((l) => ({
           productName: productById.get(l.productId)?.name ?? l.name,
@@ -385,6 +408,7 @@ const [step, setStep] = useState<Step>("cart");
         sellerName,
         note: finalNote || null,
       });
+      pendingLocalId.current = queued.localId;
       setCompletedSale(buildReceiptPreview(customerInfo, status, rows));
       setPendingSync(true);
       setStep("receipt");
@@ -437,6 +461,7 @@ const [step, setStep] = useState<Step>("cart");
   }
 
   function newSale() {
+    pendingLocalId.current = null;
     saleKey.current = null;
     setCustomer(null);
     resetCart();

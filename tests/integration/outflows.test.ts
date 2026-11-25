@@ -3,10 +3,14 @@ import { customer, loadContext, owner, sessionFor, type Ctx } from "./helpers";
 
 let ctx: Ctx;
 vi.mock("@/lib/session", () => ({
+  requireManagerOrPermission: async () => sessionFor(ctx),
+  requireAccountingManagerOrPermission: async () => sessionFor(ctx),
+  requireAdminAccess: async () => sessionFor(ctx),
   requireAccountingPlan: async () => sessionFor(ctx),
   hasPermission: () => true,
   requireSession: async () => sessionFor(ctx),
   requireManager: async () => sessionFor(ctx),
+  requireCashAccess: async () => sessionFor(ctx),
   requireSectionAccess: async () => sessionFor(ctx),
   getSession: async () => sessionFor(ctx),
 }));

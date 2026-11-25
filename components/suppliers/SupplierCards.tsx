@@ -158,7 +158,7 @@ export function SupplierCards({ suppliers, currency }: { suppliers: SupplierCard
                 <b>{s.rating ? new Intl.NumberFormat("es-VE", { minimumFractionDigits: 1 }).format(s.rating) : "Sin calificar"}</b>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <Pill tone="val">Compras {m(s.purchasedCents)}</Pill>
+                <Pill tone="val">Compras (histórico) {m(s.purchasedCents)}</Pill>
                 {s.owedCents > 0 ? <Pill tone="warn">Debe {m(s.owedCents)}</Pill> : <Pill tone="ok">Al día</Pill>}
                 <Pill>{s.invoices} facturas</Pill>
               </div>

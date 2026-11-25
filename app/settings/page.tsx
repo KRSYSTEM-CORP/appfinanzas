@@ -1,3 +1,4 @@
+import { withTenantScope } from "@/lib/tenant-db";
 import { ExchangeRateForm } from "@/components/settings/ExchangeRateForm";
 import { CurrencySelectForm } from "@/components/settings/CurrencySelectForm";
 import { ReferenceCurrencyForm } from "@/components/settings/ReferenceCurrencyForm";
@@ -23,7 +24,7 @@ import { listBranches } from "@/lib/actions/branches";
 import { listEmployees } from "@/lib/actions/employees";
 import { listRoles } from "@/lib/actions/roles";
 import { TeamPinPanel } from "@/components/settings/TeamPinPanel";
-import { requirePermission } from "@/lib/session";
+import { requireManagerPermission } from "@/lib/session";
 import { branchLimitMessage, getPlan } from "@/lib/plans";
 import { SHOP_TIME_ZONE, zonedDateParts } from "@/lib/report-types";
 
@@ -41,7 +42,7 @@ function isStale(updatedAt: Date | null): boolean {
 }
 
 export default async function SettingsPage() {
-  const session = await requirePermission("settings");
+  const session = await requireManagerPermission("settings");
   // Settings is now fully manager-gated (see requireManager above) — every
   // tab below is reachable, so this is always true. Kept as a named
   // constant rather than deleted since the IVA/Sucursales tabs below still
@@ -57,7 +58,7 @@ export default async function SettingsPage() {
     dailyEmails,
     planUsage,
     people,
-  ] = await Promise.all([
+  ] = await withTenantScope(session.companyId, () => Promise.all([
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
@@ -67,7 +68,7 @@ export default async function SettingsPage() {
     canManage ? getDailyReportEmails() : Promise.resolve([] as string[]),
     getPlanUsage(),
     canManage ? listEmployees() : Promise.resolve([]),
-  ]);
+  ]));
   const stale = isStale(updatedAt);
   // Emprende incluye solo la sucursal principal: con el tope alcanzado se bloquea «Nueva sucursal».
   const planDef = getPlan(session.plan);
@@ -76,7 +77,7 @@ export default async function SettingsPage() {
     !session.isSuperAdmin && planDef.maxBranches != null && activeBranches >= planDef.maxBranches ? branchLimitMessage(planDef) : null;
 
   const roles = await listRoles();
-  const managersWithPin = people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length;
+  const managersWithPin = Math.max(people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length, session.role === "GERENTE" && session.hasPin ? 1 : 0);
   const sections: SettingsSection[] = [
     {
       id: "plan",
@@ -93,6 +94,7 @@ export default async function SettingsPage() {
         <TeamPinPanel
           people={people}
           currentUserId={session.userId}
+          currentHasPin={session.hasPin}
           roles={roles}
           branches={branches.map((b) => ({ id: b.id, name: b.name, isActive: b.isActive, hasKey: b.hasKey }))}
           maxUsers={planUsage.plan.maxUsers}

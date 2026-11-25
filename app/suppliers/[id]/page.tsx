@@ -1,3 +1,4 @@
+import { requirePurchasesAccess } from "@/lib/session";
 import { AdminShell } from "@/components/accounting/AdminShell";
 import { notFound } from "next/navigation";
 import { SupplierForm } from "@/components/suppliers/SupplierForm";
@@ -8,6 +9,7 @@ export default async function EditSupplierPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePurchasesAccess();
   const { id } = await params;
   const supplier = await getSupplier(id);
   if (!supplier) notFound();

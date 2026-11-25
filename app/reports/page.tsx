@@ -1,5 +1,5 @@
 import { PendingClosingsRow } from "@/components/reports/PendingClosingsRow";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { BanknoteIcon, FileTextIcon, TrendingDownIcon, WalletIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CajaChicaCard } from "@/components/reports/CajaChicaCard";
@@ -10,7 +10,7 @@ import { ChannelFilter, PaymentStatusFilter } from "@/components/reports/Payment
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { formatCurrencyCents, getCurrency } from "@/lib/currencies";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
-import { requireSectionAccess } from "@/lib/session";
+import { canOperateCash, requireSectionAccess } from "@/lib/session";
 import { listRecentSales } from "@/lib/actions/sales";
 import { getDailyClosingSummary, listPendingClosings, listRecentClosings } from "@/lib/actions/cash-closing";
 import { parseDateRangeSelection, selectionToWindows, todayDateString } from "@/lib/report-types";
@@ -20,13 +20,15 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; year?: string; months?: string; status?: string; channel?: string; vista?: string }>;
+  searchParams: Promise<{ range?: string; year?: string; months?: string; status?: string; channel?: string; vista?: string; n?: string }>;
 }) {
   const session = await requireSectionAccess("reports");
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const todayStr = todayDateString();
   const channelFilter = ["MOSTRADOR", "DELIVERY", "PICKUP", "ONLINE"].includes(params.channel ?? "") ? (params.channel as string) : "";
+  // Cada venta trae partidas y pagos: se cargan 100 y «Cargar más» pide otras 100 (tope 1000).
+  const salesLimit = Math.min(1000, Math.max(100, Math.floor(Number(params.n) / 100) * 100 || 100));
   const statusFilter = params.status === "PAID" || params.status === "CREDIT" ? params.status : "";
 
   const [
@@ -38,7 +40,7 @@ export default async function ReportsPage({
     pendingClosings,
     recentClosings,
   ] = await Promise.all([
-    listRecentSales(500, selectionToWindows(range), statusFilter || undefined),
+    listRecentSales(salesLimit, selectionToWindows(range), statusFilter || undefined),
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
@@ -108,7 +110,7 @@ export default async function ReportsPage({
         </header>
         <CajaChicaCard
           summary={todaySummary}
-          canEdit={canManage && todaySummary.shiftOpen}
+          canEdit={canOperateCash(session) && todaySummary.shiftOpen}
           rate={rate}
           currencyCode={localCurrencyCode}
           exchangeRateEnabled={exchangeRateEnabled}
@@ -155,7 +157,7 @@ export default async function ReportsPage({
               company={company}
               branchName={session.branchName}
               printPaperSize={printPaperSize}
-              canClose={canManage}
+              canClose={canOperateCash(session)}
               branchSelected={session.branchId != null}
             />
           </CardHeader>
@@ -178,7 +180,7 @@ export default async function ReportsPage({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {[
-                { label: "Ventas del día", value: formatCurrencyCents(referenceCurrency, todaySummary.totalCents), sub: `${todaySummary.paidCount} ${todaySummary.paidCount === 1 ? "venta pagada" : "ventas pagadas"}`, Icon: BanknoteIcon, tone: "bg-success/14 text-success" },
+                { label: "Ventas del día", value: formatCurrencyCents(referenceCurrency, todaySummary.totalCents), sub: `${todaySummary.salesCount} ${todaySummary.salesCount === 1 ? "venta" : "ventas"}${todaySummary.creditCount > 0 ? ` · ${todaySummary.creditCount} a crédito` : ""}`, Icon: BanknoteIcon, tone: "bg-success/14 text-success" },
                 { label: "Efectivo esperado", value: formatCurrencyCents(referenceCurrency, todaySummary.expectedCashCents), sub: rate != null && exchangeRateEnabled ? `Bs ${Math.round((todaySummary.expectedCashCents / 100) * rate).toLocaleString("es-VE")}` : "Apertura + efectivo − salidas", Icon: WalletIcon, tone: "bg-primary/12 text-primary" },
                 { label: "Salidas", value: formatCurrencyCents(referenceCurrency, todaySummary.outflowsCents), sub: `${todaySummary.outflows.length} movimientos`, Icon: TrendingDownIcon, tone: "bg-destructive/12 text-destructive" },
               ].map((k) => (
@@ -202,7 +204,7 @@ export default async function ReportsPage({
           currencyCode={localCurrencyCode}
           exchangeRateEnabled={exchangeRateEnabled}
           referenceCurrency={referenceCurrency}
-          canClose={canManage}
+          canClose={canOperateCash(session)}
         />
       </PendingClosingsRow>
 
@@ -227,6 +229,18 @@ export default async function ReportsPage({
             printPaperSize={printPaperSize}
             canManage={canManage}
           />
+          {recentSales.length >= salesLimit && salesLimit < 1000 && (
+            <div className="mt-4 text-center">
+              <Link
+                href={`/reports?${new URLSearchParams({ ...Object.fromEntries(Object.entries(params).filter(([k, v]) => k !== "n" && typeof v === "string")) as Record<string, string>, n: String(salesLimit + 100) }).toString()}`}
+                scroll={false}
+                prefetch={false}
+                className="text-sm font-semibold text-primary underline underline-offset-4"
+              >
+                Cargar ventas anteriores
+              </Link>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

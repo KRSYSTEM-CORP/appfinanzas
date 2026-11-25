@@ -1,3 +1,4 @@
+import { scopeMemo } from "@/lib/tenant-db";
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { isDayClosed } from "@/lib/cash-shifts";
@@ -50,7 +51,19 @@ function walkDays(windows: { start: Date; end: Date }[]): Day[] {
   return days;
 }
 
-async function closedDateSet(
+function closedDateSet(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  branchId: string | null,
+  days: Day[]
+): Promise<Set<string>> {
+  // Una pantalla pide los mismos días cerrados para cada métrica: se consulta una vez por lectura.
+  return scopeMemo(`closed:${companyId}:${branchId ?? "-"}:${days.map((d) => d.dateStr).join(",")}`, () =>
+    closedDateSetQuery(tx, companyId, branchId, days)
+  );
+}
+
+async function closedDateSetQuery(
   tx: Prisma.TransactionClient,
   companyId: string,
   branchId: string | null,
@@ -132,6 +145,6 @@ export async function assertDayNotClosed(
     tx.cashOpening.findMany({ where: { companyId, branchId, date }, select: { shiftNumber: true } }),
   ]);
   if (isDayClosed(openings, closings)) {
-    throw new Error("La caja de ese día ya fue cerrada. Abre un nuevo turno para seguir.");
+    throw new Error("Esta venta es de un día cuya caja ya tiene Corte Z, así que no se puede anular ni cambiar. Para corregirla, registra la devolución como una salida en la Caja Chica del turno actual.");
   }
 }

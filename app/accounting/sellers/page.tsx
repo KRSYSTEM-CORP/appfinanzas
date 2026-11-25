@@ -1,5 +1,5 @@
-import { requireAccountingPlan } from "@/lib/session";
-import Link from "next/link";
+import { requireAdminAccess } from "@/lib/session";
+import Link from "@/components/ui/nav-link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -26,7 +26,7 @@ export default async function SellersReportPage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string; seller?: string }>;
 }) {
-  await requireAccountingPlan();
+  await requireAdminAccess();
   const params = await searchParams;
   const sellerId = params.seller;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "7d" });

@@ -3,7 +3,7 @@
 import { productLimitError } from "@/lib/plan-limits";
 import { userErrorMessage } from "@/lib/user-error";
 import { revalidatePath } from "next/cache";
-import { requireManager, requireSectionAccess, requireSession } from "@/lib/session";
+import { requireManager, requireSectionAccess, requireSession, requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { notifyLive, posChannel } from "@/lib/realtime";
 import { getOrSetCache } from "@/lib/cache";
@@ -686,7 +686,7 @@ export async function registerInternalUse(
   note?: string,
   taker?: { kind: "SOCIO" | "PERSONAL"; name: string }
 ): Promise<ActionResult> {
-  const session = await requireManager();
+  const session = await requireManagerOrPermission("admin");
   const { companyId, userId: actorId, sellerName: actorName } = session;
   if (!session.branchId) {
     return { success: false, error: 'Selecciona una sucursal — no se puede con "Todas las sucursales".' };
@@ -746,7 +746,7 @@ function parseTaker(sourceType: string | null, actorName: string) {
 }
 
 export async function listInternalUse(): Promise<InternalUseRow[]> {
-  const session = await requireManager();
+  const session = await requireManagerOrPermission("admin");
   const { companyId } = session;
   return withTenant(companyId, async (tx) => {
     let moves = await tx.stockMovement.findMany({
@@ -782,7 +782,7 @@ export async function listInternalUse(): Promise<InternalUseRow[]> {
 // Eliminar un retiro devuelve la mercancía al inventario. No se borra el movimiento original: se registra uno inverso
 // (así la cadena de existencias y la auditoría quedan intactas) y el retiro deja de listarse.
 export async function deleteInternalUse(movementId: string): Promise<ActionResult> {
-  const session = await requireManager();
+  const session = await requireManagerOrPermission("admin");
   const { companyId, userId: actorId, sellerName: actorName } = session;
   let affectedBranch: string | null = null;
   try {

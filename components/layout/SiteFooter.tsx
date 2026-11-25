@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { COPYRIGHT_LINE } from "@/lib/legal";
 
 // Public pages only (login/signup) — the authenticated app doesn't carry

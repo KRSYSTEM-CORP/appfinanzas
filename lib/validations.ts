@@ -802,6 +802,10 @@ export const BulkPurchaseRowSchema = z
     productName: z.preprocess(blankToUndefined, z.string().trim().optional()),
     quantity: z.coerce.number().int().positive("La cantidad debe ser mayor a 0"),
     unitCost: z.coerce.number().min(0, "El costo no puede ser negativo").transform(toCents),
+    // Moneda de «Costo unitario» y «Total factura»: código (USD, EUR, VES…) o «Bs». Vacío = moneda de referencia.
+    currency: z.preprocess(blankToUndefined, z.string().trim().max(10).optional()),
+    // Total real de la factura del proveedor (mismo importe para todas las filas de la factura): reescala costos e IVA.
+    invoiceTotal: z.preprocess(blankToUndefined, z.coerce.number().positive("El total de la factura debe ser mayor a 0").transform(toCents).optional()),
     taxCategory: z.preprocess(
       (v) => (v === "" || v == null ? undefined : v),
       TaxCategoryEnum.optional()

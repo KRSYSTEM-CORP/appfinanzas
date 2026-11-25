@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { useRouter } from "next/navigation";
 import { ArrowDownIcon, ArrowUpIcon, AwardIcon, BoxIcon, CheckIcon, LockIcon, SparklesIcon, EyeIcon, EyeOffIcon, ExternalLinkIcon, FileTextIcon, StarIcon, UsersIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";

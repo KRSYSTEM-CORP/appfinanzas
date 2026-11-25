@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { LightbulbIcon, PlusIcon, StarIcon, TrendingDownIcon, UsersIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ImportCustomers } from "@/components/customers/ImportCustomers";

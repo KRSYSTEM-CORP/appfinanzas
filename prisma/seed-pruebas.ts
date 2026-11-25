@@ -16,6 +16,8 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url 
 const LOGIN_CODE = "PRUEBA1";
 const MANAGER_EMAIL = "gerente@pruebas.test";
 const SELLER_EMAIL = "ana@pruebas.test";
+// Superadmin de la plataforma (entra a /admin). Solo existe en la base de pruebas.
+const SUPERADMIN_EMAIL = "superadmin@pruebas.test";
 const PASSWORD = "Pruebas2026!";
 const RATE = 97.5; // VES por EUR, valor de ejemplo
 
@@ -29,7 +31,7 @@ const inDays = (d: number) => daysAgo(-d);
 
 async function main() {
   await prisma.company.deleteMany({ where: { loginCode: LOGIN_CODE } });
-  await prisma.user.deleteMany({ where: { email: { in: [MANAGER_EMAIL, SELLER_EMAIL, "luis@pruebas.test"] } } });
+  await prisma.user.deleteMany({ where: { email: { in: [MANAGER_EMAIL, SELLER_EMAIL, SUPERADMIN_EMAIL, "luis@pruebas.test"] } } });
 
   const company = await prisma.company.create({
     data: {
@@ -55,6 +57,12 @@ async function main() {
     data: {
       email: MANAGER_EMAIL, passwordHash: hashPassword(PASSWORD), companyId: cid,
       firstName: "Gabriela", lastName: "Rojas", role: "GERENTE", hasSeenTour: true,
+    },
+  });
+  await prisma.user.create({
+    data: {
+      email: SUPERADMIN_EMAIL, passwordHash: hashPassword(PASSWORD), companyId: cid,
+      firstName: "Super", lastName: "Admin", role: "GERENTE", isSuperAdmin: true, hasSeenTour: true,
     },
   });
   const seller = await prisma.user.create({
@@ -268,6 +276,7 @@ async function main() {
   console.log(`  Código de empresa: ${LOGIN_CODE}`);
   console.log(`  Gerente:  ${MANAGER_EMAIL}`);
   console.log(`  Vendedor: ${SELLER_EMAIL}`);
+  console.log(`  Superadmin: ${SUPERADMIN_EMAIL}`);
   console.log(`  Contraseña (ambos): ${PASSWORD}`);
 }
 

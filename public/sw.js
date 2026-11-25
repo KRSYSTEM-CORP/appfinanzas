@@ -31,7 +31,7 @@
 // itself, so every open tab falls back to the old plain network-passthrough
 // behavior on its next load without anyone needing to clear site data by
 // hand.
-const CACHE_VERSION = "v7";
+const CACHE_VERSION = "v8";
 const CACHE_NAME = `kr-pos-shell-${CACHE_VERSION}`;
 const OFFLINE_SHELL_PATH = "/pos/offline";
 // Any failed navigation to one of these paths is redirected to the offline
@@ -39,6 +39,14 @@ const OFFLINE_SHELL_PATH = "/pos/offline";
 // navigation to e.g. /inventory or /reports still shows the browser's own
 // offline page instead of silently landing on a POS screen that has nothing
 // to do with what was asked for.
+// Logos de bancos y métodos de pago (Zelle, Binance, PayPal...) y marca: son
+// estáticos y pequeños; se precargan para que el cobro y el comprobante los
+// muestren sin internet.
+const STATIC_LOGOS = [
+  "zelle", "binance", "paypal", "banesco", "mercantil", "provincial", "bdv", "bnc", "bicentenario",
+  "bancaribe", "bod", "exterior", "plaza", "banplus", "bancamiga", "bfc", "r4", "sofitasa", "tesoro",
+  "activo", "bancrecer", "caroni", "cienbanco", "delsur", "vzlacredito",
+].map((k) => `/banks/${k}.png`);
 const OFFLINE_FALLBACK_PATHS = new Set(["/", "/pos", OFFLINE_SHELL_PATH]);
 
 // Una red "colgada" (señal débil del teléfono) nunca responde ni falla: sin
@@ -107,6 +115,16 @@ async function cachePut(cache, request, response) {
 async function warmShellCache() {
   try {
     const cache = await caches.open(CACHE_NAME);
+    // Logos primero y sin depender del shell: fallos aislados se ignoran.
+    await Promise.all(
+      STATIC_LOGOS.map(async (u) => {
+        try {
+          if (await cache.match(u)) return;
+          const r = await fetch(u);
+          if (r.ok) await cachePut(cache, u, r);
+        } catch {}
+      })
+    );
     const res = await fetch(OFFLINE_SHELL_PATH, { credentials: "same-origin" });
     if (!res.ok) return;
     // Without a session the proxy redirects /pos/offline to /login and fetch()
@@ -173,6 +191,20 @@ self.addEventListener("fetch", (event) => {
   // while online — that keeps /pos/offline showing photos. Cache-first is safe:
   // the ?v= in the URL changes whenever a product's photo does.
   if (request.method === "GET" && /^\/api\/products\/[^/]+\/image$/.test(url.pathname)) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request).then((res) => {
+            if (res.ok) caches.open(CACHE_NAME).then((c) => cachePut(c, request, res.clone()));
+            return res;
+          })
+      )
+    );
+    return;
+  }
+
+  if (request.method === "GET" && (url.pathname.startsWith("/banks/") || url.pathname.startsWith("/brand/") || url.pathname.startsWith("/icons/"))) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>

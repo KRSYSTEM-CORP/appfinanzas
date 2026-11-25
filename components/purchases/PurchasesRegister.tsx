@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { useRouter } from "next/navigation";
-import { PlusIcon, ShoppingCartIcon } from "lucide-react";
+import { DownloadIcon, PlusIcon, ShoppingCartIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/shared/ConfirmSheet";
@@ -14,6 +14,7 @@ import { PayDialog } from "@/components/purchases/PaymentOrdersPanel";
 import { voidPurchase, type PaymentOrderRow } from "@/lib/actions/purchases";
 import type { RestockSuggestion } from "@/lib/actions/reports";
 import { money } from "@/lib/money-display";
+import { downloadWorkbook } from "@/lib/spreadsheet";
 import { dualAmount, purchaseStatus, type MoneyCtx } from "@/lib/money-primary";
 import { PurchaseDetailDialog, type RegisterPurchase } from "@/components/purchases/PurchaseDetailDialog";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,10 @@ export function RestockCard({ rows, currency }: { rows: RestockSuggestion[]; cur
                 <small className="block text-xs text-muted-foreground">
                   Stock {r.stock}
                   {r.daysLeft != null ? ` · alcanza para ${r.daysLeft} días` : ""}
+                </small>
+                <small className="block text-xs text-muted-foreground">
+                  Vendiste {r.soldInWindow} en 30 días (≈ {r.perDay < 10 ? r.perDay.toFixed(1) : Math.round(r.perDay)} por día). Nivel ideal {r.idealQty}
+                  {" "}= 14 días de ventas (mínimo {r.minStock}, tope lo vendido en 30 días). Pedir {r.idealQty} − {Math.max(0, r.stock)} en stock.
                 </small>
               </div>
               <div className="text-right font-bold tabular-nums">
@@ -108,6 +113,37 @@ export function PurchasesTable({ purchases, ctx }: { purchases: RegisterPurchase
     };
   }
 
+  // «Exportar Excel»: las compras que se ven (filtro de proveedor incluido), una fila por compra.
+  async function exportExcel() {
+    try {
+      await downloadWorkbook(
+        [
+          {
+            name: "Compras",
+            rows: [
+              ["Fecha", "N.º control", "Proveedor", "Factura", "Concepto", "Base", "IVA", "Total", "Pagado", "Estado"],
+              ...shown.map((p) => [
+                p.createdAt.slice(0, 10),
+                p.controlNumber ?? "",
+                p.supplierName,
+                p.supplierInvoiceNo ?? "",
+                p.concept,
+                p.baseCents / 100,
+                p.taxCents / 100,
+                p.totalCents / 100,
+                p.paidCents / 100,
+                p.voided ? "Anulada" : p.paymentStatus === "PAID" ? "Pagada" : p.paidCents > 0 ? "Parcial" : "A crédito",
+              ]),
+            ],
+          },
+        ],
+        "compras.xlsx"
+      );
+    } catch {
+      toast.error("No se pudo generar el Excel. Inténtalo de nuevo.");
+    }
+  }
+
   function doVoid() {
     if (!toVoid) return;
     start(async () => {
@@ -133,6 +169,9 @@ export function PurchasesTable({ purchases, ctx }: { purchases: RegisterPurchase
               <option key={s}>{s}</option>
             ))}
           </select>
+          <Button type="button" variant="outline" onClick={exportExcel}>
+            <DownloadIcon aria-hidden /> Exportar Excel
+          </Button>
           <Button nativeButton={false} render={<Link href="/purchases/new" />}>
             <PlusIcon aria-hidden /> Registrar compra
           </Button>

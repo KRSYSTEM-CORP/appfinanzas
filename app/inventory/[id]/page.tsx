@@ -1,8 +1,9 @@
+import { requireManager } from "@/lib/session";
 import { notFound } from "next/navigation";
 import { ProductForm } from "@/components/inventory/ProductForm";
 import { getProduct, listCategories, updateProduct } from "@/lib/actions/products";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { Button } from "@/components/ui/button";
 import { HistoryIcon } from "lucide-react";
 
@@ -11,6 +12,7 @@ export default async function EditProductPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireManager();
   const { id } = await params;
   const [product, categories, { referenceCurrency }] = await Promise.all([
     getProduct(id),

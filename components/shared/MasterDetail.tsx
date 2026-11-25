@@ -4,6 +4,9 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import { createPortal } from "react-dom";
 import { ChevronRightIcon, XIcon } from "lucide-react";
 
+// Las filas fuera de pantalla no se maquetan ni pintan: listas largas sin tirones al deslizar.
+const ROW_CV = { contentVisibility: "auto", containIntrinsicSize: "auto 64px" } as const;
+
 // Shared "list + detail" layout.
 // - Desktop (md and up): a compact list on the left and the selected item's
 //   details and actions in a sticky panel on the right.
@@ -123,7 +126,7 @@ export function MasterDetail<T extends { id: string }>({
         {header}
         <div role="listbox" aria-label={label} aria-orientation="vertical">
           {items.map((item) => (
-            <div key={item.id} className="flex items-center border-b last:border-b-0">
+            <div key={item.id} className="flex items-center border-b last:border-b-0" style={ROW_CV}>
               {renderLead && <div className="shrink-0 pl-3">{renderLead(item)}</div>}
               <button
                 type="button"
@@ -188,6 +191,7 @@ export function MasterDetail<T extends { id: string }>({
               return (
                 <div
                   key={item.id}
+                  style={ROW_CV}
                   className={`flex items-center border-b last:border-b-0 transition-colors duration-150 ease-out ${
                     active ? "bg-primary/10 shadow-[inset_3px_0_0_var(--primary)]" : "hover:bg-muted/60"
                   }`}

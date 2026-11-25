@@ -6,7 +6,8 @@ import { computeIgtfCents } from "@/lib/igtf";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
 import { Prisma, type PaymentMethod, type PaymentStatus } from "@prisma/client";
-import { hasPermission, requireManager, requireSession } from "@/lib/session";
+import { hasPermission, requireAdminAccess, requireManager, requireSectionAccess } from "@/lib/session";
+import type { AppSection } from "@/lib/sections";
 import { withTenant } from "@/lib/tenant-db";
 import { resolveCoupon } from "@/lib/coupon-server";
 import { notifyLive, posChannel } from "@/lib/realtime";
@@ -63,7 +64,7 @@ async function lockSale(
 }
 
 export async function completeSale(input: unknown): Promise<CompleteSaleResult> {
-  const session = await requireSession();
+  const session = await requireSectionAccess("pos");
   const { companyId, userId, sellerName } = session;
   if (!session.branchId) {
     return {
@@ -735,7 +736,8 @@ export async function deleteSale(): Promise<ActionResult> {
 // de Pago document) once the sum of every abono actually reaches the total;
 // until then it stays CREDIT with a smaller remaining balance.
 export async function registerPayment(saleId: string, input: unknown): Promise<ActionResult> {
-  const { companyId, branchId: sessionBranchId } = await requireSession();
+  // El vendedor sigue pudiendo abonar (decisión del dueño): desde el POS, Caja Chica o Documentos.
+  const { companyId, branchId: sessionBranchId } = await requireSectionAccess(SALES_SECTIONS);
   const parsed = RegisterPaymentSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
@@ -862,7 +864,7 @@ export async function registerPayment(saleId: string, input: unknown): Promise<A
 // ahead of real SENIAT fiscal-machine integration — this alone does not
 // make the document fiscally compliant.
 export async function getOrCreateInvoiceNumber(saleId: string): Promise<{ invoiceNumber: number } | null> {
-  const { companyId, branchId: sessionBranchId } = await requireSession();
+  const { companyId, branchId: sessionBranchId } = await requireSectionAccess(SALES_SECTIONS);
 
   return withTenant(companyId, async (tx) => {
     const sale = await tx.sale.findFirst({
@@ -886,7 +888,7 @@ export async function getOrCreateInvoiceNumber(saleId: string): Promise<{ invoic
 }
 
 export async function getSaleReceipt(saleId: string) {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireSectionAccess(SALES_SECTIONS);
   const sale = await withTenant(companyId, (tx) =>
     tx.sale.findFirst({
       where: { id: saleId, companyId, ...(branchId ? { branchId } : {}) },
@@ -912,12 +914,16 @@ export async function getSaleReceipt(saleId: string) {
 // [start,end) ranges (see selectionToWindows, lib/report-types.ts) — used by
 // Reportes' date filter. Omitted entirely for callers that want the plain
 // "last N sales" behavior (e.g. Documentos, which does its own filtering).
-export async function listRecentSales(
-  limit = 10,
+// Pantallas desde las que se ven o cobran ventas: POS, Caja Chica y Documentos.
+const SALES_SECTIONS: AppSection[] = ["pos", "reports", "documents"];
+
+async function readRecentSales(
+  companyId: string,
+  branchId: string | null,
+  limit: number,
   windows?: { start: Date; end: Date }[],
   paymentStatus?: PaymentStatus
 ) {
-  const { companyId, branchId } = await requireSession();
   return withTenant(companyId, (tx) =>
     tx.sale.findMany({
       where: {
@@ -931,6 +937,21 @@ export async function listRecentSales(
       include: { items: true, payments: true, creditNote: { select: { controlNumber: true, createdAt: true, reason: true } }, debitNotes: { select: { controlNumber: true, createdAt: true, reason: true, totalCents: true, baseImponibleCents: true, taxCents: true }, orderBy: { controlNumber: "asc" } } },
     })
   );
+}
+
+export async function listRecentSales(
+  limit = 10,
+  windows?: { start: Date; end: Date }[],
+  paymentStatus?: PaymentStatus
+) {
+  const { companyId, branchId } = await requireSectionAccess(SALES_SECTIONS);
+  return readRecentSales(companyId, branchId, limit, windows, paymentStatus);
+}
+
+// Cuentas por cobrar (Administración): exige el permiso de Administración, no basta con ser vendedor.
+export async function listReceivableSales(limit: number, windows?: { start: Date; end: Date }[]) {
+  const { companyId, branchId } = await requireAdminAccess();
+  return readRecentSales(companyId, branchId, limit, windows, "CREDIT");
 }
 
 export type PosSaleRow = {
@@ -948,6 +969,7 @@ export type PosSaleRow = {
 
 // «Ventas del día / del periodo» dentro del POS (con «Volver a vender»).
 export async function listPosSales(preset: "today" | "7d" | "month"): Promise<PosSaleRow[]> {
+  await requireSectionAccess("pos");
   const win = rangeToDates(preset);
   const sales = await listRecentSales(40, [win]);
   return sales.map((s) => ({

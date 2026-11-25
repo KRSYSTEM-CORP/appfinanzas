@@ -6,6 +6,9 @@ import { customer, loadContext, owner, sessionFor, type Ctx } from "./helpers";
 // seeded company, and no-op cache/realtime side effects.
 let ctx: Ctx;
 vi.mock("@/lib/session", () => ({
+  requireManagerOrPermission: async () => sessionFor(ctx),
+  requireAccountingManagerOrPermission: async () => sessionFor(ctx),
+  requireAdminAccess: async () => sessionFor(ctx),
   requireAccountingPlan: async () => sessionFor(ctx),
   hasPermission: () => true,
   requireSession: async () => sessionFor(ctx),

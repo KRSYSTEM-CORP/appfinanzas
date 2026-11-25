@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { toast } from "sonner";
 import { DownloadIcon, ListChecksIcon } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";

@@ -59,7 +59,10 @@ export function PayrollPanel({
   sellers,
   monthsElapsed,
   ledger,
+  canManage = true,
 }: {
+  // Solo el gerente paga, edita o anula; el rol Contador ve la nómina y descarga recibos.
+  canManage?: boolean;
   ledger: PayrollLedgerRow[];
   sellers: PayrollSeller[];
   rates: PayrollRates;
@@ -149,9 +152,11 @@ export function PayrollPanel({
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-2">
           <CardTitle>Empleados</CardTitle>
-          <Button size="sm" onClick={() => setEditing("new")}>
-            Agregar empleado
-          </Button>
+          {canManage && (
+            <Button size="sm" onClick={() => setEditing("new")}>
+              Agregar empleado
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {employees.length === 0 ? (
@@ -184,17 +189,23 @@ export function PayrollPanel({
                         <>
                           {fullyPaid && <Badge variant="secondary">{row.surplusCents > 0 ? `Adelanto ${money(row.surplusCents)}` : "Pagada"}</Badge>}
                           {partial && <Badge variant="outline">Debes {money(row.pendingCents)}</Badge>}
-                          <Button size="sm" onClick={() => setPaying(e)}>
-                            {partial ? "Abonar" : fullyPaid ? "Otro pago" : "Pagar"}
+                          {canManage && (
+                            <Button size="sm" onClick={() => setPaying(e)}>
+                              {partial ? "Abonar" : fullyPaid ? "Otro pago" : "Pagar"}
+                            </Button>
+                          )}
+                        </>
+                      )}
+                      {canManage && (
+                        <>
+                          <Button size="sm" variant="outline" onClick={() => setEditing(e)}>
+                            Editar
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={isPending} onClick={() => toggleActive(e)}>
+                            {e.active ? "Dar de baja" : "Reactivar"}
                           </Button>
                         </>
                       )}
-                      <Button size="sm" variant="outline" onClick={() => setEditing(e)}>
-                        Editar
-                      </Button>
-                      <Button size="sm" variant="ghost" disabled={isPending} onClick={() => toggleActive(e)}>
-                        {e.active ? "Dar de baja" : "Reactivar"}
-                      </Button>
                     </div>
                   </div>
                 );
@@ -205,7 +216,7 @@ export function PayrollPanel({
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <RatesCard rates={rates} />
+        <RatesCard rates={rates} canManage={canManage} />
         <Card>
           <CardHeader>
             <CardTitle>Provisiones</CardTitle>
@@ -313,9 +324,11 @@ export function PayrollPanel({
                             Ver comprobante
                           </Button>
                         )}
-                        <Button size="xs" variant="link" className="text-destructive" disabled={isPending} onClick={() => voidPayment(p)}>
-                          Anular pago
-                        </Button>
+                        {canManage && (
+                          <Button size="xs" variant="link" className="text-destructive" disabled={isPending} onClick={() => voidPayment(p)}>
+                            Anular pago
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -681,7 +694,7 @@ function ProvisionRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RatesCard({ rates }: { rates: PayrollRates }) {
+function RatesCard({ rates, canManage }: { rates: PayrollRates; canManage: boolean }) {
   const router = useRouter();
   const [ivss, setIvss] = useState(String(rates.ivssPct));
   const [paro, setParo] = useState(String(rates.paroPct));
@@ -731,9 +744,11 @@ function RatesCard({ rates }: { rates: PayrollRates }) {
             </Field>
           </div>
           <div className="flex items-center gap-3">
-            <Button type="submit" size="sm" disabled={isPending}>
-              Guardar porcentajes
-            </Button>
+            {canManage && (
+              <Button type="submit" size="sm" disabled={isPending}>
+                Guardar porcentajes
+              </Button>
+            )}
             {saved && <span className="text-sm text-success">Guardado</span>}
             {error && (
               <span role="alert" className="text-sm text-destructive">

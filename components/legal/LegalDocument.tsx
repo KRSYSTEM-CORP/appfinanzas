@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 
 // Shared layout for the three public legal pages (Privacidad/Términos/
 // Cookies) — plain, readable typography rather than the app's usual

@@ -17,7 +17,7 @@ import { assertAccountFunds, toActionResult } from "@/lib/account-balance";
 import { lineInAccountCurrency } from "@/lib/account-money";
 import { paymentsPrimaryLocal } from "@/lib/money-primary";
 import { buildPurchasePaymentLine, stockShortfalls } from "@/lib/purchase-payment";
-import { scaleLinesToTotal, scaleLooksWrong, baseUnitCost } from "@/lib/purchase-math";
+import { scaleLinesToTotal, scaleLooksWrong, baseUnitCost, resolveImportCurrency } from "@/lib/purchase-math";
 import { paymentSettlesPurchase, purchaseRemaining } from "@/lib/purchase-payment";
 
 export type CompletePurchaseResult =
@@ -358,7 +358,7 @@ async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, co
 }
 
 // Al anular, el costo de cada producto vuelve al de la última compra no anulada (costo base, sin IVA), siempre que la
-// anulada fuera la más reciente de ese producto; si no queda ninguna otra compra, el costo se deja como está.
+// anulada fuera la más reciente de ese producto; si no queda ninguna otra compra, el costo vuelve a 0.
 async function restorePreviousCost(tx: Prisma.TransactionClient, purchaseId: string, voidedCreatedAt: Date, companyId: string, branchId: string) {
   const items = await tx.purchaseItem.findMany({ where: { purchaseId, affectsStock: true, productId: { not: null } }, select: { productId: true } });
   for (const productId of new Set(items.map((i) => i.productId as string))) {
@@ -373,7 +373,7 @@ async function restorePreviousCost(tx: Prisma.TransactionClient, purchaseId: str
       select: { baseCents: true, quantity: true },
     });
     const cost = prev ? baseUnitCost(prev.baseCents, prev.quantity) : 0;
-    if (cost > 0) await tx.product.updateMany({ where: { id: productId, companyId, branchId }, data: { costCents: cost } });
+    await tx.product.updateMany({ where: { id: productId, companyId, branchId }, data: { costCents: cost } });
   }
 }
 
@@ -430,6 +430,8 @@ export type BulkPurchaseRow = {
   productName?: unknown;
   quantity: unknown;
   unitCost: unknown;
+  currency?: unknown;
+  invoiceTotal?: unknown;
   taxCategory?: unknown;
   paymentStatus?: unknown;
   affectsStock?: unknown;
@@ -493,9 +495,15 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
         ivaReducedRatePercent: true,
         isIvaWithholdingAgent: true,
         ivaWithholdingPercent: true,
+        exchangeRate: true,
+        localCurrencyCode: true,
+        referenceCurrency: true,
       },
     })
   );
+  const importRate = company?.exchangeRate != null ? Number(company.exchangeRate) : null;
+  const importReference = company?.referenceCurrency ?? "EUR";
+  const importLocal = company?.localCurrencyCode ?? DEFAULT_CURRENCY_CODE;
   {
     const { general: ivaGeneralRatePercent, reduced: ivaReducedRatePercent } = effectiveIvaRates(
       company?.ivaEnabled ?? true,
@@ -541,6 +549,13 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
         let baseImponibleCents = 0;
         let taxTotalCents = 0;
 
+        // Todas las filas de una factura comparten la moneda: una mezcla se rechaza en vez de adivinar.
+        const currencies = new Set(entries.map((e) => resolveImportCurrency(e.data.currency, importLocal, importReference)));
+        if (currencies.size > 1) throw new Error("Las filas de una misma factura tienen monedas distintas");
+        const rowCurrency = [...currencies][0];
+        const invoiceTotals = new Set(entries.map((e) => e.data.invoiceTotal).filter((v): v is number => v != null));
+        if (invoiceTotals.size > 1) throw new Error("Las filas de una misma factura tienen «Total factura» distintos");
+
         for (const entry of entries) {
           const { productSku, productName, quantity, unitCost, taxCategory, affectsStock } = entry.data;
           const matches = productSku
@@ -553,7 +568,9 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           }
 
           const resolvedTaxCategory = taxCategory ?? product.taxCategory;
-          const subtotalCents = unitCost * quantity;
+          // Misma conversión que createPurchase: el costo se declara en Bs o en divisa y se pasa a la moneda de referencia.
+          const unitCostRef = toEurCents(unitCost, rowCurrency === "LOCAL" ? importLocal : importReference, importRate, importReference);
+          const subtotalCents = unitCostRef * quantity;
           totalCents += subtotalCents;
           const taxRatePercent = rateForCategory(resolvedTaxCategory, ivaGeneralRatePercent, ivaReducedRatePercent);
           const { baseCents, taxCents } = decomposeTax(subtotalCents, resolvedTaxCategory, taxRatePercent);
@@ -565,13 +582,28 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
             productName: product.name,
             taxCategory: resolvedTaxCategory,
             taxRatePercent,
-            unitCostCents: unitCost,
+            unitCostCents: unitCostRef,
             quantity,
             baseCents,
             taxCents,
             subtotalCents,
             affectsStock,
           });
+        }
+
+        // Con «Total factura» el desglose se reescala al total real (igual que createPurchase): costo e IVA por línea.
+        const declaredTotal = [...invoiceTotals][0];
+        if (declaredTotal != null && totalCents > 0) {
+          const declaredRef = toEurCents(declaredTotal, rowCurrency === "LOCAL" ? importLocal : importReference, importRate, importReference);
+          const scale = declaredRef / totalCents;
+          if (scaleLooksWrong(scale)) {
+            throw new Error("«Total factura» no coincide con los costos de las líneas (diferencia enorme). Revisa la moneda y los montos.");
+          }
+          const r = scaleLinesToTotal(itemsData, scale, declaredRef);
+          itemsData.splice(0, itemsData.length, ...r.lines.map((l) => ({ ...l, unitCostCents: l.quantity > 0 ? Math.round(l.subtotalCents / l.quantity) : l.unitCostCents })));
+          totalCents = declaredRef;
+          baseImponibleCents = r.baseTotalCents;
+          taxTotalCents = r.taxTotalCents;
         }
 
         const ivaRetainedCents = company?.isIvaWithholdingAgent

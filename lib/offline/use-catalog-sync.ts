@@ -87,8 +87,17 @@ export function useCatalogSync(params: {
       paymentAccounts: params.paymentAccounts,
       ...(params.shiftOpen != null ? { shiftOpen: params.shiftOpen } : {}),
     };
-    putCatalogSnapshot(snapshot);
     writeLastBranch({ branchId, branchName, companyName });
+    // El volcado a IndexedDB clona todo el catálogo: se hace cuando el navegador está libre,
+    // no durante la hidratación (en teléfonos de gama baja era una tarea larga al abrir el POS).
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void };
+    const save = () => putCatalogSnapshot(snapshot);
+    if (w.requestIdleCallback) {
+      const h = w.requestIdleCallback(save, { timeout: 4000 });
+      return () => w.cancelIdleCallback?.(h);
+    }
+    const t = setTimeout(save, 1500);
+    return () => clearTimeout(t);
     // Only the values that actually identify "the data changed" are worth
     // depending on — params.rate/categories/etc. all change in lockstep with
     // `products` (same server render), so re-listing every field here would

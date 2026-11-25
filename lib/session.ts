@@ -1,4 +1,5 @@
-import { DEFAULT_LOCK_MINUTES, SECTION_PERMISSION, type PermissionId } from "@/lib/permissions";
+import { DEFAULT_LOCK_MINUTES, type PermissionId } from "@/lib/permissions";
+import { canOperateCash, hasPermission, hasSectionAccess, isManagerSession } from "@/lib/access";
 import { getPlan, type PlanId } from "@/lib/plans";
 import "server-only";
 import { cache } from "react";
@@ -240,13 +241,8 @@ export async function requireManager(): Promise<Session> {
 // quote's PDF is reachable from both Presupuestos and Documentos).
 export async function requireSectionAccess(section: AppSection | AppSection[]): Promise<Session> {
   const session = await requireSession();
-  if (session.role === "GERENTE" || session.isSuperAdmin) return session;
   const sections = Array.isArray(section) ? section : [section];
-  if (session.permissions) {
-    if (sections.some((s) => session.permissions!.includes(SECTION_PERMISSION[s]))) return session;
-    redirect("/pos");
-  }
-  if (session.allowedSections.length === 0 || sections.some((s) => session.allowedSections.includes(s))) return session;
+  if (hasSectionAccess(session, sections)) return session;
   redirect("/pos");
 }
 
@@ -294,14 +290,37 @@ export function requireBranchId(session: Session): string {
   return session.branchId;
 }
 
-// ¿Tiene esta persona el permiso? Un super admin y un gerente sin rol asignado lo tienen todo
-// (comportamiento anterior); un vendedor sin rol solo lo que sus secciones habilitan.
-export function hasPermission(session: Pick<Session, "isSuperAdmin" | "role" | "permissions" | "allowedSections">, permission: PermissionId): boolean {
-  if (session.isSuperAdmin) return true;
-  if (session.permissions) return session.permissions.includes(permission);
-  if (session.role === "GERENTE") return true;
-  const enabled = session.allowedSections.length === 0 ? Object.keys(SECTION_PERMISSION) : session.allowedSections;
-  return enabled.some((sec) => SECTION_PERMISSION[sec] === permission);
+// Datos que un gerente siempre puede leer y que un rol de vendedor (p. ej. Contador) puede leer si
+// tiene alguno de estos permisos. Quien no, vuelve al POS.
+export { canOperateCash, hasPermission, isManagerSession };
+
+// Caja Chica (apertura, salidas y cierre): gerente, o un rol con el permiso «Caja Chica» (Cajero).
+// Un vendedor sin rol o con el rol Vendedor no entra, aunque vea la pantalla.
+export async function requireCashAccess(): Promise<Session> {
+  const session = await requireSession();
+  if (!canOperateCash(session)) redirect("/pos");
+  return session;
+}
+
+export async function requireManagerOrPermission(...permissions: PermissionId[]): Promise<Session> {
+  const session = await requireSession();
+  if (isManagerSession(session) || permissions.some((p) => hasPermission(session, p))) return session;
+  redirect("/pos");
+}
+
+// Igual que requireManagerOrPermission, pero además exige el plan con Contabilidad.
+export async function requireAccountingManagerOrPermission(...permissions: PermissionId[]): Promise<Session> {
+  const session = await requireAccountingPlan();
+  if (isManagerSession(session) || permissions.some((p) => hasPermission(session, p))) return session;
+  redirect("/pos");
+}
+
+// Pantallas de gerente que además se pueden apagar por rol (Asistente IA, Sucursales, Ajustes):
+// hace falta ser gerente de base Y tener el permiso. Las acciones de esas pantallas ya exigen gerente.
+export async function requireManagerPermission(permission: PermissionId): Promise<Session> {
+  const session = await requirePermission(permission);
+  if (!isManagerSession(session)) redirect("/pos");
+  return session;
 }
 
 // Valida un permiso en el servidor: quien no lo tiene vuelve al POS.

@@ -1,3 +1,4 @@
+import { withTenantScope } from "@/lib/tenant-db";
 import { requireAccountingPlan, requirePermission } from "@/lib/session";
 import { AdminShell } from "@/components/accounting/AdminShell";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
@@ -19,17 +20,17 @@ export default async function StatementsPage({
   searchParams: Promise<{ range?: string; year?: string; months?: string; from?: string; to?: string; islr?: string; tab?: string }>;
 }) {
   await requirePermission("admin");
-  await requireAccountingPlan();
+  const planSession = await requireAccountingPlan();
   const params = await searchParams;
   const { ivaEnabled } = await getIvaSettings();
   const tab = statementTab(params.tab, ivaEnabled);
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const islr = Number.isFinite(Number(params.islr)) && params.islr !== undefined ? Number(params.islr) : 15;
-  const [statements, movements, { referenceCurrency, rate, exchangeRateEnabled }] = await Promise.all([
+  const [statements, movements, { referenceCurrency, rate, exchangeRateEnabled }] = await withTenantScope(planSession.companyId, () => Promise.all([
     getStatements(range, islr),
     listMovements(range),
     getExchangeRateInfo(),
-  ]);
+  ]));
   const label = selectionLabel(range, todayDateString());
 
   return (

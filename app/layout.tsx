@@ -15,6 +15,7 @@ import { AnnouncementBanners } from "@/components/nav/AnnouncementBanners";
 import { getActiveBanners } from "@/lib/platform-banner";
 import { FEATURES, hasFeature } from "@/lib/features";
 import { getBranding, getSidebarRate } from "@/lib/actions/settings";
+import { outsideScope, withTenantScope } from "@/lib/tenant-db";
 import { getPlan } from "@/lib/plans";
 import { listBranches } from "@/lib/actions/branches";
 import { deriveBrandVars, deriveDarkAccent } from "@/lib/theme-color";
@@ -65,15 +66,19 @@ export default async function RootLayout({
   const renewal =
     canLoadAppChrome && session && !session.isSuperAdmin && session.role === "GERENTE" && (session.roleName == null || session.roleName === "Dueño") ? renewalNotice(session.nextPaymentDueDate, session.isExempt, new Date(), session.inTrial) : null;
   const isOwner = Boolean(canLoadAppChrome && session && !session.isSuperAdmin && session.role === "GERENTE" && (session.roleName == null || session.roleName === "Dueño"));
-  const [branding, branches, sidebarRate, banners, paymentState] = await Promise.all([
+  // Una sola transacción para las lecturas del menú; las que se atrapan con .catch van aparte (outsideScope).
+  const [branding, branches, sidebarRate, banners, paymentState] = await (session && canLoadAppChrome ? withTenantScope(session.companyId, load) : load());
+  async function load() {
+    return Promise.all([
     session ? getBranding() : Promise.resolve({ logoDataUrl: null, brandColor: null, brandBackground: null }),
     canManage && canLoadAppChrome ? listBranches() : Promise.resolve([]),
     canLoadAppChrome ? getSidebarRate() : Promise.resolve(null),
     // Avisos de la Plataforma: una falla de lectura nunca debe tumbar la app.
-    canLoadAppChrome && session && !session.isSuperAdmin ? getActiveBanners(session).catch(() => []) : Promise.resolve([]),
+    canLoadAppChrome && session && !session.isSuperAdmin ? outsideScope(() => getActiveBanners(session)).catch(() => []) : Promise.resolve([]),
     // Estado del pago reportado (pendiente o recién aprobado): una falla de lectura nunca debe tumbar la app.
-    isOwner && session ? getPaymentBannerState(session.companyId).catch(() => null) : Promise.resolve(null),
-  ]);
+    isOwner && session ? outsideScope(() => getPaymentBannerState(session.companyId)).catch(() => null) : Promise.resolve(null),
+    ]);
+  }
   // The accent (buttons/links) applies in both themes, but the company's
   // chosen background and the surface colors derived from it only make sense
   // in light mode. As an inline style on <html> they beat the .dark palette,
@@ -115,6 +120,7 @@ export default async function RootLayout({
             role={session.role}
             sellerName={session.sellerName}
             allowedSections={session.allowedSections}
+            permissions={session.permissions}
             featureLinks={FEATURES.filter((f) => f.href && hasFeature(session.enabledFeatures, f.id)).map((f) => ({
               href: f.href as string,
               label: f.label,

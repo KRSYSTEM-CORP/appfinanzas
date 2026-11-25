@@ -4,7 +4,13 @@ import { DEFAULT_CURRENCY_CODE, eurCentsToLocal, formatCurrencyCents, formatLoca
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { CashClosingSummary } from "@/lib/actions/cash-closing";
 import { grandTotals, groupIncomeByMethod } from "@/lib/income-by-method";
+import { OUTFLOW_METHOD_LABEL } from "@/lib/cash-outflow";
+import { countedDifference, differenceLabel, expectedCashByCurrency } from "@/lib/cash-closing";
+import { SHOP_TIME_ZONE } from "@/lib/report-types";
 import { isThermal, printRootClass } from "@/lib/print-paper-sizes";
+
+const formatTime = (d: Date | string) =>
+  new Intl.DateTimeFormat("es-VE", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: SHOP_TIME_ZONE }).format(typeof d === "string" ? new Date(d) : d);
 
 // Plain HTML/CSS rendering of a Cierre de Caja for the browser print dialog
 // (see PrintDialog.tsx) — mirrors PrintableSaleDocument.tsx's structure,
@@ -36,6 +42,24 @@ export function PrintableCashClosing({
       ? formatLocalCurrency(eurCentsToLocal(cents, rate!), currencyCode)
       : formatCurrencyCents(referenceCurrency, cents);
 
+  const refMoney = (cents: number) => formatCurrencyCents(referenceCurrency, cents);
+  const localMoney = (cents: number) => formatCurrencyCents(currencyCode, cents);
+  const refName = referenceCurrency === "EUR" ? "euros" : "dólares";
+  const expected = expectedCashByCurrency({
+    openingCents: summary.openingCents,
+    openingRefCents: summary.openingRefCents,
+    openingLocalCents: summary.openingLocalCents,
+    incomeRows: summary.byAccount ?? [],
+    outflows: summary.outflows,
+    refundedCash: summary.refundedCash,
+    rate,
+    referenceCurrency,
+    localCurrency: currencyCode,
+  });
+  const showBs = showLocal || expected.localCents !== 0 || (summary.counted?.bsCents ?? 0) > 0;
+  const diff = summary.counted ? countedDifference(expected, summary.counted) : { refDiffCents: 0, localDiffCents: 0 };
+  const diffText = (cents: number, fmt: (c: number) => string) =>
+    `${cents > 0 ? "+" : cents < 0 ? "−" : ""}${fmt(Math.abs(cents))} · ${differenceLabel(cents)}`;
   const incomeSections = groupIncomeByMethod(summary.byAccount);
   const incomeTotal = grandTotals(incomeSections);
 
@@ -79,25 +103,28 @@ export function PrintableCashClosing({
       )}
 
       <div className="my-2 border-t border-dashed border-black" />
+      <p className="print-title">Ventas del turno</p>
       <div className="flex justify-between">
-        <span>Total vendido:</span>
-        <span className="font-bold">{money(summary.totalCents)}</span>
-      </div>
-      <div className="flex justify-between">
-        <span>Nº de ventas:</span>
-        <span>{summary.salesCount}</span>
-      </div>
-      <div className="flex justify-between">
-        <span>Pagadas ({summary.paidCount}):</span>
+        <span>Ventas pagadas ({summary.paidCount}):</span>
         <span>{money(summary.paidCents)}</span>
       </div>
       <div className="flex justify-between">
-        <span>A crédito ({summary.creditCount}):</span>
+        <span>A crédito, por cobrar ({summary.creditCount}):</span>
         <span>{money(summary.creditCents)}</span>
       </div>
+      <div className="flex justify-between font-bold">
+        <span>Total vendido ({summary.salesCount}):</span>
+        <span>{money(summary.totalCents)}</span>
+      </div>
+      {summary.voidedCount > 0 && (
+        <div className="flex justify-between text-xs">
+          <span>Anuladas ({summary.voidedCount}), no suman:</span>
+          <span>{money(summary.voidedCents)}</span>
+        </div>
+      )}
 
       <div className="my-2 border-t border-dashed border-black" />
-      <p className="print-title">Caja Chica</p>
+      <p className="print-title">Caja Chica (efectivo)</p>
       <div className="flex justify-between">
         <span>Apertura:</span>
         <span>{money(summary.openingCents ?? 0)}</span>
@@ -106,16 +133,72 @@ export function PrintableCashClosing({
         <span>Ventas en efectivo:</span>
         <span>{money(summary.cashSalesCents)}</span>
       </div>
-      {summary.outflows.map((o) => (
-        <div key={o.id} className="flex justify-between">
-          <span>Salida: {o.concept}</span>
-          <span>−{money(o.amountCents)}</span>
-        </div>
-      ))}
-      <div className="flex justify-between font-bold">
-        <span>Efectivo esperado:</span>
-        <span>{money(summary.expectedCashCents)}</span>
+      <div className="flex justify-between">
+        <span>Salidas en efectivo:</span>
+        <span>−{money(summary.cashOutflowsCents)}</span>
       </div>
+      {summary.outflowsCents > summary.cashOutflowsCents && (
+        <div className="flex justify-between text-xs">
+          <span>Salidas desde cuentas (no tocan la caja):</span>
+          <span>{money(summary.outflowsCents - summary.cashOutflowsCents)}</span>
+        </div>
+      )}
+      <div className="flex justify-between font-bold">
+        <span>Esperado en {refName}:</span>
+        <span>{refMoney(expected.refCents)}</span>
+      </div>
+      {showBs && (
+        <div className="flex justify-between font-bold">
+          <span>Esperado en bolívares:</span>
+          <span>{localMoney(expected.localCents)}</span>
+        </div>
+      )}
+      {summary.counted ? (
+        <>
+          <div className="flex justify-between">
+            <span>Contado en {refName}:</span>
+            <span>{refMoney(summary.counted.usdCents)}</span>
+          </div>
+          {showBs && (
+            <div className="flex justify-between">
+              <span>Contado en bolívares:</span>
+              <span>{localMoney(summary.counted.bsCents)}</span>
+            </div>
+          )}
+          <div className="flex justify-between font-bold">
+            <span>Diferencia en {refName}:</span>
+            <span>{diffText(diff.refDiffCents, refMoney)}</span>
+          </div>
+          {showBs && (
+            <div className="flex justify-between font-bold">
+              <span>Diferencia en bolívares:</span>
+              <span>{diffText(diff.localDiffCents, localMoney)}</span>
+            </div>
+          )}
+        </>
+      ) : summary.closed ? (
+        <p className="text-xs">Efectivo contado: no se registró conteo</p>
+      ) : null}
+
+      <div className="my-2 border-t border-dashed border-black" />
+      <p className="print-title">Salidas y devoluciones</p>
+      {summary.outflows.length === 0 ? (
+        <p className="text-xs">Sin salidas de Caja Chica en este turno.</p>
+      ) : (
+        summary.outflows.map((o) => (
+          <div key={o.id} className="flex justify-between text-xs">
+            <span>
+              {formatTime(o.createdAt)} {o.concept} ({[o.paymentMethod ? OUTFLOW_METHOD_LABEL[o.paymentMethod] : "Efectivo", o.accountLabel].filter(Boolean).join(" · ")})
+            </span>
+            <span>
+              −
+              {o.currencyCode && o.amountCurrencyCents != null && o.currencyCode !== referenceCurrency
+                ? formatCurrencyCents(o.currencyCode, o.amountCurrencyCents)
+                : money(o.amountCents)}
+            </span>
+          </div>
+        ))
+      )}
 
       {summary.byCurrency.length > 0 && (
         <>

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { PosSalesSheet } from "@/components/pos/PosSalesSheet";
 import { PosClient } from "@/components/pos/PosClient";
 import { OfflineSyncBanner } from "@/components/pos/OfflineSyncBanner";
@@ -7,7 +7,9 @@ import { getQuoteForConversion } from "@/lib/actions/quotes";
 import { effectiveIvaRates } from "@/lib/tax";
 import { getBranding, getExchangeRateInfo, getFiscalData, getIvaSettings } from "@/lib/actions/settings";
 import { listPaymentAccounts } from "@/lib/actions/payment-accounts";
+import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/session";
+import { canAccess, landingPath } from "@/lib/access";
 import { getRequireCustomerOnSale } from "@/lib/actions/marketing";
 import { getDailyClosingSummary } from "@/lib/actions/cash-closing";
 import { CashClosedAlert } from "@/components/pos/CashClosedAlert";
@@ -21,6 +23,9 @@ export default async function PosPage({
   searchParams: Promise<{ fromQuote?: string }>;
 }) {
   const { fromQuote } = await searchParams;
+  // Quien no tiene el POS (p. ej. Contador) aterriza en su primer módulo en vez de ver un POS que no puede usar.
+  const me = await requireSession();
+  if (!canAccess(me, { kind: "section", sections: ["pos"] })) redirect(landingPath(me));
   const [
     { companyName, sellerName, companyId, branchId, branchName, role, isSuperAdmin },
     products,

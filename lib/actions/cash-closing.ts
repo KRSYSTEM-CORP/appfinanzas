@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { userErrorMessage } from "@/lib/user-error";
-import { requireManager, requireSession } from "@/lib/session";
+import { requireCashAccess, requireSession, requireSectionAccess } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { SHOP_TIME_ZONE, dayBoundsUtc, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { closingDateFromString, openDayList } from "@/lib/closed-days";
@@ -101,7 +101,7 @@ const MAX_RESPONSIBLE_LENGTH = 80;
 // abierto (o el último cerrado): solo sus ventas, salidas y apertura. Con
 // «Todas las sucursales» se agrega el día completo.
 export async function getDailyClosingSummary(dateStr: string): Promise<CashClosingSummary> {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireSectionAccess(["reports", "pos"]);
   const { start: dayStart, end: dayEnd } = dayBoundsUtc(dateStr);
   const closingDate = closingDateFromString(dateStr);
 
@@ -345,7 +345,7 @@ export async function closeCashRegister(
 ): Promise<ActionResult> {
   // Closing the day is the manager's call (KRPOS-SEC-004); sellers still see
   // the summary through the read actions below.
-  const session = await requireManager();
+  const session = await requireCashAccess();
   const { companyId, userId } = session;
   if (!session.branchId) {
     return {
@@ -478,7 +478,7 @@ export async function listCashClosings() {
 }
 
 async function requireBranchDay(dateStr: string) {
-  const session = await requireManager();
+  const session = await requireCashAccess();
   if (!session.branchId) {
     return { ok: false, error: 'Selecciona una sucursal — no se puede con "Todas las sucursales".' } as const;
   }
@@ -633,7 +633,7 @@ export type RecentClosing = {
 
 // Últimos cierres de caja (de la sede activa o de todas), para el «Historial de cierres».
 export async function listRecentClosings(limit = 5): Promise<RecentClosing[]> {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireSectionAccess(["reports", "pos"]);
   const rows = await withTenant(companyId, (tx) =>
     tx.cashClosing.findMany({
       where: { companyId, ...(branchId ? { branchId } : {}) },

@@ -98,26 +98,34 @@ function formatNum(v: number, f: NumFormat): string {
 
 export function CountUp({ value, format, duration = 900 }: { value: number; format: NumFormat; duration?: number }) {
   const [ref, on] = useInView<HTMLSpanElement>();
-  const [shown, setShown] = useState<number | null>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!on) return;
-    // Sin animación: `shown` sigue en null y se pinta el valor final.
+    // Sin animación se queda el valor final que ya pintó el servidor.
     if (prefersReducedMotion() || value === 0) return;
     let raf = 0;
+    const node = textRef.current;
     const t0 = performance.now();
+    // El texto se escribe directo en el DOM: un setState por fotograma re-renderizaba
+    // todo el árbol de la tarjeta (decenas de cifras a la vez) y trababa el teléfono.
     const tick = (t: number) => {
       const p = Math.min(1, (t - t0) / duration);
       const e = 1 - Math.pow(1 - p, 3);
-      setShown(value * e);
+      if (node) node.textContent = formatNum(value * e, format);
       if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [on, value, duration]);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (node) node.textContent = formatNum(value, format);
+    };
+    // format es un objeto nuevo en cada render: se compara por su contenido.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, value, duration, JSON.stringify(format)]);
   // Antes de verse se muestra el valor final (sin saltos si no hay JS).
   return (
     <span ref={ref} aria-label={formatNum(value, format)}>
-      <span aria-hidden>{formatNum(shown ?? value, format)}</span>
+      <span ref={textRef} aria-hidden suppressHydrationWarning>{formatNum(value, format)}</span>
     </span>
   );
 }

@@ -7,9 +7,9 @@ import { SectionCard } from "@/components/shared/SectionCard";
 import { SalesTable } from "@/components/reports/SalesTable";
 import { getCurrency } from "@/lib/currencies";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";
-import { listRecentSales } from "@/lib/actions/sales";
+import { listReceivableSales } from "@/lib/actions/sales";
 import { money } from "@/lib/money-display";
-import { requireAdminAccess, requireSectionAccess } from "@/lib/session";
+import { requireAdminAccess } from "@/lib/session";
 import { selectionToWindows, todayDateString, wholeYearSelection } from "@/lib/report-types";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +20,9 @@ const BUCKET: Record<Bucket, string> = { a: "0-30 días", b: "31-60 días", c: "
 // Administración → Cuentas por cobrar (antes vivía en Marketing): Por cobrar, Vencido, antigüedad por cliente
 // y «Registrar abono» sobre cada venta a crédito.
 export default async function ReceivablesPage() {
-  await requireAdminAccess();
-  const session = await requireSectionAccess("reports");
+  const session = await requireAdminAccess();
   const [creditSales, { rate, localCurrencyCode, exchangeRateEnabled, referenceCurrency, printPaperSize }, { logoDataUrl }, fiscalData] = await Promise.all([
-    listRecentSales(500, selectionToWindows(wholeYearSelection()), "CREDIT"),
+    listReceivableSales(500, selectionToWindows(wholeYearSelection())),
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),

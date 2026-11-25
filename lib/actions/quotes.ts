@@ -4,7 +4,7 @@ import { QUOTE_LOST_REASONS, QUOTE_LOST_REASONS_LEGACY, type FollowUpKind } from
 import { userErrorMessage } from "@/lib/user-error";
 import { nextDocumentNumber } from "@/lib/document-sequence";
 import { revalidatePath } from "next/cache";
-import { requireSectionAccess, requireSession } from "@/lib/session";
+import { requireSectionAccess } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { QuoteSchema, type QuoteInput } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
@@ -16,7 +16,7 @@ export type CreateQuoteResult =
   | { success: false; error: string };
 
 export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult> {
-  const session = await requireSession();
+  const session = await requireSectionAccess(["quotes", "pos"]);
   const { companyId, userId, sellerName } = session;
   if (!session.branchId) {
     return {
@@ -167,7 +167,7 @@ export type QuoteForConversion = {
 export async function getQuoteForConversion(quoteId: string): Promise<
   { success: true; quote: QuoteForConversion } | { success: false; error: string }
 > {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireSectionAccess(["quotes", "pos"]);
   if (!branchId) {
     return { success: false, error: 'Selecciona una sucursal antes de facturar un presupuesto — no se puede con "Todas las sucursales".' };
   }
@@ -246,7 +246,7 @@ export async function listQuotes(limit = 200, windows?: { start: Date; end: Date
 }
 
 export async function updateQuoteStatus(quoteId: string, status: QuoteStatus, lostReason?: string): Promise<ActionResult> {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireSectionAccess(["quotes", "pos"]);
   // CONVERTED solo lo pone la facturación de la venta; un presupuesto ya facturado no se reabre desde aquí.
   if (status === "CONVERTED") return { success: false, error: "Un presupuesto pasa a Facturado al cobrarlo en el POS" };
   const result = await withTenant(companyId, (tx) =>
@@ -266,7 +266,7 @@ export async function updateQuoteStatus(quoteId: string, status: QuoteStatus, lo
 // same tenant/branch scoping as the single-quote version above, just applied
 // to every id in the selection at once.
 export async function updateQuoteStatusBulk(quoteIds: string[], status: QuoteStatus): Promise<ActionResult> {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireSectionAccess(["quotes", "pos"]);
   if (quoteIds.length === 0) {
     return { success: false, error: "Selecciona al menos un presupuesto" };
   }
@@ -284,7 +284,7 @@ export async function updateQuoteStatusBulk(quoteIds: string[], status: QuoteSta
 
 // Marca un presupuesto como enviado o visto por el cliente (o quita la marca).
 export async function markQuoteStage(quoteId: string, stage: "SENT" | "VIEWED", on: boolean): Promise<ActionResult> {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireSectionAccess(["quotes", "pos"]);
   const when = on ? new Date() : null;
   const result = await withTenant(companyId, (tx) =>
     tx.quote.updateMany({
@@ -300,7 +300,7 @@ export async function markQuoteStage(quoteId: string, stage: "SENT" | "VIEWED", 
 
 // Registra una llamada, un mensaje por WhatsApp o una nota en el historial de un presupuesto.
 export async function addQuoteFollowUp(quoteId: string, kind: FollowUpKind, text?: string): Promise<ActionResult> {
-  const { companyId, branchId, userId, sellerName } = await requireSession();
+  const { companyId, branchId, userId, sellerName } = await requireSectionAccess(["quotes", "pos"]);
   if (!["CALL", "WHATSAPP", "NOTE"].includes(kind)) return { success: false, error: "Tipo de seguimiento no válido" };
   const ok = await withTenant(companyId, async (tx) => {
     const quote = await tx.quote.findFirst({ where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) }, select: { id: true } });
@@ -316,7 +316,7 @@ export async function addQuoteFollowUp(quoteId: string, kind: FollowUpKind, text
 
 // «Recordarme en N días» (null quita el recordatorio).
 export async function setQuoteReminder(quoteId: string, days: number | null): Promise<ActionResult> {
-  const { companyId, branchId } = await requireSession();
+  const { companyId, branchId } = await requireSectionAccess(["quotes", "pos"]);
   const remindAt = days == null ? null : new Date(Date.now() + days * 86_400_000);
   const r = await withTenant(companyId, (tx) =>
     tx.quote.updateMany({ where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) }, data: { remindAt } })
@@ -328,7 +328,7 @@ export async function setQuoteReminder(quoteId: string, days: number | null): Pr
 
 // Copia un presupuesto (mismos productos y cliente, vigencia nueva) con número nuevo.
 export async function duplicateQuote(quoteId: string): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await requireSectionAccess(["quotes", "pos"]);
   const { companyId, userId, sellerName } = session;
   if (!session.branchId) return { success: false, error: "Selecciona una sucursal antes de duplicar." };
   const branchId = session.branchId;
@@ -364,7 +364,7 @@ export async function duplicateQuote(quoteId: string): Promise<ActionResult> {
 
 // Elimina un presupuesto que no se haya facturado.
 export async function deleteQuote(quoteId: string): Promise<ActionResult> {
-  const { companyId, branchId, userId, role, isSuperAdmin } = await requireSession();
+  const { companyId, branchId, userId, role, isSuperAdmin } = await requireSectionAccess(["quotes", "pos"]);
   const result = await withTenant(companyId, async (tx) => {
     const q = await tx.quote.findFirst({ where: { id: quoteId, companyId, ...(branchId ? { branchId } : {}) }, include: { sale: { select: { id: true } } } });
     if (!q) return "Presupuesto no encontrado";

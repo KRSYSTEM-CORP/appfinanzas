@@ -28,7 +28,7 @@ export async function listTransferableProducts(branchId: string): Promise<Transf
   assertBranchAllowed(session, branchId);
   return withTenant(companyId, (tx) =>
     tx.product.findMany({
-      where: { companyId, branchId, trackStock: true, stock: { gt: 0 } },
+      where: { companyId, branchId, trackStock: true, isActive: true, stock: { gt: 0 } },
       orderBy: { name: "asc" },
       select: { id: true, name: true, sku: true, stock: true },
     })
@@ -99,6 +99,7 @@ export async function createTransfer(input: unknown): Promise<ActionResult> {
         await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${line.productId} AND "companyId" = ${companyId} AND "branchId" = ${d.fromBranchId} FOR UPDATE`;
         const src = await tx.product.findFirst({ where: { id: line.productId, companyId, branchId: d.fromBranchId } });
         if (!src) throw new Error("Un producto ya no existe en la sucursal de origen");
+        if (!src.isActive) throw new Error(`«${src.name}» está inactivo o descontinuado: actívalo antes de traspasarlo`);
         if (!src.trackStock) throw new Error(`«${src.name}» no lleva control de existencias`);
         if (src.stock < line.quantity) throw new Error(`«${src.name}»: solo hay ${src.stock} en existencia`);
 

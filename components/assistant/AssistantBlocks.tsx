@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { ArrowUpRightIcon, DownloadIcon, EyeIcon, FileTextIcon, ImageIcon } from "lucide-react";
 import type { DeliveryNoteCompany } from "@/lib/delivery-note";
 import type { ResolvedBlock, ResolvedChart, ResolvedProducts, ResolvedTable, SalePreview } from "@/lib/assistant-types";

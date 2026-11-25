@@ -23,12 +23,15 @@ type BranchOption = { id: string; name: string; isActive: boolean; hasKey: boole
 export function TeamPinPanel({
   people,
   currentUserId,
+  currentHasPin = false,
   roles,
   branches,
   maxUsers,
 }: {
   people: EmployeeListItem[];
   currentUserId: string;
+  // El PIN de quien tiene la sesión abierta, leído de su propia sesión (no de la lista de personas).
+  currentHasPin?: boolean;
   roles: RoleRow[];
   branches: BranchOption[];
   maxUsers: number;
@@ -49,7 +52,13 @@ export function TeamPinPanel({
   const newRole = roles.find((r) => r.id === roleId);
   const activeBranches = branches.filter((b) => b.isActive);
 
-  const managersWithPin = people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length;
+  const me = people.find((p) => p.id === currentUserId);
+  const meIsManager = me?.role === "GERENTE" || me == null;
+  // Si quien está dentro es un gerente con PIN, ya hay al menos un gerente con PIN.
+  const managersWithPin = Math.max(
+    people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length,
+    meIsManager && (currentHasPin || me?.hasPin) ? 1 : 0
+  );
   const roleOf = (p: EmployeeListItem) => roles.find((r) => r.id === p.roleId) ?? roles.find((r) => r.isSystem && r.baseRole === p.role && (r.name === "Gerente" || r.name === "Vendedor"));
   const keysActive = branches.some((b) => b.hasKey);
 
@@ -150,7 +159,7 @@ export function TeamPinPanel({
           <p className="mt-2 text-[13px] text-muted-foreground">Los permisos son del rol. Cámbialos desde «Gestionar» o crea un rol nuevo.</p>
           {managersWithPin === 0 && (
             <p role="status" className="mt-2 rounded-[14px] bg-warning/18 px-3.5 py-3 text-[13px] font-semibold text-warning">
-              Ningún gerente tiene PIN todavía. Crea primero el tuyo con «Cambiar mi PIN».
+              {meIsManager ? "Tu usuario aún no tiene PIN y ningún otro gerente lo tiene. Crea el tuyo con «Cambiar mi PIN»." : "Ningún gerente tiene PIN todavía. Pídele a un gerente que cree el suyo en Ajustes."}
             </p>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
