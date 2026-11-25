@@ -99,4 +99,37 @@ Tercera pasada: sin riesgo de transacción abortada, movimientos por lote y layo
 | `/settings` | 75 | 45 |
 | `/home` | 81 | 41 |
 
-Pendiente: seguir bajando de 30 exige unificar lecturas distintas en consultas agrupadas (por ejemplo los agregados de `lib/actions/finance.ts` en un solo SQL); no se hizo.
+
+## Cuarta pasada: consultas agrupadas (2026-11-25)
+
+Cómo se midió: `KR_QUERY_LOG=1` (con `KR_QUERY_LOG_LEN=330` para ver la consulta completa), una petición HTTP por ruta con la sesión de gerente, sin service worker ni prefetch, contando cada línea `[Q]` (incluye `set_config` y `COMMIT`). «Antes» es `main` (e530852e) medido el mismo día y contra la misma base; el texto completo de cada pantalla se comparó antes/después (idéntico en las 37 rutas; `/customers` mostró un cliente más porque se creó uno entre las dos mediciones).
+
+Qué se cambió:
+
+1. **`lib/batch-sql.ts`**: `bq<Fila>(tx)\`SELECT ...\``. Las consultas SQL pedidas en el mismo turno sobre la misma transacción viajan en UNA sentencia (`SELECT (SELECT json_agg(t) FROM (consulta 0) t) AS r0, ...`). Cada subconsulta es la original con los mismos filtros y el mismo RLS. Una pantalla pasa de ~30 agregados en serie a 2 o 3 viajes. Las filas vuelven como JSON (`jsDate`/`jsDateOnly` devuelven las fechas).
+2. Se convirtieron a SQL agrupado los agregados de `reports.ts`, `finance.ts`, `seller-reports.ts`, `home.ts`, `statements.ts` (IVA, inventario, por pagar, consumo interno y movimientos en sumas SQL), `account-balance.ts`, `account-movements.ts`, `account-queries.ts` (cuentas, una lectura por pantalla), `closed-days.ts`, `cash-closing.ts` (resumen del turno: 12 consultas a 2), `branches.ts`, `transfers.ts`, `plan.ts` y los getters de `settings.ts`.
+3. **Sesión en una consulta** (`lib/session.ts`): usuario, empresa, rol y sede en un solo `SELECT` dentro de una transacción (antes 2 lecturas más hasta 3 transacciones).
+4. **`withTenantScope` perezoso**: la transacción se abre al primer `withTenant` y se cierra con COMMIT, o con ROLLBACK si la pantalla falla; una pantalla que no lee nada no abre ninguna. Estado de pago del layout en una sola consulta.
+5. Pantallas envueltas en `withTenantScope`: POS, Reportes, Compras, Gastos, Resumen, Libros de impuestos, Sucursales, Suscripción (las lecturas con `.catch` van por `outsideScope`).
+6. Índices (migración `20261128110000_indices_consultas_pantallas`, aditiva): `SalePayment(createdAt)` y `Purchase(companyId, paymentStatus)`. Comprobado con `EXPLAIN ANALYZE` (`enable_seqscan=off`): los cobros por fecha y las compras por pagar los usan; los de ventas, gastos y cierres (`companyId` + fecha) ya existían.
+
+Consultas por pantalla (antes → después):
+
+| Pantalla | Antes | Después |
+| --- | --- | --- |
+| `/finance` | 63 | 15 |
+| `/accounting/statements` | 59 | 19 |
+| `/accounting/accounts` | 44 | 20 |
+| `/settings` | 39 | 20 |
+| `/home` | 44 | 16 |
+| `/pos` | 47 | 20 |
+| `/reports` | 46 | 16 |
+| `/branches` | 59 | 12 |
+| `/accounting/gastos` | 63 | 27 |
+| `/purchases` | 40 | 24 |
+| `/tax-book` | 36 | 20 |
+| `/inventory/transfers` | 43 | 22 |
+| `/billing` | 43 | 18 |
+| `/accounting` | 40 | 14 |
+
+Las demás rutas de las 37 medidas quedan entre 7 y 24 (el layout con sesión solo cuesta 7). Pruebas: `tests/unit/batch-sql.test.ts`, `tests/unit/tenant-scope.test.ts` y `tests/integration/scope-equivalence.test.ts` (misma cifra con scope, sin scope y en serie, y contra el cálculo original con el ORM).

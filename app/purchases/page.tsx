@@ -1,5 +1,6 @@
 import { LandmarkIcon, ShoppingCartIcon, TrendingDownIcon } from "lucide-react";
 import { requirePurchasesAccess } from "@/lib/session";
+import { withTenantScope } from "@/lib/tenant-db";
 import { AdminShell } from "@/components/accounting/AdminShell";
 import { DateRangeSwitcher } from "@/components/shared/DateRangeSwitcher";
 import { PeriodBar } from "@/components/shared/PeriodBar";
@@ -23,14 +24,14 @@ export default async function PurchasesPage({
 }: {
   searchParams: Promise<{ range?: string; year?: string; months?: string; from?: string; to?: string }>;
 }) {
-  await requirePurchasesAccess();
+  const me = await requirePurchasesAccess();
   const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
-  const [purchases, orders, restock, rateInfo] = await Promise.all([
+  const [purchases, orders, restock, rateInfo] = await withTenantScope(me.companyId, () => Promise.all([
     listRecentPurchases(500, selectionToWindows(range)),
     listPaymentOrders(),
     restockSuggestions(6),
     getExchangeRateInfo(),
-  ]);
+  ]));
   const { referenceCurrency } = rateInfo;
   const ctx: MoneyCtx = { rate: rateInfo.rate, localCurrencyCode: rateInfo.localCurrencyCode, referenceCurrency, exchangeRateEnabled: rateInfo.exchangeRateEnabled };
   const label = selectionLabel(range, todayDateString());

@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { currentRateOf } from "@/lib/account-balance";
+import { loadPaymentAccounts } from "@/lib/account-queries";
 import { accountMovementsMany, type AccountMovement, type TimeWindow } from "@/lib/account-movements";
 import { shiftWindow } from "@/lib/cash-shifts";
 import { closingDateFromString } from "@/lib/closed-days";
@@ -93,8 +94,7 @@ export async function getAccountsPeriodReport(spec: PeriodSpec): Promise<Account
     const r = await resolveWindows(tx, companyId, branchId ?? null, spec);
     const base = { seg: spec.seg, needsBranch: r.needsBranch, shifts: r.shifts, selectedShift: r.selectedShift, from: r.from, to: r.to, label: r.label };
     if (r.windows.length === 0) return { ...base, accounts: [] };
-    const rate = await currentRateOf(tx, companyId);
-    const accounts = await tx.paymentAccount.findMany({ where: { companyId, active: true }, orderBy: { createdAt: "asc" } });
+    const [rate, accounts] = await Promise.all([currentRateOf(tx, companyId), loadPaymentAccounts(tx, companyId)]);
     const rows: AccountPeriodRow[] = [];
     const movements = await accountMovementsMany(tx, companyId, accounts, rate, r.windows);
     for (const a of accounts) {
@@ -115,8 +115,7 @@ export async function getAccountsPeriodMovements(spec: PeriodSpec, accountId: st
   return withTenant(companyId, async (tx) => {
     const r = await resolveWindows(tx, companyId, branchId ?? null, spec);
     if (r.windows.length === 0) return [];
-    const rate = await currentRateOf(tx, companyId);
-    const accounts = await tx.paymentAccount.findMany({ where: { companyId, active: true, ...(accountId ? { id: accountId } : {}) }, orderBy: { createdAt: "asc" } });
+    const [rate, accounts] = await Promise.all([currentRateOf(tx, companyId), loadPaymentAccounts(tx, companyId, { id: accountId ?? undefined })]);
     const out: PeriodMovement[] = [];
     const movements = await accountMovementsMany(tx, companyId, accounts, rate, r.windows);
     for (const a of accounts) {

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireManager, requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { Prisma } from "@prisma/client";
+import { bq } from "@/lib/batch-sql";
 import { closedDayWindows } from "@/lib/closed-days";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import type { ActionResult } from "@/lib/types";
@@ -15,6 +17,11 @@ export type SellerSalesOverviewRow = {
   commissionPercent: number | null;
   commissionCents: number;
 };
+
+function windowsSql(column: string, windows: { start: Date; end: Date }[]): Prisma.Sql {
+  const parts = windows.map((w) => Prisma.sql`(${Prisma.raw(column)} >= ${w.start} AND ${Prisma.raw(column)} < ${w.end})`);
+  return Prisma.sql`(${Prisma.join(parts, " OR ")})`;
+}
 
 function sellerDisplayName(u: { firstName: string | null; lastName: string | null; email: string }): string {
   const full = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -39,28 +46,27 @@ export async function sellersSalesOverview(range: DateRangeSelection, opts: { cl
       ? await closedDayWindows(tx, companyId, branchId, requestedWindows)
       : requestedWindows;
     const [employees, grouped] = await Promise.all([
-      tx.user.findMany({ where: { companyId }, orderBy: [{ role: "asc" }, { createdAt: "asc" }] }),
-      tx.sale.groupBy({
-        by: ["sellerId"],
-        where: {
-          companyId,
-          ...(branchId ? { branchId } : {}),
-          OR: windows.map((w) => ({ createdAt: { gte: w.start, lt: w.end } })),
-          voided: false,
-          sellerId: { not: null },
-        },
-        _sum: { totalCents: true },
-        _count: true,
-      }),
+      bq<{ id: string; firstName: string | null; lastName: string | null; email: string; commissionPercent: number | null }>(tx)`
+        SELECT "id", "firstName", "lastName", "email", "commissionPercent"::float8 AS "commissionPercent"
+        FROM "User" WHERE "companyId" = ${companyId} ORDER BY "role" ASC, "createdAt" ASC`,
+      windows.length === 0
+        ? Promise.resolve([] as { sellerId: string; total: number | null; n: number }[])
+        : bq<{ sellerId: string; total: number | null; n: number }>(tx)`
+            SELECT "sellerId", SUM("totalCents")::bigint AS total, COUNT(*)::bigint AS n
+            FROM "Sale"
+            WHERE "companyId" = ${companyId}
+              ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+              AND ${windowsSql('"createdAt"', windows)} AND "voided" = false AND "sellerId" IS NOT NULL
+            GROUP BY "sellerId"`,
     ]);
 
-    const bySeller = new Map(grouped.map((g) => [g.sellerId as string, g]));
+    const bySeller = new Map(grouped.map((g) => [g.sellerId, g]));
 
     return employees
       .map((u) => {
         const g = bySeller.get(u.id);
-        const totalEurCents = g?._sum.totalCents ?? 0;
-        const count = g?._count ?? 0;
+        const totalEurCents = Number(g?.total ?? 0);
+        const count = Number(g?.n ?? 0);
         const commissionPercent = u.commissionPercent != null ? Number(u.commissionPercent) : null;
         const commissionCents =
           commissionPercent != null ? Math.round((totalEurCents * commissionPercent) / 100) : 0;

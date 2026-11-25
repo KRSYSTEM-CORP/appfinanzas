@@ -22,15 +22,13 @@ export default async function StatementsPage({
   await requirePermission("admin");
   const planSession = await requireAccountingPlan();
   const params = await searchParams;
-  const { ivaEnabled } = await getIvaSettings();
-  const tab = statementTab(params.tab, ivaEnabled);
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const islr = Number.isFinite(Number(params.islr)) && params.islr !== undefined ? Number(params.islr) : 15;
-  const [statements, movements, { referenceCurrency, rate, exchangeRateEnabled }] = await withTenantScope(planSession.companyId, () => Promise.all([
-    getStatements(range, islr),
-    listMovements(range),
-    getExchangeRateInfo(),
-  ]));
+  const { tab, statements, movements, referenceCurrency, rate, exchangeRateEnabled } = await withTenantScope(planSession.companyId, async () => {
+    const { ivaEnabled } = await getIvaSettings();
+    const [statements, movements, info] = await Promise.all([getStatements(range, islr), listMovements(range), getExchangeRateInfo()]);
+    return { tab: statementTab(params.tab, ivaEnabled), statements, movements, ...info };
+  });
   const label = selectionLabel(range, todayDateString());
 
   return (

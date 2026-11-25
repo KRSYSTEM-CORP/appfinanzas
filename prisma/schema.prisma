@@ -745,6 +745,8 @@ model SalePayment {
 
   @@index([paymentAccountId])
   @@index([saleId])
+  // Cobros por fecha de cobro (Ingresos por moneda, Distribución de ventas, Caja Chica y cuentas)
+  @@index([createdAt])
 }
 
 model SaleItem {
@@ -953,6 +955,8 @@ model Purchase {
   @@index([companyId, createdAt])
   @@index([branchId, createdAt])
   @@index([supplierId])
+  // Compras por pagar (Estados financieros, Órdenes de pago)
+  @@index([companyId, paymentStatus])
 }
 
 // The inverse of SalePayment — one row per payment method used to settle a

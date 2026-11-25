@@ -58,6 +58,7 @@ export default async function SettingsPage() {
     dailyEmails,
     planUsage,
     people,
+    roles,
   ] = await withTenantScope(session.companyId, () => Promise.all([
     getExchangeRateInfo(),
     getBranding(),
@@ -68,6 +69,7 @@ export default async function SettingsPage() {
     canManage ? getDailyReportEmails() : Promise.resolve([] as string[]),
     getPlanUsage(),
     canManage ? listEmployees() : Promise.resolve([]),
+    listRoles(),
   ]));
   const stale = isStale(updatedAt);
   // Emprende incluye solo la sucursal principal: con el tope alcanzado se bloquea «Nueva sucursal».
@@ -76,7 +78,6 @@ export default async function SettingsPage() {
   const branchLimit =
     !session.isSuperAdmin && planDef.maxBranches != null && activeBranches >= planDef.maxBranches ? branchLimitMessage(planDef) : null;
 
-  const roles = await listRoles();
   const managersWithPin = Math.max(people.filter((p) => p.role === "GERENTE" && p.status === "ACTIVE" && p.hasPin).length, session.role === "GERENTE" && session.hasPin ? 1 : 0);
   const sections: SettingsSection[] = [
     {

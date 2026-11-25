@@ -22,7 +22,7 @@ export const prisma =
     ? (() => {
         const c = new PrismaClient({ adapter, log: [{ emit: "event", level: "query" }] });
         (c as unknown as { $on: (e: string, f: (q: { query: string; duration: number }) => void) => void }).$on("query", (q) =>
-          console.log(`[Q] ${q.duration}ms ${q.query.replace(/\s+/g, " ").slice(0, 90)}`)
+          console.log(`[Q] ${q.duration}ms ${q.query.replace(/\s+/g, " ").slice(0, Number(process.env.KR_QUERY_LOG_LEN) || 90)}`)
         );
         return c;
       })()
