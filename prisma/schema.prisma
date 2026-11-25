@@ -705,6 +705,8 @@ model Sale {
   @@unique([branchId, invoiceNumber])
   @@index([companyId, createdAt])
   @@index([branchId, createdAt])
+  @@index([companyId, customerId])
+  @@index([companyId, paymentStatus])
 }
 
 // One entry in a sale's payment breakdown. amountEurCents entries for a sale
