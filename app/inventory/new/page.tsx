@@ -1,8 +1,10 @@
+import { requireManager } from "@/lib/session";
 import { ProductForm } from "@/components/inventory/ProductForm";
 import { createProduct, listCategories } from "@/lib/actions/products";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 
 export default async function NewProductPage() {
+  await requireManager();
   const [categories, { referenceCurrency }] = await Promise.all([listCategories(), getExchangeRateInfo()]);
 
   return (

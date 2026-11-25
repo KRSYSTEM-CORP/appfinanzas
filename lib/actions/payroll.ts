@@ -104,7 +104,8 @@ export async function listPayroll(currentPeriod?: string): Promise<{
   sellers: PayrollSeller[];
   ledger: PayrollLedgerRow[];
 }> {
-  const { companyId } = await requirePayrollManager();
+  // Ver la nómina: permiso de Administración (Contador incluido). Pagar o editar sigue siendo del gerente.
+  const { companyId } = await requireAdminAccess();
   return withTenant(companyId, async (tx) => {
     const [employees, payments, company, users] = await Promise.all([
       tx.payrollEmployee.findMany({ where: { companyId }, orderBy: [{ active: "desc" }, { name: "asc" }] }),
@@ -223,7 +224,7 @@ export async function listPayroll(currentPeriod?: string): Promise<{
 }
 
 export async function getPayrollProof(paymentId: string): Promise<string | null> {
-  const { companyId } = await requirePayrollManager();
+  const { companyId } = await requireAdminAccess();
   const row = await withTenant(companyId, (tx) =>
     tx.payrollPayment.findFirst({ where: { id: paymentId, companyId }, select: { proofDataUrl: true } })
   );

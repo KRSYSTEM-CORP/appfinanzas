@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireManager, requireSession } from "@/lib/session";
+import { requireManager, requireSession, requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import type { ActionResult } from "@/lib/types";
 import type { PaymentAccountKind } from "@prisma/client";
@@ -55,7 +55,7 @@ export type SourceAccountRow = { id: string; label: string; currency: string; ki
 // Cuentas activas que pueden ser el origen de un pago (compras, nómina, gastos): su saldo baja al pagar.
 // Incluye el saldo para mostrarlo al elegir la cuenta y avisar antes de que falten fondos.
 export async function listSourceAccounts(includePos = false): Promise<SourceAccountRow[]> {
-  const { companyId } = await requireManager();
+  const { companyId } = await requireManagerOrPermission("admin", "purchases");
   return withTenant(companyId, async (tx) => {
     const rate = await currentRateOf(tx, companyId);
     const rows = await tx.paymentAccount.findMany({ where: { companyId, active: true, ...(includePos ? {} : { kind: { not: "PUNTO_DE_VENTA" as const } }) }, orderBy: { createdAt: "asc" } });
@@ -144,7 +144,7 @@ export type AccountBalanceRow = {
 // Saldo por cuenta = inicial + cobros (no anulados) del método vinculado + inyecciones − pagos hechos desde la
 // cuenta (compras, nómina y gastos), todo desde la fecha de inicio.
 export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
-  const { companyId } = await requireManager();
+  const { companyId } = await requireManagerOrPermission("admin");
   return withTenant(companyId, async (tx) => {
     const accounts = await tx.paymentAccount.findMany({ where: { companyId, active: true }, orderBy: { createdAt: "asc" } });
     const currentRate = await currentRateOf(tx, companyId);
@@ -201,7 +201,7 @@ export type { AccountMovement } from "@/lib/account-movements";
 // Movimientos de una cuenta (cobros, inyecciones, compras, nómina y gastos), del más reciente al más antiguo.
 // `limit` null = historial completo; `windows` limita a esos períodos.
 export async function getAccountMovements(accountId: string, limit: number | null = 40, windows?: { start: Date; end: Date }[]): Promise<AccountMovement[]> {
-  const { companyId } = await requireManager();
+  const { companyId } = await requireManagerOrPermission("admin");
   return withTenant(companyId, async (tx) => {
     const a = await tx.paymentAccount.findFirst({ where: { id: accountId, companyId } });
     if (!a) return [];

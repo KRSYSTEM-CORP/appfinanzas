@@ -13,6 +13,7 @@ import { CommandPalette, type PaletteItem } from "@/components/nav/CommandPalett
 import { lockSession } from "@/lib/actions/pin";
 import { useRouter } from "next/navigation";
 import type { Role } from "@prisma/client";
+import { MODULE_ACCESS, canAccess } from "@/lib/access";
 
 const ROLE_LABELS: Record<Role, string> = { GERENTE: "Gerente", VENDEDOR: "Vendedor" };
 
@@ -57,6 +58,7 @@ export function Sidebar({
   role,
   sellerName,
   allowedSections,
+  permissions = null,
   featureLinks,
   branches,
   currentBranchId,
@@ -72,6 +74,7 @@ export function Sidebar({
   role: Role;
   sellerName: string;
   allowedSections: string[];
+  permissions?: string[] | null;
   featureLinks: { href: string; label: string; managerOnly: boolean }[];
   branches: { id: string; name: string }[];
   currentBranchId: string | null;
@@ -87,23 +90,26 @@ export function Sidebar({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const canManage = role === "GERENTE" || isSuperAdmin;
 
-  const allowed = (item: NavItem) => canManage || allowedSections.length === 0 || allowedSections.includes(item.section as string);
-  // Sin `section` = solo gerente. Learning lo ve todo el equipo.
-  const visible = [...MODULES.filter((i) => (i.key === "learn" ? true : i.section ? allowed(i) : canManage)), ...(isSuperAdmin ? [PLATFORM] : [])];
+  // El menú sigue la misma tabla que las guardas del servidor (lib/access.ts): nunca ofrece una
+  // pantalla que luego rebote al POS.
+  const subject = { isSuperAdmin: Boolean(isSuperAdmin), role, permissions, allowedSections };
+  const NAV_MODULE: Record<string, string> = { inicio: "home", pos: "pos", inv: "inventory", pre: "quotes", caja: "cash", est: "stats", mkt: "crm", adm: "admin", suc: "branches", ia: "assistant", learn: "learning", set: "settings" };
+  const allowed = (item: NavItem) => {
+    const mod = MODULE_ACCESS.find((m) => m.id === NAV_MODULE[item.key]);
+    return mod ? canAccess(subject, mod.rule) : canManage;
+  };
+  const visible = [...MODULES.filter(allowed), ...(isSuperAdmin ? [PLATFORM] : [])];
 
   const tabCandidates = ["inicio", "inv", "pos", "pre"];
   const tabs = tabCandidates.map((k) => visible.find((i) => i.key === k)).filter((i): i is NavItem => Boolean(i));
 
   const paletteItems: PaletteItem[] = [
     ...visible.map((i) => ({ href: i.href, label: i.label, group: i.group })),
-    ...(canManage
-      ? [
-          { href: "/documents", label: "Documentos", group: "Administración" },
-          { href: "/employees", label: "Perfiles y PIN", group: "Ajustes" },
-          { href: "/billing", label: "Suscripción mensual", group: "Ajustes" },
-          { href: "/payroll", label: "Nómina", group: "Administración" },
-        ]
-      : []),
+    ...MODULE_ACCESS.filter((m) => ["documents", "employees", "billing", "payroll", "taxbook", "purchases"].includes(m.id) && canAccess(subject, m.rule)).map((m) => ({
+      href: m.href,
+      label: m.label,
+      group: m.id === "employees" || m.id === "billing" ? "Ajustes" : "Administración",
+    })),
     ...featureLinks.filter((l) => canManage || !l.managerOnly).map((l) => ({ href: l.href, label: l.label, group: "Más" })),
   ];
 

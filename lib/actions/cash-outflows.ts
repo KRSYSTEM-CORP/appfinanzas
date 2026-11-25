@@ -1,7 +1,7 @@
 "use server";
 
 import { Prisma, type PaymentMethod } from "@prisma/client";
-import { requireManager } from "@/lib/session";
+import { requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 
@@ -27,7 +27,7 @@ const METHODS = ["CASH", "CARD", "POS", "TRANSFER", "ZELLE", "BINANCE", "PAYPAL"
 // Administración → Balance → Salidas y devoluciones: salidas de Caja Chica y devoluciones por anulación del periodo,
 // con de dónde salió el dinero. Filtra por método (Efectivo incluye las anteriores sin método) y por cuenta.
 export async function listOutflowHistory(range: DateRangeSelection, filters: OutflowFilters = {}): Promise<OutflowHistoryRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("admin");
   const windows = selectionToWindows(range);
   if (windows.length === 0) return [];
   const where: Prisma.CashOutflowWhereInput = {

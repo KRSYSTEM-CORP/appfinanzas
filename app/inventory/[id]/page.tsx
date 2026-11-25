@@ -1,3 +1,4 @@
+import { requireManager } from "@/lib/session";
 import { notFound } from "next/navigation";
 import { ProductForm } from "@/components/inventory/ProductForm";
 import { getProduct, listCategories, updateProduct } from "@/lib/actions/products";
@@ -11,6 +12,7 @@ export default async function EditProductPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireManager();
   const { id } = await params;
   const [product, categories, { referenceCurrency }] = await Promise.all([
     getProduct(id),

@@ -1,7 +1,7 @@
 "use server";
 
 import { Prisma } from "@prisma/client";
-import { requireManager } from "@/lib/session";
+import { requireManager, requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { closedDayWindows } from "@/lib/closed-days";
 import {
@@ -35,7 +35,7 @@ async function getCurrentRate(tx: Prisma.TransactionClient, companyId: string): 
 }
 
 export async function revenueTotals(range: DateRangeSelection) {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const requestedWindows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
@@ -87,7 +87,7 @@ export async function revenueTotals(range: DateRangeSelection) {
 // number of closed days on each side is returned too: the UI shows it, since a
 // period with fewer closed days will naturally look smaller.
 export async function revenueComparison(range: DateRangeSelection) {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const comparison = comparisonWindows(range);
   if (!comparison) return null;
   const currentWindows = selectionToWindows(range);
@@ -122,7 +122,7 @@ export async function revenueComparison(range: DateRangeSelection) {
 }
 
 export async function receivablesTotals() {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
 
   return withTenant(companyId, async (tx) => {
     const currentRate = await getCurrentRate(tx, companyId);
@@ -150,7 +150,7 @@ export async function receivablesTotals() {
 }
 
 export async function salesByDay(range: DateRangeSelection): Promise<SalesByDayPoint[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const requestedWindows = selectionToWindows(range);
 
   const rows = await withTenant(companyId, async (tx) => {
@@ -199,7 +199,7 @@ export type CurrencyIncomeRow = { currencyCode: string; totalCents: number };
 // sale's own date, so a credit sale collected later counts as income on the
 // day it was actually paid, not the day it was sold.
 export async function incomeByCurrency(range: DateRangeSelection): Promise<CurrencyIncomeRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const requestedWindows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
@@ -226,7 +226,7 @@ export async function incomeByCurrency(range: DateRangeSelection): Promise<Curre
 }
 
 export async function topProducts(range: DateRangeSelection, limit = 10): Promise<TopProductPoint[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const requestedWindows = selectionToWindows(range);
   const grouped = await withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
@@ -261,7 +261,7 @@ export async function topProducts(range: DateRangeSelection, limit = 10): Promis
 // invisible. That's the useful signal here: dead stock, not just the
 // bottom of what happened to sell.
 export async function bottomProducts(range: DateRangeSelection, limit = 10): Promise<BottomProductPoint[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const requestedWindows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
@@ -298,7 +298,7 @@ export type PaymentMixRow = { method: string; totalCents: number; count: number 
 // Distribución de ventas: cuánto se cobró por cada método de pago en el periodo
 // (en la divisa de referencia), de mayor a menor.
 export async function salesByPaymentMethod(range: DateRangeSelection): Promise<PaymentMixRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const requestedWindows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
@@ -325,7 +325,7 @@ export type PurchasedProductRow = { name: string; quantity: number; totalCents: 
 // Productos más comprados: unidades compradas a proveedores en el periodo
 // (compras anuladas no cuentan).
 export async function mostPurchasedProducts(range: DateRangeSelection, limit = 10): Promise<PurchasedProductRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const windows = selectionToWindows(range);
   if (windows.length === 0) return [];
   return withTenant(companyId, async (tx) => {
@@ -353,7 +353,7 @@ export type RotationRow = { name: string; sold: number; stock: number; turns: nu
 // (unidades vendidas ÷ stock actual; con stock 0 se cuenta como 1 para no dividir
 // entre cero). Solo productos con control de stock que vendieron algo.
 export async function inventoryRotation(range: DateRangeSelection, limit = 10): Promise<RotationRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const requestedWindows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
@@ -386,7 +386,7 @@ export type CustomerMix = { total: number; newCount: number; returningCount: num
 // Clientes atendidos en el período: «nuevos» = su primera compra cae dentro del
 // período; «recurrentes» = ya habían comprado antes. Ventas anuladas no cuentan.
 export async function customerMix(range: DateRangeSelection): Promise<CustomerMix> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const windows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
     const rows = await tx.$queryRaw<{ new_n: bigint; ret_n: bigint }[]>`
@@ -436,7 +436,7 @@ const RESTOCK_WINDOW_DAYS = 30;
 // control de stock que vendieron algo. Se descuenta lo ya pedido y aún no recibido no existe en
 // el sistema, así que la cifra es una sugerencia, no una orden.
 export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const since = new Date(Date.now() - RESTOCK_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   return withTenant(companyId, async (tx) => {
     const rows = await tx.$queryRaw<{ id: string; name: string; stock: number; cost: number | null; sold: bigint; active_days: number }[]>`
@@ -476,7 +476,7 @@ export type PeriodExtras = { prevCount: number; prevAvgCents: number; prevExpens
 // solo días con cierre de caja en las ventas) para mostrar la variación de venta
 // promedio, número de ventas y gastos en Estadísticas.
 export async function periodExtras(range: DateRangeSelection): Promise<PeriodExtras | null> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const comparison = comparisonWindows(range);
   if (!comparison) return null;
   return withTenant(companyId, async (tx) => {
@@ -522,7 +522,7 @@ function addDaysStr(dateStr: string, days: number): string {
 // Reporte semanal: las últimas 4 semanas (lunes a domingo, hora de Venezuela) con
 // ventas y pedidos. Se calcula al abrir Estadísticas; no se envía por correo.
 export async function weeklyReports(): Promise<WeeklyRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const today = todayDateString();
   const dow = (new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7; // 0 = lunes
   const thisMonday = addDaysStr(today, -dow);
@@ -555,7 +555,7 @@ export async function weeklyReports(): Promise<WeeklyRow[]> {
 }
 
 export async function getWeeklyReportEnabled(): Promise<boolean> {
-  const { companyId } = await requireManager();
+  const { companyId } = await requireManagerOrPermission("stats", "admin");
   const c = await withTenant(companyId, (tx) => tx.company.findUnique({ where: { id: companyId }, select: { weeklyReportEnabled: true } }));
   return c?.weeklyReportEnabled ?? false;
 }
@@ -573,7 +573,7 @@ export type TicketBucketRow = { bucket: number; count: number };
 // 0-10, 10-20, 20-30, 30-50, 50-80 y 80+. Igual que el resto de cifras de
 // ventas, solo cuenta días con cierre de caja. Solo lectura.
 export async function ticketDistribution(range: DateRangeSelection): Promise<TicketBucketRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const requestedWindows = selectionToWindows(range);
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);

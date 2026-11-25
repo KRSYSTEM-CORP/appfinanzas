@@ -1,6 +1,6 @@
 "use server";
 
-import { requireManager } from "@/lib/session";
+import { requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { closedDayWindows } from "@/lib/closed-days";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
@@ -16,7 +16,7 @@ export type CollectionRow = {
 // Administración → Balance → Cobros: lo cobrado por método y moneda (bolívares en Bs, divisas
 // con su referencia), con los mismos días con cierre de caja que el resto de los reportes.
 export async function collectionsByMethod(range: DateRangeSelection): Promise<CollectionRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("admin");
   return withTenant(companyId, async (tx) => {
     const windows = await closedDayWindows(tx, companyId, branchId, selectionToWindows(range));
     if (windows.length === 0) return [];

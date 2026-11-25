@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManager } from "@/lib/session";
+import { requireManager, requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { closedDayWindows } from "@/lib/closed-days";
 import { selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
@@ -28,7 +28,7 @@ function sellerDisplayName(u: { firstName: string | null; lastName: string | nul
 // revenueTotals() in lib/actions/reports.ts — a voided sale shouldn't count
 // toward anyone's commission.
 export async function sellersSalesOverview(range: DateRangeSelection, opts: { closedOnly?: boolean } = {}): Promise<SellerSalesOverviewRow[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("admin", "stats");
   const requestedWindows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {
@@ -108,7 +108,7 @@ async function loadSellerSales(
 }
 
 export async function sellerSalesDetail(sellerId: string, range: DateRangeSelection): Promise<SellerSalesDetail | null> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("admin", "stats");
   const windows = selectionToWindows(range);
 
   return withTenant(companyId, async (tx) => {

@@ -115,6 +115,7 @@ export default async function RootLayout({
             role={session.role}
             sellerName={session.sellerName}
             allowedSections={session.allowedSections}
+            permissions={session.permissions}
             featureLinks={FEATURES.filter((f) => f.href && hasFeature(session.enabledFeatures, f.id)).map((f) => ({
               href: f.href as string,
               label: f.label,

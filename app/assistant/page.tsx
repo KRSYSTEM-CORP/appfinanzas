@@ -1,4 +1,4 @@
-import { requirePermission } from "@/lib/session";
+import { requireManagerPermission } from "@/lib/session";
 import { AssistantCreditsProvider, CreditsBadge } from "@/components/assistant/AssistantCredits";
 import { AssistantChat } from "@/components/assistant/AssistantChat";
 import { getBranding, getFiscalData } from "@/lib/actions/settings";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export default async function AssistantPage() {
-  const session = await requirePermission("assistant");
+  const session = await requireManagerPermission("assistant");
   const [status, history, requests, { logoDataUrl }, fiscalData] = await Promise.all([getAssistantStatus(), listAssistantHistory(), listMyCreditRequests(), getBranding(), getFiscalData()]);
   const company = { name: session.companyName, logoDataUrl, ...fiscalData };
   return (

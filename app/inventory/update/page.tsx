@@ -1,8 +1,10 @@
+import { requireManager } from "@/lib/session";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { UpdateInventoryForm } from "@/components/inventory/UpdateInventoryForm";
 
-export default function UpdateInventoryPage() {
+export default async function UpdateInventoryPage() {
+  await requireManager();
   return (
     <div className="flex flex-col gap-4 px-4 py-5">
       <div className="flex items-center justify-between">

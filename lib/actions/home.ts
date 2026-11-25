@@ -1,7 +1,7 @@
 "use server";
 
 import { Prisma } from "@prisma/client";
-import { requireManager } from "@/lib/session";
+import { requireManager, requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { dayBoundsUtc, SHOP_TIME_ZONE, todayDateString } from "@/lib/report-types";
 
@@ -74,7 +74,7 @@ export type HeatCell = { dow: number; hour: number; count: number };
 // Mapa de calor: ventas por día de la semana (0 = lunes) y hora (8 a 20, hora de
 // Venezuela) en las últimas 8 semanas. Usa ventas reales, no solo días cerrados.
 export async function salesHeatmap(): Promise<HeatCell[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("stats");
   const since = new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
   return withTenant(companyId, async (tx) => {
     const rows = await tx.$queryRaw<{ d: number; h: number; n: bigint }[]>`

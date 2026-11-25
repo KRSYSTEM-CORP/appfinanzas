@@ -1,7 +1,7 @@
 "use server";
 
 import type { Prisma } from "@prisma/client";
-import { requireManager } from "@/lib/session";
+import { requireManagerOrPermission } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
 import { currentRateOf } from "@/lib/account-balance";
 import { accountMovementsList, type AccountMovement, type TimeWindow } from "@/lib/account-movements";
@@ -88,7 +88,7 @@ async function resolveWindows(tx: Tx, companyId: string, branchId: string | null
 // Ingresos (cobros + fondos) y egresos (compras, nómina, gastos) de cada cuenta activa dentro del período,
 // en la moneda de la cuenta.
 export async function getAccountsPeriodReport(spec: PeriodSpec): Promise<AccountsPeriodReport> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("admin");
   return withTenant(companyId, async (tx) => {
     const r = await resolveWindows(tx, companyId, branchId ?? null, spec);
     const base = { seg: spec.seg, needsBranch: r.needsBranch, shifts: r.shifts, selectedShift: r.selectedShift, from: r.from, to: r.to, label: r.label };
@@ -110,7 +110,7 @@ export type PeriodMovement = AccountMovement & { accountId: string };
 
 // Historial completo del período: de una cuenta o (accountId null) de todas.
 export async function getAccountsPeriodMovements(spec: PeriodSpec, accountId: string | null): Promise<PeriodMovement[]> {
-  const { companyId, branchId } = await requireManager();
+  const { companyId, branchId } = await requireManagerOrPermission("admin");
   return withTenant(companyId, async (tx) => {
     const r = await resolveWindows(tx, companyId, branchId ?? null, spec);
     if (r.windows.length === 0) return [];
