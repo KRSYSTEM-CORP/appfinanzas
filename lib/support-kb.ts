@@ -1,6 +1,6 @@
 import { AI_ASK_COST, AI_BIG_COST, AI_PACKS } from "@/lib/assistant";
 import { TRIAL_DAYS } from "@/lib/billing";
-import { PLANS } from "@/lib/plans";
+import { PLANS, usersText } from "@/lib/plans";
 
 // Manual de uso que se le da al Asistente IA para contestar "¿cómo se hace…?".
 // Lo de los planes sale de lib/plans.ts, así nunca queda desactualizado; el resto
@@ -12,7 +12,7 @@ const usd = (cents: number) => `$${(cents / 100).toFixed(2).replace(".", ",")}`;
 function plansSection(): string {
   const lines = Object.values(PLANS).map((p) => {
     const first = p.firstMonthUsdCents ? ` (primer mes ${usd(p.firstMonthUsdCents)} para empresas nuevas)` : "";
-    return `- ${p.label}: ${usd(p.priceUsdCents)} al mes${first}. Hasta ${p.maxUsers} ${p.maxUsers === 1 ? "usuario" : "usuarios"}, ${
+    return `- ${p.label}: ${usd(p.priceUsdCents)} al mes${first}. ${p.maxUsers == null ? "Usuarios ilimitados" : `Hasta ${usersText(p)}`}, ${
       p.maxProducts == null ? "productos ilimitados" : `${p.maxProducts} productos`
     }, ${p.aiCredits} créditos de IA al mes, ${p.accounting ? "incluye Contabilidad" : "sin Contabilidad"}.`;
   });

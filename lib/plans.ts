@@ -8,7 +8,8 @@ export type PlanDef = {
   priceUsdCents: number;
   // Solo Emprende: primer mes a este precio para empresas nuevas.
   firstMonthUsdCents?: number;
-  maxUsers: number;
+  // null = usuarios ilimitados.
+  maxUsers: number | null;
   // null = ilimitado.
   maxProducts: number | null;
   // null = ilimitadas.
@@ -46,12 +47,12 @@ export const PLANS: Record<PlanId, PlanDef> = {
   },
   CORPORATIVO: {
     id: "CORPORATIVO", label: "Corporativo", priceUsdCents: 4499,
-    maxUsers: 10, maxProducts: null, maxBranches: null, aiCredits: 200, accounting: true,
+    maxUsers: null, maxProducts: null, maxBranches: null, aiCredits: 200, accounting: true,
     tagline: "Para equipos grandes y a tu medida",
     features: [
       "Todo lo de Pyme",
       "200 créditos de Asistente IA incluidos",
-      "10 usuarios",
+      "Usuarios ilimitados",
       "Productos ilimitados en el inventario",
       "Creación de un módulo personalizado adaptado a tu empresa. Una creación por mes",
     ],
@@ -79,7 +80,7 @@ export function productLimitMessage(plan: PlanDef): string | null {
 export function recommendPlan(usedUsers: number, usedProducts: number): PlanDef {
   const list = Object.values(PLANS);
   return (
-    list.find((p) => p.maxUsers >= usedUsers && (p.maxProducts == null || p.maxProducts >= usedProducts)) ??
+    list.find((p) => (p.maxUsers == null || p.maxUsers >= usedUsers) && (p.maxProducts == null || p.maxProducts >= usedProducts)) ??
     list[list.length - 1]
   );
 }
@@ -117,5 +118,12 @@ export function branchLimitMessage(plan: PlanDef): string | null {
 }
 
 export function userLimitMessage(plan: PlanDef): string {
+  if (plan.maxUsers == null) return `Tu plan ${plan.label} no tiene límite de usuarios.`;
   return `Tu plan ${plan.label} permite hasta ${plan.maxUsers} ${plan.maxUsers === 1 ? "usuario" : "usuarios"}. Sube de plan para agregar más.`;
+}
+
+// «1 usuario», «5 usuarios» o «usuarios ilimitados» (Corporativo).
+export function usersText(plan: Pick<PlanDef, "maxUsers">): string {
+  if (plan.maxUsers == null) return "usuarios ilimitados";
+  return `${plan.maxUsers} ${plan.maxUsers === 1 ? "usuario" : "usuarios"}`;
 }

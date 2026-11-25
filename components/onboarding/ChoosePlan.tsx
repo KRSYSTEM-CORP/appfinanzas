@@ -7,7 +7,7 @@ import "@/components/settings/my-plan.css";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckIcon, StarIcon } from "lucide-react";
-import { PLANS, recommendPlan, type PlanId } from "@/lib/plans";
+import { PLANS, recommendPlan, usersText, type PlanId } from "@/lib/plans";
 import { chooseInitialPlan } from "@/lib/actions/plan";
 import { Support } from "@/components/settings/MyPlanPanel";
 
@@ -80,7 +80,7 @@ export function ChoosePlan({ trialDays, companyName }: { trialDays: number; comp
                   <span>/ mes</span>
                 </div>
                 <div className="kp-muted" style={{ fontSize: 13 }}>
-                  {p.maxUsers} {p.maxUsers === 1 ? "usuario" : "usuarios"} · {p.maxProducts == null ? "productos ilimitados" : `${nf(p.maxProducts, 0)} productos`}
+                  {usersText(p)} · {p.maxProducts == null ? "productos ilimitados" : `${nf(p.maxProducts, 0)} productos`}
                   {p.aiCredits ? ` · ${p.aiCredits} créditos IA` : ""}
                 </div>
                 <ul>

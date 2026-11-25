@@ -23,5 +23,19 @@ describe("plan request", () => {
     expect(recommendPlan(6, 100).id).toBe("PYME");
     expect(recommendPlan(3, 300).id).toBe("PYME");
     expect(recommendPlan(8, 900).id).toBe("CORPORATIVO");
+    expect(recommendPlan(31, 100).id).toBe("CORPORATIVO");
+  });
+});
+
+import { PLANS, usersText } from "@/lib/plans";
+import { userLimitMessage } from "@/lib/plans";
+describe("usuarios por plan", () => {
+  it("Emprende 5, Pyme 30 y Corporativo ilimitado", () => {
+    expect(PLANS.EMPRENDE.maxUsers).toBe(5);
+    expect(PLANS.PYME.maxUsers).toBe(30);
+    expect(PLANS.CORPORATIVO.maxUsers).toBeNull();
+    expect(usersText(PLANS.CORPORATIVO)).toBe("usuarios ilimitados");
+    expect(usersText(PLANS.EMPRENDE)).toBe("5 usuarios");
+    expect(userLimitMessage(PLANS.CORPORATIVO)).toMatch(/no tiene límite/);
   });
 });
