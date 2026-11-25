@@ -132,6 +132,8 @@ afterAll(async () => {
 describe("misma cifra con y sin transacción compartida", () => {
   for (const [name, range] of [["año", YEAR], ["mes", MONTH], ["7 días", SEVEN]] as const) {
     it(`todas las lecturas de las pantallas coinciden (${name})`, async () => {
+      // Calentamiento: la primera lectura puede refrescar la tasa BCV vencida (escribe la empresa); sin esto las siguientes ven otra tasa.
+      await runAll(range, "sinScope");
       const [scoped, plain, serial] = [await runAll(range, "scope"), await runAll(range, "sinScope"), await runAll(range, "secuencial")];
       for (const k of Object.keys(plain)) {
         expect(scoped[k], `scope vs sin scope: ${k}`).toBe(plain[k]);
