@@ -85,7 +85,7 @@ Todos los valores están en `tokens.css`. Reglas de uso:
   - Arriba: logo "KR" en cuadro marca + nombre del sistema + nombre del negocio.
   - Chip **Sede activa** con el nombre de la sede.
   - Módulos en 3 grupos con título en mayúsculas.
-  - Abajo: pill del plan ("Plan Pyme · 5 usuarios"), pill de tasa ("Tasa Bs …"), botón **Bloquear pantalla**, avatar + nombre + rol del usuario.
+  - Abajo: pill del plan ("Plan Pyme · 30 usuarios"), pill de tasa ("Tasa Bs …"), botón **Bloquear pantalla**, avatar + nombre + rol del usuario.
 - **Teléfono (< 960px)**: barra inferior fija de 5 posiciones. La del centro es un botón circular elevado de 54px color marca. La quinta es **Más**, que abre una hoja con la cuadrícula de todos los módulos (3 columnas), más "Modo claro / oscuro" y "Bloquear pantalla".
   - Orden por defecto: Inicio · Inventario · **POS** (centro) · Presupuestos · Más.
   - Si el usuario no tiene permiso para alguno, se sustituye por el siguiente módulo permitido (ver función `bk()` en la referencia 00).

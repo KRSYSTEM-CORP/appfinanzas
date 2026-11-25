@@ -18,8 +18,9 @@ describe("plan request", () => {
   });
   it("recommends by usage", () => {
     expect(recommendPlan(1, 100).id).toBe("EMPRENDE");
-    expect(recommendPlan(2, 100).id).toBe("PYME");
-    expect(recommendPlan(4, 100).id).toBe("PYME");
+    expect(recommendPlan(2, 100).id).toBe("EMPRENDE");
+    expect(recommendPlan(5, 100).id).toBe("EMPRENDE");
+    expect(recommendPlan(6, 100).id).toBe("PYME");
     expect(recommendPlan(3, 300).id).toBe("PYME");
     expect(recommendPlan(8, 900).id).toBe("CORPORATIVO");
   });

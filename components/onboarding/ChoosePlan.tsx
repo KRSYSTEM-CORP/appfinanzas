@@ -20,7 +20,7 @@ export function ChoosePlan({ trialDays, companyName }: { trialDays: number; comp
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  // Cliente nuevo: 1 usuario y sin productos; sin pago aprobado, así que aplica el primer mes.
+  // Cliente nuevo: 1 usuario creado y sin productos; sin pago aprobado, así que aplica el primer mes.
   const rec = recommendPlan(1, 0);
   const firstMonth = true;
   const emprende = PLANS.EMPRENDE;

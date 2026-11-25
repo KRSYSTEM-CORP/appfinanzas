@@ -26,7 +26,7 @@ describe("Mi plan: uso de límites", () => {
   it("trae el plan de la sesión y los mismos conteos que la base", async () => {
     const usage = await getPlanUsage();
     expect(usage.plan.id).toBe("PYME");
-    expect(usage.plan.maxUsers).toBe(5);
+    expect(usage.plan.maxUsers).toBe(30);
 
     const users = await owner.user.count({ where: { companyId: ctx.companyId, status: "ACTIVE" } });
     const products = await owner.product.count({ where: { companyId: ctx.companyId } });
