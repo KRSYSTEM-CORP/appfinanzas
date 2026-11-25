@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { userErrorMessage } from "@/lib/user-error";
 import { requireCashAccess, requireSession, requireSectionAccess } from "@/lib/session";
 import { withTenant } from "@/lib/tenant-db";
+import { bq, jsDate, jsDateOnly } from "@/lib/batch-sql";
 import { SHOP_TIME_ZONE, dayBoundsUtc, selectionToWindows, type DateRangeSelection } from "@/lib/report-types";
 import { closingDateFromString, openDayList } from "@/lib/closed-days";
 import { activeShiftNumber, isDayClosed, nextShiftNumber, shiftWindow } from "@/lib/cash-shifts";
@@ -103,22 +104,28 @@ const MAX_RESPONSIBLE_LENGTH = 80;
 export async function getDailyClosingSummary(dateStr: string): Promise<CashClosingSummary> {
   const { companyId, branchId } = await requireSectionAccess(["reports", "pos"]);
   const { start: dayStart, end: dayEnd } = dayBoundsUtc(dateStr);
-  const closingDate = closingDateFromString(dateStr);
 
   return withTenant(companyId, async (tx) => {
-    const [closings, activeBranches, openings] = await Promise.all([
-      tx.cashClosing.findMany({
-        where: { companyId, closingDate, ...(branchId ? { branchId } : {}) },
-        orderBy: [{ shiftNumber: "asc" }, { closedAt: "asc" }],
-      }),
+    // Cierres, sedes activas y aperturas del día: una sola sentencia agrupada (lib/batch-sql.ts).
+    const branchSql = branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty;
+    const [closingRows, activeBranches, openingRows] = await Promise.all([
+      bq<{
+        id: string; branchId: string; shiftNumber: number; closedAt: string; note: string | null; responsibleName: string | null; openedAt: string | null;
+        countedUsdCents: number | null; countedBsCents: number | null; expectedCashCents: number | null; differenceCents: number | null;
+      }>(tx)`
+        SELECT "id", "branchId", "shiftNumber", "closedAt", "note", "responsibleName", "openedAt", "countedUsdCents", "countedBsCents", "expectedCashCents", "differenceCents"
+        FROM "CashClosing" WHERE "companyId" = ${companyId} AND "closingDate" = ${dateStr}::date ${branchSql}
+        ORDER BY "shiftNumber" ASC, "closedAt" ASC`,
       branchId
         ? Promise.resolve([{ id: branchId }])
-        : tx.branch.findMany({ where: { companyId, isActive: true }, select: { id: true } }),
-      tx.cashOpening.findMany({
-        where: { companyId, date: closingDate, ...(branchId ? { branchId } : {}) },
-        orderBy: { shiftNumber: "asc" },
-      }),
+        : bq<{ id: string }>(tx)`SELECT "id" FROM "Branch" WHERE "companyId" = ${companyId} AND "isActive" = true`,
+      bq<{ id: string; branchId: string; shiftNumber: number; responsibleName: string | null; createdAt: string; amountCents: number; openingUsdCents: number | null; openingBsCents: number | null }>(tx)`
+        SELECT "id", "branchId", "shiftNumber", "responsibleName", "createdAt", "amountCents", "openingUsdCents", "openingBsCents"
+        FROM "CashOpening" WHERE "companyId" = ${companyId} AND "date" = ${dateStr}::date ${branchSql}
+        ORDER BY "shiftNumber" ASC`,
     ]);
+    const closings = closingRows.map((c) => ({ ...c, closedAt: jsDate(c.closedAt), openedAt: c.openedAt ? jsDate(c.openedAt) : null }));
+    const openings = openingRows.map((o) => ({ ...o, createdAt: jsDate(o.createdAt) }));
 
     // Turno a mostrar (solo con sede seleccionada).
     let viewShift: number | null = null;
@@ -134,25 +141,22 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
     const viewClosing = viewShift != null ? closings.find((c) => c.shiftNumber === viewShift) ?? null : null;
     const viewOpening = viewShift != null ? viewOpenings[0] ?? null : null;
 
-    const voidedAgg = await tx.sale.aggregate({
-      where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: window.start, lt: window.end }, voided: true },
-      _sum: { totalCents: true },
-      _count: true,
-    });
     const hasOpeningSplit = viewOpenings.some((o) => o.openingUsdCents != null || o.openingBsCents != null);
-    const [totals, byStatus, byMethodRows, byCurrencyRows, byAccountRows, outflows] = await Promise.all([
-      tx.sale.aggregate({
-        where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: window.start, lt: window.end }, voided: false },
-        _sum: { totalCents: true },
-        _count: true,
-      }),
-      tx.sale.groupBy({
-        by: ["paymentStatus"],
-        where: { companyId, ...(branchId ? { branchId } : {}), createdAt: { gte: window.start, lt: window.end }, voided: false },
-        _sum: { totalCents: true },
-        _count: true,
-      }),
-      tx.$queryRaw<{ paymentMethod: PaymentMethod; total_cents: bigint }[]>`
+    const saleBranch = branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty;
+    // Las ocho lecturas del turno (anuladas, totales, estado, métodos, monedas, cuentas, salidas y devoluciones
+    // en efectivo) viajan juntas en una sola sentencia agrupada.
+    const [voidedRows, totalsRows, byStatusRows, byMethodRows, byCurrencyRows, byAccountRows, outflowRaw, refundedCashRows] = await Promise.all([
+      bq<{ total: number | null; n: number }>(tx)`
+        SELECT SUM("totalCents")::bigint AS total, COUNT(*)::bigint AS n FROM "Sale"
+        WHERE "companyId" = ${companyId} ${saleBranch} AND "createdAt" >= ${window.start} AND "createdAt" < ${window.end} AND "voided" = true`,
+      bq<{ total: number | null; n: number }>(tx)`
+        SELECT SUM("totalCents")::bigint AS total, COUNT(*)::bigint AS n FROM "Sale"
+        WHERE "companyId" = ${companyId} ${saleBranch} AND "createdAt" >= ${window.start} AND "createdAt" < ${window.end} AND "voided" = false`,
+      bq<{ paymentStatus: string; total: number | null; n: number }>(tx)`
+        SELECT "paymentStatus"::text AS "paymentStatus", SUM("totalCents")::bigint AS total, COUNT(*)::bigint AS n FROM "Sale"
+        WHERE "companyId" = ${companyId} ${saleBranch} AND "createdAt" >= ${window.start} AND "createdAt" < ${window.end} AND "voided" = false
+        GROUP BY "paymentStatus"`,
+      bq<{ paymentMethod: PaymentMethod; total_cents: bigint }>(tx)`
         SELECT sp."paymentMethod", SUM(sp."amountEurCents")::bigint AS total_cents
         FROM "SalePayment" sp
         JOIN "Sale" s ON s.id = sp."saleId"
@@ -163,7 +167,7 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
         GROUP BY sp."paymentMethod"
         ORDER BY total_cents DESC
       `,
-      tx.$queryRaw<{ currency: string; cents: bigint; ref: bigint }[]>`
+      bq<{ currency: string; cents: bigint; ref: bigint }>(tx)`
         SELECT COALESCE(sp."currencyCode", CASE WHEN sp."paymentMethod"::text IN ('ZELLE','BINANCE','PAYPAL') THEN 'USD' ELSE 'EUR' END) AS currency,
                SUM(COALESCE(sp."amountCurrencyCents", sp."amountEurCents"))::bigint AS cents, SUM(sp."amountEurCents")::bigint AS ref
         FROM "SalePayment" sp
@@ -175,13 +179,13 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
         GROUP BY 1
         ORDER BY ref DESC
       `,
-      tx.$queryRaw<
+      bq<
         {
           accountId: string | null; kind: string | null; bankKey: string | null; bankName: string | null;
           accountNumber: string | null; paymentMethod: PaymentMethod;
           count: bigint; ref: bigint; currency: string; cents: bigint;
-        }[]
-      >`
+        }
+      >(tx)`
         SELECT sp."paymentAccountId" AS "accountId", pa.kind::text AS kind, pa."bankKey" AS "bankKey", pa."bankName" AS "bankName",
                pa."accountNumber" AS "accountNumber", sp."paymentMethod" AS "paymentMethod",
                COUNT(*)::bigint AS count, SUM(sp."amountEurCents")::bigint AS ref,
@@ -197,36 +201,40 @@ export async function getDailyClosingSummary(dateStr: string): Promise<CashClosi
         GROUP BY 1, 2, 3, 4, 5, 6, 9
         ORDER BY ref DESC
       `,
-      tx.cashOutflow.findMany({
-        where: {
-          companyId,
-          date: closingDate,
-          ...(branchId ? { branchId } : {}),
-          ...(viewShift != null ? { shiftNumber: viewShift } : {}),
-        },
-        orderBy: { createdAt: "asc" },
-        select: {
-          id: true, concept: true, amountCents: true, createdAt: true, paymentMethod: true, currencyCode: true,
-          amountCurrencyCents: true, exchangeRate: true, saleId: true,
-          paymentAccount: { select: { bankName: true, kind: true, accountNumber: true } },
-        },
-      }),
+      bq<{
+        id: string; concept: string; amountCents: number; createdAt: string; paymentMethod: PaymentMethod | null; currencyCode: string | null;
+        amountCurrencyCents: number | null; exchangeRate: number | null; saleId: string | null; bankName: string | null; kind: string | null; accountNumber: string | null;
+      }>(tx)`
+        SELECT o."id", o."concept", o."amountCents", o."createdAt", o."paymentMethod"::text AS "paymentMethod", o."currencyCode", o."amountCurrencyCents",
+               o."exchangeRate"::float8 AS "exchangeRate", o."saleId", pa."bankName", pa."kind"::text AS "kind", pa."accountNumber"
+        FROM "CashOutflow" o LEFT JOIN "PaymentAccount" pa ON pa."id" = o."paymentAccountId"
+        WHERE o."companyId" = ${companyId} AND o."date" = ${dateStr}::date
+          ${branchId ? Prisma.sql`AND o."branchId" = ${branchId}` : Prisma.empty}
+          ${viewShift != null ? Prisma.sql`AND o."shiftNumber" = ${viewShift}` : Prisma.empty}
+        ORDER BY o."createdAt" ASC`,
+      // El efectivo de una venta anulada con devolución registrada sigue en la gaveta hasta que sale por la
+      // devolución (salida de Caja Chica): se cuenta aquí para que la salida no reste dos veces.
+      bq<{ currency: string; cents: bigint; ref: bigint }>(tx)`
+        SELECT COALESCE(sp."currencyCode", 'USD') AS currency,
+               SUM(COALESCE(sp."amountCurrencyCents", sp."amountEurCents"))::bigint AS cents, SUM(sp."amountEurCents")::bigint AS ref
+        FROM "SalePayment" sp
+        JOIN "Sale" s ON s.id = sp."saleId"
+        WHERE s."companyId" = ${companyId}
+          ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
+          AND sp."createdAt" >= ${window.start} AND sp."createdAt" < ${window.end}
+          AND s."voided" = true AND sp."paymentMethod"::text = 'CASH'
+          AND EXISTS (SELECT 1 FROM "CashOutflow" co WHERE co."saleId" = s.id)
+        GROUP BY 1`,
     ]);
+    const voidedAgg = { _count: Number(voidedRows[0]?.n ?? 0), _sum: { totalCents: Number(voidedRows[0]?.total ?? 0) } };
+    const totals = { _count: Number(totalsRows[0]?.n ?? 0), _sum: { totalCents: Number(totalsRows[0]?.total ?? 0) } };
+    const byStatus = byStatusRows.map((r) => ({ paymentStatus: r.paymentStatus, _count: Number(r.n), _sum: { totalCents: Number(r.total ?? 0) } }));
+    const outflows = outflowRaw.map((o) => ({
+      ...o,
+      createdAt: jsDate(o.createdAt),
+      paymentAccount: o.kind != null || o.bankName != null || o.accountNumber != null ? { bankName: o.bankName, kind: o.kind as string, accountNumber: o.accountNumber as string } : null,
+    }));
     const openingCents = viewOpenings.length > 0 ? viewOpenings.reduce((a, o) => a + o.amountCents, 0) : null;
-    // El efectivo de una venta anulada con devolución registrada sigue en la gaveta hasta que sale por la
-    // devolución (salida de Caja Chica): se cuenta aquí para que la salida no reste dos veces.
-    const refundedCashRows = await tx.$queryRaw<{ currency: string; cents: bigint; ref: bigint }[]>`
-      SELECT COALESCE(sp."currencyCode", 'USD') AS currency,
-             SUM(COALESCE(sp."amountCurrencyCents", sp."amountEurCents"))::bigint AS cents, SUM(sp."amountEurCents")::bigint AS ref
-      FROM "SalePayment" sp
-      JOIN "Sale" s ON s.id = sp."saleId"
-      WHERE s."companyId" = ${companyId}
-        ${branchId ? Prisma.sql`AND s."branchId" = ${branchId}` : Prisma.empty}
-        AND sp."createdAt" >= ${window.start} AND sp."createdAt" < ${window.end}
-        AND s."voided" = true AND sp."paymentMethod"::text = 'CASH'
-        AND EXISTS (SELECT 1 FROM "CashOutflow" co WHERE co."saleId" = s.id)
-      GROUP BY 1
-    `;
     const cashSalesCents =
       Number(byMethodRows.find((r) => r.paymentMethod === "CASH")?.total_cents ?? 0) + refundedCashRows.reduce((a, r) => a + Number(r.ref), 0);
     const outflowRows: CashOutflowRow[] = outflows.map((o) => ({
@@ -443,7 +451,7 @@ export async function listPendingClosings(range: DateRangeSelection): Promise<Pe
     // on the single transaction connection and blew the transaction timeout.
     const spanStart = openDays.reduce((m, d) => (d.start < m ? d.start : m), openDays[0].start);
     const spanEnd = openDays.reduce((m, d) => (d.end > m ? d.end : m), openDays[0].end);
-    const rows = await tx.$queryRaw<{ day: string; total_cents: bigint; sales_count: bigint }[]>`
+    const rows = await bq<{ day: string; total_cents: bigint; sales_count: bigint }>(tx)`
       SELECT to_char(s."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE ${SHOP_TIME_ZONE}, 'YYYY-MM-DD') AS day,
              COALESCE(SUM(s."totalCents"), 0)::bigint AS total_cents,
              COUNT(*)::bigint AS sales_count
@@ -634,14 +642,15 @@ export type RecentClosing = {
 // Últimos cierres de caja (de la sede activa o de todas), para el «Historial de cierres».
 export async function listRecentClosings(limit = 5): Promise<RecentClosing[]> {
   const { companyId, branchId } = await requireSectionAccess(["reports", "pos"]);
-  const rows = await withTenant(companyId, (tx) =>
-    tx.cashClosing.findMany({
-      where: { companyId, ...(branchId ? { branchId } : {}) },
-      orderBy: [{ closingDate: "desc" }, { closedAt: "desc" }],
-      take: limit,
-      select: { id: true, closingDate: true, shiftNumber: true, responsibleName: true, openedAt: true, closedAt: true, totalCents: true, salesCount: true, note: true },
-    })
+  const rowsRaw = await withTenant(companyId, (tx) =>
+    bq<{ id: string; closingDate: string; shiftNumber: number; responsibleName: string | null; openedAt: string | null; closedAt: string; totalCents: number; salesCount: number; note: string | null }>(tx)`
+      SELECT "id", "closingDate"::text AS "closingDate", "shiftNumber", "responsibleName", "openedAt", "closedAt", "totalCents", "salesCount", "note"
+      FROM "CashClosing"
+      WHERE "companyId" = ${companyId} ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
+      ORDER BY "closingDate" DESC, "closedAt" DESC
+      LIMIT ${limit}`
   );
+  const rows = rowsRaw.map((r) => ({ ...r, closingDate: jsDateOnly(r.closingDate), openedAt: r.openedAt ? jsDate(r.openedAt) : null, closedAt: jsDate(r.closedAt) }));
   return rows.map((r) => ({
     id: r.id,
     date: r.closingDate.toISOString().slice(0, 10),

@@ -1,6 +1,8 @@
 import { MyPlanPanel } from "@/components/settings/MyPlanPanel";
 import { getBillingInfo } from "@/lib/actions/billing";
 import { getPlanUsage } from "@/lib/actions/plan";
+import { getSession } from "@/lib/session";
+import { withTenantScope } from "@/lib/tenant-db";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +14,10 @@ export default async function BillingPage({
   searchParams: Promise<{ plan?: string }>;
 }) {
   const { plan: planParam } = await searchParams;
-  const [usage, info] = await Promise.all([getPlanUsage(), getBillingInfo()]);
+  // Esta pantalla también la ve una empresa bloqueada: se lee la sesión sin redirigir (igual que getPlanUsage).
+  const session = await getSession();
+  const load = () => Promise.all([getPlanUsage(), getBillingInfo()]);
+  const [usage, info] = await (session ? withTenantScope(session.companyId, load) : load());
 
   return (
     <div id="opciones-de-pago" className="flex scroll-mt-6 flex-col gap-4 px-4 py-5">

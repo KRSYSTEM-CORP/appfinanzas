@@ -8,6 +8,7 @@ import { commissionsTotal } from "@/lib/actions/seller-reports";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
 import { selectionLabel } from "@/lib/period-label";
 import { parseDateRangeSelection, todayDateString } from "@/lib/report-types";
+import { withTenantScope } from "@/lib/tenant-db";
 
 export const dynamic = "force-dynamic";
 
@@ -18,17 +19,17 @@ export default async function AccountingPage({
   searchParams: Promise<{ range?: string; year?: string; months?: string; from?: string; to?: string }>;
 }) {
   await requirePermission("admin");
-  await requireAccountingPlan();
+  const planSession = await requireAccountingPlan();
   const range = parseDateRangeSelection(await searchParams, { kind: "preset", preset: "month" });
   const today = todayDateString();
-  const [netSales, cogsCents, expensesCents, commissionsCents, expenses, { referenceCurrency, rate, exchangeRateEnabled }] = await Promise.all([
+  const [netSales, cogsCents, expensesCents, commissionsCents, expenses, { referenceCurrency, rate, exchangeRateEnabled }] = await withTenantScope(planSession.companyId, () => Promise.all([
     netSalesCents(range),
     costOfGoodsSold(range),
     expensesTotal(range),
     commissionsTotal(range),
     listExpenses(range),
     getExchangeRateInfo(),
-  ]);
+  ]));
   const b = { salesCents: netSales, cogsCents, expensesCents, commissionsCents };
   const label = selectionLabel(range, today);
 
