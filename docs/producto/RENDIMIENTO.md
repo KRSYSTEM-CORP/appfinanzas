@@ -70,7 +70,21 @@ Móvil y sin conexión:
 
 Nota sobre los tiempos: el túnel SSH a la base de pruebas cuesta unos 170 ms por consulta y cada pantalla ejecuta de 22 a 140 consultas (el layout solo son 22, repartidas en varias transacciones de 3 viajes cada una). Con la base en el mismo servidor (VPS) ese costo es casi nulo, así que el FCP de 2 a 3 s medido aquí es sobre todo latencia de red hacia la base de pruebas, no del código. Las cifras firmes son peticiones, tareas largas, desbordamiento y número de consultas.
 
+Consultas por pantalla (segunda pasada, `KR_QUERY_LOG=1`):
+
+`lib/tenant-db.ts` ahora tiene `withTenantScope(companyId, fn)`: dentro, todas las llamadas a `withTenant` de la misma empresa reutilizan UNA transacción (se ahorran BEGIN, `set_config` y COMMIT de cada una; otra empresa abre la suya, así RLS no se relaja) y `scopeMemo(clave, fn)` ejecuta una sola vez una lectura idéntica (días cerrados de caja, tasa, datos fiscales, IVA). Se aplicó a `/finance`, `/accounting/statements`, `/accounting/accounts`, `/settings` y `/home`. `KR_NO_TENANT_SCOPE=1` apaga el reuso para comparar.
+
+| Pantalla | Consultas antes | Después |
+| --- | --- | --- |
+| `/finance` | 139 | 55 |
+| `/accounting/statements` | 96 | 66 |
+| `/accounting/accounts` | 77 | 70 |
+| `/settings` | 75 | 49 |
+| `/home` | 81 | 41 |
+
+Equivalencia: con la sesión de gerente se descargó el texto de las 5 pantallas con y sin el reuso (`KR_NO_TENANT_SCOPE=1`) y es idéntico carácter por carácter (en `/finance` solo cambió «día 24 de 30» por el cambio de fecha entre dos corridas; repetido el mismo día, idéntico). Prueba unitaria `tests/unit/tenant-scope.test.ts` (una transacción por empresa, otra empresa abre la suya, memo solo dentro del scope).
+
 Pendiente, con su causa:
 
-- `/finance` (139 consultas), `/accounting/statements` (96), `/accounting/accounts` (77), `/settings` (75) y `/home` (81) calculan muchos agregados independientes, cada uno en su propia transacción `withTenant` (BEGIN, `set_config`, COMMIT). Unificarlos exige reescribir `lib/actions/finance.ts` y similares cuidando RLS; no se hizo en esta pasada.
-- `withTenant` cuesta 3 viajes por llamada; agrupar varias lecturas de un mismo módulo en una sola transacción reduciría el total a la mitad.
+- No se llegó a menos de 30 consultas. De las que quedan, 7 a 10 pares BEGIN/COMMIT son del layout raíz (sesión, sedes, avisos, tasa del menú) y de guardas que corren fuera del scope; el resto son lecturas distintas de verdad. En `/accounting/accounts` y `/accounting/statements` queda un bucle por cuenta en `accountMovementsList` (compras, nómina, gastos y salidas por cada cuenta): agruparlo como se hizo con los saldos exige reescribir esa función, y con pocas cuentas (la empresa de pruebas) pesa poco.
+- Dentro del scope, una consulta que falle aborta la transacción de la pantalla completa (antes solo esa lectura; hay `.catch` en `/home` y `/accounting/statements`).

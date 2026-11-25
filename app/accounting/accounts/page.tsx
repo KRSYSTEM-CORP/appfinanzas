@@ -1,3 +1,4 @@
+import { withTenantScope } from "@/lib/tenant-db";
 import { requireAccountingPlan, requirePermission } from "@/lib/session";
 import { getAccountBalances, listPaymentAccounts } from "@/lib/actions/payment-accounts";
 import { getExchangeRateInfo } from "@/lib/actions/settings";
@@ -17,16 +18,16 @@ export default async function AccountsPage({
   searchParams: Promise<{ seg?: string; turno?: string; range?: string; year?: string; months?: string; from?: string; to?: string }>;
 }) {
   await requirePermission("admin");
-  await requireAccountingPlan();
+  const planSession = await requireAccountingPlan();
   const params = await searchParams;
   const seg = parseSegMode(params.seg);
   const selection = parseDateRangeSelection(params, { kind: "preset", preset: "today" });
-  const [balances, accounts, { rate, exchangeRateEnabled, referenceCurrency }, report] = await Promise.all([
+  const [balances, accounts, { rate, exchangeRateEnabled, referenceCurrency }, report] = await withTenantScope(planSession.companyId, () => Promise.all([
     getAccountBalances(),
     listPaymentAccounts(),
     getExchangeRateInfo(),
     getAccountsPeriodReport({ seg, turno: params.turno, selection }),
-  ]);
+  ]));
   const byId = new Map(balances.map((b) => [b.id, b]));
   const rows: BankAccount[] = accounts.flatMap((a) => {
     const b = byId.get(a.id);

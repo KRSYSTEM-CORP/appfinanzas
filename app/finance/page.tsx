@@ -1,3 +1,4 @@
+import { withTenantScope } from "@/lib/tenant-db";
 import Link from "@/components/ui/nav-link";
 import { listPendingClosings } from "@/lib/actions/cash-closing";
 import { formatCurrencyTotals } from "@/lib/currency-breakdown";
@@ -67,7 +68,7 @@ export default async function FinancePage({
   searchParams: Promise<{ range?: string; year?: string; months?: string; from?: string; to?: string; q?: string }>;
 }) {
   await requirePermission("stats");
-  await requireAccountingPlan();
+  const planSession = await requireAccountingPlan();
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const expenseSearch = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
@@ -101,7 +102,7 @@ export default async function FinancePage({
     netSales,
     netUncosted,
     { localCurrencyCode, exchangeRateEnabled, referenceCurrency, rate },
-  ] = await Promise.all([
+  ] = await withTenantScope(planSession.companyId, () => Promise.all([
     revenueTotals(range),
     receivablesTotals(),
     salesByDay(range),
@@ -130,7 +131,7 @@ export default async function FinancePage({
     netSalesCents(range),
     netSalesWithoutCost(range),
     getExchangeRateInfo(),
-  ]);
+  ]));
 
   const unclosedDays = (await listPendingClosings(range)).length;
   const cur = referenceCurrency as string;

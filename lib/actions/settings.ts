@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession, requireSession, requireManager, setSessionCookie } from "@/lib/session";
-import { withTenant } from "@/lib/tenant-db";
+import { scopeMemo, withTenant } from "@/lib/tenant-db";
 import { getOrSetCache, invalidateCache } from "@/lib/cache";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { fetchBcvRate } from "@/lib/bcv-rate";
@@ -48,7 +48,7 @@ export async function getExchangeRateInfo(): Promise<ExchangeRateInfo> {
   // (each of which invalidates this key below), so a short TTL is safe and
   // doesn't meaningfully delay the self-healing "stale rate" refresh logic
   // inside, which only fires after hours of staleness.
-  return getOrSetCache(`exchangeRateInfo:${companyId}`, 600, () => computeExchangeRateInfo(companyId));
+  return scopeMemo(`rate:${companyId}`, () => getOrSetCache(`exchangeRateInfo:${companyId}`, 600, () => computeExchangeRateInfo(companyId)));
 }
 
 async function computeExchangeRateInfo(companyId: string): Promise<ExchangeRateInfo> {
@@ -164,6 +164,10 @@ export type IvaSettingsInfo = {
 };
 
 export async function getIvaSettings(): Promise<IvaSettingsInfo> {
+  return scopeMemo(`getIvaSettings`, getIvaSettingsQuery);
+}
+
+async function getIvaSettingsQuery(): Promise<IvaSettingsInfo> {
   const { companyId } = await requireSession();
   const company = await withTenant(companyId, (tx) =>
     tx.company.findUnique({
@@ -433,6 +437,10 @@ export type FiscalData = {
 };
 
 export async function getFiscalData(): Promise<FiscalData> {
+  return scopeMemo(`getFiscalData`, getFiscalDataQuery);
+}
+
+async function getFiscalDataQuery(): Promise<FiscalData> {
   const { companyId } = await requireSession();
   const company = await withTenant(companyId, (tx) =>
     tx.company.findUnique({

@@ -1,3 +1,4 @@
+import { withTenantScope } from "@/lib/tenant-db";
 import { ExchangeRateForm } from "@/components/settings/ExchangeRateForm";
 import { CurrencySelectForm } from "@/components/settings/CurrencySelectForm";
 import { ReferenceCurrencyForm } from "@/components/settings/ReferenceCurrencyForm";
@@ -57,7 +58,7 @@ export default async function SettingsPage() {
     dailyEmails,
     planUsage,
     people,
-  ] = await Promise.all([
+  ] = await withTenantScope(session.companyId, () => Promise.all([
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
@@ -67,7 +68,7 @@ export default async function SettingsPage() {
     canManage ? getDailyReportEmails() : Promise.resolve([] as string[]),
     getPlanUsage(),
     canManage ? listEmployees() : Promise.resolve([]),
-  ]);
+  ]));
   const stale = isStale(updatedAt);
   // Emprende incluye solo la sucursal principal: con el tope alcanzado se bloquea «Nueva sucursal».
   const planDef = getPlan(session.plan);
