@@ -10,6 +10,7 @@ vi.mock("@/lib/session", () => ({
   hasPermission: () => true,
   requireSession: async () => sessionFor(ctx),
   requireManager: async () => sessionFor(ctx),
+  requireCashAccess: async () => sessionFor(ctx),
   requireSectionAccess: async () => sessionFor(ctx),
   getSession: async () => sessionFor(ctx),
 }));
