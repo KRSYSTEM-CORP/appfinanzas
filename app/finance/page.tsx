@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { listPendingClosings } from "@/lib/actions/cash-closing";
 import { formatCurrencyTotals } from "@/lib/currency-breakdown";
 import { requireAccountingPlan, requirePermission } from "@/lib/session";

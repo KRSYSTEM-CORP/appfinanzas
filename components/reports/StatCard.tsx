@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import type { ComponentType, ReactNode } from "react";
 
 // A fixed color per metric (never rotated/cycled) — e.g. Finanzas always

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { CheckIcon, EyeIcon, FlagIcon, MoreVerticalIcon, PhoneIcon, PrinterIcon, SearchIcon, StickyNoteIcon, TargetIcon, ZapIcon } from "lucide-react";
 import type { Quote, QuoteStatus, ReferenceCurrency } from "@prisma/client";
 import { Button, buttonVariants } from "@/components/ui/button";

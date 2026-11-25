@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { getSaleReceipt } from "@/lib/actions/sales";
 import type { PaymentStatus } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { CustomerForm, type CustomerInfo } from "@/components/pos/CustomerForm";
@@ -12,7 +13,7 @@ import { defaultPaymentSplitRows, type PaymentSplitRow } from "@/components/paym
 import { useDefaultPaymentRow } from "@/components/payments/useDefaultPaymentRow";
 import { accountChoiceMessage } from "@/lib/payment-method-accounts";
 import { computeItemDiscountCents } from "@/lib/discount";
-import { queueSale, type PendingSaleInput } from "@/lib/offline/sync";
+import { queueSale, SALE_SYNCED_EVENT, type PendingSaleInput } from "@/lib/offline/sync";
 import { buildPendingReceipt } from "@/lib/offline/pending-receipt";
 import { useCart } from "@/lib/pos/use-cart";
 import { CashClosedAlert } from "@/components/pos/CashClosedAlert";
@@ -104,6 +105,28 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
   const [discountPercent, setDiscountPercent] = useState("0");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [completedSale, setCompletedSale] = useState<any>(null);
+  const [receiptSynced, setReceiptSynced] = useState(false);
+  const pendingLocalId = useRef<string | null>(null);
+
+  // Cuando la venta en cola se sincroniza con el servidor, el comprobante deja
+  // de decir «pendiente» y muestra el número real.
+  useEffect(() => {
+    function onSynced(e: Event) {
+      const d = (e as CustomEvent<{ localId: string; saleId: string }>).detail;
+      if (!d || pendingLocalId.current !== d.localId) return;
+      pendingLocalId.current = null;
+      void getSaleReceipt(d.saleId)
+        .then((sale) => {
+          if (sale) {
+            setCompletedSale(sale);
+            setReceiptSynced(true);
+          }
+        })
+        .catch(() => {});
+    }
+    window.addEventListener(SALE_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(SALE_SYNCED_EVENT, onSynced);
+  }, []);
   const [isPending, startTransition] = useTransition();
   const [payError, setPayError] = useState<string | null>(null);
   const accountsForChoice = (snapshot.paymentAccounts ?? []).map((a) => ({ id: a.id, kind: a.kind }));
@@ -166,7 +189,7 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
     };
 
     startTransition(async () => {
-      await queueSale({ ...saleInput, offlineExchangeRate: snapshot.rate ?? undefined }, {
+      const queued = await queueSale({ ...saleInput, offlineExchangeRate: snapshot.rate ?? undefined }, {
         totalCents: total,
         items: lines.map((l) => ({
           productName: productById.get(l.productId)?.name ?? l.name,
@@ -179,6 +202,8 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
         sellerName: snapshot.sellerName,
         note: note.trim() || null,
       });
+      pendingLocalId.current = queued.localId;
+      setReceiptSynced(false);
       setCompletedSale(
         buildPendingReceipt({
           lines: lines.map((l) => {
@@ -211,6 +236,7 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
   }
 
   function newSale() {
+    pendingLocalId.current = null;
     setCustomer(null);
     resetCart();
     setPaymentStatus("PAID");
@@ -241,7 +267,7 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
           printPaperSize={snapshot.printPaperSize}
           company={snapshot.company}
           onNewSale={newSale}
-          pendingSync
+          pendingSync={!receiptSynced}
         />
       </div>
     );

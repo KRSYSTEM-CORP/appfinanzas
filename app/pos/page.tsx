@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { PosSalesSheet } from "@/components/pos/PosSalesSheet";
 import { PosClient } from "@/components/pos/PosClient";
 import { OfflineSyncBanner } from "@/components/pos/OfflineSyncBanner";

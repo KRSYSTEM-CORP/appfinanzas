@@ -8,7 +8,7 @@ import type { ActionResult } from "@/lib/types";
 import type { PaymentAccountKind } from "@prisma/client";
 import { defaultCurrencyForKind } from "@/lib/account-money";
 import { accountMovementsList, type AccountMovement } from "@/lib/account-movements";
-import { accountBalance, currentRateOf } from "@/lib/account-balance";
+import { accountBalances, currentRateOf } from "@/lib/account-balance";
 import { normalizeBankSiteUrl } from "@/lib/bank-sites";
 
 export type PaymentAccountRow = {
@@ -60,8 +60,9 @@ export async function listSourceAccounts(includePos = false): Promise<SourceAcco
     const rate = await currentRateOf(tx, companyId);
     const rows = await tx.paymentAccount.findMany({ where: { companyId, active: true, ...(includePos ? {} : { kind: { not: "PUNTO_DE_VENTA" as const } }) }, orderBy: { createdAt: "asc" } });
     const out: SourceAccountRow[] = [];
+    const balances = await accountBalances(tx, companyId, rows, rate);
     for (const a of rows) {
-      const b = await accountBalance(tx, companyId, a, rate);
+      const b = balances.get(a.id)!;
       out.push({
         id: a.id,
         label: [a.bankName ?? a.kind, a.accountNumber].filter(Boolean).join(" · "),
@@ -149,8 +150,9 @@ export async function getAccountBalances(): Promise<AccountBalanceRow[]> {
     const accounts = await tx.paymentAccount.findMany({ where: { companyId, active: true }, orderBy: { createdAt: "asc" } });
     const currentRate = await currentRateOf(tx, companyId);
     const rows: AccountBalanceRow[] = [];
+    const balances = await accountBalances(tx, companyId, accounts, currentRate);
     for (const a of accounts) {
-      const b = await accountBalance(tx, companyId, a, currentRate);
+      const b = balances.get(a.id)!;
       rows.push({
         id: a.id,
         label: [a.bankName, a.accountNumber].filter(Boolean).join(" · "),

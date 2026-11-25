@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { aggregateByCurrency, formatCurrencyTotals } from "@/lib/currency-breakdown";
 import {
   AlertTriangleIcon,

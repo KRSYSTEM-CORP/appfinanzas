@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { CASH_CLOSED_MESSAGE } from "@/lib/cash-gate";
 
 export function CashClosedAlert({ offline = false }: { offline?: boolean }) {

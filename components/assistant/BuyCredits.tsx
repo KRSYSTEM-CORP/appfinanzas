@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { Button } from "@/components/ui/button";
 import { AI_ASK_COST, AI_BIG_COST } from "@/lib/assistant";
 import { useAssistantCredits } from "./AssistantCredits";

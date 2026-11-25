@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { redirect } from "next/navigation";
 import { ArrowRightIcon, CalendarDaysIcon, CircleAlertIcon, CreditCardIcon, LogOutIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";

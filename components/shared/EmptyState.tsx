@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

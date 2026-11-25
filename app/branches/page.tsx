@@ -5,7 +5,7 @@ import { BranchCards } from "@/components/branches/BranchCards";
 import { branchOverview } from "@/lib/actions/branches";
 import { requirePermission } from "@/lib/session";
 import { branchLimitMessage, getPlan } from "@/lib/plans";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { PlusIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/PageHeader";

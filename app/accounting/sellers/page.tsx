@@ -1,5 +1,5 @@
 import { requireAccountingPlan } from "@/lib/session";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,

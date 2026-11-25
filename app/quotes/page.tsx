@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { QuoteClient } from "@/components/quotes/QuoteClient";
 import { listActiveProducts, listCategories } from "@/lib/actions/products";
 import { getBranding, getExchangeRateInfo, getFiscalData } from "@/lib/actions/settings";

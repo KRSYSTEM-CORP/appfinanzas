@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { AlertTriangleIcon, BanknoteIcon, BellIcon, Building2Icon, ClockIcon, SparklesIcon, UserPlusIcon } from "lucide-react";
 import { PlatformShell } from "@/components/admin/PlatformShell";
 import { Kpi, KpiGrid } from "@/components/shared/Kpi";

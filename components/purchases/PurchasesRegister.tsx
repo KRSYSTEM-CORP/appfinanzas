@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { useRouter } from "next/navigation";
 import { PlusIcon, ShoppingCartIcon } from "lucide-react";
 import { toast } from "sonner";

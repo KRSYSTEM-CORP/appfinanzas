@@ -1,5 +1,5 @@
 import { PendingClosingsRow } from "@/components/reports/PendingClosingsRow";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { BanknoteIcon, FileTextIcon, TrendingDownIcon, WalletIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CajaChicaCard } from "@/components/reports/CajaChicaCard";
@@ -20,13 +20,15 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; year?: string; months?: string; status?: string; channel?: string; vista?: string }>;
+  searchParams: Promise<{ range?: string; year?: string; months?: string; status?: string; channel?: string; vista?: string; n?: string }>;
 }) {
   const session = await requireSectionAccess("reports");
   const params = await searchParams;
   const range = parseDateRangeSelection(params, { kind: "preset", preset: "month" });
   const todayStr = todayDateString();
   const channelFilter = ["MOSTRADOR", "DELIVERY", "PICKUP", "ONLINE"].includes(params.channel ?? "") ? (params.channel as string) : "";
+  // Cada venta trae partidas y pagos: se cargan 100 y «Cargar más» pide otras 100 (tope 1000).
+  const salesLimit = Math.min(1000, Math.max(100, Math.floor(Number(params.n) / 100) * 100 || 100));
   const statusFilter = params.status === "PAID" || params.status === "CREDIT" ? params.status : "";
 
   const [
@@ -38,7 +40,7 @@ export default async function ReportsPage({
     pendingClosings,
     recentClosings,
   ] = await Promise.all([
-    listRecentSales(500, selectionToWindows(range), statusFilter || undefined),
+    listRecentSales(salesLimit, selectionToWindows(range), statusFilter || undefined),
     getExchangeRateInfo(),
     getBranding(),
     getFiscalData(),
@@ -227,6 +229,18 @@ export default async function ReportsPage({
             printPaperSize={printPaperSize}
             canManage={canManage}
           />
+          {recentSales.length >= salesLimit && salesLimit < 1000 && (
+            <div className="mt-4 text-center">
+              <Link
+                href={`/reports?${new URLSearchParams({ ...Object.fromEntries(Object.entries(params).filter(([k, v]) => k !== "n" && typeof v === "string")) as Record<string, string>, n: String(salesLimit + 100) }).toString()}`}
+                scroll={false}
+                prefetch={false}
+                className="text-sm font-semibold text-primary underline underline-offset-4"
+              >
+                Cargar ventas anteriores
+              </Link>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

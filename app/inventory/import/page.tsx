@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { Button } from "@/components/ui/button";
 import { ImportProductsForm } from "@/components/inventory/ImportProductsForm";
 

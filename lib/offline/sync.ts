@@ -36,6 +36,8 @@ export async function discardPendingSale(localId: string): Promise<void> {
   await removePendingSale(localId);
 }
 
+export const SALE_SYNCED_EVENT = "kr:sale-synced";
+
 export type SyncResult = { synced: number; remaining: number };
 
 // Best-effort: submits every queued sale in order through the real
@@ -68,6 +70,11 @@ async function runSync(): Promise<SyncResult> {
       if (result.success) {
         await removePendingSale(sale.localId);
         synced++;
+        // Avisa al comprobante abierto (si lo hay) para que cambie «pendiente»
+        // por el número real sin recargar.
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent(SALE_SYNCED_EVENT, { detail: { localId: sale.localId, saleId: result.saleId } }));
+        }
       } else {
         await setPendingSaleError(sale.localId, result.error);
       }

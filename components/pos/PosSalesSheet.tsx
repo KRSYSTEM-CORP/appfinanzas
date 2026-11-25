@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { BarChart3Icon, EllipsisVerticalIcon, RotateCcwIcon } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/ui/nav-link";
 import { toast } from "sonner";
 import { Chip } from "@/components/ui/chip";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
