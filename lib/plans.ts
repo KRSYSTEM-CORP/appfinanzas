@@ -23,24 +23,24 @@ export type PlanDef = {
 export const PLANS: Record<PlanId, PlanDef> = {
   EMPRENDE: {
     id: "EMPRENDE", label: "Emprende", priceUsdCents: 1299, firstMonthUsdCents: 999,
-    maxUsers: 1, maxProducts: 100, maxBranches: 1, aiCredits: 0, accounting: false,
+    maxUsers: 5, maxProducts: 100, maxBranches: 1, aiCredits: 0, accounting: false,
     tagline: "Todo el sistema para empezar",
     features: [
       "Todos los módulos excepto Contabilidad",
       "Learning y Asistente IA (1 crédito por consulta)",
-      "1 usuario: el dueño o gerente",
+      "Hasta 5 usuarios (perfiles de trabajadores)",
       "Hasta 100 productos en el inventario",
     ],
   },
   PYME: {
     id: "PYME", label: "Pyme", priceUsdCents: 2399,
-    maxUsers: 5, maxProducts: 500, maxBranches: null, aiCredits: 100, accounting: true,
+    maxUsers: 30, maxProducts: 500, maxBranches: null, aiCredits: 100, accounting: true,
     tagline: "Más equipo, más inventario y IA",
     features: [
       "Todo lo de Emprende",
       "Módulo de Contabilidad incluido",
       "100 créditos de Asistente IA incluidos",
-      "5 usuarios",
+      "Hasta 30 usuarios (perfiles de trabajadores)",
       "Hasta 500 productos en el inventario",
     ],
   },
