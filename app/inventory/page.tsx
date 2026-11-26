@@ -3,6 +3,8 @@ import { MoreHorizontalIcon, PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { ProductTable } from "@/components/inventory/ProductTable";
+import { BulkPriceIncreaseButton } from "@/components/inventory/BulkPriceIncreaseButton";
+import { getLastPriceAdjustment } from "@/lib/actions/price-adjustments";
 import { PriceListButton } from "@/components/inventory/PriceListButton";
 import { productImageUrl } from "@/lib/product-image";
 import { getInventoryOverview, listAllProducts, listCategories } from "@/lib/actions/products";
@@ -36,6 +38,7 @@ export default async function InventoryPage() {
     .map((p) => ({ name: p.name, category: p.category, priceCents: p.priceCents, imageUrl: productImageUrl(p) }));
   const priceListCompany = { name: session.companyName, logoDataUrl, ...fiscalData };
   const canManage = session.role === "GERENTE" || session.isSuperAdmin;
+  const lastAdjustment = canManage ? await getLastPriceAdjustment() : null;
   const plan = getPlan(session.plan);
   // Valor del inventario = existencias × costo de los productos con control de stock.
   const inventoryValueCents = products.reduce((a, p) => (p.trackStock && p.costCents != null ? a + p.stock * p.costCents : a), 0);
@@ -82,6 +85,7 @@ export default async function InventoryPage() {
               <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/inventory/transfers" />}>
                 Traspasos
               </Button>
+              <BulkPriceIncreaseButton categories={categories} referenceCurrency={referenceCurrency} last={lastAdjustment} />
             </>
           )}
           <PriceListButton
@@ -90,6 +94,11 @@ export default async function InventoryPage() {
             referenceCurrency={referenceCurrency}
           />
         </div>
+        {canManage && (
+          <div className="md:hidden">
+            <BulkPriceIncreaseButton categories={categories} referenceCurrency={referenceCurrency} last={lastAdjustment} className="w-full" />
+          </div>
+        )}
         <div className="flex items-center gap-2 md:hidden">
           {canManage ? (
             <>
