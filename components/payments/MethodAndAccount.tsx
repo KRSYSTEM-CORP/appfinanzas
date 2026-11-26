@@ -81,6 +81,7 @@ export function MethodAndAccount({
   accounts,
   accountId,
   onAccount,
+  onPick,
   methods,
   accountLabel = "¿De qué cuenta salió el dinero?",
 }: {
@@ -89,6 +90,9 @@ export function MethodAndAccount({
   accounts: PickableAccount[];
   accountId: string;
   onAccount: (id: string) => void;
+  // Si el estado vive en un solo objeto (método y cuenta juntos), usar onPick: llamar onMethod y luego onAccount
+  // con el mismo objeto viejo hace que la segunda llamada pise el método recién elegido.
+  onPick?: (m: PaymentMethod, accountId: string) => void;
   methods?: PaymentMethod[];
   accountLabel?: string;
 }) {
@@ -101,8 +105,10 @@ export function MethodAndAccount({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options.length, hasChoice, method]);
   function pick(m: PaymentMethod) {
+    const next = defaultAccountFor(m, accounts);
+    if (onPick) return onPick(m, next);
     onMethod(m);
-    onAccount(defaultAccountFor(m, accounts));
+    onAccount(next);
   }
   return (
     <div className="flex flex-col gap-2.5">
