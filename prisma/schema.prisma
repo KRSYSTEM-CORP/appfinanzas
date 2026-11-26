@@ -215,6 +215,7 @@ model Company {
   suppliers             Supplier[]
   purchases             Purchase[]
   stockMovements        StockMovement[]
+  priceAdjustments      PriceAdjustment[]
   // Maintenance billing, managed by a KYRA System platform admin from /admin.
   // Activation itself is charged outside the app for now — only the recurring
   // maintenance cycle is tracked here and can block access. Priced in USD —
@@ -558,6 +559,30 @@ model StockMovement {
 
   @@index([companyId, branchId, createdAt])
   @@index([productId, createdAt])
+}
+
+// Aumento porcentual de precios (Inventario → Aumentar precios): quién, cuándo, cuánto y los precios anteriores
+// para poder deshacerlo (24 h). Sirve también de registro de auditoría del ajuste.
+model PriceAdjustment {
+  id           String    @id @default(cuid())
+  companyId    String
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId     String?
+  actorId      String?
+  actorName    String
+  // Porcentaje en centésimas de punto (10,5 % = 1050).
+  percentBp    Int
+  // CENT, 0.05 o 0.10
+  rounding     String
+  scopeCategory String?
+  productCount Int
+  // [{id, p, w, b, np, nw, nb}]: precio detal/mayor/gran mayor antes (p,w,b) y después (np,nw,nb).
+  items        Json
+  createdAt    DateTime  @default(now())
+  undoneAt     DateTime?
+  undoneByName String?
+
+  @@index([companyId, createdAt])
 }
 
 model Customer {
