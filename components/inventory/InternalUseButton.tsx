@@ -106,8 +106,8 @@ export function InternalUseButton({ products }: { products: Option[] }) {
                   type="number"
                   min="0.001"
                   max={selected?.stock}
-                  step="1"
-                  inputMode="numeric"
+                  step={getUnit(selected?.unit).decimals ? "0.001" : "1"}
+                  inputMode="decimal"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                 />

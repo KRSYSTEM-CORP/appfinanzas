@@ -9,7 +9,7 @@ import { bq, jsDate } from "@/lib/batch-sql";
 import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateCache } from "@/lib/cache";
 import type { ActionResult } from "@/lib/types";
-import { addQty, formatQtyUnit, subQty, toQty, validateQty } from "@/lib/units";
+import { formatQtyUnit, subQty, toQty, validateQty } from "@/lib/units";
 
 export type TransferableProduct = { id: string; name: string; sku: string | null; stock: number; unit: string; unitLabel: string | null };
 

@@ -1,4 +1,4 @@
-import { formatQtyCompact, perUnitText } from "@/lib/units";
+import { formatQtyCompact } from "@/lib/units";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDate } from "@/lib/format";

@@ -1,4 +1,4 @@
-import { formatQtyCompact, perUnitText } from "@/lib/units";
+import { formatQtyCompact } from "@/lib/units";
 import { layoutCompanyName } from "@/lib/pdf-header-layout";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";

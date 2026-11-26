@@ -38,9 +38,9 @@ describe("SaleSchema", () => {
       SaleSchema.safeParse({ ...customer, items: [item], payments: [{ paymentMethod: "ZELLE", amount: 10, reference: "ABC123" }] }).success
     ).toBe(true);
   });
-  it("rechaza descuentos fuera de 0–100 y cantidades no enteras", () => {
+  it("rechaza descuentos fuera de 0–100 y cantidades no positivas (los decimales los valida el servidor según la unidad del producto)", () => {
     expect(SaleSchema.safeParse({ ...customer, items: [item], discountPercent: 120, payments: [] }).success).toBe(false);
-    expect(SaleSchema.safeParse({ ...customer, items: [{ productId: "p1", quantity: 1.5 }], paymentStatus: "CREDIT" }).success).toBe(false);
+    expect(SaleSchema.safeParse({ ...customer, items: [{ productId: "p1", quantity: 0 }], paymentStatus: "CREDIT" }).success).toBe(false);
   });
   it("la tasa de una venta sin conexión debe ser positiva", () => {
     expect(SaleSchema.safeParse({ ...customer, items: [item], paymentStatus: "CREDIT", offlineExchangeRate: 0 }).success).toBe(false);
