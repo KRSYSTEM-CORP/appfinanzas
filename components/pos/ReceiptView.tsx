@@ -13,8 +13,9 @@ import type {
   PaymentMethod,
   PaymentStatus,
   PrintPaperSize,
-  ReferenceCurrency,
   SaleItem,
+  ReferenceCurrency,
+
   SalePayment,
 } from "@prisma/client";
 
@@ -37,7 +38,7 @@ type ReceiptSale = {
   customerAddress: string | null;
   sellerName: string | null;
   note: string | null;
-  items: SaleItem[];
+  items: (Omit<SaleItem, "quantity"> & { quantity: number })[];
   // exchangeRate here is already a plain number (or null) — Decimal
   // instances can't cross the server action boundary, see getSaleReceipt.
   payments: (Omit<SalePayment, "exchangeRate"> & { exchangeRate: number | null })[];

@@ -180,7 +180,7 @@ export function lineTotalCents(unitPriceCents: number, qty: number): number {
 const nf = new Intl.NumberFormat("es-VE", { maximumFractionDigits: 3, minimumFractionDigits: 0 });
 
 /** "0,5", "2", "1.250,75" (separador de miles solo cuando hace falta). */
-export function formatQty(q: number | string | null | undefined): string {
+export function formatQty(q: unknown): string {
   return nf.format(toQty(q));
 }
 
@@ -196,9 +196,22 @@ export function unitLabel(unitKey: string | null | undefined, qty: number, custo
 }
 
 /** "0,5 L" · "2 unidades" · "1 coleto"… Texto listo para recibos, carrito, reportes. */
-export function formatQtyUnit(qty: number | string | null | undefined, unitKey: string | null | undefined, customLabel?: string | null): string {
+export function formatQtyUnit(qty: unknown, unitKey: string | null | undefined, customLabel?: string | null): string {
   const q = toQty(qty);
   return `${formatQty(q)} ${unitLabel(unitKey, q, customLabel)}`;
+}
+
+/**
+ * Versión compacta para tablas y recibos: los productos en «unidad» (la mayoría) siguen mostrando solo el número,
+ * exactamente como antes; los demás agregan su unidad («0,5 L», «2 cajas», «3 rollo»).
+ */
+export function formatQtyCompact(qty: unknown, unitKey: string | null | undefined, customLabel?: string | null): string {
+  return !unitKey || unitKey === DEFAULT_UNIT ? formatQty(qty) : formatQtyUnit(qty, unitKey, customLabel);
+}
+
+/** «c/u» para productos en unidad; «por litro», «por kilogramo»... para los demás. */
+export function perUnitText(unitKey: string | null | undefined, customLabel?: string | null): string {
+  return !unitKey || unitKey === DEFAULT_UNIT ? "c/u" : `por ${unitName(unitKey, customLabel)}`;
 }
 
 /** Nombre corto de la unidad base para encabezados y precios ("por litro"). */
@@ -214,6 +227,32 @@ export function showsUnitBadge(unitKey: string | null | undefined): boolean {
 }
 
 export const UNIT_LABEL_MAX = 20;
+
+/** Columnas `unit`/`unitLabel` listas para Prisma (etiqueta solo si es «otra»; si algo no cuadra, «unidad»). */
+export function unitColumns(i: { unit?: string | null; unitLabel?: string | null }): { unit: string; unitLabel: string | null } {
+  const r = normalizeUnitInput(i);
+  return r.ok ? { unit: r.unit, unitLabel: r.unitLabel } : { unit: DEFAULT_UNIT, unitLabel: null };
+}
+
+/**
+ * Cantidad escrita en `saleUnit` (por defecto la base) → cantidad en la unidad BASE del producto.
+ * Valida decimales según la unidad en que se escribió y que la unidad sea de la misma familia.
+ * Vender 500 ml de un producto en litros devuelve 0,5.
+ */
+export function toBaseQty(raw: unknown, saleUnit: string | null | undefined, baseUnit: string): QtyCheck {
+  const sale = saleUnit && isUnitKey(saleUnit) ? saleUnit : baseUnit;
+  const base = getUnit(baseUnit);
+  if (getUnit(sale).family !== base.family) return { ok: false, error: `Esa unidad no se puede usar con un producto en ${base.plural}` };
+  if (sale !== baseUnit && (base.family === "conteo" || base.family === "otra")) {
+    return { ok: false, error: `Este producto solo se vende en ${base.plural}` };
+  }
+  const first = validateQty(raw, sale);
+  if (!first.ok) return first;
+  const qty = convertQty(first.qty, sale, baseUnit);
+  if (qty <= 0) return { ok: false, error: "La cantidad es demasiado pequeña" };
+  const fin = validateQty(qty, baseUnit);
+  return fin.ok ? { ok: true, qty } : fin;
+}
 
 export type UnitInput = { unit?: string | null; unitLabel?: string | null };
 

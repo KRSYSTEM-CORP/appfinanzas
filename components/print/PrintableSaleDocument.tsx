@@ -1,3 +1,4 @@
+import { formatQtyCompact, perUnitText } from "@/lib/units";
 import { paidAmount } from "@/lib/money-primary";
 import type { PrintPaperSize, ReferenceCurrency } from "@prisma/client";
 import { PAYMENT_METHOD_LABELS, formatDate } from "@/lib/format";
@@ -129,9 +130,9 @@ export function PrintableSaleDocument({
           {sale.items.map((item, i) => (
             <div key={i}>
               <p>
-                {item.quantity} x {itemDescription(item)}
+                {formatQtyCompact(item.quantity, item.unit, item.unitLabel)} x {itemDescription(item)}
               </p>
-              <p>{money(item.unitPriceCents)} c/u</p>
+              <p>{money(item.unitPriceCents)} {perUnitText(item.unit, item.unitLabel)}</p>
               <p className="text-right font-medium">{money(item.subtotalCents)}</p>
             </div>
           ))}
@@ -149,7 +150,7 @@ export function PrintableSaleDocument({
           <tbody>
             {sale.items.map((item, i) => (
               <tr key={i} className="border-b border-black">
-                <td className="py-1">{item.quantity}</td>
+                <td className="py-1">{formatQtyCompact(item.quantity, item.unit, item.unitLabel)}</td>
                 <td className="py-1">{itemDescription(item)}</td>
                 <td className="py-1 text-right">{money(item.unitPriceCents)}</td>
                 <td className="py-1 text-right">{money(item.subtotalCents)}</td>

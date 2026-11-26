@@ -1,3 +1,4 @@
+import { toQty } from "@/lib/units";
 import type { listRecentSales } from "@/lib/actions/sales";
 
 type Sale = Awaited<ReturnType<typeof listRecentSales>>[number];
@@ -10,6 +11,7 @@ export function toPlainSale(sale: Sale) {
     ...sale,
     exchangeRate: sale.exchangeRate != null ? Number(sale.exchangeRate) : null,
     paidExchangeRate: sale.paidExchangeRate != null ? Number(sale.paidExchangeRate) : null,
+    items: sale.items.map((i) => ({ ...i, quantity: toQty(i.quantity) })),
     payments: sale.payments.map((p) => ({
       ...p,
       exchangeRate: p.exchangeRate != null ? Number(p.exchangeRate) : null,

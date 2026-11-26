@@ -2,6 +2,7 @@ import Link from "@/components/ui/nav-link";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon, ArrowDownIcon, ArrowUpIcon, RotateCcwIcon } from "lucide-react";
 import { getProductStockMovements } from "@/lib/actions/products";
+import { formatQty, formatQtyUnit } from "@/lib/units";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -36,7 +37,7 @@ export default async function ProductMovementsPage({ params }: { params: Promise
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Inventario · Historial</p>
             <h1 className="kr-h1">{data.product.name}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{data.product.branch.name} · Existencia actual: {data.product.stock.toLocaleString("es-VE")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{data.product.branch.name} · Existencia actual: {formatQtyUnit(data.product.stock, data.product.unit, data.product.unitLabel)}</p>
           </div>
         </div>
       </header>
@@ -67,9 +68,9 @@ export default async function ProductMovementsPage({ params }: { params: Promise
                         <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">{formatDate(movement.createdAt)}</td>
                         <td className="px-3 py-3"><span className="inline-flex items-center gap-2"><Icon className={`size-4 ${positive ? "text-emerald-600" : "text-rose-600"}`} />{reasonLabels[movement.reason] ?? movement.reason}</span></td>
                         <td className="px-3 py-3">{movement.actorName}</td>
-                        <td className={`px-3 py-3 text-right font-semibold tabular-nums ${positive ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>{positive ? "+" : ""}{movement.quantityChange.toLocaleString("es-VE")}</td>
-                        <td className="px-3 py-3 text-right tabular-nums">{movement.stockBefore.toLocaleString("es-VE")}</td>
-                        <td className="px-3 py-3 text-right font-medium tabular-nums">{movement.stockAfter.toLocaleString("es-VE")}</td>
+                        <td className={`px-3 py-3 text-right font-semibold tabular-nums ${positive ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>{positive ? "+" : ""}{formatQty(movement.quantityChange)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{formatQty(movement.stockBefore)}</td>
+                        <td className="px-3 py-3 text-right font-medium tabular-nums">{formatQty(movement.stockAfter)}</td>
                       </tr>
                     );
                   })}

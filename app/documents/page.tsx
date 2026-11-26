@@ -1,3 +1,4 @@
+import { toQty } from "@/lib/units";
 import Link from "@/components/ui/nav-link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DocumentsTable } from "@/components/documents/DocumentsTable";
@@ -36,6 +37,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
     ...sale,
     exchangeRate: sale.exchangeRate != null ? Number(sale.exchangeRate) : null,
     paidExchangeRate: sale.paidExchangeRate != null ? Number(sale.paidExchangeRate) : null,
+    items: sale.items.map((i) => ({ ...i, quantity: toQty(i.quantity) })),
     payments: sale.payments.map((p) => ({
       ...p,
       exchangeRate: p.exchangeRate != null ? Number(p.exchangeRate) : null,

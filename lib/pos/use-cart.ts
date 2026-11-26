@@ -4,6 +4,12 @@ import { useState } from "react";
 import type { ListedProduct } from "@/lib/product-image";
 import type { CartLine } from "@/components/pos/Cart";
 import { resolveTierPrice, tierPriceCents, type PriceTier, type TieredProduct } from "@/lib/pricing";
+import { addQty, getUnit, subQty, toQty } from "@/lib/units";
+
+// Cantidad mínima de una línea: 1 en unidades enteras, un milésimo en las que admiten decimales (0,001 L = 1 ml).
+export function minQtyFor(product: object): number {
+  return getUnit((product as { unit?: string }).unit).decimals ? 0.001 : 1;
+}
 
 // Pure cart-line state (add/remove/quantity/price-tier) — no online/offline
 // branching of any kind, which is exactly why it's shared between PosClient
@@ -16,7 +22,7 @@ export function useCart(initialLines: CartLine[] = []) {
   // Unlimited for a product that doesn't track stock — there's no count to
   // cap against.
   function maxStockFor(product: ListedProduct): number {
-    return product.trackStock ? product.stock : Infinity;
+    return product.trackStock ? toQty(product.stock) : Infinity;
   }
 
   // The price a line should show for its current quantity: the seller's
@@ -36,7 +42,7 @@ export function useCart(initialLines: CartLine[] = []) {
       const existing = prev.find((l) => l.productId === product.id);
       if (existing) {
         if (existing.quantity >= maxStock) return prev;
-        const quantity = existing.quantity + 1;
+        const quantity = addQty(existing.quantity, 1);
         return prev.map((l) =>
           l.productId === product.id
             ? { ...l, quantity, unitPriceCents: linePriceCents(l.product, quantity, l.priceTierOverride) }
@@ -62,7 +68,7 @@ export function useCart(initialLines: CartLine[] = []) {
     setLines((prev) =>
       prev.map((l) => {
         if (l.productId !== productId || l.quantity >= l.maxStock) return l;
-        const quantity = l.quantity + 1;
+        const quantity = addQty(l.quantity, 1);
         return { ...l, quantity, unitPriceCents: linePriceCents(l.product, quantity, l.priceTierOverride) };
       })
     );
@@ -73,7 +79,7 @@ export function useCart(initialLines: CartLine[] = []) {
       prev
         .map((l) => {
           if (l.productId !== productId) return l;
-          const quantity = l.quantity - 1;
+          const quantity = subQty(l.quantity, 1);
           return { ...l, quantity, unitPriceCents: linePriceCents(l.product, quantity, l.priceTierOverride) };
         })
         .filter((l) => l.quantity > 0)
@@ -87,7 +93,7 @@ export function useCart(initialLines: CartLine[] = []) {
     setLines((prev) =>
       prev.map((l) => {
         if (l.productId !== productId) return l;
-        const clamped = Math.min(Math.max(1, quantity), l.maxStock);
+        const clamped = Math.min(Math.max(minQtyFor(l.product), toQty(quantity)), l.maxStock);
         return { ...l, quantity: clamped, unitPriceCents: linePriceCents(l.product, clamped, l.priceTierOverride) };
       })
     );

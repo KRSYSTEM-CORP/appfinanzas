@@ -9,7 +9,12 @@ export const PRODUCT_LIST_LIMIT = 5000;
 // A product as served by the list endpoints: everything except the base64
 // photo (which can weigh tens of KB each), plus a flag saying whether one
 // exists so the UI knows whether to request it.
-export type ListedProduct = Omit<Product, "imageDataUrl"> & { hasImage: boolean };
+export type ListedProduct = Omit<Product, "imageDataUrl" | "stock" | "lowStockThreshold"> & {
+  hasImage: boolean;
+  // Cantidades como number (hasta 3 decimales): Prisma entrega Decimal, que no viaja bien a clientes ni a la caché.
+  stock: number;
+  lowStockThreshold: number;
+};
 
 // The photo is fetched on demand from /api/products/[id]/image. `v` is the
 // product's updatedAt, so editing the photo changes the URL and busts the

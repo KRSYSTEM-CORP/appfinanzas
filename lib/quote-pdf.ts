@@ -1,3 +1,4 @@
+import { formatQtyCompact, perUnitText } from "@/lib/units";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDate } from "@/lib/format";
@@ -26,6 +27,8 @@ export type QuoteForPdf = {
     productName: string;
     category?: string | null;
     quantity: number;
+    unit?: string;
+    unitLabel?: string | null;
     unitPriceCents: number;
     subtotalCents: number;
   }[];
@@ -83,7 +86,7 @@ export async function buildQuotePDF(
   y = renderNote(doc, quote.note, margin, y, pageWidth);
 
   const rows = quote.items.map((item) => [
-    String(item.quantity),
+    formatQtyCompact(item.quantity, item.unit, item.unitLabel),
     itemDescription(item),
     showLocal
       ? formatLocalCurrency(eurCentsToLocal(item.unitPriceCents, rate!), currencyCode)

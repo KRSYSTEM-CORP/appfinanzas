@@ -1,3 +1,4 @@
+import { toQty } from "@/lib/units";
 import { NextResponse, type NextRequest } from "next/server";
 import { withSuperAdmin } from "@/lib/tenant-db";
 import { pickClientIp } from "@/lib/request-ip";
@@ -68,6 +69,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     ...sale,
     exchangeRate: sale.exchangeRate != null ? Number(sale.exchangeRate) : null,
     paidExchangeRate: sale.paidExchangeRate != null ? Number(sale.paidExchangeRate) : null,
+    items: sale.items.map((i) => ({ ...i, quantity: toQty(i.quantity) })),
     payments: sale.payments.map((p) => ({
       ...p,
       exchangeRate: p.exchangeRate != null ? Number(p.exchangeRate) : null,

@@ -16,6 +16,7 @@ import { invalidateProductsCache } from "@/lib/products-cache";
 import { assertAccountFunds, toActionResult } from "@/lib/account-balance";
 import { lineInAccountCurrency } from "@/lib/account-money";
 import { paymentsPrimaryLocal } from "@/lib/money-primary";
+import { addQty, lineTotalCents, subQty, toQty, validateQty } from "@/lib/units";
 import { buildPurchasePaymentLine, stockShortfalls } from "@/lib/purchase-payment";
 import { scaleLinesToTotal, scaleLooksWrong, baseUnitCost, resolveImportCurrency } from "@/lib/purchase-math";
 import { paymentSettlesPurchase, purchaseRemaining } from "@/lib/purchase-payment";
@@ -110,13 +111,20 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         if (!product) {
           throw new Error("Uno de los productos ya no existe en esta sucursal");
         }
-        const unitCostCents = toEurCents(
+        // El proveedor puede vender en otra presentación (caja de 12): cantidad y costo vienen por empaque
+        // y se guardan en la unidad base del producto (12 unidades por caja).
+        const packSize = item.packSize ?? 1;
+        const qtyChk = validateQty(Math.round(item.quantity * packSize * 1000) / 1000, product.unit);
+        if (!qtyChk.ok) throw new Error(`${product.name}: ${qtyChk.error}`);
+        const baseQty = qtyChk.qty;
+        const packCostCents = toEurCents(
           item.unitCost,
           item.unitCostInForeignCurrency ? referenceCurrency : localCurrencyCode,
           rate,
           referenceCurrency
         );
-        const subtotalCents = unitCostCents * item.quantity;
+        const subtotalCents = lineTotalCents(packCostCents, item.quantity);
+        const unitCostCents = Math.round(subtotalCents / baseQty);
         estimatedTotalCents += subtotalCents;
         const taxRatePercent = rateForCategory(item.taxCategory, ivaGeneralRatePercent, ivaReducedRatePercent);
         const { baseCents, taxCents } = decomposeTax(subtotalCents, item.taxCategory, taxRatePercent);
@@ -127,7 +135,9 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
           productName: product.name,
           taxCategory: item.taxCategory,
           taxRatePercent,
-          quantity: item.quantity,
+          quantity: baseQty,
+          unit: product.unit,
+          unitLabel: product.unitLabel,
           unitCostCents,
           baseCents,
           taxCents,
@@ -269,18 +279,19 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
         if (!item.affectsStock) continue;
         const existing = stockUpdateByProductId.get(item.productId);
         stockUpdateByProductId.set(item.productId, {
-          quantity: (existing?.quantity ?? 0) + item.quantity,
+          quantity: addQty(existing?.quantity ?? 0, item.quantity),
           unitCostCents: baseUnitCost(item.baseCents, item.quantity),
         });
       }
       await Promise.all(
         Array.from(stockUpdateByProductId, async ([productId, { quantity, unitCostCents }]) => {
           const product = productById.get(productId)!;
-          const rows = await tx.$queryRaw<{ stock: number }[]>`
+          const qtyText = quantity.toFixed(3);
+          const rows = await tx.$queryRaw<{ stock: unknown }[]>`
             UPDATE "Product"
-            SET "stock" = "stock" + ${quantity},
+            SET "stock" = "stock" + ${qtyText}::numeric,
                 "costCents" = CASE WHEN ${unitCostCents} > 0 THEN ${unitCostCents} ELSE "costCents" END,
-                "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${quantity} > 0 THEN true ELSE "isActive" END
+                "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${qtyText}::numeric > 0 THEN true ELSE "isActive" END
             WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
             RETURNING "stock"
           `;
@@ -288,7 +299,7 @@ export async function createPurchase(input: unknown): Promise<CompletePurchaseRe
           await recordStockMovement(tx, {
             companyId, branchId, productId, productName: product.name, actorId, actorName,
             reason: "PURCHASE", sourceType: "purchase", sourceId: purchase.id,
-            quantityChange: quantity, stockBefore: rows[0].stock - quantity, stockAfter: rows[0].stock,
+            quantityChange: quantity, stockBefore: subQty(toQty(rows[0].stock), quantity), stockAfter: toQty(rows[0].stock),
           });
         })
       );
@@ -310,7 +321,7 @@ async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, co
   const quantityByProductId = new Map<string, number>();
   for (const item of items) {
     if (!item.productId || !item.affectsStock) continue;
-    quantityByProductId.set(item.productId, (quantityByProductId.get(item.productId) ?? 0) + item.quantity);
+    quantityByProductId.set(item.productId, addQty(quantityByProductId.get(item.productId) ?? 0, toQty(item.quantity)));
   }
   if (quantityByProductId.size === 0) return;
 
@@ -321,12 +332,12 @@ async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, co
 
   // Primero se bloquean las filas y se revisa que la mercancía de la compra siga en existencias: si ya se vendió
   // (stock menor a lo que entró) no se anula en silencio dejando el inventario en 0, se avisa qué falta.
-  const locked = await tx.$queryRaw<{ id: string; stock: number }[]>`
+  const locked = await tx.$queryRaw<{ id: string; stock: unknown }[]>`
     SELECT "id", "stock" FROM "Product"
     WHERE "id" = ANY(${Array.from(quantityByProductId.keys())}) AND "companyId" = ${companyId} AND "branchId" = ${branchId}
     FOR UPDATE
   `;
-  const stockById = new Map(locked.map((r) => [r.id, r.stock]));
+  const stockById = new Map(locked.map((r) => [r.id, toQty(r.stock)]));
   const short = stockShortfalls(
     Array.from(quantityByProductId, ([productId, quantity]) => ({
       name: productById.get(productId)?.name ?? "Producto",
@@ -343,8 +354,9 @@ async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, co
   for (const [productId, quantity] of quantityByProductId) {
     const product = productById.get(productId);
     if (!product) continue;
-    const rows = await tx.$queryRaw<{ stock: number }[]>`
-      UPDATE "Product" SET "stock" = "stock" - ${quantity}
+    const qtyText = quantity.toFixed(3);
+    const rows = await tx.$queryRaw<{ stock: unknown }[]>`
+      UPDATE "Product" SET "stock" = "stock" - ${qtyText}::numeric
       WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
       RETURNING "stock"
     `;
@@ -352,7 +364,7 @@ async function reverseStock(tx: Prisma.TransactionClient, purchaseId: string, co
     await recordStockMovement(tx, {
       companyId, branchId, productId, productName: product.name, actorId, actorName,
       reason: "PURCHASE_VOID", sourceType: "purchase", sourceId: purchaseId,
-      quantityChange: -quantity, stockBefore: rows[0].stock + quantity, stockAfter: rows[0].stock,
+      quantityChange: -quantity, stockBefore: addQty(toQty(rows[0].stock), quantity), stockAfter: toQty(rows[0].stock),
     });
   }
 }
@@ -372,7 +384,7 @@ async function restorePreviousCost(tx: Prisma.TransactionClient, purchaseId: str
       orderBy: { purchase: { createdAt: "desc" } },
       select: { baseCents: true, quantity: true },
     });
-    const cost = prev ? baseUnitCost(prev.baseCents, prev.quantity) : 0;
+    const cost = prev ? baseUnitCost(prev.baseCents, toQty(prev.quantity)) : 0;
     await tx.product.updateMany({ where: { id: productId, companyId, branchId }, data: { costCents: cost } });
   }
 }
@@ -539,6 +551,8 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           taxRatePercent: number;
           unitCostCents: number;
           quantity: number;
+          unit: string;
+          unitLabel: string | null;
           baseCents: number;
           taxCents: number;
           subtotalCents: number;
@@ -557,7 +571,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
         if (invoiceTotals.size > 1) throw new Error("Las filas de una misma factura tienen «Total factura» distintos");
 
         for (const entry of entries) {
-          const { productSku, productName, quantity, unitCost, taxCategory, affectsStock } = entry.data;
+          const { productSku, productName, quantity: packs, packSize, unitCost, taxCategory, affectsStock } = entry.data;
           const matches = productSku
             ? await tx.product.findMany({ where: { branchId, sku: productSku }, take: 2 })
             : await tx.product.findMany({ where: { branchId, name: { equals: productName, mode: "insensitive" } }, take: 2 });
@@ -570,7 +584,10 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           const resolvedTaxCategory = taxCategory ?? product.taxCategory;
           // Misma conversión que createPurchase: el costo se declara en Bs o en divisa y se pasa a la moneda de referencia.
           const unitCostRef = toEurCents(unitCost, rowCurrency === "LOCAL" ? importLocal : importReference, importRate, importReference);
-          const subtotalCents = unitCostRef * quantity;
+          const qtyChk = validateQty(Math.round(packs * (packSize ?? 1) * 1000) / 1000, product.unit);
+          if (!qtyChk.ok) throw new Error(`${product.name}: ${qtyChk.error}`);
+          const quantity = qtyChk.qty;
+          const subtotalCents = lineTotalCents(unitCostRef, packs);
           totalCents += subtotalCents;
           const taxRatePercent = rateForCategory(resolvedTaxCategory, ivaGeneralRatePercent, ivaReducedRatePercent);
           const { baseCents, taxCents } = decomposeTax(subtotalCents, resolvedTaxCategory, taxRatePercent);
@@ -582,8 +599,10 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
             productName: product.name,
             taxCategory: resolvedTaxCategory,
             taxRatePercent,
-            unitCostCents: unitCostRef,
+            unitCostCents: Math.round(subtotalCents / quantity),
             quantity,
+            unit: product.unit,
+            unitLabel: product.unitLabel,
             baseCents,
             taxCents,
             subtotalCents,
@@ -636,11 +655,12 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           if (!item.affectsStock) continue;
           const product = await tx.product.findFirst({ where: { id: item.productId, companyId, branchId } });
           if (!product) continue;
-          const stockRows = await tx.$queryRaw<{ stock: number }[]>`
+          const qtyText = item.quantity.toFixed(3);
+          const stockRows = await tx.$queryRaw<{ stock: unknown }[]>`
             UPDATE "Product"
-            SET "stock" = "stock" + ${item.quantity},
+            SET "stock" = "stock" + ${qtyText}::numeric,
                 "costCents" = CASE WHEN ${baseUnitCost(item.baseCents, item.quantity)} > 0 THEN ${baseUnitCost(item.baseCents, item.quantity)} ELSE "costCents" END,
-                "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${item.quantity} > 0 THEN true ELSE "isActive" END
+                "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${qtyText}::numeric > 0 THEN true ELSE "isActive" END
             WHERE "id" = ${product.id} AND "companyId" = ${companyId} AND "branchId" = ${branchId}
             RETURNING "stock"
           `;
@@ -648,7 +668,7 @@ export async function bulkImportPurchases(rows: BulkPurchaseRow[]): Promise<Bulk
           await recordStockMovement(tx, {
             companyId, branchId, productId: product.id, productName: product.name, actorId, actorName,
             reason: "IMPORT", sourceType: "purchase", sourceId: purchase.id,
-            quantityChange: item.quantity, stockBefore: stockRows[0].stock - item.quantity, stockAfter: stockRows[0].stock,
+            quantityChange: item.quantity, stockBefore: subQty(toQty(stockRows[0].stock), item.quantity), stockAfter: toQty(stockRows[0].stock),
           });
         }
 

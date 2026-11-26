@@ -1,5 +1,6 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
+import { lineTotalCents, toQty } from "@/lib/units";
 import type { Proposal, BlockSpec } from "@/lib/assistant";
 import {
   ASSISTANT_LINKS,
@@ -186,9 +187,9 @@ export async function planSale(tx: Tx, ctx: DataCtx, p: Extract<Proposal, { type
       issues.push("Uno de los productos ya no existe en esta sucursal.");
       continue;
     }
-    if (prod.trackStock && prod.stock < it.quantity) issues.push(`Stock insuficiente de «${prod.name}» (hay ${prod.stock}).`);
+    if (prod.trackStock && toQty(prod.stock) < it.quantity) issues.push(`Stock insuficiente de «${prod.name}» (hay ${toQty(prod.stock)}).`);
     const unit = resolveTierPrice(prod, it.quantity).priceCents;
-    const raw = unit * it.quantity;
+    const raw = lineTotalCents(unit, it.quantity);
     const sub = raw - computeItemDiscountCents(raw, p.discountPercent);
     total += sub;
     lines.push({ name: prod.name, quantity: it.quantity, unit: formatCurrencyCents(ctx.currency, unit), subtotal: formatCurrencyCents(ctx.currency, sub) });

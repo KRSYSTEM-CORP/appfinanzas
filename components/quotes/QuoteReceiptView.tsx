@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatQtyCompact } from "@/lib/units";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { formatDate } from "@/lib/format";
@@ -147,7 +148,7 @@ export function QuoteReceiptView({
         {quote.items.map((item, i) => (
           <div key={i} className="flex justify-between items-center text-sm">
             <span>
-              {item.quantity} × {itemDescription(item)}
+              {formatQtyCompact(item.quantity, item.unit, item.unitLabel)} × {itemDescription(item)}
             </span>
             <span className="font-mono tabular-nums font-medium">{money(item.subtotalCents)}</span>
           </div>
