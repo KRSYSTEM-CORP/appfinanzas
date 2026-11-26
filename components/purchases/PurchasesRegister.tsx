@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatQty, formatQtyCompact, perUnitText } from "@/lib/units";
 import Link from "@/components/ui/nav-link";
 import { useRouter } from "next/navigation";
 import { DownloadIcon, PlusIcon, ShoppingCartIcon } from "lucide-react";
@@ -37,19 +38,19 @@ export function RestockCard({ rows, currency }: { rows: RestockSuggestion[]; cur
               <div className="min-w-0">
                 <b>{r.name}</b>
                 <small className="block text-xs text-muted-foreground">
-                  Stock {r.stock}
+                  Stock {formatQtyCompact(r.stock, r.unit, r.unitLabel)}
                   {r.daysLeft != null ? ` · alcanza para ${r.daysLeft} días` : ""}
                 </small>
                 <small className="block text-xs text-muted-foreground">
-                  Vendiste {r.soldInWindow} en 30 días (≈ {r.perDay < 10 ? r.perDay.toFixed(1) : Math.round(r.perDay)} por día). Nivel ideal {r.idealQty}
-                  {" "}= 14 días de ventas (mínimo {r.minStock}, tope lo vendido en 30 días). Pedir {r.idealQty} − {Math.max(0, r.stock)} en stock.
+                  Vendiste {formatQtyCompact(r.soldInWindow, r.unit, r.unitLabel)} en 30 días (≈ {r.perDay < 10 ? r.perDay.toFixed(1) : Math.round(r.perDay)} por día). Nivel ideal {formatQty(r.idealQty)}
+                  {" "}= 14 días de ventas (mínimo {formatQty(r.minStock)}, tope lo vendido en 30 días). Pedir {formatQty(r.idealQty)} − {formatQty(Math.max(0, r.stock))} en stock.
                 </small>
               </div>
               <div className="text-right font-bold tabular-nums">
-                Pedir {r.suggestedQty}
+                Pedir {formatQtyCompact(r.suggestedQty, r.unit, r.unitLabel)}
                 {r.estimatedCostCents != null && (
                   <small className="block text-xs font-semibold text-muted-foreground">
-                    {money(currency, Math.round(r.estimatedCostCents / r.suggestedQty))} c/u · {money(currency, r.estimatedCostCents)}
+                    {money(currency, Math.round(r.estimatedCostCents / r.suggestedQty))} {perUnitText(r.unit, r.unitLabel)} · {money(currency, r.estimatedCostCents)}
                   </small>
                 )}
               </div>

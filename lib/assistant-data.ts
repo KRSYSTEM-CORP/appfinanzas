@@ -114,7 +114,7 @@ export async function dataset(tx: Tx, ctx: DataCtx, id: DatasetId, fromIn?: stri
     table = { ...base, subtitle: "Las 15 más recientes", columns: ["Nº", "Fecha", "Cliente", "Estado", `Total ${refTag}`], rows: rows.map((r) => [r.n != null ? String(r.n) : "—", fmtDate(r.at), r.cust || "—", r.voided ? "Anulada" : r.st === "CREDIT" ? "A crédito" : "Pagada", m(r.total)]) };
   } else if (id === "top_productos") {
     const rows = await tx.$queryRaw<{ name: string; qty: bigint; total: bigint }[]>`
-      SELECT si."productName" AS name, SUM(si."quantity")::bigint AS qty, SUM(si."subtotalCents")::bigint AS total
+      SELECT si."productName" AS name, SUM(si."quantity")::float8 AS qty, SUM(si."subtotalCents")::bigint AS total
       FROM "SaleItem" si JOIN "Sale" s ON s.id = si."saleId"
       WHERE s."companyId" = ${ctx.companyId} ${br} AND s."voided" = false AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
       GROUP BY 1 ORDER BY total DESC LIMIT 10`;

@@ -22,16 +22,19 @@ import { tryToEurCents } from "@/lib/payment-currency";
 import { dualAmount, paymentsPrimaryLocal } from "@/lib/money-primary";
 import type { IvaSettingsInfo } from "@/lib/actions/settings";
 import type { ReferenceCurrency } from "@prisma/client";
+import { formatQtyCompact, getUnit, unitName } from "@/lib/units";
 
 // Only the fields this form actually reads off a product — lets a row
 // created via "+ Crear producto nuevo" (quickCreateProduct's pared-down
 // return value) slot into the same local `products` list as the full
 // Product rows loaded from the server, with no unsound cast.
-type PurchaseProduct = Pick<Product, "id" | "name" | "costCents" | "taxCategory" | "stock">;
+type PurchaseProduct = Pick<Product, "id" | "name" | "costCents" | "taxCategory" | "unit" | "unitLabel"> & { stock: number };
 
 type PurchaseItemRow = {
   productId: string;
   quantity: string;
+  // Unidades base por empaque del proveedor (caja de 12 = 12). Vacío = se compra en la unidad del producto.
+  packSize: string;
   unitCost: string;
   // true = unitCost is typed directly in the reference currency (Euro/Dólar
   // BCV) — the only option before this toggle existed, kept as the default.
@@ -40,10 +43,16 @@ type PurchaseItemRow = {
   affectsStock: boolean;
 };
 
+function rowUnitFor(products: PurchaseProduct[], productId: string): string {
+  const p = products.find((x) => x.id === productId);
+  return p && p.unit !== "unidad" ? unitName(p.unit, p.unitLabel) : "";
+}
+
 function emptyRow(defaultProductId: string, defaultTaxCategory: TaxCategory = "GENERAL"): PurchaseItemRow {
   return {
     productId: defaultProductId,
     quantity: "1",
+    packSize: "",
     unitCost: "",
     unitCostInForeignCurrency: true,
     taxCategory: defaultTaxCategory,
@@ -292,6 +301,7 @@ export function PurchaseForm({
         items: rows.map((r) => ({
           productId: r.productId,
           quantity: r.quantity,
+          packSize: r.packSize || undefined,
           unitCost: r.unitCost,
           unitCostInForeignCurrency: r.unitCostInForeignCurrency,
           taxCategory: r.taxCategory,
@@ -383,7 +393,7 @@ export function PurchaseForm({
                   <div className="flex items-center justify-between gap-2">
                     <Pill tone="val">Línea {i + 1}</Pill>
                     <div className="flex items-center gap-2">
-                      {product && <span className="text-xs text-muted-foreground">Stock actual: {product.stock}</span>}
+                      {product && <span className="text-xs text-muted-foreground">Stock actual: {formatQtyCompact(product.stock, product.unit, product.unitLabel)}</span>}
                       {rows.length > 1 && (
                         <Button type="button" size="sm" variant="ghost" onClick={() => removeRow(i)}>
                           Quitar
@@ -437,9 +447,20 @@ export function PurchaseForm({
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor={`quantity-${i}`} className={lbl}>
-                        Cantidad
+                        {row.packSize ? "Cantidad de empaques" : `Cantidad${rowUnitFor(products, row.productId) ? ` (${rowUnitFor(products, row.productId)})` : ""}`}
                       </Label>
-                      <Input id={`quantity-${i}`} type="number" min="1" step="1" value={row.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} />
+                      <Input id={`quantity-${i}`} type="number" inputMode="decimal" min="0" step={row.packSize ? "1" : getUnit(products.find((p) => p.id === row.productId)?.unit).decimals ? "0.001" : "1"} value={row.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`pack-${i}`} className={lbl}>
+                        Unidades por empaque (opcional)
+                      </Label>
+                      <Input id={`pack-${i}`} type="number" inputMode="decimal" min="0" step="any" placeholder="Ej. 12 si compras por caja de 12" value={row.packSize} onChange={(e) => updateRow(i, { packSize: e.target.value })} />
+                      {row.packSize && Number(row.packSize) > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Entran {formatQtyCompact(Math.round((Number(row.quantity) || 0) * Number(row.packSize) * 1000) / 1000, products.find((p) => p.id === row.productId)?.unit, products.find((p) => p.id === row.productId)?.unitLabel)} al inventario. El costo se escribe por empaque.
+                        </p>
+                      )}
                     </div>
                   </div>
 

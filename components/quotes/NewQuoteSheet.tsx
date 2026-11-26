@@ -1,5 +1,6 @@
 "use client";
 
+import { lineTotalCents } from "@/lib/units";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PlusIcon } from "lucide-react";
@@ -40,7 +41,7 @@ export function NewQuoteButton({
   const [isPending, startTransition] = useTransition();
 
   const money = (c: number) => formatCurrencyCents(referenceCurrency, c);
-  const subtotal = lines.reduce((t, l) => t + l.unitPriceCents * l.quantity, 0);
+  const subtotal = lines.reduce((t, l) => t + lineTotalCents(l.unitPriceCents, l.quantity), 0);
 
   function reset() {
     setFirstName("");
@@ -155,7 +156,7 @@ export function NewQuoteButton({
                     <span>
                       {l.quantity} × {l.name}
                     </span>
-                    <b className="tabular-nums">{money(l.unitPriceCents * l.quantity)}</b>
+                    <b className="tabular-nums">{money(lineTotalCents(l.unitPriceCents, l.quantity))}</b>
                   </div>
                 ))}
                 <div className="flex items-center justify-between gap-2.5 py-2.5 text-sm">

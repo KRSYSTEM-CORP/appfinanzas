@@ -222,7 +222,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
 }
 
 export type QuickCreateProductResult =
-  | { success: true; product: { id: string; name: string; costCents: number | null; taxCategory: TaxCategory; stock: number } }
+  | { success: true; product: { id: string; name: string; costCents: number | null; taxCategory: TaxCategory; stock: number; unit: string; unitLabel: string | null } }
   | { success: false; error: string };
 
 // Pared-down product creation for the "+ Crear producto nuevo" shortcut
@@ -284,7 +284,7 @@ export async function quickCreateProduct(input: {
   void notifyLive(posChannel(companyId), "product");
   return {
     success: true,
-    product: { id: product.id, name: product.name, costCents: product.costCents, taxCategory: product.taxCategory, stock: toQty(product.stock) },
+    product: { id: product.id, name: product.name, costCents: product.costCents, taxCategory: product.taxCategory, stock: toQty(product.stock), unit: product.unit, unitLabel: product.unitLabel },
   };
 }
 

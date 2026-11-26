@@ -1,5 +1,6 @@
 "use client";
 
+import { lineTotalCents } from "@/lib/units";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { getSaleReceipt } from "@/lib/actions/sales";
 import type { PaymentStatus } from "@prisma/client";
@@ -131,10 +132,10 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
   const [payError, setPayError] = useState<string | null>(null);
   const accountsForChoice = (snapshot.paymentAccounts ?? []).map((a) => ({ id: a.id, kind: a.kind }));
 
-  const rawTotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+  const rawTotal = lines.reduce((sum, l) => sum + lineTotalCents(l.unitPriceCents, l.quantity), 0);
   const discountValue = Math.min(100, Math.max(0, Number(discountPercent) || 0));
   const discountCentsTotal = lines.reduce(
-    (sum, l) => sum + computeItemDiscountCents(l.unitPriceCents * l.quantity, discountValue),
+    (sum, l) => sum + computeItemDiscountCents(lineTotalCents(l.unitPriceCents, l.quantity), discountValue),
     0
   );
   const total = rawTotal - discountCentsTotal;
@@ -197,7 +198,7 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
           quantity: l.quantity,
           unitPriceCents: l.unitPriceCents,
           subtotalCents:
-            l.unitPriceCents * l.quantity - computeItemDiscountCents(l.unitPriceCents * l.quantity, discountValue),
+            lineTotalCents(l.unitPriceCents, l.quantity) - computeItemDiscountCents(lineTotalCents(l.unitPriceCents, l.quantity), discountValue),
         })),
         sellerName: snapshot.sellerName,
         note: note.trim() || null,
@@ -215,6 +216,7 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
               taxCategory: product?.taxCategory ?? "GENERAL",
               unitPriceCents: l.unitPriceCents,
               quantity: l.quantity,
+              product: { unit: product?.unit ?? l.product.unit, unitLabel: product?.unitLabel ?? l.product.unitLabel },
             };
           }),
           customer,

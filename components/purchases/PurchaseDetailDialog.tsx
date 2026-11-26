@@ -1,6 +1,7 @@
 "use client";
 
 import type { PaymentMethod } from "@prisma/client";
+import { formatQtyCompact } from "@/lib/units";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Pill, StatusPill } from "@/components/shared/Pills";
@@ -17,6 +18,8 @@ export type RegisterPurchase = {
   items: {
     name: string;
     quantity: number;
+    unit?: string;
+    unitLabel?: string | null;
     unitCostCents: number;
     subtotalCents: number;
     baseCents: number;
@@ -141,7 +144,7 @@ export function PurchaseDetailDialog({
                 <div className="min-w-0">
                   <b>{it.name}</b>
                   <small className="block text-xs text-muted-foreground">
-                    {it.quantity} × <Dual cents={it.unitCostCents} ctx={ctx} local={local} />
+                    {formatQtyCompact(it.quantity, it.unit, it.unitLabel)} × <Dual cents={it.unitCostCents} ctx={ctx} local={local} />
                   </small>
                   <small className="block text-xs text-muted-foreground">
                     IVA {TAX_LABEL[it.taxCategory] ?? it.taxCategory} {it.taxRatePercent}% · base {dualAmount(it.baseCents, ctx, local).primary} · IVA{" "}

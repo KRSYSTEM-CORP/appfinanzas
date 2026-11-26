@@ -111,13 +111,13 @@ export async function buildFullReport(tx: Tx, ctx: ReportCtx, from: string, to: 
     FROM "Sale" s WHERE s."companyId" = ${cid} ${brS} AND s."voided" = false AND s."createdAt" >= ${start} AND s."createdAt" < ${end} GROUP BY 1 ORDER BY 1`;
 
   const prodRows = await tx.$queryRaw<{ name: string; cat: string | null; qty: bigint; total: bigint; cogs: bigint }[]>`
-    SELECT si."productName" AS name, si."category" AS cat, SUM(si."quantity")::bigint AS qty, SUM(si."subtotalCents")::bigint AS total,
+    SELECT si."productName" AS name, si."category" AS cat, SUM(si."quantity")::float8 AS qty, SUM(si."subtotalCents")::bigint AS total,
            COALESCE(SUM(si."quantity" * p."costCents"),0)::bigint AS cogs
     FROM "SaleItem" si JOIN "Sale" s ON s.id = si."saleId" LEFT JOIN "Product" p ON p.id = si."productId"
     WHERE s."companyId" = ${cid} ${brS} AND s."voided" = false AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
     GROUP BY 1, 2 ORDER BY total DESC`;
   const catRows = await tx.$queryRaw<{ cat: string; qty: bigint; total: bigint; cogs: bigint }[]>`
-    SELECT COALESCE(NULLIF(si."category",''),'Sin categoría') AS cat, SUM(si."quantity")::bigint AS qty, SUM(si."subtotalCents")::bigint AS total,
+    SELECT COALESCE(NULLIF(si."category",''),'Sin categoría') AS cat, SUM(si."quantity")::float8 AS qty, SUM(si."subtotalCents")::bigint AS total,
            COALESCE(SUM(si."quantity" * p."costCents"),0)::bigint AS cogs
     FROM "SaleItem" si JOIN "Sale" s ON s.id = si."saleId" LEFT JOIN "Product" p ON p.id = si."productId"
     WHERE s."companyId" = ${cid} ${brS} AND s."voided" = false AND s."createdAt" >= ${start} AND s."createdAt" < ${end}

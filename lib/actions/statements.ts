@@ -105,7 +105,7 @@ export async function getStatements(range: DateRangeSelection, islrPercent: numb
       const branchSql = (col: string) => (branchId ? Prisma.sql`AND ${Prisma.raw(col)} = ${branchId}` : Prisma.empty);
       const [inv, pend, used] = await Promise.all([
         bq<{ v: number | null }>(tx)`
-          SELECT COALESCE(SUM(GREATEST("stock", 0)::bigint * COALESCE("costCents", 0)), 0)::bigint AS v FROM "Product"
+          SELECT COALESCE(SUM(GREATEST("stock", 0) * COALESCE("costCents", 0)), 0)::bigint AS v FROM "Product"
           WHERE "companyId" = ${companyId} ${branchSql('"branchId"')} AND "trackStock" = true`,
         bq<{ v: number | null }>(tx)`
           SELECT SUM("totalCents")::bigint AS v FROM "Purchase"

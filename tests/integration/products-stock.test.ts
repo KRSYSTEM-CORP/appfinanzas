@@ -23,7 +23,7 @@ let startStock = 0;
 
 // Lo mismo que envía el formulario de edición.
 function editForm(
-  p: { name: string; sku: string | null; category: string | null; priceCents: number; lowStockThreshold: number; stock: number },
+  p: { name: string; sku: string | null; category: string | null; priceCents: number; lowStockThreshold: unknown; stock: unknown },
   add: string
 ) {
   const f = new FormData();
@@ -40,7 +40,7 @@ function editForm(
 
 beforeAll(async () => {
   ctx = await loadContext();
-  startStock = (await owner.product.findUniqueOrThrow({ where: { id: ctx.productId } })).stock;
+  startStock = Number((await owner.product.findUniqueOrThrow({ where: { id: ctx.productId } })).stock);
 });
 
 afterAll(async () => {
@@ -52,11 +52,11 @@ describe("Sumar existencias", () => {
   it("suma al stock actual aunque el formulario traiga un número viejo", async () => {
     const p = await owner.product.findUniqueOrThrow({ where: { id: ctx.productId } });
     // Una venta ocurre mientras la persona editaba: el stock real baja a p.stock - 3.
-    await owner.product.update({ where: { id: ctx.productId }, data: { stock: p.stock - 3 } });
+    await owner.product.update({ where: { id: ctx.productId }, data: { stock: Number(p.stock) - 3 } });
     const r = await updateProduct(ctx.productId, editForm(p, "7"));
     expect(r).toEqual({ success: true });
     const after = await owner.product.findUniqueOrThrow({ where: { id: ctx.productId } });
-    expect(after.stock).toBe(p.stock - 3 + 7);
+    expect(Number(after.stock)).toBe(Number(p.stock) - 3 + 7);
   });
 
   it("deja el movimiento en el historial del producto", async () => {

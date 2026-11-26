@@ -23,7 +23,7 @@ vi.mock("@/lib/realtime", () => ({ notifyLive: async () => {}, posChannel: (id: 
 const { completeSale, voidSale, issueCreditNote, registerPayment, getOrCreateInvoiceNumber } = await import("@/lib/actions/sales");
 
 async function stockOf(productId: string) {
-  return (await owner.product.findUniqueOrThrow({ where: { id: productId } })).stock;
+  return Number((await owner.product.findUniqueOrThrow({ where: { id: productId } })).stock);
 }
 
 async function sell(quantity: number, extra: Record<string, unknown> = {}) {

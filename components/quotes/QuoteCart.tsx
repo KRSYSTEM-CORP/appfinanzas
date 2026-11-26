@@ -1,5 +1,6 @@
 "use client";
 
+import { lineTotalCents } from "@/lib/units";
 import { MinusIcon, PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -56,7 +57,7 @@ export function QuoteCart({
   isPending: boolean;
   error: string | null;
 }) {
-  const total = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+  const total = lines.reduce((sum, l) => sum + lineTotalCents(l.unitPriceCents, l.quantity), 0);
   const showLocal = exchangeRateEnabled && useLocalCurrency && rate != null;
   const money = (cents: number) =>
     showLocal ? formatLocalCurrency(eurCentsToLocal(cents, rate!), currencyCode) : formatCurrencyCents(referenceCurrency, cents);
@@ -127,7 +128,7 @@ export function QuoteCart({
               </Button>
             </div>
             <div className="w-28 text-right tabular-nums text-sm font-medium">
-              {money(line.unitPriceCents * line.quantity)}
+              {money(lineTotalCents(line.unitPriceCents, line.quantity))}
             </div>
             <Button
               type="button"
