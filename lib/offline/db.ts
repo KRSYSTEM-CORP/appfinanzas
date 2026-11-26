@@ -51,6 +51,8 @@ export type PendingSalePreview = {
     productName: string;
     category?: string | null;
     quantity: number;
+    unit?: string;
+    unitLabel?: string | null;
     unitPriceCents: number;
     subtotalCents: number;
   }[];

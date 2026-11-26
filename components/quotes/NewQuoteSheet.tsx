@@ -1,6 +1,6 @@
 "use client";
 
-import { lineTotalCents } from "@/lib/units";
+import { addQty, getUnit, lineTotalCents, toQty } from "@/lib/units";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PlusIcon } from "lucide-react";
@@ -57,11 +57,11 @@ export function NewQuoteButton({
   function addLine() {
     const p = products.find((x) => x.id === productId);
     if (!p) return;
-    const quantity = Math.max(1, parseInt(qty, 10) || 1);
+    const quantity = Math.max(getUnit(p.unit).decimals ? 0.001 : 1, toQty(qty) || 1);
     setError(null);
     setLines((prev) => {
       const ex = prev.find((l) => l.productId === p.id);
-      if (ex) return prev.map((l) => (l.productId === p.id ? { ...l, quantity: l.quantity + quantity } : l));
+      if (ex) return prev.map((l) => (l.productId === p.id ? { ...l, quantity: addQty(l.quantity, quantity) } : l));
       return [...prev, { productId: p.id, name: p.name, unitPriceCents: p.priceCents, quantity }];
     });
   }
@@ -138,7 +138,7 @@ export function NewQuoteButton({
             </label>
             <label className={LABEL}>
               Cantidad
-              <input className={FIELD} type="number" min={1} step={1} value={qty} onChange={(e) => setQty(e.target.value)} />
+              <input className={FIELD} type="number" min={0.001} step="any" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
             </label>
           </div>
           <div>

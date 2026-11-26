@@ -33,7 +33,7 @@ export default async function ConsumptionPage({
         end={
           <AddWithdrawalButton
             currency={referenceCurrency}
-            products={products.filter((p) => p.trackStock && p.stock > 0).map((p) => ({ id: p.id, name: p.name, stock: p.stock, costCents: p.costCents ?? 0 }))}
+            products={products.filter((p) => p.trackStock && p.stock > 0).map((p) => ({ id: p.id, name: p.name, stock: p.stock, costCents: p.costCents ?? 0, unit: p.unit, unitLabel: p.unitLabel }))}
           />
         }
       >

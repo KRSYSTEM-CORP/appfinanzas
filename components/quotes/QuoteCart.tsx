@@ -1,6 +1,6 @@
 "use client";
 
-import { lineTotalCents } from "@/lib/units";
+import { lineTotalCents, perUnitText } from "@/lib/units";
 import { MinusIcon, PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,8 @@ export type QuoteCartLine = {
   unitPriceCents: number;
   quantity: number;
   maxStock: number;
+  unit?: string;
+  unitLabel?: string | null;
 };
 
 export function QuoteCart({
@@ -99,7 +101,7 @@ export function QuoteCart({
           <div key={line.productId} className="flex items-center justify-between gap-2 rounded-lg border p-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{line.name}</p>
-              <p className="text-xs text-muted-foreground">{money(line.unitPriceCents)} c/u</p>
+              <p className="text-xs text-muted-foreground">{money(line.unitPriceCents)} {perUnitText(line.unit, line.unitLabel)}</p>
             </div>
             <div className="flex items-center gap-1">
               <Button
@@ -115,6 +117,7 @@ export function QuoteCart({
                 quantity={line.quantity}
                 maxStock={line.maxStock}
                 onCommit={(quantity) => onSetQuantity(line.productId, quantity)}
+              unit={line.unit}
               />
               <Button
                 type="button"

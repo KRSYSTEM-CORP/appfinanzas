@@ -1,5 +1,6 @@
 "use client";
 
+import { formatQtyCompact } from "@/lib/units";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "@/components/ui/nav-link";
@@ -349,7 +350,7 @@ export function QuoteHistoryTable({
                 {(detail?.items ?? []).map((i) => (
                   <div key={i.id} className="flex items-center justify-between gap-2.5 border-b py-2.5 text-sm">
                     <span>
-                      {i.quantity} × {i.productName}
+                      {formatQtyCompact(i.quantity, i.unit, i.unitLabel)} × {i.productName}
                     </span>
                     <b className="tabular-nums">{money(i.subtotalCents)}</b>
                   </div>

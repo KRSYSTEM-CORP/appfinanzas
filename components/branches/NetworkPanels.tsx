@@ -1,5 +1,6 @@
 "use client";
 
+import { formatQtyCompact } from "@/lib/units";
 import Link from "@/components/ui/nav-link";
 import { useState } from "react";
 import { ArrowRightLeftIcon, TruckIcon } from "lucide-react";
@@ -150,7 +151,7 @@ export function BranchTransfersCard({ suggestions, transfers }: { suggestions: T
             <li key={t.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
               <div className="min-w-0">
                 <p className="truncate font-semibold">
-                  {t.items.map((i) => `${i.quantity} × ${i.productName}`).join(", ")}
+                  {t.items.map((i) => `${formatQtyCompact(i.quantity, i.unit, i.unitLabel)} × ${i.productName}`).join(", ")}
                 </p>
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
                   {t.fromBranchName} <ArrowRightLeftIcon className="size-3" aria-hidden /> {t.toBranchName} · {new Date(t.createdAt).toLocaleDateString("es-VE")}

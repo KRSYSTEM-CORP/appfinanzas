@@ -15,8 +15,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { registerInternalUse } from "@/lib/actions/products";
+import { formatQtyUnit, getUnit } from "@/lib/units";
 
-type Option = { id: string; name: string; stock: number };
+type Option = { id: string; name: string; stock: number; unit: string; unitLabel: string | null };
 
 // Consumo interno: sacar mercancía del inventario para uso de la propia empresa.
 export function InternalUseButton({ products }: { products: Option[] }) {
@@ -91,7 +92,7 @@ export function InternalUseButton({ products }: { products: Option[] }) {
                       }`}
                     >
                       <span className="truncate">{p.name}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{p.stock} en stock</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{formatQtyUnit(p.stock, p.unit, p.unitLabel)} en stock</span>
                     </button>
                   ))
                 )}
@@ -103,7 +104,7 @@ export function InternalUseButton({ products }: { products: Option[] }) {
                 <Input
                   id="iu-qty"
                   type="number"
-                  min="1"
+                  min="0.001"
                   max={selected?.stock}
                   step="1"
                   inputMode="numeric"

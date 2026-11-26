@@ -255,7 +255,8 @@ const [step, setStep] = useState<Step>("cart");
       for (const it of items) {
         const product = productById.get(it.productId);
         if (!product) continue;
-        for (let i = 0; i < it.quantity; i++) addProductToCart(product);
+        addProductToCart(product);
+        if (it.quantity !== 1) setQuantity(product.id, it.quantity);
       }
     }
     window.addEventListener("kr-pos-resell", onResell);
@@ -404,6 +405,8 @@ const [step, setStep] = useState<Step>("cart");
           productName: productById.get(l.productId)?.name ?? l.name,
           category: productById.get(l.productId)?.category ?? null,
           quantity: l.quantity,
+          unit: l.product.unit,
+          unitLabel: l.product.unitLabel,
           unitPriceCents: l.unitPriceCents,
           subtotalCents: lineTotalCents(l.unitPriceCents, l.quantity) - computeItemDiscountCents(lineTotalCents(l.unitPriceCents, l.quantity), discountValue),
         })),

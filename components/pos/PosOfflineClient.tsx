@@ -196,6 +196,8 @@ function PosOfflineCheckout({ snapshot }: { snapshot: CatalogSnapshot }) {
           productName: productById.get(l.productId)?.name ?? l.name,
           category: productById.get(l.productId)?.category ?? null,
           quantity: l.quantity,
+          unit: l.product.unit,
+          unitLabel: l.product.unitLabel,
           unitPriceCents: l.unitPriceCents,
           subtotalCents:
             lineTotalCents(l.unitPriceCents, l.quantity) - computeItemDiscountCents(lineTotalCents(l.unitPriceCents, l.quantity), discountValue),
