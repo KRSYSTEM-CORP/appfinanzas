@@ -1,0 +1,65 @@
+
+> kr-pos@0.1.0 dev
+> next dev -p 3032
+
+▲ Next.js 16.4.6 (Turbopack)
+- Local:         http://localhost:3032
+- Network:       http://172.16.0.85:3032
+- Environments: .env
+✓ Ready in 652ms
+[@sentry/nextjs] Importing `withSentryConfig` from `@sentry/nextjs` is deprecated and will stop working in v11. Import it from `@sentry/nextjs/config` instead:
+  import { withSentryConfig } from '@sentry/nextjs/config';
+✓ Running next.config.ts took 3.1s
+- Experiments (use with caution):
+  · clientTraceMetadata
+  · serverActions
+  · staleTimes
+
+○ Compiling /login ...
+ GET /login 200 in 6.8s (next.js: 5.8s, proxy.ts: 90ms, application-code: 900ms)
+ GET /login?next=%2Fpos%2Foffline 200 in 313ms (next.js: 122ms, proxy.ts: 8ms, application-code: 182ms)
+ GET /login 200 in 257ms (next.js: 135ms, proxy.ts: 7ms, application-code: 114ms)
+ GET /login?next=%2Fpos%2Foffline 200 in 125ms (next.js: 8ms, proxy.ts: 8ms, application-code: 109ms)
+ POST /login 200 in 829ms (next.js: 8ms, proxy.ts: 8ms, application-code: 813ms)
+  └─ ƒ getCompanyBrandingByEmail("gerente@pruebas.test") in 788ms lib/actions/auth.ts
+ POST /login 200 in 1046ms (next.js: 6ms, proxy.ts: 8ms, application-code: 1032ms)
+  └─ ƒ login({}) in 980ms lib/actions/auth.ts
+ GET /login?next=%2Finventory%2Fnew 200 in 121ms (next.js: 7ms, proxy.ts: 6ms, application-code: 107ms)
+ GET /login 200 in 116ms (next.js: 7ms, proxy.ts: 5ms, application-code: 104ms)
+ GET /login?next=%2Fpos%2Foffline 200 in 113ms (next.js: 6ms, proxy.ts: 5ms, application-code: 102ms)
+ POST /login 200 in 611ms (next.js: 7ms, proxy.ts: 7ms, application-code: 598ms)
+  └─ ƒ getCompanyBrandingByEmail("gerente@pruebas.test") in 588ms lib/actions/auth.ts
+ POST /login 200 in 1010ms (next.js: 6ms, proxy.ts: 5ms, application-code: 999ms)
+  └─ ƒ login({}) in 951ms lib/actions/auth.ts
+ GET /login?next=%2Finventory%2Fnew 200 in 115ms (next.js: 6ms, proxy.ts: 5ms, application-code: 105ms)
+ GET /login 200 in 104ms (next.js: 6ms, proxy.ts: 4ms, application-code: 94ms)
+ GET /login?next=%2Fpos%2Foffline 200 in 110ms (next.js: 7ms, proxy.ts: 5ms, application-code: 98ms)
+ POST /login 200 in 633ms (next.js: 6ms, proxy.ts: 5ms, application-code: 621ms)
+  └─ ƒ getCompanyBrandingByEmail("gerente@pruebas.test") in 611ms lib/actions/auth.ts
+ POST /login 200 in 1057ms (next.js: 6ms, proxy.ts: 5ms, application-code: 1046ms)
+  └─ ƒ login({}) in 1005ms lib/actions/auth.ts
+ GET /lock 200 in 2.8s (next.js: 1319ms, proxy.ts: 5ms, application-code: 1491ms)
+ POST /login 200 in 3.6s (next.js: 6ms, proxy.ts: 4ms, application-code: 3.6s)
+  └─ ƒ completeBranchLogin("eyJ1IjoiY213dW41MDEwMDAwNHo3YTZ6dWRsaTFkMSIsImMiOiJjbXd1bjR6bjIwMDAwejdhNjdiaGp4cXFlIiwiZSI6MTc5NTczNzQxMDkyNCwicCI6ImJyYW5jaCJ9.xXmOCf3ifXap-ja5kD2HCj4mlpKVF6znKo_ON-9IabY", "cmwun4zqq0001z7a6f7l3j3dz") in 760ms lib/actions/auth.ts
+ GET /inventory/new 200 in 2.7s (next.js: 1841ms, proxy.ts: 5ms, application-code: 897ms)
+ GET /lock 200 in 907ms (next.js: 50ms, proxy.ts: 5ms, application-code: 852ms)
+ GET /pos/offline 200 in 3.5s (next.js: 2.8s, proxy.ts: 6ms, application-code: 635ms)
+ GET /pos/offline 200 in 710ms (next.js: 108ms, proxy.ts: 6ms, application-code: 596ms)
+ GET /pos/offline 200 in 621ms (next.js: 15ms, proxy.ts: 5ms, application-code: 600ms)
+ GET /pos/offline 200 in 621ms (next.js: 23ms, proxy.ts: 6ms, application-code: 592ms)
+ GET /login 200 in 120ms (next.js: 11ms, proxy.ts: 6ms, application-code: 103ms)
+ GET /login?next=%2Fpos%2Foffline 200 in 115ms (next.js: 9ms, proxy.ts: 6ms, application-code: 100ms)
+ POST /login 200 in 613ms (next.js: 8ms, proxy.ts: 7ms, application-code: 598ms)
+  └─ ƒ getCompanyBrandingByEmail("gerente@pruebas.test") in 589ms lib/actions/auth.ts
+ POST /login 200 in 1057ms (next.js: 7ms, proxy.ts: 5ms, application-code: 1044ms)
+  └─ ƒ login({}) in 997ms lib/actions/auth.ts
+ GET /lock 200 in 886ms (next.js: 7ms, proxy.ts: 4ms, application-code: 874ms)
+ POST /login 200 in 1597ms (next.js: 6ms, proxy.ts: 5ms, application-code: 1586ms)
+  └─ ƒ completeBranchLogin("eyJ1IjoiY213dW41MDEwMDAwNHo3YTZ6dWRsaTFkMSIsImMiOiJjbXd1bjR6bjIwMDAwejdhNjdiaGp4cXFlIiwiZSI6MTc5NTczNzQ2MjgyNCwicCI6ImJyYW5jaCJ9.EnY2DITBzPnS2zBVdszHBDxVu-3odvukc9Ry9tmG4QM", "cmwun4zqq0001z7a6f7l3j3dz") in 687ms lib/actions/auth.ts
+ GET /inventory/new 200 in 903ms (next.js: 67ms, proxy.ts: 5ms, application-code: 831ms)
+ GET /pos/offline 200 in 701ms (next.js: 5ms, proxy.ts: 5ms, application-code: 691ms)
+ GET /lock 200 in 1309ms (next.js: 5ms, proxy.ts: 5ms, application-code: 1300ms)
+ GET /pos/offline 200 in 734ms (next.js: 13ms, proxy.ts: 6ms, application-code: 715ms)
+ GET /pos/offline 200 in 603ms (next.js: 11ms, proxy.ts: 6ms, application-code: 585ms)
+ GET /pos/offline 200 in 604ms (next.js: 13ms, proxy.ts: 7ms, application-code: 584ms)
+[?25h
