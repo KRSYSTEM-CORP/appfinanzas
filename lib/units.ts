@@ -209,6 +209,11 @@ export function formatQtyCompact(qty: unknown, unitKey: string | null | undefine
   return !unitKey || unitKey === DEFAULT_UNIT ? formatQty(qty) : formatQtyUnit(qty, unitKey, customLabel);
 }
 
+/** Existencias para listas: «5 und.» en productos por unidad (como antes) y «2,5 L», «3 cajas»... en los demás. */
+export function formatStock(qty: unknown, unitKey: string | null | undefined, customLabel?: string | null): string {
+  return !unitKey || unitKey === DEFAULT_UNIT ? `${formatQty(qty)} und.` : formatQtyUnit(qty, unitKey, customLabel);
+}
+
 /** «c/u» para productos en unidad; «por litro», «por kilogramo»... para los demás. */
 export function perUnitText(unitKey: string | null | undefined, customLabel?: string | null): string {
   return !unitKey || unitKey === DEFAULT_UNIT ? "c/u" : `por ${unitName(unitKey, customLabel)}`;

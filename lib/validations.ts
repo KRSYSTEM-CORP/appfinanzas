@@ -289,6 +289,12 @@ export const ProductUpdateRowSchema = z.object({
     .preprocess(blankToUndefined, z.coerce.number().min(0).optional())
     .transform((v) => (v == null ? v : toCents(v))),
   bulkMinQty: z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional()),
+}).superRefine((d, ctx) => {
+  if (d.unit?.startsWith("__desconocida__:")) {
+    ctx.addIssue({ code: "custom", path: ["unit"], message: `No reconozco la unidad «${d.unit.slice(16)}». Usa unidad, litro, ml, kg, g, metro, caja... o «otra» con su nombre.` });
+  } else if (d.unit === "otra" && !d.unitLabel) {
+    ctx.addIssue({ code: "custom", path: ["unit"], message: "Para la unidad «otra» escribe también su nombre (por ejemplo: rollo, saco)" });
+  }
 });
 
 export type ProductUpdateRowInput = z.infer<typeof ProductUpdateRowSchema>;

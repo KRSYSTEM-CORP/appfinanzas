@@ -11,10 +11,11 @@ import { isLowStock } from "@/lib/inventory";
 import { downloadWorkbook } from "@/lib/spreadsheet";
 import { formatCurrencyCents } from "@/lib/currencies";
 import type { ReferenceCurrency } from "@prisma/client";
+import { formatQty, formatQtyCompact, getUnit, lineTotalCents, subQty, unitName } from "@/lib/units";
 
 // Cantidad sugerida: lo que falta para llegar al doble del mínimo (como en la preview).
 function suggestedQty(p: ListedProduct): number {
-  return Math.max(p.lowStockThreshold * 2 - p.stock, 1);
+  return Math.max(subQty(p.lowStockThreshold * 2, p.stock), getUnit(p.unit).decimals ? 0.001 : 1);
 }
 
 // «Lista de reposición» y «Exportar Excel» de la barra de Inventario.
@@ -31,7 +32,7 @@ export function InventoryActions({
   const needs = products
     .filter((p) => p.isActive && isLowStock(p))
     .sort((a, b) => a.stock - b.stock);
-  const totalCost = needs.reduce((s, p) => s + suggestedQty(p) * (p.costCents ?? 0), 0);
+  const totalCost = needs.reduce((s, p) => s + lineTotalCents(p.costCents ?? 0, suggestedQty(p)), 0);
 
   async function exportExcel() {
     setBusy(true);
@@ -41,11 +42,12 @@ export function InventoryActions({
           {
             name: "Inventario",
             rows: [
-              ["Producto", "SKU", "Categoría", "Stock", "Mínimo", "Costo", "Precio", "Estado"],
+              ["Producto", "SKU", "Categoría", "Unidad", "Stock", "Mínimo", "Costo", "Precio", "Estado"],
               ...products.map((p) => [
                 p.name,
                 p.sku ?? "",
                 p.category ?? "",
+                unitName(p.unit, p.unitLabel),
                 p.trackStock ? p.stock : "",
                 p.trackStock ? p.lowStockThreshold : "",
                 p.costCents != null ? p.costCents / 100 : "",
@@ -91,11 +93,11 @@ export function InventoryActions({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{p.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        Tienes {p.stock} · mínimo {p.lowStockThreshold}
+                        Tienes {formatQtyCompact(p.stock, p.unit, p.unitLabel)} · mínimo {formatQty(p.lowStockThreshold)}
                       </p>
                     </div>
                     <div className="shrink-0 text-right text-xs text-muted-foreground">
-                      <p className="font-semibold text-foreground">Pedir {suggestedQty(p)}</p>
+                      <p className="font-semibold text-foreground">Pedir {formatQtyCompact(suggestedQty(p), p.unit, p.unitLabel)}</p>
                       {p.costCents != null && <p>{formatCurrencyCents(referenceCurrency, suggestedQty(p) * p.costCents)}</p>}
                     </div>
                   </li>

@@ -33,6 +33,13 @@ const HEADER_MAP: Record<string, string> = {
   "umbral de stock bajo": "lowStockThreshold",
   umbral: "lowStockThreshold",
   lowstockthreshold: "lowStockThreshold",
+  unidad: "unit",
+  "unidad de medida": "unit",
+  unit: "unit",
+  um: "unit",
+  "etiqueta de unidad": "unitLabel",
+  "nombre de unidad": "unitLabel",
+  unitlabel: "unitLabel",
   iva: "taxCategory",
   "categoria de iva": "taxCategory",
   taxcategory: "taxCategory",
@@ -66,6 +73,8 @@ type ParsedRow = {
   trackStock?: unknown;
   stock?: unknown;
   lowStockThreshold?: unknown;
+  unit?: unknown;
+  unitLabel?: unknown;
   taxCategory?: unknown;
   priceTiersEnabled?: unknown;
   wholesalePrice?: unknown;
@@ -100,6 +109,7 @@ async function downloadTemplate() {
       "Nombre",
       "SKU",
       "Categoría",
+      "Unidad",
       "Precio",
       "Costo",
       "Controlar stock",
@@ -112,8 +122,9 @@ async function downloadTemplate() {
       "Precio gran mayor",
       "Cantidad mínima gran mayor",
     ],
-    ["Camisa azul", "CAM-001", "Ropa", 12.5, 7, "Sí", 20, 5, "General", "No", "", "", "", ""],
-    ["Camisa azul (al mayor)", "CAM-002", "Ropa", 12.5, 7, "Sí", 500, 20, "General", "Sí", 10, 51, 8, 100],
+    ["Cloro", "LIM-001", "Limpieza", "litro", 2.5, 1.2, "Sí", 40.5, 5, "General", "No", "", "", "", ""],
+    ["Desinfectante", "LIM-002", "Limpieza", "ml", 0.004, 0.002, "Sí", 20000, 2000, "General", "No", "", "", "", ""],
+    ["Coleto", "LIM-003", "Limpieza", "unidad", 3, 1.5, "Sí", 60, 10, "General", "No", "", "", "", ""],
   ]);
   appendSheet(wb, ws, "Productos");
   await downloadWorkbook(wb, "plantilla-productos.xlsx");
@@ -163,6 +174,8 @@ export function ImportProductsForm() {
           trackStock: r.trackStock,
           stock: r.stock,
           lowStockThreshold: r.lowStockThreshold,
+          unit: r.unit,
+          unitLabel: r.unitLabel,
           taxCategory: r.taxCategory,
           priceTiersEnabled: r.priceTiersEnabled,
           wholesalePrice: r.wholesalePrice,
@@ -182,9 +195,9 @@ export function ImportProductsForm() {
       <div className="flex flex-col gap-1.5 rounded-lg border p-4">
         <p className="text-sm text-muted-foreground">
           Sube un archivo Excel (.xlsx) con tus productos. Las columnas esperadas son:{" "}
-          <strong>Nombre, SKU, Categoría, Precio, Costo, Controlar stock, Stock, Umbral de stock bajo, IVA</strong>{" "}
+          <strong>Nombre, SKU, Categoría, Unidad, Precio, Costo, Controlar stock, Stock, Umbral de stock bajo, IVA</strong>{" "}
           (Nombre y Precio son obligatorios; Stock solo si &quot;Controlar stock&quot; es &quot;Sí&quot;, que es el
-          valor por defecto si dejas la columna en blanco). Opcionalmente,{" "}
+          valor por defecto si dejas la columna en blanco). <strong>Unidad</strong> es la unidad de medida del producto (unidad, pieza, caja, litro, ml, galón, kg, g, libra, metro, cm, hora, o «otra» con su nombre en la columna <strong>Etiqueta de unidad</strong>); en blanco se toma «unidad». El precio y el stock se expresan en esa unidad (por ejemplo, precio por litro y stock en litros). Opcionalmente,{" "}
           <strong>
             Precios por cantidad, Precio mayor, Cantidad mínima mayor, Precio gran mayor, Cantidad
             mínima gran mayor
@@ -235,6 +248,7 @@ export function ImportProductsForm() {
                   <TableHead>Nombre</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Categoría</TableHead>
+                  <TableHead>Unidad</TableHead>
                   <TableHead>Precio</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>Estado</TableHead>
@@ -247,6 +261,7 @@ export function ImportProductsForm() {
                     <TableCell>{String(r.name ?? "—")}</TableCell>
                     <TableCell>{String(r.sku ?? "—")}</TableCell>
                     <TableCell>{String(r.category ?? "—")}</TableCell>
+                    <TableCell>{String(r.unit ?? "unidad")}</TableCell>
                     <TableCell>{String(r.price ?? "—")}</TableCell>
                     <TableCell>{String(r.stock ?? "—")}</TableCell>
                     <TableCell>
