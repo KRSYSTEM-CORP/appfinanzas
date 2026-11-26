@@ -72,6 +72,6 @@ describe("Sumar existencias", () => {
     expect((await updateProduct(ctx.productId, editForm(p, "-5"))).success).toBe(false);
     expect((await updateProduct(ctx.productId, editForm(p, "2.5"))).success).toBe(false);
     const after = await owner.product.findUniqueOrThrow({ where: { id: ctx.productId } });
-    expect(after.stock).toBe(p.stock);
+    expect(Number(after.stock)).toBe(Number(p.stock));
   });
 });

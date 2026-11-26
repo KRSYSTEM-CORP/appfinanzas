@@ -210,7 +210,7 @@ describe("las cifras agrupadas igualan el cálculo original con el ORM", () => {
     });
     const top = await reports.topProducts(YEAR);
     // Mismas cantidades por posición (los empates pueden venir en otro orden entre dos consultas).
-    expect(top.map((t) => t.quantity)).toEqual(grouped.map((g) => g._sum.quantity ?? 0));
+    expect(top.map((t) => t.quantity)).toEqual(grouped.map((g) => Number(g._sum.quantity ?? 0)));
     for (const t of top) {
       const g = grouped.find((x) => x.productId === t.productId && x.productName === t.productName);
       if (g) expect(t.revenueCents).toBe(g._sum.subtotalCents ?? 0);
