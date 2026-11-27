@@ -1,3 +1,4 @@
+import { todayDateString } from "@/lib/report-types";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadContext, owner, sessionFor, type Ctx } from "./helpers";
 
@@ -88,7 +89,7 @@ function screenReads(range: typeof YEAR | typeof MONTH | typeof SEVEN) {
     listSourceAccounts: () => accounts.listSourceAccounts(true),
     getAccountsPeriodReport: () => period.getAccountsPeriodReport({ seg: "fecha", selection: range }),
     getAccountsPeriodMovements: () => period.getAccountsPeriodMovements({ seg: "fecha", selection: range }, null),
-    getDailyClosingSummary: () => cash.getDailyClosingSummary(new Date().toISOString().slice(0, 10)),
+    getDailyClosingSummary: () => cash.getDailyClosingSummary(todayDateString()),
     listPendingClosings: () => cash.listPendingClosings(range),
     listRecentClosings: () => cash.listRecentClosings(10),
     branchOverview: () => branches.branchOverview(),

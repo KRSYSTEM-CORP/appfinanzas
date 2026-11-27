@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { todayDateString } from "@/lib/report-types";
+import { closingDateFromString } from "@/lib/closed-days";
 import { randomUUID } from "node:crypto";
 import { customer, loadContext, owner, sessionFor, type Ctx } from "./helpers";
 
@@ -46,7 +48,7 @@ async function sellCredit(items: { productId: string; quantity: number; unit?: s
 
 beforeAll(async () => {
   ctx = await loadContext();
-  const today = new Date(new Date().toISOString().slice(0, 10));
+  const today = closingDateFromString(todayDateString());
   await owner.cashOpening.upsert({
     where: { branchId_date_shiftNumber: { branchId: ctx.branchId, date: today, shiftNumber: 1 } },
     update: {},
