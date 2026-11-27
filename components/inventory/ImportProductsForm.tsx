@@ -123,7 +123,7 @@ async function downloadTemplate() {
       "Cantidad mínima gran mayor",
     ],
     ["Cloro", "LIM-001", "Limpieza", "litro", 2.5, 1.2, "Sí", 40.5, 5, "General", "No", "", "", "", ""],
-    ["Desinfectante", "LIM-002", "Limpieza", "ml", 0.004, 0.002, "Sí", 20000, 2000, "General", "No", "", "", "", ""],
+    ["Desinfectante", "LIM-002", "Limpieza", "galón", 8, 4, "Sí", 20, 2, "General", "No", "", "", "", ""],
     ["Coleto", "LIM-003", "Limpieza", "unidad", 3, 1.5, "Sí", 60, 10, "General", "No", "", "", "", ""],
   ]);
   appendSheet(wb, ws, "Productos");
