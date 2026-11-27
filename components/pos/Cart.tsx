@@ -270,8 +270,8 @@ export function Cart({
         )}
         {lines.map((line) => (
           <div key={line.productId} className="flex items-center gap-2.5 border-b border-border py-2.5 last:border-b-0">
-            <div className="min-w-0 flex-1">
-              <b className="block truncate font-bold">{line.name}</b>
+            <div className="min-w-[6.5rem] flex-1">
+              <b className="line-clamp-2 break-words font-bold leading-tight">{line.name}</b>
               <small className="block text-[0.8333em] text-muted-foreground tabular-nums">
                 {formatCurrencyCents(referenceCurrency, line.unitPriceCents)} {perUnitText(line.product.unit, line.product.unitLabel)}
               </small>
