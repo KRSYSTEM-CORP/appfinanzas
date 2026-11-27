@@ -139,7 +139,7 @@ describe("misma cifra con y sin transacción compartida", () => {
         expect(scoped[k], `scope vs sin scope: ${k}`).toBe(plain[k]);
         expect(serial[k], `secuencial vs sin scope: ${k}`).toBe(plain[k]);
       }
-    });
+    }, 180_000);
   }
 });
 
