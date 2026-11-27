@@ -155,6 +155,16 @@ export function lineCurrency(line: OutflowLine, accounts: { id: string; currency
   return outflowCurrencyFor(line.method, acc?.currency ?? null, line.currency, { rateEnabled });
 }
 
+// Al cambiar la moneda de una línea (por elegir otro método o cuenta), el número escrito se convierte con la tasa:
+// 12,77 $ no puede quedar como 12,77 Bs. Sin tasa o sin monto escrito, no se toca.
+export function convertAmountForCurrency(amount: string, from: OutflowCurrency, to: OutflowCurrency, rate: number | null): string {
+  if (from === to || !rate || rate <= 0) return amount;
+  const n = Number(amount.replace(",", "."));
+  if (!Number.isFinite(n) || n <= 0) return amount;
+  const out = from === "REFERENCE" ? n * rate : n / rate;
+  return (Math.round(out * 100) / 100).toFixed(2);
+}
+
 // Convierte la línea del formulario en lo que recibe el servidor (monto en la moneda de la línea, en centavos).
 export function lineToSource(line: OutflowLine, accounts: { id: string; currency: string }[], rateEnabled: boolean): OutflowSource {
   return {

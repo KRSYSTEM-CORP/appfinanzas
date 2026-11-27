@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { convertQty, formatQty, getUnit, sellableUnits, toBaseQty } from "@/lib/units";
+import { toast } from "sonner";
+import { convertQty, formatQty, formatQtyUnit, getUnit, sellableUnits, toBaseQty } from "@/lib/units";
 
 // Lets the cashier type a quantity directly instead of only tapping −/+ —
 // much faster for a bulk sale. Keeps its own draft string so the field can
@@ -43,17 +44,25 @@ export function QuantityInput({
     setInvalid(false);
   }
 
+  const decimalsHere = unit ? getUnit(displayUnit).decimals : false;
+
   function commit() {
     const text = draft.trim().replace(",", ".");
     const parsed = text === "" ? NaN : Number(text);
     const checked = Number.isFinite(parsed) && parsed > 0 ? toBaseQty(parsed, displayUnit, base) : null;
     if (checked && checked.ok) {
       const clamped = Math.min(checked.qty, maxStock);
+      if (clamped < checked.qty) toast.error(`Solo hay ${formatQtyUnit(maxStock, base)} disponibles; dejamos ese máximo.`);
       setInvalid(false);
       setDraft(shown(clamped));
       if (clamped !== quantity) onCommit(clamped);
     } else {
       setInvalid(!!text);
+      if (text) {
+        toast.error(
+          decimalsHere ? "Escribe un número mayor que cero (hasta 3 decimales)." : "Este producto se vende en cantidades enteras: no se puede vender una fracción."
+        );
+      }
       setDraft(shown(quantity));
     }
   }
@@ -63,7 +72,6 @@ export function QuantityInput({
     setDraft(formatQty(convertQty(quantity, base, next)).replace(/\./g, ""));
   }
 
-  const decimalsHere = unit ? getUnit(displayUnit).decimals : false;
   const baseClass = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
   const input = (
     <input

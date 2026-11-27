@@ -191,6 +191,8 @@ export const ProductSchema = z
     price: z.coerce
       .number()
       .min(0, "El precio no puede ser negativo")
+      // Los precios se guardan en céntimos: 0,004 por ml quedaría en 0 y se vendería gratis.
+      .refine((v) => v === 0 || Math.round(v * 100) >= 1, "El precio mínimo es 0,01 por unidad de medida: para algo tan barato por ml, véndelo por litro")
       .transform(toCents),
     cost: z
       .preprocess(blankToUndefined, z.coerce.number().min(0).optional().nullable())

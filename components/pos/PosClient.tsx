@@ -1,6 +1,6 @@
 "use client";
 
-import { lineTotalCents } from "@/lib/units";
+import { getUnit, lineTotalCents } from "@/lib/units";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PlusIcon, SearchIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -485,7 +485,8 @@ const [step, setStep] = useState<Step>("cart");
   }
 
   const isGeneral = customer?.phone === "0000-0000000";
-  const itemCount = lines.reduce((n, l) => n + l.quantity, 0);
+  // Una línea con cantidad fraccionaria (0,5 L) cuenta como un producto, no como 0,5.
+  const itemCount = lines.reduce((n, l) => n + (getUnit(l.product.unit).decimals ? 1 : l.quantity), 0);
 
   // Atajos de la preview en la venta: «C» cobra y «E» deja la venta en espera.
   useEffect(() => {
