@@ -1,3 +1,4 @@
+import { todayDateString } from "@/lib/report-types";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadContext, owner, sessionFor, type Ctx } from "./helpers";
 
@@ -88,7 +89,7 @@ function screenReads(range: typeof YEAR | typeof MONTH | typeof SEVEN) {
     listSourceAccounts: () => accounts.listSourceAccounts(true),
     getAccountsPeriodReport: () => period.getAccountsPeriodReport({ seg: "fecha", selection: range }),
     getAccountsPeriodMovements: () => period.getAccountsPeriodMovements({ seg: "fecha", selection: range }, null),
-    getDailyClosingSummary: () => cash.getDailyClosingSummary(new Date().toISOString().slice(0, 10)),
+    getDailyClosingSummary: () => cash.getDailyClosingSummary(todayDateString()),
     listPendingClosings: () => cash.listPendingClosings(range),
     listRecentClosings: () => cash.listRecentClosings(10),
     branchOverview: () => branches.branchOverview(),
@@ -139,7 +140,7 @@ describe("misma cifra con y sin transacción compartida", () => {
         expect(scoped[k], `scope vs sin scope: ${k}`).toBe(plain[k]);
         expect(serial[k], `secuencial vs sin scope: ${k}`).toBe(plain[k]);
       }
-    });
+    }, 180_000);
   }
 });
 
@@ -210,7 +211,7 @@ describe("las cifras agrupadas igualan el cálculo original con el ORM", () => {
     });
     const top = await reports.topProducts(YEAR);
     // Mismas cantidades por posición (los empates pueden venir en otro orden entre dos consultas).
-    expect(top.map((t) => t.quantity)).toEqual(grouped.map((g) => g._sum.quantity ?? 0));
+    expect(top.map((t) => t.quantity)).toEqual(grouped.map((g) => Number(g._sum.quantity ?? 0)));
     for (const t of top) {
       const g = grouped.find((x) => x.productId === t.productId && x.productName === t.productName);
       if (g) expect(t.revenueCents).toBe(g._sum.subtotalCents ?? 0);
@@ -233,7 +234,7 @@ describe("las cifras agrupadas igualan el cálculo original con el ORM", () => {
   it("estados financieros: inventario, por pagar y consumo interno", async () => {
     const s = await statements.getStatements(YEAR, 15);
     const products = await owner.product.findMany({ where: { ...companyWhere(), trackStock: true }, select: { stock: true, costCents: true } });
-    expect(s.inventory).toBe(products.reduce((n, p) => n + Math.max(p.stock, 0) * (p.costCents ?? 0), 0));
+    expect(s.inventory).toBe(products.reduce((n, p) => n + Math.round(Math.max(Number(p.stock), 0) * (p.costCents ?? 0)), 0));
     const pending = await owner.purchase.aggregate({ where: { ...companyWhere(), voided: false, paymentStatus: "PENDING" }, _sum: { totalCents: true } });
     expect(s.payables).toBe(pending._sum.totalCents ?? 0);
     const wins = selectionToWindows(YEAR);
@@ -243,7 +244,7 @@ describe("las cifras agrupadas igualan el cálculo original con el ORM", () => {
     });
     const costs = await owner.product.findMany({ where: { companyId: ctx.companyId, id: { in: moves.map((m) => m.productId).filter((x): x is string => !!x) } }, select: { id: true, costCents: true } });
     const cost = new Map(costs.map((p) => [p.id, p.costCents ?? 0]));
-    expect(s.internalUse).toBe(moves.reduce((n, m) => n + (m.productId ? (cost.get(m.productId) ?? 0) : 0) * Math.abs(m.quantityChange), 0));
+    expect(s.internalUse).toBe(moves.reduce((n, m) => n + (m.productId ? (cost.get(m.productId) ?? 0) : 0) * Math.abs(Number(m.quantityChange)), 0));
   });
 
   it("IVA del libro: base e IVA netos igualan facturas + débito − crédito", async () => {

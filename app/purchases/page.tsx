@@ -51,7 +51,9 @@ export default async function PurchasesPage({
       concept: names.length > 2 ? `${names.slice(0, 2).join(", ")} y ${names.length - 2} más` : names.join(" y ") || (p.note ?? "—"),
       items: p.items.map((i) => ({
         name: i.productName,
-        quantity: i.quantity,
+        quantity: Number(i.quantity),
+        unit: i.unit,
+        unitLabel: i.unitLabel,
         unitCostCents: i.unitCostCents,
         subtotalCents: i.subtotalCents,
         baseCents: i.baseCents,

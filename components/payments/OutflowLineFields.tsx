@@ -2,7 +2,7 @@
 
 import { MethodAndAccount, type PickableAccount } from "@/components/payments/MethodAndAccount";
 import { Field, FIELD_CONTROL } from "@/components/shared/Field";
-import { canChooseOutflowCurrency, defaultOutflowCurrency, lineCurrency, type OutflowLine } from "@/lib/cash-outflow";
+import { canChooseOutflowCurrency, defaultOutflowCurrency, lineCurrency, lineForMethod, type OutflowLine } from "@/lib/cash-outflow";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { cn } from "@/lib/utils";
 import type { PaymentMethod } from "@prisma/client";
@@ -46,6 +46,7 @@ export function OutflowLineFields({
         accounts={accounts}
         accountId={line.accountId}
         onAccount={(id) => onChange({ ...line, accountId: id })}
+        onPick={(m, accountId) => onChange(lineForMethod(line, m, accountId, money.exchangeRateEnabled))}
       />
       <div className="grid grid-cols-[1fr_auto] items-end gap-2">
         <Field label={`${amountLabel} en ${curCode}`} className="mt-0">

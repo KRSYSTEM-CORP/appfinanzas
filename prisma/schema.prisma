@@ -215,6 +215,7 @@ model Company {
   suppliers             Supplier[]
   purchases             Purchase[]
   stockMovements        StockMovement[]
+  priceAdjustments      PriceAdjustment[]
   // Maintenance billing, managed by a KYRA System platform admin from /admin.
   // Activation itself is charged outside the app for now — only the recurring
   // maintenance cycle is tracked here and can block access. Priced in USD —
@@ -489,8 +490,11 @@ model Product {
   // fallback tier below wholesaleMinQty when it's on.
   priceCents          Int
   costCents           Int?
-  stock               Int             @default(0)
-  lowStockThreshold   Int             @default(5)
+  stock               Decimal         @default(0) @db.Decimal(14, 3)
+  lowStockThreshold   Decimal         @default(5) @db.Decimal(14, 3)
+  // Unidad base (lib/units.ts); el precio es por esta unidad. unitLabel solo si unit = "otra".
+  unit                String          @default("unidad")
+  unitLabel           String?
   // Off by default so every existing product keeps requiring/tracking a real
   // stock count exactly as before. When off, stock/lowStockThreshold are
   // ignored everywhere (checkout, ProductPicker, isActive-on-zero-stock) —
@@ -548,13 +552,37 @@ model StockMovement {
   reason         String
   sourceType     String?
   sourceId       String?
-  quantityChange Int
-  stockBefore    Int
-  stockAfter     Int
+  quantityChange Decimal  @db.Decimal(14, 3)
+  stockBefore    Decimal  @db.Decimal(14, 3)
+  stockAfter     Decimal  @db.Decimal(14, 3)
   createdAt      DateTime @default(now())
 
   @@index([companyId, branchId, createdAt])
   @@index([productId, createdAt])
+}
+
+// Aumento porcentual de precios (Inventario → Aumentar precios): quién, cuándo, cuánto y los precios anteriores
+// para poder deshacerlo (24 h). Sirve también de registro de auditoría del ajuste.
+model PriceAdjustment {
+  id           String    @id @default(cuid())
+  companyId    String
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId     String?
+  actorId      String?
+  actorName    String
+  // Porcentaje en centésimas de punto (10,5 % = 1050).
+  percentBp    Int
+  // CENT, 0.05 o 0.10
+  rounding     String
+  scopeCategory String?
+  productCount Int
+  // [{id, p, w, b, np, nw, nb}]: precio detal/mayor/gran mayor antes (p,w,b) y después (np,nw,nb).
+  items        Json
+  createdAt    DateTime  @default(now())
+  undoneAt     DateTime?
+  undoneByName String?
+
+  @@index([companyId, createdAt])
 }
 
 model Customer {
@@ -762,7 +790,9 @@ model SaleItem {
   // to tell apart two products that share a name but differ by category.
   category       String?
   unitPriceCents Int
-  quantity       Int
+  quantity       Decimal  @db.Decimal(14, 3)
+  unit           String   @default("unidad")
+  unitLabel      String?
   // Tax-inclusive subtotal AFTER discount (unitPriceCents * quantity -
   // discountCents) — see discountCents below for the pre-discount figure.
   subtotalCents  Int
@@ -867,7 +897,9 @@ model QuoteItem {
   // Snapshotted at quote time — same reasoning as SaleItem.category.
   category       String?
   unitPriceCents Int
-  quantity       Int
+  quantity       Decimal  @db.Decimal(14, 3)
+  unit           String   @default("unidad")
+  unitLabel      String?
   subtotalCents  Int
 
   @@index([quoteId])
@@ -1000,7 +1032,9 @@ model PurchaseItem {
   taxCategory    TaxCategory @default(GENERAL)
   taxRatePercent Int         @default(16)
   unitCostCents  Int
-  quantity       Int
+  quantity       Decimal  @db.Decimal(14, 3)
+  unit           String   @default("unidad")
+  unitLabel      String?
   baseCents      Int
   taxCents       Int
   subtotalCents  Int
@@ -1519,7 +1553,9 @@ model BranchTransferItem {
   transfer    BranchTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   productName String
   sku         String?
-  quantity    Int
+  quantity    Decimal @db.Decimal(14, 3)
+  unit        String  @default("unidad")
+  unitLabel   String?
 
   @@index([transferId])
 }

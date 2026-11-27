@@ -9,8 +9,9 @@ import { bq, jsDate } from "@/lib/batch-sql";
 import { recordStockMovement } from "@/lib/stock-movements";
 import { invalidateCache } from "@/lib/cache";
 import type { ActionResult } from "@/lib/types";
+import { formatQtyUnit, subQty, toQty, validateQty } from "@/lib/units";
 
-export type TransferableProduct = { id: string; name: string; sku: string | null; stock: number };
+export type TransferableProduct = { id: string; name: string; sku: string | null; stock: number; unit: string; unitLabel: string | null };
 
 export type TransferRow = {
   id: string;
@@ -19,7 +20,7 @@ export type TransferRow = {
   toBranchName: string;
   note: string | null;
   createdByName: string;
-  items: { id: string; productName: string; quantity: number }[];
+  items: { id: string; productName: string; quantity: number; unit: string; unitLabel: string | null }[];
 };
 
 // Productos con existencias en la sucursal de origen.
@@ -27,21 +28,22 @@ export async function listTransferableProducts(branchId: string): Promise<Transf
   const session = await requireManager();
   const { companyId } = session;
   assertBranchAllowed(session, branchId);
-  return withTenant(companyId, (tx) =>
+  const rows = await withTenant(companyId, (tx) =>
     tx.product.findMany({
       where: { companyId, branchId, trackStock: true, isActive: true, stock: { gt: 0 } },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, sku: true, stock: true },
+      select: { id: true, name: true, sku: true, stock: true, unit: true, unitLabel: true },
     })
   );
+  return rows.map((r) => ({ ...r, stock: toQty(r.stock) }));
 }
 
 export async function listTransfers(limit = 50): Promise<TransferRow[]> {
   const { companyId } = await requireManager();
   const rowsRaw = await withTenant(companyId, (tx) =>
-    bq<{ id: string; createdAt: string; note: string | null; createdByName: string; fromName: string; toName: string; items: { id: string; productName: string; quantity: number }[] }>(tx)`
+    bq<{ id: string; createdAt: string; note: string | null; createdByName: string; fromName: string; toName: string; items: { id: string; productName: string; quantity: number; unit: string; unitLabel: string | null }[] }>(tx)`
       SELECT t."id", t."createdAt", t."note", t."createdByName", fb."name" AS "fromName", tb."name" AS "toName",
-             COALESCE((SELECT json_agg(json_build_object('id', i."id", 'productName', i."productName", 'quantity', i."quantity") ORDER BY i."id")
+             COALESCE((SELECT json_agg(json_build_object('id', i."id", 'productName', i."productName", 'quantity', i."quantity", 'unit', i."unit", 'unitLabel', i."unitLabel") ORDER BY i."id")
                        FROM "BranchTransferItem" i WHERE i."transferId" = t."id"), '[]'::json) AS "items"
       FROM "BranchTransfer" t
       JOIN "Branch" fb ON fb."id" = t."fromBranchId" JOIN "Branch" tb ON tb."id" = t."toBranchId"
@@ -57,7 +59,7 @@ export async function listTransfers(limit = 50): Promise<TransferRow[]> {
     toBranchName: t.toBranch.name,
     note: t.note,
     createdByName: t.createdByName,
-    items: t.items.map((i) => ({ id: i.id, productName: i.productName, quantity: i.quantity })),
+    items: t.items.map((i) => ({ id: i.id, productName: i.productName, quantity: toQty(i.quantity), unit: i.unit, unitLabel: i.unitLabel })),
   }));
 }
 
@@ -66,7 +68,7 @@ const TransferSchema = z.object({
   toBranchId: z.string().min(1, "Elige la sucursal de destino"),
   note: z.string().trim().max(200).optional(),
   items: z
-    .array(z.object({ productId: z.string().min(1), quantity: z.number().int().min(1, "La cantidad debe ser mayor a 0") }))
+    .array(z.object({ productId: z.string().min(1), quantity: z.number().positive("La cantidad debe ser mayor a 0") }))
     .min(1, "Agrega al menos un producto")
     .max(200),
 });
@@ -99,30 +101,37 @@ export async function createTransfer(input: unknown): Promise<ActionResult> {
       });
       if (branches.length !== 2) throw new Error("Sucursal no encontrada o inactiva");
 
-      const items: { productName: string; sku: string | null; quantity: number }[] = [];
+      const items: { productName: string; sku: string | null; quantity: number; unit: string; unitLabel: string | null }[] = [];
       for (const line of d.items) {
         await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${line.productId} AND "companyId" = ${companyId} AND "branchId" = ${d.fromBranchId} FOR UPDATE`;
         const src = await tx.product.findFirst({ where: { id: line.productId, companyId, branchId: d.fromBranchId } });
         if (!src) throw new Error("Un producto ya no existe en la sucursal de origen");
         if (!src.isActive) throw new Error(`«${src.name}» está inactivo o descontinuado: actívalo antes de traspasarlo`);
         if (!src.trackStock) throw new Error(`«${src.name}» no lleva control de existencias`);
-        if (src.stock < line.quantity) throw new Error(`«${src.name}»: solo hay ${src.stock} en existencia`);
+        const qtyChk = validateQty(line.quantity, src.unit);
+        if (!qtyChk.ok) throw new Error(`«${src.name}»: ${qtyChk.error}`);
+        const srcStock = toQty(src.stock);
+        if (srcStock < line.quantity) throw new Error(`«${src.name}»: solo hay ${formatQtyUnit(srcStock, src.unit, src.unitLabel)} en existencia`);
 
-        const srcAfter = src.stock - line.quantity;
+        const srcAfter = subQty(srcStock, line.quantity);
         await tx.product.update({ where: { id: src.id }, data: { stock: srcAfter, isActive: srcAfter > 0 } });
         await recordStockMovement(tx, {
           companyId, branchId: d.fromBranchId, productId: src.id, productName: src.name,
           actorId: userId, actorName: sellerName, reason: "TRANSFER_OUT", sourceType: "transfer",
-          quantityChange: -line.quantity, stockBefore: src.stock,
+          quantityChange: -line.quantity, stockBefore: srcStock,
         });
 
         const dest = src.sku
           ? await tx.product.findUnique({ where: { branchId_sku: { branchId: d.toBranchId, sku: src.sku } } })
           : await tx.product.findFirst({ where: { companyId, branchId: d.toBranchId, sku: null, name: src.name } });
         if (dest) {
+          if (dest.unit !== src.unit || dest.unitLabel !== src.unitLabel) {
+            throw new Error(`«${src.name}» se mide distinto en cada sucursal (${src.unit} y ${dest.unit}): igualen la unidad antes de traspasar`);
+          }
           // Incremento atómico: el stock del destino se lee bloqueando la fila (una venta concurrente no se pierde).
-          const destRows = await tx.$queryRaw<{ stock: number }[]>`
-            UPDATE "Product" SET "stock" = "stock" + ${line.quantity}, "isActive" = true
+          const qtyText = line.quantity.toFixed(3);
+          const destRows = await tx.$queryRaw<{ stock: unknown }[]>`
+            UPDATE "Product" SET "stock" = "stock" + ${qtyText}::numeric, "isActive" = true
             WHERE "id" = ${dest.id} AND "companyId" = ${companyId} AND "branchId" = ${d.toBranchId}
             RETURNING "stock"
           `;
@@ -130,7 +139,7 @@ export async function createTransfer(input: unknown): Promise<ActionResult> {
           await recordStockMovement(tx, {
             companyId, branchId: d.toBranchId, productId: dest.id, productName: dest.name,
             actorId: userId, actorName: sellerName, reason: "TRANSFER_IN", sourceType: "transfer",
-            quantityChange: line.quantity, stockBefore: destRows[0].stock - line.quantity,
+            quantityChange: line.quantity, stockBefore: subQty(toQty(destRows[0].stock), line.quantity),
           });
         } else {
           const created = await tx.product.create({
@@ -143,6 +152,8 @@ export async function createTransfer(input: unknown): Promise<ActionResult> {
               priceCents: src.priceCents,
               costCents: src.costCents,
               lowStockThreshold: src.lowStockThreshold,
+              unit: src.unit,
+              unitLabel: src.unitLabel,
               trackStock: true,
               isActive: true,
               imageDataUrl: src.imageDataUrl,
@@ -161,7 +172,7 @@ export async function createTransfer(input: unknown): Promise<ActionResult> {
             quantityChange: line.quantity, stockBefore: 0,
           });
         }
-        items.push({ productName: src.name, sku: src.sku, quantity: line.quantity });
+        items.push({ productName: src.name, sku: src.sku, quantity: line.quantity, unit: src.unit, unitLabel: src.unitLabel });
       }
 
       await tx.branchTransfer.create({
@@ -207,13 +218,14 @@ export async function listTransferSuggestions(): Promise<TransferSuggestion[]> {
   const rows = await withTenant(companyId, (tx) =>
     bq<{ name: string; qty: number; from_name: string; to_name: string; from_stock: number; to_stock: number }>(tx)`
       SELECT p_to."name" AS name,
-             LEAST(p_to."lowStockThreshold" * 2 - p_to."stock", p_from."stock" - p_from."lowStockThreshold")::int AS qty,
+             FLOOR(LEAST(p_to."lowStockThreshold" * 2 - p_to."stock", p_from."stock" - p_from."lowStockThreshold") * 1000) / 1000 AS qty,
              b_from."name" AS from_name, b_to."name" AS to_name,
-             p_from."stock"::int AS from_stock, p_to."stock"::int AS to_stock
+             p_from."stock"::float8 AS from_stock, p_to."stock"::float8 AS to_stock
       FROM "Product" p_to
       JOIN "Product" p_from
         ON p_from."companyId" = p_to."companyId"
        AND p_from."branchId" <> p_to."branchId"
+       AND p_from."unit" = p_to."unit"
        AND ((p_to."sku" IS NOT NULL AND p_from."sku" = p_to."sku") OR (p_to."sku" IS NULL AND p_from."sku" IS NULL AND lower(p_from."name") = lower(p_to."name")))
       JOIN "Branch" b_to ON b_to.id = p_to."branchId" AND b_to."isActive" = true
       JOIN "Branch" b_from ON b_from.id = p_from."branchId" AND b_from."isActive" = true
@@ -229,7 +241,7 @@ export async function listTransferSuggestions(): Promise<TransferSuggestion[]> {
     .filter((r) => r.qty > 0)
     .map((r) => ({
       productName: r.name,
-      quantity: r.qty,
+      quantity: toQty(r.qty),
       fromBranchName: r.from_name,
       toBranchName: r.to_name,
       reason: `${r.to_name} tiene ${r.to_stock} y ${r.from_name} ${r.from_stock}`,

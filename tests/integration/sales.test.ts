@@ -1,4 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { todayDateString } from "@/lib/report-types";
+import { closingDateFromString } from "@/lib/closed-days";
 import { randomUUID } from "node:crypto";
 import { customer, loadContext, owner, sessionFor, type Ctx } from "./helpers";
 
@@ -23,7 +25,7 @@ vi.mock("@/lib/realtime", () => ({ notifyLive: async () => {}, posChannel: (id: 
 const { completeSale, voidSale, issueCreditNote, registerPayment, getOrCreateInvoiceNumber } = await import("@/lib/actions/sales");
 
 async function stockOf(productId: string) {
-  return (await owner.product.findUniqueOrThrow({ where: { id: productId } })).stock;
+  return Number((await owner.product.findUniqueOrThrow({ where: { id: productId } })).stock);
 }
 
 async function sell(quantity: number, extra: Record<string, unknown> = {}) {
@@ -44,7 +46,7 @@ async function sell(quantity: number, extra: Record<string, unknown> = {}) {
 beforeAll(async () => {
   ctx = await loadContext();
   // Regla: no se vende con la caja cerrada. Se abre una para las ventas de la prueba.
-  const today = new Date(new Date().toISOString().slice(0, 10));
+  const today = closingDateFromString(todayDateString());
   await owner.cashOpening.upsert({
     where: { branchId_date_shiftNumber: { branchId: ctx.branchId, date: today, shiftNumber: 1 } },
     update: {},

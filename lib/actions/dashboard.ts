@@ -1,5 +1,6 @@
 "use server";
 
+import { toQty } from "@/lib/units";
 import { requireManager } from "@/lib/session";
 import { bq } from "@/lib/batch-sql";
 import { withTenant } from "@/lib/tenant-db";
@@ -27,7 +28,7 @@ export async function getDashboardTasks() {
           ORDER BY "stock" ASC, "name" ASC LIMIT 3
         `,
       ]);
-      return { count: Number(count[0]?.count ?? 0), products };
+      return { count: Number(count[0]?.count ?? 0), products: products.map((p) => ({ ...p, stock: toQty(p.stock), lowStockThreshold: toQty(p.lowStockThreshold) })) };
     }),
     withTenant(companyId, (tx) => tx.quote.count({ where: { companyId, ...(branchId ? { branchId } : {}), status: "PENDING" } })),
     listPendingClosings({ kind: "preset", preset: "month" }),

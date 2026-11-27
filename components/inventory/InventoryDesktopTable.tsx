@@ -20,6 +20,7 @@ import {
 import { Price } from "@/components/money/Price";
 import { StockAdjustDialog } from "@/components/inventory/StockAdjustDialog";
 import { formatCurrencyCents } from "@/lib/currencies";
+import { formatQty, formatStock } from "@/lib/units";
 
 type Status = "ok" | "low" | "out" | "inactive";
 
@@ -116,11 +117,11 @@ export function InventoryDesktopTable({
                   <td className="px-2 py-3">
                     {p.trackStock ? (
                       <div className="flex min-w-36 flex-col gap-1">
-                        <span className="font-semibold tabular-nums">{p.stock} und.</span>
+                        <span className="font-semibold tabular-nums">{formatStock(p.stock, p.unit, p.unitLabel)}</span>
                         <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`Existencia de ${p.name}`} aria-valuenow={barPct} aria-valuemin={0} aria-valuemax={100}>
                           <div className={`h-full rounded-full ${ui.bar}`} style={{ width: `${Math.max(barPct, p.stock > 0 ? 6 : 0)}%` }} />
                         </div>
-                        <span className="text-[11px] text-muted-foreground">Mín: {p.lowStockThreshold}</span>
+                        <span className="text-[11px] text-muted-foreground">Mín: {formatQty(p.lowStockThreshold)}</span>
                       </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">Sin control de stock</span>
@@ -139,7 +140,7 @@ export function InventoryDesktopTable({
                   {canSeeCosts && <td className="whitespace-nowrap px-2 py-3 text-right tabular-nums">{value != null ? formatCurrencyCents(referenceCurrency, value) : "—"}</td>}
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <span className="whitespace-nowrap tabular-nums font-semibold">{p.trackStock ? `${p.stock} und.` : ""}</span>
+                      <span className="whitespace-nowrap tabular-nums font-semibold">{p.trackStock ? formatStock(p.stock, p.unit, p.unitLabel) : ""}</span>
                       <ActionMenu
                         trigger={<Button type="button" variant="ghost" size="icon-sm" aria-label={`Acciones de ${p.name}`} />}
                         triggerChildren={<MoreVerticalIcon className="size-4" />}

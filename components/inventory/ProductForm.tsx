@@ -12,11 +12,13 @@ import { resizeImageToDataUrl } from "@/lib/image-utils";
 import { TAX_CATEGORY_LABELS } from "@/lib/tax";
 import type { ActionResult } from "@/lib/types";
 import type { Product, ReferenceCurrency, TaxCategory } from "@prisma/client";
+import { UnitSelect, type UnitValue } from "@/components/shared/UnitSelect";
+import { formatQty, getUnit, unitName } from "@/lib/units";
 
 const MAX_IMAGE_DIMENSION = 480;
 
 type Props = {
-  product?: Product;
+  product?: Omit<Product, "stock" | "lowStockThreshold"> & { stock: number; lowStockThreshold: number };
   categories: string[];
   referenceCurrency: ReferenceCurrency;
   action: (formData: FormData) => Promise<ActionResult>;
@@ -30,6 +32,10 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
   const [taxCategory, setTaxCategory] = useState<TaxCategory>(product?.taxCategory ?? "GENERAL");
   const [imageError, setImageError] = useState<string | null>(null);
   const [trackStock, setTrackStock] = useState(product?.trackStock ?? true);
+  const [unitValue, setUnitValue] = useState<UnitValue>({ unit: product?.unit ?? "unidad", unitLabel: product?.unitLabel ?? "" });
+  const unitDef = getUnit(unitValue.unit);
+  const qtyStep = unitDef.decimals ? "0.001" : "1";
+  const perUnit = unitName(unitValue.unit, unitValue.unitLabel);
   const [priceTiersEnabled, setPriceTiersEnabled] = useState(product?.priceTiersEnabled ?? false);
   const [isPending, startTransition] = useTransition();
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -155,7 +161,7 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="price">Precio de venta ({referenceCurrency})</Label>
+              <Label htmlFor="price">Precio de venta por {perUnit} ({referenceCurrency})</Label>
               <Input
                 id="price"
                 name="price"
@@ -167,7 +173,7 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cost">Costo ({referenceCurrency}, opcional)</Label>
+              <Label htmlFor="cost">Costo por {perUnit} ({referenceCurrency}, opcional)</Label>
               <Input
                 id="cost"
                 name="cost"
@@ -232,6 +238,16 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
             </p>
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="unit">Unidad de medida</Label>
+            <UnitSelect id="unit" value={unitValue} onChange={setUnitValue} />
+            <p className="text-xs text-muted-foreground">
+              {unitDef.decimals
+                ? `El precio es por ${perUnit}. En el punto de venta se puede vender en fracciones (por ejemplo 0,5 o 250 ml).`
+                : `Se vende por ${perUnit}, siempre en cantidades enteras.`}
+            </p>
+          </div>
+
           {trackStock && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {product ? (
@@ -239,16 +255,16 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
                   {/* Solo satisface la validación; el servidor suma stockAdd al stock real. */}
                   <input type="hidden" name="stock" value={product.stock} />
                   <Label htmlFor="stockAdd">Sumar existencias</Label>
-                  <Input id="stockAdd" name="stockAdd" type="number" min={0} step={1} defaultValue={0} />
+                  <Input id="stockAdd" name="stockAdd" type="number" inputMode="decimal" min={0} step={qtyStep} defaultValue={0} />
                   <p className="text-xs text-muted-foreground">
-                    Stock actual: <b className="tabular-nums">{product.stock}</b>. Lo que escribas se suma; el
+                    Stock actual: <b className="tabular-nums">{formatQty(product.stock)}</b> {perUnit}. Lo que escribas se suma; el
                     movimiento queda en el historial del producto.
                   </p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="stock">Stock actual</Label>
-                  <Input id="stock" name="stock" type="number" min={0} step={1} defaultValue={0} required />
+                  <Input id="stock" name="stock" type="number" inputMode="decimal" min={0} step={qtyStep} defaultValue={0} required />
                 </div>
               )}
               <div className="flex flex-col gap-1.5">
@@ -257,8 +273,9 @@ export function ProductForm({ product, categories, referenceCurrency, action }: 
                   id="lowStockThreshold"
                   name="lowStockThreshold"
                   type="number"
+                  inputMode="decimal"
                   min={0}
-                  step={1}
+                  step={qtyStep}
                   defaultValue={product?.lowStockThreshold ?? 5}
                   required
                 />

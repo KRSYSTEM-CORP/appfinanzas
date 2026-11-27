@@ -50,6 +50,12 @@ export function defaultOutflowCurrency(method: PaymentMethod, rateEnabled: boole
 }
 
 // ¿El usuario puede escoger entre Bs y divisa? Solo efectivo y «otro» sin cuenta, y solo si hay tasa.
+// Línea completa al elegir un método: método, cuenta preseleccionada y moneda por defecto, todo en un solo cambio.
+// (Antes se cambiaba el método y la cuenta por separado con la misma línea vieja, y la cuenta pisaba el método.)
+export function lineForMethod(line: OutflowLine, method: PaymentMethod, accountId: string, rateEnabled: boolean): OutflowLine {
+  return { ...line, method, accountId, currency: defaultOutflowCurrency(method, rateEnabled) };
+}
+
 export function canChooseOutflowCurrency(method: PaymentMethod, hasAccount: boolean, ctx: Pick<OutflowMoneyCtx, "rateEnabled" | "rate">): boolean {
   return !hasAccount && ctx.rateEnabled && ctx.rate != null && (method === "CASH" || method === "OTHER");
 }

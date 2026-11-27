@@ -13,6 +13,7 @@ import { ProductSchema, ProductUpdateRowSchema } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 import { Prisma, type TaxCategory } from "@prisma/client";
 import { recordStockMovement } from "@/lib/stock-movements";
+import { addQty, formatQtyUnit, subQty, toQty, unitColumns, validateQty } from "@/lib/units";
 
 // La lista tiene un TTL corto como red de seguridad, pero NO se confía en él: toda acción que cambie
 // existencias (venta, anulación, nota de crédito, compra, ajuste, transferencia) invalida la caché con
@@ -43,7 +44,7 @@ async function fetchProductList(
       }),
     ]);
     const hasImage = new Set(withImage.map((p) => p.id));
-    return products.map((p) => ({ ...p, hasImage: hasImage.has(p.id) }));
+    return products.map((p) => ({ ...p, stock: toQty(p.stock), lowStockThreshold: toQty(p.lowStockThreshold), hasImage: hasImage.has(p.id) }));
   });
 }
 
@@ -68,14 +69,14 @@ export async function getInventoryOverview() {
   const { companyId, branchId } = await requireSectionAccess("inventory");
   return withTenant(companyId, async (tx) => {
     const [rows, categoryRows] = await Promise.all([
-      tx.$queryRaw<{ total_count: bigint; active_count: bigint; low_stock_count: bigint; stock_total: bigint }[]>`
+      tx.$queryRaw<{ total_count: bigint; active_count: bigint; low_stock_count: bigint; stock_total: unknown }[]>`
         SELECT COUNT(*)::bigint AS total_count,
                COUNT(*) FILTER (WHERE "isActive" = true)::bigint AS active_count,
                COUNT(*) FILTER (
                  WHERE "trackStock" = true AND "stock" <= "lowStockThreshold"
                    AND ("isActive" = true OR "stock" = 0)
                )::bigint AS low_stock_count,
-               COALESCE(SUM("stock"), 0)::bigint AS stock_total
+               COALESCE(SUM("stock"), 0) AS stock_total
         FROM "Product"
         WHERE "companyId" = ${companyId}
           ${branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty}
@@ -93,10 +94,10 @@ export async function getInventoryOverview() {
       totalCount: Number(totals?.total_count ?? 0),
       activeCount: Number(totals?.active_count ?? 0),
       lowStockCount: Number(totals?.low_stock_count ?? 0),
-      totalStock: Number(totals?.stock_total ?? 0),
+      totalStock: toQty(totals?.stock_total ?? 0),
       categoryTotals: categoryRows.map((row) => ({
         category: row.category?.trim() || "Sin categoría",
-        stock: row._sum.stock ?? 0,
+        stock: toQty(row._sum.stock ?? 0),
         count: row._count._all,
       })),
     };
@@ -108,7 +109,7 @@ export async function getProduct(id: string) {
   const { companyId, branchId } = await requireSession();
   return withTenant(companyId, (tx) =>
     tx.product.findFirst({ where: { id, companyId, ...(branchId ? { branchId } : {}) } })
-  );
+  ).then((p) => (p ? { ...p, stock: toQty(p.stock), lowStockThreshold: toQty(p.lowStockThreshold) } : null));
 }
 
 export async function getProductStockMovements(id: string) {
@@ -116,7 +117,7 @@ export async function getProductStockMovements(id: string) {
   return withTenant(companyId, async (tx) => {
     const product = await tx.product.findFirst({
       where: { id, companyId, ...(branchId ? { branchId } : {}) },
-      select: { id: true, name: true, stock: true, branch: { select: { name: true } } },
+      select: { id: true, name: true, stock: true, unit: true, unitLabel: true, branch: { select: { name: true } } },
     });
     if (!product) return null;
     const movements = await tx.stockMovement.findMany({
@@ -124,7 +125,10 @@ export async function getProductStockMovements(id: string) {
       orderBy: { createdAt: "desc" },
       take: 100,
     });
-    return { product, movements };
+    return {
+      product: { ...product, stock: toQty(product.stock) },
+      movements: movements.map((m) => ({ ...m, quantityChange: toQty(m.quantityChange), stockBefore: toQty(m.stockBefore), stockAfter: toQty(m.stockAfter) })),
+    };
   });
 }
 
@@ -138,6 +142,8 @@ function readProductForm(formData: FormData) {
     trackStock: formData.get("trackStock") ?? undefined,
     stock: formData.get("stock") || undefined,
     lowStockThreshold: formData.get("lowStockThreshold"),
+    unit: formData.get("unit") || undefined,
+    unitLabel: formData.get("unitLabel") || undefined,
     taxCategory: formData.get("taxCategory") || undefined,
     image: formData.get("image") || undefined,
     priceTiersEnabled: formData.get("priceTiersEnabled") ?? undefined,
@@ -183,6 +189,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
       const product = await tx.product.create({
         data: {
           ...rest,
+          ...unitColumns(rest),
           priceCents: price,
           costCents: cost,
           imageDataUrl: image ?? null,
@@ -215,7 +222,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
 }
 
 export type QuickCreateProductResult =
-  | { success: true; product: { id: string; name: string; costCents: number | null; taxCategory: TaxCategory; stock: number } }
+  | { success: true; product: { id: string; name: string; costCents: number | null; taxCategory: TaxCategory; stock: number; unit: string; unitLabel: string | null } }
   | { success: false; error: string };
 
 // Pared-down product creation for the "+ Crear producto nuevo" shortcut
@@ -277,7 +284,7 @@ export async function quickCreateProduct(input: {
   void notifyLive(posChannel(companyId), "product");
   return {
     success: true,
-    product: { id: product.id, name: product.name, costCents: product.costCents, taxCategory: product.taxCategory, stock: product.stock },
+    product: { id: product.id, name: product.name, costCents: product.costCents, taxCategory: product.taxCategory, stock: toQty(product.stock), unit: product.unit, unitLabel: product.unitLabel },
   };
 }
 
@@ -298,9 +305,9 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
 
   let stockAdd: number | null = null;
   if (formData.has("stockAdd")) {
-    const n = Number(formData.get("stockAdd") || 0);
-    if (!Number.isInteger(n) || n < 0 || n > 1_000_000) {
-      return { success: false, error: "Las existencias a sumar deben ser un número entero de 0 a 1.000.000" };
+    const n = Number(String(formData.get("stockAdd") || 0).replace(",", "."));
+    if (!Number.isFinite(n) || n < 0 || n > 1_000_000) {
+      return { success: false, error: "Las existencias a sumar deben ser un número de 0 a 1.000.000" };
     }
     stockAdd = n;
   }
@@ -317,11 +324,16 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
 
       // «Sumar existencias»: la edición solo suma al stock que haya en este momento
       // (leído con la fila bloqueada), nunca lo reemplaza por un número viejo.
+      const existingStock = toQty(existing.stock);
       const resolvedStock = !trackStock
-        ? existing.stock
+        ? existingStock
         : stockAdd != null
-          ? existing.stock + stockAdd
+          ? addQty(existingStock, stockAdd)
           : (stock ?? 0);
+      if (stockAdd != null) {
+        const chk = validateQty(stockAdd, rest.unit, { allowZero: true });
+        if (!chk.ok) throw new Error(chk.error);
+      }
       // Stock is the source of truth for availability: reaching 0 always
       // deactivates, and manually entering stock for a previously
       // out-of-stock product reactivates it. An unrelated edit that leaves
@@ -332,7 +344,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
         ? existing.isActive
         : resolvedStock === 0
           ? false
-          : existing.stock === 0
+          : existingStock === 0
             ? true
             : existing.isActive;
 
@@ -340,6 +352,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
         where: { id, companyId, branchId },
         data: {
           ...rest,
+          ...unitColumns(rest),
           priceCents: price,
           costCents: cost,
           imageDataUrl: image ?? null,
@@ -350,10 +363,10 @@ export async function updateProduct(id: string, formData: FormData): Promise<Act
           isActive,
         },
       });
-      if (resolvedStock !== existing.stock) await recordStockMovement(tx, {
+      if (resolvedStock !== existingStock) await recordStockMovement(tx, {
         companyId, branchId, productId: existing.id, productName: existing.name, actorId, actorName,
         reason: "ADJUSTMENT", sourceType: "product", sourceId: existing.id,
-        quantityChange: resolvedStock - existing.stock, stockBefore: existing.stock,
+        quantityChange: subQty(resolvedStock, existingStock), stockBefore: existingStock,
       });
       return result;
     });
@@ -412,6 +425,10 @@ export type BulkImportRow = {
   trackStock?: unknown;
   stock?: unknown;
   lowStockThreshold?: unknown;
+  /** Nombre o abreviatura de la unidad (litro, ml, kg, pza...). Vacío = «unidad». */
+  unit?: unknown;
+  /** Solo para unit = «otra». */
+  unitLabel?: unknown;
   taxCategory?: unknown;
   priceTiersEnabled?: unknown;
   wholesalePrice?: unknown;
@@ -497,7 +514,8 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
         if (existing) {
           // Al re-importar solo se tocan las columnas que vienen en el archivo; el resto del producto se conserva.
           const touchStock = has("stock") || has("trackStock");
-          const nextStock = touchStock ? resolvedStock : existing.stock;
+          const existingStock = toQty(existing.stock);
+          const nextStock = touchStock ? resolvedStock : existingStock;
           const data: Prisma.ProductUncheckedUpdateInput = {
             name: rest.name,
             priceCents: price,
@@ -506,6 +524,7 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
             ...(has("trackStock") ? { trackStock } : {}),
             ...(touchStock ? { stock: nextStock, isActive: (has("trackStock") ? trackStock : existing.trackStock) ? nextStock > 0 : true } : {}),
             ...(has("lowStockThreshold") ? { lowStockThreshold: rest.lowStockThreshold } : {}),
+            ...(has("unit") ? unitColumns(rest) : {}),
             ...(has("taxCategory") ? { taxCategory: rest.taxCategory } : {}),
             ...(has("priceTiersEnabled") ? { priceTiersEnabled: rest.priceTiersEnabled } : {}),
             ...(has("wholesalePrice") ? { wholesalePriceCents: wholesalePrice } : {}),
@@ -514,10 +533,10 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
             ...(has("bulkMinQty") ? { bulkMinQty: rest.bulkMinQty } : {}),
           };
           await tx.product.update({ where: { id: existing.id }, data });
-          if (nextStock !== existing.stock) await recordStockMovement(tx, {
+          if (nextStock !== existingStock) await recordStockMovement(tx, {
             companyId, branchId, productId: existing.id, productName: existing.name, actorId, actorName,
             reason: "IMPORT", sourceType: "product_import", sourceId: existing.id,
-            quantityChange: nextStock - existing.stock, stockBefore: existing.stock,
+            quantityChange: subQty(nextStock, existingStock), stockBefore: existingStock,
           });
           updated++;
         } else {
@@ -527,7 +546,7 @@ export async function bulkImportProducts(rows: BulkImportRow[]): Promise<BulkImp
             continue;
           }
           const createdProduct = await tx.product.create({
-            data: { ...rest, ...priceFields, companyId, branchId },
+            data: { ...rest, ...unitColumns(rest), ...priceFields, companyId, branchId },
           });
           if (resolvedStock > 0) await recordStockMovement(tx, {
             companyId, branchId, productId: createdProduct.id, productName: createdProduct.name, actorId, actorName,
@@ -562,6 +581,8 @@ export type BulkUpdateRow = {
   trackStock?: unknown;
   stock?: unknown;
   lowStockThreshold?: unknown;
+  unit?: unknown;
+  unitLabel?: unknown;
   taxCategory?: unknown;
   priceTiersEnabled?: unknown;
   wholesalePrice?: unknown;
@@ -615,6 +636,8 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
         trackStock,
         stock,
         lowStockThreshold,
+        unit,
+        unitLabel,
         taxCategory,
         priceTiersEnabled,
         wholesalePrice,
@@ -634,6 +657,27 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
       }
 
       const data: Prisma.ProductUpdateInput = {};
+      const effUnit = unit ?? existing.unit;
+      if (unit !== undefined) {
+        if (unit.startsWith("__desconocida__:")) {
+          failed.push({ row: i + 1, error: `No reconozco la unidad «${unit.slice(16)}». Usa unidad, litro, ml, kg, g, metro, caja... o «otra» con su nombre.` });
+          continue;
+        }
+        if (unit === "otra" && !(unitLabel ?? existing.unitLabel)) {
+          failed.push({ row: i + 1, error: "Para la unidad «otra» escribe también su nombre (por ejemplo: rollo, saco)" });
+          continue;
+        }
+        const cols = unitColumns({ unit, unitLabel: unitLabel ?? existing.unitLabel ?? undefined });
+        data.unit = cols.unit;
+        data.unitLabel = cols.unitLabel;
+      }
+      if (stock !== undefined) {
+        const chk = validateQty(stock, effUnit, { allowZero: true });
+        if (!chk.ok) {
+          failed.push({ row: i + 1, error: chk.error });
+          continue;
+        }
+      }
       if (sku !== undefined) data.sku = sku;
       if (name !== undefined) data.name = name;
       if (category !== undefined) data.category = category;
@@ -658,10 +702,10 @@ export async function bulkUpdateProducts(rows: BulkUpdateRow[]): Promise<BulkUpd
 
       try {
         await tx.product.update({ where: { id: existing.id }, data });
-        if (stock !== undefined && stock !== existing.stock) await recordStockMovement(tx, {
+        if (stock !== undefined && stock !== toQty(existing.stock)) await recordStockMovement(tx, {
           companyId, branchId, productId: existing.id, productName: existing.name, actorId, actorName,
           reason: "ADJUSTMENT", sourceType: "bulk_update", sourceId: existing.id,
-          quantityChange: stock - existing.stock, stockBefore: existing.stock,
+          quantityChange: subQty(stock, toQty(existing.stock)), stockBefore: toQty(existing.stock),
         });
         updated++;
       } catch {
@@ -692,18 +736,17 @@ export async function registerInternalUse(
     return { success: false, error: 'Selecciona una sucursal — no se puede con "Todas las sucursales".' };
   }
   const branchId = session.branchId;
-  if (!Number.isInteger(quantity) || quantity <= 0) {
-    return { success: false, error: "La cantidad debe ser un número entero mayor a 0" };
-  }
-
   try {
     await withTenant(companyId, async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId} FOR UPDATE`;
       const product = await tx.product.findFirst({ where: { id: productId, companyId, branchId } });
       if (!product) throw new Error("Producto no encontrado");
       if (!product.trackStock) throw new Error("Este producto no lleva control de existencias");
-      if (product.stock < quantity) throw new Error(`Solo hay ${product.stock} en existencia`);
-      const after = product.stock - quantity;
+      const chk = validateQty(quantity, product.unit);
+      if (!chk.ok) throw new Error(chk.error);
+      const current = toQty(product.stock);
+      if (current < quantity) throw new Error(`Solo hay ${formatQtyUnit(current, product.unit, product.unitLabel)} en existencia`);
+      const after = subQty(current, quantity);
       await tx.product.update({ where: { id: product.id }, data: { stock: after, isActive: after > 0 } });
       await recordStockMovement(tx, {
         companyId, branchId, productId: product.id, productName: product.name, actorId, actorName,
@@ -711,7 +754,7 @@ export async function registerInternalUse(
         sourceType: taker?.name.trim()
           ? `taker:${taker.kind}|${taker.name.trim().slice(0, 60).replace(/\|/g, " ")}|${(note ?? "").trim().slice(0, 120)}`
           : note?.trim() ? `note:${note.trim().slice(0, 120)}` : "internal_use",
-        quantityChange: -quantity, stockBefore: product.stock,
+        quantityChange: -quantity, stockBefore: current,
       });
     });
   } catch (err) {
@@ -766,7 +809,7 @@ export async function listInternalUse(): Promise<InternalUseRow[]> {
     const cost = new Map(products.map((p) => [p.id, p.costCents ?? 0]));
     return moves.map((m) => {
       const t = parseTaker(m.sourceType, m.actorName);
-      const qty = Math.abs(m.quantityChange);
+      const qty = Math.abs(toQty(m.quantityChange));
       return {
         id: m.id,
         date: m.createdAt.toISOString(),
@@ -795,9 +838,10 @@ export async function deleteInternalUse(movementId: string): Promise<ActionResul
       if (already) throw new Error("Este retiro ya fue eliminado");
       affectedBranch = m.branchId;
       if (m.productId) {
-        const qty = Math.abs(m.quantityChange);
-        const rows = await tx.$queryRaw<{ stock: number }[]>`
-          UPDATE "Product" SET "stock" = "stock" + ${qty}, "isActive" = true
+        const qty = Math.abs(toQty(m.quantityChange));
+        const qtyText = qty.toFixed(3);
+        const rows = await tx.$queryRaw<{ stock: unknown }[]>`
+          UPDATE "Product" SET "stock" = "stock" + ${qtyText}::numeric, "isActive" = true
           WHERE "id" = ${m.productId} AND "companyId" = ${companyId} AND "branchId" = ${m.branchId} AND "trackStock" = true
           RETURNING "stock"
         `;
@@ -805,7 +849,7 @@ export async function deleteInternalUse(movementId: string): Promise<ActionResul
           await recordStockMovement(tx, {
             companyId, branchId: m.branchId, productId: m.productId, productName: m.productName, actorId, actorName,
             reason: "ADJUSTMENT", sourceType: "internal_use_void", sourceId: m.id,
-            quantityChange: qty, stockBefore: rows[0].stock - qty,
+            quantityChange: qty, stockBefore: subQty(toQty(rows[0].stock), qty),
           });
         } else {
           await tx.stockMovement.create({
@@ -841,23 +885,23 @@ export async function adjustStock(
     return { success: false, error: 'Selecciona una sucursal — no se puede con "Todas las sucursales".' };
   }
   const branchId = session.branchId;
-  if (!Number.isInteger(quantity) || quantity < 0 || (type !== "CONTEO" && quantity === 0)) {
-    return { success: false, error: type === "CONTEO" ? "La cantidad contada debe ser un número entero de 0 o más" : "La cantidad debe ser un número entero mayor a 0" };
-  }
   try {
     await withTenant(companyId, async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${productId} AND "companyId" = ${companyId} AND "branchId" = ${branchId} FOR UPDATE`;
       const product = await tx.product.findFirst({ where: { id: productId, companyId, branchId } });
       if (!product) throw new Error("Producto no encontrado");
       if (!product.trackStock) throw new Error("Este producto no lleva control de existencias");
-      const after = type === "ENTRADA" ? product.stock + quantity : type === "SALIDA" ? product.stock - quantity : quantity;
-      if (after < 0) throw new Error(`Solo hay ${product.stock} en existencia`);
+      const chk = validateQty(quantity, product.unit, { allowZero: type === "CONTEO" });
+      if (!chk.ok) throw new Error(chk.error);
+      const current = toQty(product.stock);
+      const after = type === "ENTRADA" ? addQty(current, quantity) : type === "SALIDA" ? subQty(current, quantity) : chk.qty;
+      if (after < 0) throw new Error(`Solo hay ${formatQtyUnit(current, product.unit, product.unitLabel)} en existencia`);
       await tx.product.update({ where: { id: product.id }, data: { stock: after, isActive: after > 0 ? true : product.isActive } });
       await recordStockMovement(tx, {
         companyId, branchId, productId: product.id, productName: product.name, actorId, actorName,
         reason: "ADJUSTMENT",
         sourceType: `${type.toLowerCase()}${note?.trim() ? `:${note.trim().slice(0, 120)}` : ""}`,
-        quantityChange: after - product.stock, stockBefore: product.stock, stockAfter: after,
+        quantityChange: subQty(after, current), stockBefore: current, stockAfter: after,
       });
     });
   } catch (err) {

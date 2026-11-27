@@ -9,6 +9,7 @@ import { withTenant } from "@/lib/tenant-db";
 import { QuoteSchema, type QuoteInput } from "@/lib/validations";
 import type { ActionResult } from "@/lib/types";
 import { resolveTierPrice } from "@/lib/pricing";
+import { lineTotalCents, toBaseQty, toQty } from "@/lib/units";
 import type { QuoteStatus } from "@prisma/client";
 
 export type CreateQuoteResult =
@@ -62,15 +63,20 @@ export async function createQuote(input: QuoteInput): Promise<CreateQuoteResult>
           throw new Error("Uno de los productos ya no existe");
         }
         // Mismo precio que cobrará la venta: por mayor / gran mayor según la cantidad.
-        const unitPriceCents = resolveTierPrice(product, item.quantity).priceCents;
-        const subtotalCents = unitPriceCents * item.quantity;
+        const qtyCheck = toBaseQty(item.quantity, item.unit, product.unit);
+        if (!qtyCheck.ok) throw new Error(`${product.name}: ${qtyCheck.error}`);
+        const qty = qtyCheck.qty;
+        const unitPriceCents = resolveTierPrice(product, qty).priceCents;
+        const subtotalCents = lineTotalCents(unitPriceCents, qty);
         totalCents += subtotalCents;
         return {
           productId: product.id,
           productName: product.name,
           category: product.category,
           unitPriceCents,
-          quantity: item.quantity,
+          quantity: qty,
+          unit: product.unit,
+          unitLabel: product.unitLabel,
           subtotalCents,
         };
       });
@@ -134,7 +140,7 @@ export async function getQuote(quoteId: string) {
     })
   );
   if (!quote) return null;
-  return { ...quote, exchangeRate: quote.exchangeRate != null ? Number(quote.exchangeRate) : null };
+  return { ...quote, items: quote.items.map((i) => ({ ...i, quantity: toQty(i.quantity) })), exchangeRate: quote.exchangeRate != null ? Number(quote.exchangeRate) : null };
 }
 
 export type QuoteConversionLine = {
@@ -143,6 +149,8 @@ export type QuoteConversionLine = {
   unitPriceCents: number;
   quantity: number;
   maxStock: number;
+  unit: string;
+  unitLabel: string | null;
 };
 
 export type QuoteForConversion = {
@@ -202,8 +210,10 @@ export async function getQuoteForConversion(quoteId: string): Promise<
       productId: product.id,
       name: product.name,
       unitPriceCents: product.priceCents,
-      quantity: Math.max(1, Math.min(item.quantity, product.trackStock ? Math.max(product.stock, 1) : item.quantity)),
-      maxStock: product.trackStock ? product.stock : Infinity,
+      quantity: product.trackStock && toQty(product.stock) > 0 ? Math.min(toQty(item.quantity), toQty(product.stock)) : toQty(item.quantity),
+      maxStock: product.trackStock ? toQty(product.stock) : Infinity,
+      unit: product.unit,
+      unitLabel: product.unitLabel,
     });
   }
 
@@ -352,7 +362,7 @@ export async function duplicateQuote(quoteId: string): Promise<ActionResult> {
         sellerName,
         note: q.note,
         validUntil: new Date(Date.now() + 15 * 86_400_000),
-        items: { create: q.items.map((i) => ({ productId: i.productId, productName: i.productName, category: i.category, unitPriceCents: i.unitPriceCents, quantity: i.quantity, subtotalCents: i.subtotalCents })) },
+        items: { create: q.items.map((i) => ({ productId: i.productId, productName: i.productName, category: i.category, unitPriceCents: i.unitPriceCents, quantity: i.quantity, unit: i.unit, unitLabel: i.unitLabel, subtotalCents: i.subtotalCents })) },
       },
     });
     return true;

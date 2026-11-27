@@ -1,5 +1,6 @@
 "use client";
 
+import { formatQtyCompact } from "@/lib/units";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -97,7 +98,7 @@ export function PendingSaleReview() {
             {sale.preview.items.map((item, i) => (
               <div key={i} className="flex justify-between">
                 <span>
-                  {item.quantity} × {item.productName}
+                  {formatQtyCompact(item.quantity, item.unit, item.unitLabel)} × {item.productName}
                 </span>
                 <span>{formatCurrencyCents("USD", item.subtotalCents)}</span>
               </div>

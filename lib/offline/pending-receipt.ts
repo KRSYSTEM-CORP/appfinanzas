@@ -1,4 +1,7 @@
-import type { PaymentStatus, SaleItem, SalePayment, TaxCategory, ReferenceCurrency } from "@prisma/client";
+import type { PaymentStatus, SaleItem as PrismaSaleItem, SalePayment, TaxCategory, ReferenceCurrency } from "@prisma/client";
+import { lineTotalCents } from "@/lib/units";
+
+type SaleItem = Omit<PrismaSaleItem, "quantity"> & { quantity: number };
 import type { CustomerInfo } from "@/components/pos/CustomerForm";
 import type { PaymentSplitRow } from "@/components/payments/PaymentSplitBuilder";
 import { resolveSalePayments } from "@/lib/payment-currency";
@@ -16,6 +19,7 @@ export type PendingReceiptLineInput = {
   taxCategory: TaxCategory;
   unitPriceCents: number;
   quantity: number;
+  product: { unit: string; unitLabel: string | null };
 };
 
 export type BuildPendingReceiptParams = {
@@ -66,9 +70,9 @@ export function buildPendingReceipt(params: BuildPendingReceiptParams) {
   const now = new Date();
   const localId = crypto.randomUUID();
 
-  const rawTotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+  const rawTotal = lines.reduce((sum, l) => sum + lineTotalCents(l.unitPriceCents, l.quantity), 0);
   const discountCentsTotal = lines.reduce(
-    (sum, l) => sum + computeItemDiscountCents(l.unitPriceCents * l.quantity, discountPercent),
+    (sum, l) => sum + computeItemDiscountCents(lineTotalCents(l.unitPriceCents, l.quantity), discountPercent),
     0
   );
   const total = rawTotal - discountCentsTotal;
@@ -90,7 +94,7 @@ export function buildPendingReceipt(params: BuildPendingReceiptParams) {
       : [];
 
   const items: SaleItem[] = lines.map((l) => {
-    const rawSubtotalCents = l.unitPriceCents * l.quantity;
+    const rawSubtotalCents = lineTotalCents(l.unitPriceCents, l.quantity);
     const itemDiscountCents = computeItemDiscountCents(rawSubtotalCents, discountPercent);
     const subtotalCents = rawSubtotalCents - itemDiscountCents;
     const taxRatePercent = rateForCategory(l.taxCategory, ivaGeneralRatePercent, ivaReducedRatePercent);
@@ -103,6 +107,8 @@ export function buildPendingReceipt(params: BuildPendingReceiptParams) {
       category: l.category,
       unitPriceCents: l.unitPriceCents,
       quantity: l.quantity,
+      unit: l.product.unit,
+      unitLabel: l.product.unitLabel,
       subtotalCents,
       discountCents: itemDiscountCents,
       taxCategory: l.taxCategory,

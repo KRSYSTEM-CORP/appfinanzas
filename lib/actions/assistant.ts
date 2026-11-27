@@ -80,7 +80,7 @@ async function buildContext(companyId: string, branchId: string | null, question
       tx.sale.aggregate({ where: { companyId, ...branchWhere, voided: false, paymentStatus: "CREDIT" }, _sum: { totalCents: true }, _count: true }),
       tx.expense.aggregate({ where: { companyId, spentAt: { gte: monthStart } }, _sum: { amountCents: true } }),
       tx.$queryRaw<{ name: string; qty: bigint; cents: bigint }[]>`
-        SELECT si."productName" AS name, SUM(si."quantity")::bigint AS qty, SUM(si."subtotalCents")::bigint AS cents
+        SELECT si."productName" AS name, SUM(si."quantity")::float8 AS qty, SUM(si."subtotalCents")::bigint AS cents
         FROM "SaleItem" si JOIN "Sale" s ON s.id = si."saleId"
         WHERE s."companyId" = ${companyId} AND s."voided" = false AND s."createdAt" >= ${since}
         GROUP BY 1 ORDER BY cents DESC LIMIT 5`,

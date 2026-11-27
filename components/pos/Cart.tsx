@@ -1,5 +1,6 @@
 "use client";
 
+import { getUnit, lineTotalCents, perUnitText } from "@/lib/units";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronRightIcon, MinusIcon, PauseIcon, PlusIcon, ShoppingCartIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ export type CartLine = {
   // Only present (and only meaningful) when the product has quantity-based
   // pricing configured — see lib/pricing.ts. priceTierOverride is the
   // seller's manual pick; null means auto-detect from quantity.
-  product: TieredProduct;
+  product: TieredProduct & { unit: string; unitLabel: string | null };
   priceTierOverride: PriceTier | null;
 };
 
@@ -46,7 +47,7 @@ function PriceTierPicker({
   override,
   onChange,
 }: {
-  product: TieredProduct;
+  product: TieredProduct & { unit: string; unitLabel: string | null };
   quantity: number;
   override: PriceTier | null;
   onChange: (tier: PriceTier | null) => void;
@@ -150,12 +151,12 @@ export function Cart({
   cashClosed?: boolean;
   error: string | null;
 }) {
-  const rawTotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+  const rawTotal = lines.reduce((sum, l) => sum + lineTotalCents(l.unitPriceCents, l.quantity), 0);
   // Same per-line rounding the server applies in completeSale, so this
   // preview always matches the total that's actually validated at checkout.
   const discountValue = Math.min(100, Math.max(0, Number(discountPercent) || 0));
   const discountCents = lines.reduce(
-    (sum, l) => sum + computeItemDiscountCents(l.unitPriceCents * l.quantity, discountValue),
+    (sum, l) => sum + computeItemDiscountCents(lineTotalCents(l.unitPriceCents, l.quantity), discountValue),
     0
   );
   const total = rawTotal - discountCents;
@@ -164,7 +165,7 @@ export function Cart({
   // just friction, and the server already accepts paymentStatus "PAID"
   // with no payment rows for a zero total (see completeSale).
   const isExonerated = total <= 0 && lines.length > 0;
-  const itemCount = lines.reduce((sum, l) => sum + l.quantity, 0);
+  const itemCount = lines.reduce((sum, l) => sum + (getUnit(l.product.unit).decimals ? 1 : l.quantity), 0);
 
   // Phones: the cart is a bottom sheet opened from a bar showing the total.
   // From md up the very same element is the inline column next to the catalog,
@@ -272,7 +273,7 @@ export function Cart({
             <div className="min-w-0 flex-1">
               <b className="block truncate font-bold">{line.name}</b>
               <small className="block text-[0.8333em] text-muted-foreground tabular-nums">
-                {formatCurrencyCents(referenceCurrency, line.unitPriceCents)} c/u
+                {formatCurrencyCents(referenceCurrency, line.unitPriceCents)} {perUnitText(line.product.unit, line.product.unitLabel)}
               </small>
               {line.product.priceTiersEnabled && (
                 <div className="mt-1">
@@ -298,7 +299,8 @@ export function Cart({
                 quantity={line.quantity}
                 maxStock={line.maxStock}
                 onCommit={(quantity) => onSetQuantity(line.productId, quantity)}
-                className="w-[22px] min-w-[22px] bg-transparent text-center font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                unit={line.product.unit}
+                className={`${line.product.unit === "unidad" ? "w-[22px] min-w-[22px]" : "w-14"} bg-transparent text-center font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-primary/40`}
               />
               <button
                 type="button"
@@ -311,7 +313,7 @@ export function Cart({
               </button>
             </span>
             <b className="min-w-16 text-right font-bold tabular-nums">
-              {formatCurrencyCents(referenceCurrency, line.unitPriceCents * line.quantity)}
+              {formatCurrencyCents(referenceCurrency, lineTotalCents(line.unitPriceCents, line.quantity))}
             </b>
           </div>
         ))}

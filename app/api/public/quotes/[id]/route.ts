@@ -1,3 +1,4 @@
+import { toQty } from "@/lib/units";
 import { NextResponse } from "next/server";
 import { withSuperAdmin } from "@/lib/tenant-db";
 import { buildQuotePDF, quoteControlNumberLabel } from "@/lib/quote-pdf";
@@ -40,7 +41,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const rate = exchangeRate ?? (quote.company.exchangeRate != null ? Number(quote.company.exchangeRate) : null);
 
   const doc = await buildQuotePDF(
-    quote,
+    { ...quote, items: quote.items.map((i) => ({ ...i, quantity: toQty(i.quantity) })) },
     company,
     rate,
     quote.company.localCurrencyCode,

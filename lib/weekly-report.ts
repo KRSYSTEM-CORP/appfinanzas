@@ -36,7 +36,7 @@ export async function sendWeeklyReports(): Promise<{ companies: number; sent: nu
         const [agg, top, managers] = await Promise.all([
           tx.sale.aggregate({ _sum: { totalCents: true }, _count: true, where: { companyId: c.id, voided: false, createdAt: { gte: start, lt: end } } }),
           tx.$queryRaw<{ name: string; qty: bigint }[]>`
-            SELECT si."productName" AS name, SUM(si."quantity")::bigint AS qty
+            SELECT si."productName" AS name, SUM(si."quantity")::float8 AS qty
             FROM "SaleItem" si JOIN "Sale" s ON s.id = si."saleId"
             WHERE s."companyId" = ${c.id} AND s."voided" = false AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
             GROUP BY si."productName" ORDER BY SUM(si."quantity") DESC LIMIT 3`,

@@ -1,3 +1,4 @@
+import { formatQtyCompact } from "@/lib/units";
 import { layoutCompanyName } from "@/lib/pdf-header-layout";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -72,6 +73,8 @@ export type DeliveryNoteSale = {
     productName: string;
     category?: string | null;
     quantity: number;
+    unit?: string;
+    unitLabel?: string | null;
     unitPriceCents: number;
     subtotalCents: number;
   }[];
@@ -460,7 +463,7 @@ export async function buildDeliveryNotePDF(
   y = renderNote(doc, isCreditNote ? `Motivo: ${creditNote.reason}` : sale.note, margin, y, pageWidth);
 
   const rows = sale.items.map((item) => [
-    String(item.quantity),
+    formatQtyCompact(item.quantity, item.unit, item.unitLabel),
     itemDescription(item),
     showLocal
       ? formatLocalCurrency(eurCentsToLocal(item.unitPriceCents, rate!), currencyCode)
@@ -584,7 +587,7 @@ export async function buildPaymentReceiptPDF(
   y += 10;
 
   const rows = sale.items.map((item) => [
-    String(item.quantity),
+    formatQtyCompact(item.quantity, item.unit, item.unitLabel),
     itemDescription(item),
     showLocal
       ? formatLocalCurrency(eurCentsToLocal(item.unitPriceCents, rate!), currencyCode)

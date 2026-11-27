@@ -11,6 +11,7 @@ import { findProductByCode, normalizeCode } from "@/lib/barcode";
 import { useBarcodeWedge } from "@/lib/use-barcode-wedge";
 import { isLowStock } from "@/lib/inventory";
 import type { ReferenceCurrency } from "@prisma/client";
+import { formatStock } from "@/lib/units";
 
 const PAGE_SIZE = 90;
 const ALL_CATEGORIES = "__all__";
@@ -89,7 +90,7 @@ const ProductCard = memo(function ProductCard({
           }`}
         >
           <span className="inline-block size-1.5 rounded-full bg-current" aria-hidden />
-          {p.stock} und.
+          {formatStock(p.stock, p.unit, p.unitLabel)}
         </span>
       )}
       {outOfStock && (

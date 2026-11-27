@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProductUpdateRowSchema } from "@/lib/validations";
 import { bulkUpdateProducts, listAllProducts, type BulkUpdateResult } from "@/lib/actions/products";
 import { TAX_CATEGORY_EXPORT_LABELS } from "@/lib/tax";
+import { unitName } from "@/lib/units";
 
 const HEADER_MAP: Record<string, string> = {
   id: "id",
@@ -35,6 +36,13 @@ const HEADER_MAP: Record<string, string> = {
   "umbral de stock bajo": "lowStockThreshold",
   umbral: "lowStockThreshold",
   lowstockthreshold: "lowStockThreshold",
+  unidad: "unit",
+  "unidad de medida": "unit",
+  unit: "unit",
+  um: "unit",
+  "etiqueta de unidad": "unitLabel",
+  "nombre de unidad": "unitLabel",
+  unitlabel: "unitLabel",
   iva: "taxCategory",
   "categoria de iva": "taxCategory",
   taxcategory: "taxCategory",
@@ -69,6 +77,8 @@ type ParsedRow = {
   trackStock?: unknown;
   stock?: unknown;
   lowStockThreshold?: unknown;
+  unit?: unknown;
+  unitLabel?: unknown;
   taxCategory?: unknown;
   priceTiersEnabled?: unknown;
   wholesalePrice?: unknown;
@@ -116,6 +126,7 @@ export function UpdateInventoryForm() {
           "SKU",
           "Nombre",
           "Categoría",
+          "Unidad",
           "Precio",
           "Costo",
           "Controlar stock",
@@ -133,6 +144,7 @@ export function UpdateInventoryForm() {
           p.sku ?? "",
           p.name,
           p.category ?? "",
+          unitName(p.unit, p.unitLabel),
           p.priceCents / 100,
           p.costCents != null ? p.costCents / 100 : "",
           p.trackStock ? "Sí" : "No",
@@ -190,6 +202,8 @@ export function UpdateInventoryForm() {
           trackStock: r.trackStock,
           stock: r.stock,
           lowStockThreshold: r.lowStockThreshold,
+          unit: r.unit,
+          unitLabel: r.unitLabel,
           taxCategory: r.taxCategory,
           priceTiersEnabled: r.priceTiersEnabled,
           wholesalePrice: r.wholesalePrice,

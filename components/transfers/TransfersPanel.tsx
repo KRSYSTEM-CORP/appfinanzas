@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
+import { formatQtyCompact, formatQtyUnit, getUnit, toQty } from "@/lib/units";
 import {
   createTransfer,
   listTransferableProducts,
@@ -53,9 +54,8 @@ export function TransfersPanel({
   const q = search.trim().toLowerCase();
   const shown = (q ? products.filter((p) => p.name.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q)) : products).slice(0, 30);
   const lines = Object.entries(qty)
-    .map(([productId, v]) => ({ productId, quantity: Math.floor(Number(v)) }))
+    .map(([productId, v]) => ({ productId, quantity: toQty(v) }))
     .filter((l) => l.quantity > 0);
-  const totalUnits = lines.reduce((a, l) => a + l.quantity, 0);
 
   function changeFrom(id: string) {
     setFromId(id);
@@ -128,7 +128,7 @@ export function TransfersPanel({
                       <p className="truncate font-medium">{p.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {p.sku ? `${p.sku} · ` : ""}
-                        {p.stock} en stock
+                        {formatQtyUnit(p.stock, p.unit, p.unitLabel)} en stock
                       </p>
                     </div>
                     <Input
@@ -136,8 +136,8 @@ export function TransfersPanel({
                       type="number"
                       min="0"
                       max={p.stock}
-                      step="1"
-                      inputMode="numeric"
+                      step={getUnit(p.unit).decimals ? "0.001" : "1"}
+                      inputMode={getUnit(p.unit).decimals ? "decimal" : "numeric"}
                       placeholder="0"
                       value={qty[p.id] ?? ""}
                       onChange={(e) => setQty((s) => ({ ...s, [p.id]: e.target.value }))}
@@ -165,7 +165,7 @@ export function TransfersPanel({
               Registrar traspaso
             </Button>
             <span className="text-sm text-muted-foreground">
-              {lines.length} {lines.length === 1 ? "producto" : "productos"} · {totalUnits} {totalUnits === 1 ? "unidad" : "unidades"}
+              {lines.length} {lines.length === 1 ? "producto" : "productos"}
             </span>
           </div>
         </CardContent>
@@ -188,7 +188,7 @@ export function TransfersPanel({
                       {formatDate(t.createdAt)} · {t.createdByName}
                     </span>
                   </div>
-                  <p className="text-muted-foreground">{t.items.map((i) => `${i.productName} ×${i.quantity}`).join(", ")}</p>
+                  <p className="text-muted-foreground">{t.items.map((i) => `${i.productName} ×${formatQtyCompact(i.quantity, i.unit, i.unitLabel)}`).join(", ")}</p>
                   {t.note && <p className="text-xs text-muted-foreground">{t.note}</p>}
                 </div>
               ))}

@@ -1,5 +1,6 @@
 "use client";
 
+import { lineTotalCents } from "@/lib/units";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { PlusIcon, SearchIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -224,13 +225,13 @@ const [step, setStep] = useState<Step>("cart");
     return () => window.removeEventListener(SALE_SYNCED_EVENT, onSynced);
   }, []);
 
-  const rawTotal = lines.reduce((sum, l) => sum + l.unitPriceCents * l.quantity, 0);
+  const rawTotal = lines.reduce((sum, l) => sum + lineTotalCents(l.unitPriceCents, l.quantity), 0);
   const discountValue = Math.min(100, Math.max(0, Number(discountPercent) || 0));
   // Same per-line rounding completeSale applies server-side, so the payment
   // split this drives always matches the total that's actually validated at
   // checkout (see assertPaymentsMatchTotal in lib/payment-currency.ts).
   const discountCentsTotal = lines.reduce(
-    (sum, l) => sum + computeItemDiscountCents(l.unitPriceCents * l.quantity, discountValue),
+    (sum, l) => sum + computeItemDiscountCents(lineTotalCents(l.unitPriceCents, l.quantity), discountValue),
     0
   );
   const total = rawTotal - discountCentsTotal;
@@ -254,7 +255,8 @@ const [step, setStep] = useState<Step>("cart");
       for (const it of items) {
         const product = productById.get(it.productId);
         if (!product) continue;
-        for (let i = 0; i < it.quantity; i++) addProductToCart(product);
+        addProductToCart(product);
+        if (it.quantity !== 1) setQuantity(product.id, it.quantity);
       }
     }
     window.addEventListener("kr-pos-resell", onResell);
@@ -333,6 +335,7 @@ const [step, setStep] = useState<Step>("cart");
           taxCategory: product?.taxCategory ?? "GENERAL",
           unitPriceCents: l.unitPriceCents,
           quantity: l.quantity,
+          product: { unit: product?.unit ?? l.product.unit, unitLabel: product?.unitLabel ?? l.product.unitLabel },
         };
       }),
       customer,
@@ -402,8 +405,10 @@ const [step, setStep] = useState<Step>("cart");
           productName: productById.get(l.productId)?.name ?? l.name,
           category: productById.get(l.productId)?.category ?? null,
           quantity: l.quantity,
+          unit: l.product.unit,
+          unitLabel: l.product.unitLabel,
           unitPriceCents: l.unitPriceCents,
-          subtotalCents: l.unitPriceCents * l.quantity - computeItemDiscountCents(l.unitPriceCents * l.quantity, discountValue),
+          subtotalCents: lineTotalCents(l.unitPriceCents, l.quantity) - computeItemDiscountCents(lineTotalCents(l.unitPriceCents, l.quantity), discountValue),
         })),
         sellerName,
         note: finalNote || null,

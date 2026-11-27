@@ -4,6 +4,7 @@ import { PaymentMethod, TaxCategory } from "@prisma/client";
 import { CURRENCIES } from "@/lib/currencies";
 import { zonedDateStringToUtc } from "@/lib/report-types";
 import { isSafeImageDataUrl } from "@/lib/image-validation";
+import { getUnit, normalizeUnitInput, parseUnit, toMilli } from "@/lib/units";
 
 const toCents = (v: number) => Math.round(v * 100);
 
@@ -148,6 +149,32 @@ function booleanFieldWithDefault(defaultValue: boolean) {
 // of just being left unset.
 const blankToUndefined = (v: unknown) => (v === "" || v == null ? undefined : v);
 
+// Texto libre → clave del catálogo de unidades. Vacío = «unidad». Desconocido = error claro (nunca se adivina).
+const unitField = z
+  .preprocess(
+    (v) => (v === "" || v == null ? "unidad" : parseUnit(String(v)) ?? "__desconocida__:" + String(v)),
+    z.string()
+  );
+
+function unitProblem(d: { unit: string; unitLabel?: string }): string | null {
+  if (d.unit.startsWith("__desconocida__:")) {
+    return `No reconozco la unidad «${d.unit.slice("__desconocida__:".length)}». Usa unidad, litro, ml, kg, g, metro, caja… o «otra» con su nombre.`;
+  }
+  const r = normalizeUnitInput({ unit: d.unit, unitLabel: d.unitLabel });
+  return r.ok ? null : r.error;
+}
+
+function qtyFitsUnit(q: number, unit: string): boolean {
+  if (toMilli(q) / 1000 !== Math.round(q * 1000) / 1000) return false;
+  return getUnit(unit).decimals || toMilli(q) % 1000 === 0;
+}
+
+function qtyUnitMessage(unit: string): string {
+  return getUnit(unit).decimals
+    ? "Usa hasta 3 decimales"
+    : `Este producto se mide por ${getUnit(unit).name}: usa números enteros`;
+}
+
 export const ProductSchema = z
   .object({
     name: z.string().trim().min(1, "El nombre es obligatorio"),
@@ -172,11 +199,14 @@ export const ProductSchema = z
     trackStock: booleanFieldWithDefault(true),
     stock: z.preprocess(
       blankToUndefined,
-      z.coerce.number().int().min(0, "El stock no puede ser negativo").optional()
+      z.coerce.number().min(0, "El stock no puede ser negativo").max(99_999_999).optional()
     ),
     lowStockThreshold: z
-      .preprocess(blankToUndefined, z.coerce.number().int().min(0).optional())
+      .preprocess(blankToUndefined, z.coerce.number().min(0).max(99_999_999).optional())
       .transform((v) => v ?? 5),
+    // Unidad base del producto: acepta la clave o un nombre/abreviatura en español (ml, litro, pza…).
+    unit: unitField,
+    unitLabel: z.preprocess(blankToUndefined, z.string().trim().max(40).optional()),
     taxCategory: TaxCategoryEnum.default("GENERAL"),
     image: z
       .string()
@@ -197,6 +227,11 @@ export const ProductSchema = z
       .preprocess(blankToUndefined, z.coerce.number().min(0).optional().nullable())
       .transform((v) => (v == null ? v : toCents(v as number))),
     bulkMinQty: z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional().nullable()),
+  })
+  .superRefine((d, ctx) => {
+    const problem = unitProblem(d);
+    if (problem) ctx.addIssue({ code: "custom", message: problem, path: ["unit"] });
+    else if (d.stock != null && !qtyFitsUnit(d.stock, d.unit)) ctx.addIssue({ code: "custom", message: qtyUnitMessage(d.unit), path: ["stock"] });
   })
   .refine((d) => !d.trackStock || d.stock != null, {
     message: "El stock es obligatorio cuando controlas el stock de este producto",
@@ -235,8 +270,11 @@ export const ProductUpdateRowSchema = z.object({
   cost: z
     .preprocess(blankToUndefined, z.coerce.number().min(0).optional())
     .transform((v) => (v == null ? v : toCents(v))),
-  stock: z.preprocess(blankToUndefined, z.coerce.number().int().min(0, "El stock no puede ser negativo").optional()),
-  lowStockThreshold: z.preprocess(blankToUndefined, z.coerce.number().int().min(0).optional()),
+  stock: z.preprocess(blankToUndefined, z.coerce.number().min(0, "El stock no puede ser negativo").max(99_999_999).optional()),
+  lowStockThreshold: z.preprocess(blankToUndefined, z.coerce.number().min(0).max(99_999_999).optional()),
+  // Columna «Unidad» opcional: vacía = no cambia.
+  unit: z.preprocess((v) => (v === "" || v == null ? undefined : parseUnit(String(v)) ?? "__desconocida__:" + String(v)), z.string().optional()),
+  unitLabel: z.preprocess(blankToUndefined, z.string().trim().max(40).optional()),
   taxCategory: z.preprocess(blankToUndefined, TaxCategoryEnum.optional()),
   trackStock: z.preprocess((v) => (v === "" || v == null ? undefined : (coerceBoolean(v) ?? v)), z.boolean().optional()),
   priceTiersEnabled: z.preprocess(
@@ -251,13 +289,21 @@ export const ProductUpdateRowSchema = z.object({
     .preprocess(blankToUndefined, z.coerce.number().min(0).optional())
     .transform((v) => (v == null ? v : toCents(v))),
   bulkMinQty: z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional()),
+}).superRefine((d, ctx) => {
+  if (d.unit?.startsWith("__desconocida__:")) {
+    ctx.addIssue({ code: "custom", path: ["unit"], message: `No reconozco la unidad «${d.unit.slice(16)}». Usa unidad, litro, ml, kg, g, metro, caja... o «otra» con su nombre.` });
+  } else if (d.unit === "otra" && !d.unitLabel) {
+    ctx.addIssue({ code: "custom", path: ["unit"], message: "Para la unidad «otra» escribe también su nombre (por ejemplo: rollo, saco)" });
+  }
 });
 
 export type ProductUpdateRowInput = z.infer<typeof ProductUpdateRowSchema>;
 
 export const CartItemSchema = z.object({
   productId: z.string(),
-  quantity: z.number().int().min(1),
+  // En la unidad `unit` (por defecto la unidad base del producto). El servidor la valida y la convierte.
+  quantity: z.number().positive(),
+  unit: z.string().max(20).optional(),
   // Seller's manual override of which price tier to charge (see
   // lib/pricing.ts) — omitted means auto-detect from quantity. Only POS
   // checkout (completeSale) reads this; Quote items ignore it.
@@ -714,7 +760,10 @@ export type SupplierInput = z.infer<typeof SupplierSchema>;
 
 const PurchaseItemSchema = z.object({
   productId: z.string().trim().min(1, "Selecciona un producto"),
-  quantity: z.coerce.number().int().positive("La cantidad debe ser mayor a 0"),
+  quantity: z.coerce.number().positive("La cantidad debe ser mayor a 0"),
+  // Unidades por empaque cuando el proveedor vende en caja/paquete (caja de 12 → 12). La cantidad se
+  // escribe en empaques y el costo es por empaque; se guarda en la unidad base.
+  packSize: z.coerce.number().positive().max(100_000).optional(),
   // Raw amount as typed, still in whatever currency unitCostInForeignCurrency
   // selects — createPurchase resolves it to reference-currency cents server-
   // side (same pattern as a payment-split row), so the exchange rate used is
@@ -800,7 +849,8 @@ export const BulkPurchaseRowSchema = z
     supplierInvoiceNo: z.preprocess(blankToUndefined, z.string().trim().optional()),
     productSku: z.preprocess(blankToUndefined, z.string().trim().optional()),
     productName: z.preprocess(blankToUndefined, z.string().trim().optional()),
-    quantity: z.coerce.number().int().positive("La cantidad debe ser mayor a 0"),
+    quantity: z.coerce.number().positive("La cantidad debe ser mayor a 0"),
+    packSize: z.preprocess(blankToUndefined, z.coerce.number().positive().max(100_000).optional()),
     unitCost: z.coerce.number().min(0, "El costo no puede ser negativo").transform(toCents),
     // Moneda de «Costo unitario» y «Total factura»: código (USD, EUR, VES…) o «Bs». Vacío = moneda de referencia.
     currency: z.preprocess(blankToUndefined, z.string().trim().max(10).optional()),

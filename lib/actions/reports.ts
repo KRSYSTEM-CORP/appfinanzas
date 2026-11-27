@@ -3,6 +3,7 @@
 import { Prisma } from "@prisma/client";
 import { requireManager, requireManagerOrPermission } from "@/lib/session";
 import { RESTOCK_WINDOW_DAYS, restockPlan } from "@/lib/restock";
+import { getUnit, lineTotalCents, toQty } from "@/lib/units";
 import { bq } from "@/lib/batch-sql";
 import { scopeMemo, withTenant } from "@/lib/tenant-db";
 import { closedDayWindows } from "@/lib/closed-days";
@@ -219,7 +220,7 @@ export async function topProducts(range: DateRangeSelection, limit = 10): Promis
     if (windows.length === 0) return [];
     return bq<{ productId: string | null; productName: string; category: string | null; quantity: number; revenue: number }>(tx)`
       SELECT si."productId", si."productName", si."category",
-             SUM(si."quantity")::bigint AS quantity, SUM(si."subtotalCents")::bigint AS revenue
+             SUM(si."quantity")::float8 AS quantity, SUM(si."subtotalCents")::bigint AS revenue
       FROM "SaleItem" si
       JOIN "Sale" s ON s."id" = si."saleId"
       WHERE s."companyId" = ${companyId}
@@ -315,7 +316,7 @@ export async function mostPurchasedProducts(range: DateRangeSelection, limit = 1
   return withTenant(companyId, async (tx) => {
     const rows = await bq<{ name: string; qty: bigint; cents: bigint }>(tx)`
       SELECT pi."productName" AS name,
-             SUM(pi."quantity")::bigint AS qty,
+             SUM(pi."quantity")::float8 AS qty,
              SUM(pi."subtotalCents")::bigint AS cents
       FROM "PurchaseItem" pi
       JOIN "Purchase" p ON p.id = pi."purchaseId"
@@ -343,7 +344,7 @@ export async function inventoryRotation(range: DateRangeSelection, limit = 10): 
     const windows = await closedDayWindows(tx, companyId, branchId, requestedWindows);
     if (windows.length === 0) return [];
     const rows = await bq<{ name: string; sold: bigint; stock: number }>(tx)`
-      SELECT pr."name" AS name, SUM(si."quantity")::bigint AS sold, pr."stock" AS stock
+      SELECT pr."name" AS name, SUM(si."quantity")::float8 AS sold, pr."stock" AS stock
       FROM "Product" pr
       JOIN "SaleItem" si ON si."productId" = pr.id
       JOIN "Sale" s ON s.id = si."saleId"
@@ -417,6 +418,8 @@ export type RestockSuggestion = {
   idealQty: number;
   /** Mínimo configurado del producto (alerta de stock bajo). */
   minStock: number;
+  unit: string;
+  unitLabel: string | null;
 };
 
 // Reposición sugerida: solo productos activos con control de stock que vendieron algo en 30 días.
@@ -425,8 +428,8 @@ export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]
   const { companyId, branchId } = await requireManagerOrPermission("stats", "admin");
   const since = new Date(Date.now() - RESTOCK_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   return withTenant(companyId, async (tx) => {
-    const rows = await bq<{ id: string; name: string; stock: number; cost: number | null; min_stock: number; sold: bigint; active_days: number }>(tx)`
-      SELECT pr.id, pr."name" AS name, pr."stock" AS stock, pr."costCents" AS cost, pr."lowStockThreshold" AS min_stock, SUM(si."quantity")::bigint AS sold,
+    const rows = await bq<{ id: string; name: string; stock: unknown; cost: number | null; min_stock: unknown; unit: string; unit_label: string | null; sold: unknown; active_days: number }>(tx)`
+      SELECT pr.id, pr."name" AS name, pr."stock" AS stock, pr."costCents" AS cost, pr."lowStockThreshold" AS min_stock, pr."unit" AS unit, pr."unitLabel" AS unit_label, SUM(si."quantity") AS sold,
              LEAST(${RESTOCK_WINDOW_DAYS}, GREATEST(1, CEIL(EXTRACT(EPOCH FROM (NOW() - GREATEST(${since}::timestamptz, pr."createdAt"))) / 86400.0)))::float AS active_days
       FROM "Product" pr
       JOIN "SaleItem" si ON si."productId" = pr.id
@@ -435,23 +438,27 @@ export async function restockSuggestions(limit = 8): Promise<RestockSuggestion[]
         ${branchId ? Prisma.sql`AND pr."branchId" = ${branchId}` : Prisma.empty}
         AND pr."isActive" = true AND pr."trackStock" = true
         AND s."voided" = false AND s."createdAt" >= ${since}
-      GROUP BY pr.id, pr."name", pr."stock", pr."costCents", pr."lowStockThreshold", pr."createdAt"
+      GROUP BY pr.id, pr."name", pr."stock", pr."costCents", pr."lowStockThreshold", pr."unit", pr."unitLabel", pr."createdAt"
     `;
     return rows
       .map((r) => {
-        const sold = Number(r.sold);
-        const plan = restockPlan({ sold, activeDays: r.active_days, stock: r.stock, minStock: r.min_stock });
+        const sold = toQty(r.sold);
+        const stock = toQty(r.stock);
+        const minStock = toQty(r.min_stock);
+        const plan = restockPlan({ sold, activeDays: r.active_days, stock, minStock, decimals: getUnit(r.unit).decimals });
         return {
           id: r.id,
           name: r.name,
-          stock: r.stock,
-          daysLeft: plan.perDay > 0 ? Math.floor(Math.max(0, r.stock) / plan.perDay) : null,
+          stock,
+          unit: r.unit,
+          unitLabel: r.unit_label,
+          daysLeft: plan.perDay > 0 ? Math.floor(Math.max(0, stock) / plan.perDay) : null,
           suggestedQty: plan.need,
-          estimatedCostCents: r.cost != null ? plan.need * r.cost : null,
+          estimatedCostCents: r.cost != null ? lineTotalCents(r.cost, plan.need) : null,
           soldInWindow: sold,
           perDay: plan.perDay,
           idealQty: plan.ideal,
-          minStock: r.min_stock,
+          minStock,
         };
       })
       .filter((x) => x.suggestedQty > 0)

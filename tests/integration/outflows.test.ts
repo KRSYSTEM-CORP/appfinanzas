@@ -1,3 +1,4 @@
+import { todayDateString } from "@/lib/report-types";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { customer, loadContext, owner, sessionFor, type Ctx } from "./helpers";
 
@@ -23,7 +24,7 @@ const { addCashOutflow, deleteCashOutflow, getDailyClosingSummary } = await impo
 const { getAccountBalances, getAccountMovements } = await import("@/lib/actions/payment-accounts");
 const { listOutflowHistory } = await import("@/lib/actions/cash-outflows");
 
-const today = new Date().toISOString().slice(0, 10);
+const today = todayDateString();
 const RATE = 40;
 let accountId: string;
 let usdAccountId: string;

@@ -23,6 +23,7 @@ import { computeItemDiscountCents } from "@/lib/discount";
 import { resolveTierPrice, tierPriceCents } from "@/lib/pricing";
 import type { ActionResult } from "@/lib/types";
 import { recordStockMovement } from "@/lib/stock-movements";
+import { subQty, addQty, lineTotalCents, toBaseQty, toQty, formatQtyUnit } from "@/lib/units";
 import { invalidateProductsCache } from "@/lib/products-cache";
 import { InsufficientFundsError, assertReceivingAccounts, toActionResult } from "@/lib/account-balance";
 import { defaultRefundLines, maxRefundRefCents, type OutflowSource } from "@/lib/cash-outflow";
@@ -213,9 +214,13 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         if (!product) {
           throw new Error("Uno de los productos ya no existe");
         }
-        if (product.trackStock && product.stock < item.quantity) {
+        // La cantidad llega en la unidad elegida en el POS (500 ml) y se guarda en la unidad base (0,5 L).
+        const qtyCheck = toBaseQty(item.quantity, item.unit, product.unit);
+        if (!qtyCheck.ok) throw new Error(`${product.name}: ${qtyCheck.error}`);
+        const qty = qtyCheck.qty;
+        if (product.trackStock && toQty(product.stock) < qty) {
           throw new Error(
-            `Stock insuficiente para "${product.name}" (disponible: ${product.stock})`
+            `Stock insuficiente para "${product.name}" (disponible: ${formatQtyUnit(product.stock, product.unit, product.unitLabel)})`
           );
         }
         // Price is always resolved server-side from the product's own
@@ -224,14 +229,14 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
         // tamper with what a sale actually charges. An override tier that
         // isn't actually configured on this product (or absent) falls back
         // to the quantity-based auto-detection.
-        const autoTier = resolveTierPrice(product, item.quantity);
+        const autoTier = resolveTierPrice(product, qty);
         const overridePriceCents = item.priceTier ? tierPriceCents(product, item.priceTier) : null;
         const unitPriceCents = overridePriceCents ?? autoTier.priceCents;
         // The discount is applied to each line's own subtotal BEFORE tax is
         // decomposed below — the fiscally correct order in Venezuela, since
         // it means the IVA on the factura is computed on the already-
         // discounted base, not just subtracted from an already-taxed total.
-        const rawSubtotalCents = unitPriceCents * item.quantity;
+        const rawSubtotalCents = lineTotalCents(unitPriceCents, qty);
         const itemDiscountCents = computeItemDiscountCents(rawSubtotalCents, discountPercent);
         const subtotalCents = rawSubtotalCents - itemDiscountCents;
         totalCents += subtotalCents;
@@ -245,7 +250,9 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
           productName: product.name,
           category: product.category,
           unitPriceCents,
-          quantity: item.quantity,
+          quantity: qty,
+          unit: product.unit,
+          unitLabel: product.unitLabel,
           subtotalCents,
           discountCents: itemDiscountCents,
           taxCategory: product.taxCategory,
@@ -365,18 +372,19 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
       // racing off the same stale productById snapshot.
       const quantityByProductId = new Map<string, number>();
       for (const item of itemsData) {
-        quantityByProductId.set(item.productId, (quantityByProductId.get(item.productId) ?? 0) + item.quantity);
+        quantityByProductId.set(item.productId, addQty(quantityByProductId.get(item.productId) ?? 0, item.quantity));
       }
       await Promise.all(
         Array.from(quantityByProductId, async ([productId, quantity]) => {
           const product = productById.get(productId)!;
           if (!product.trackStock) return;
-          const stockRows = await tx.$queryRaw<{ stock: number }[]>`
+          const qtyText = quantity.toFixed(3);
+          const stockRows = await tx.$queryRaw<{ stock: unknown }[]>`
             UPDATE "Product"
-            SET "stock" = "stock" - ${quantity},
-                "isActive" = CASE WHEN "stock" - ${quantity} = 0 THEN false ELSE "isActive" END
+            SET "stock" = "stock" - ${qtyText}::numeric,
+                "isActive" = CASE WHEN "stock" - ${qtyText}::numeric = 0 THEN false ELSE "isActive" END
             WHERE "id" = ${productId} AND "companyId" = ${companyId}
-              AND "branchId" = ${branchId} AND "trackStock" = true AND "stock" >= ${quantity}
+              AND "branchId" = ${branchId} AND "trackStock" = true AND "stock" >= ${qtyText}::numeric
             RETURNING "stock"
           `;
           if (stockRows.length === 0) {
@@ -386,15 +394,15 @@ export async function completeSale(input: unknown): Promise<CompleteSaleResult> 
             });
             throw new Error(
               current
-                ? `Stock insuficiente para "${current.name}" (disponible: ${current.stock})`
+                ? `Stock insuficiente para "${current.name}" (disponible: ${formatQtyUnit(current.stock, product.unit, product.unitLabel)})`
                 : "Uno de los productos ya no existe"
             );
           }
-          const stockAfter = stockRows[0].stock;
+          const stockAfter = toQty(stockRows[0].stock);
           await recordStockMovement(tx, {
             companyId, branchId, productId, productName: product.name, actorId: userId, actorName: sellerName,
             reason: "SALE", sourceType: "sale", sourceId: sale.id,
-            quantityChange: -quantity, stockBefore: stockAfter + quantity, stockAfter,
+            quantityChange: -quantity, stockBefore: addQty(stockAfter, quantity), stockAfter,
           });
         })
       );
@@ -455,7 +463,7 @@ async function restoreStock(tx: Prisma.TransactionClient, saleId: string, compan
   const quantityByProductId = new Map<string, number>();
   for (const item of items) {
     if (!item.productId) continue;
-    quantityByProductId.set(item.productId, (quantityByProductId.get(item.productId) ?? 0) + item.quantity);
+    quantityByProductId.set(item.productId, addQty(quantityByProductId.get(item.productId) ?? 0, toQty(item.quantity)));
   }
   if (quantityByProductId.size === 0) return;
 
@@ -463,10 +471,11 @@ async function restoreStock(tx: Prisma.TransactionClient, saleId: string, compan
     Array.from(quantityByProductId, async ([productId, quantity]) => {
       const product = await tx.product.findFirst({ where: { id: productId, companyId, branchId }, select: { name: true } });
       if (!product) return;
-      const rows = await tx.$queryRaw<{ stock: number }[]>`
+      const qtyText = quantity.toFixed(3);
+      const rows = await tx.$queryRaw<{ stock: unknown }[]>`
         UPDATE "Product"
-        SET "stock" = "stock" + ${quantity},
-            "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${quantity} > 0 THEN true ELSE "isActive" END
+        SET "stock" = "stock" + ${qtyText}::numeric,
+            "isActive" = CASE WHEN "stock" = 0 AND "stock" + ${qtyText}::numeric > 0 THEN true ELSE "isActive" END
         WHERE "id" = ${productId} AND "companyId" = ${companyId}
           AND "branchId" = ${branchId} AND "trackStock" = true
         RETURNING "stock"
@@ -474,7 +483,7 @@ async function restoreStock(tx: Prisma.TransactionClient, saleId: string, compan
       if (rows[0]) await recordStockMovement(tx, {
         companyId, branchId, productId, productName: product.name, actorId, actorName,
         reason: "SALE_VOID", sourceType: "sale", sourceId: saleId,
-        quantityChange: quantity, stockBefore: rows[0].stock - quantity, stockAfter: rows[0].stock,
+        quantityChange: quantity, stockBefore: subQty(toQty(rows[0].stock), quantity), stockAfter: toQty(rows[0].stock),
       });
     })
   );
@@ -905,6 +914,7 @@ export async function getSaleReceipt(saleId: string) {
     ...sale,
     exchangeRate: sale.exchangeRate != null ? Number(sale.exchangeRate) : null,
     paidExchangeRate: sale.paidExchangeRate != null ? Number(sale.paidExchangeRate) : null,
+    items: sale.items.map((i) => ({ ...i, quantity: toQty(i.quantity) })),
     payments: sale.payments.map((p) => ({
       ...p,
       exchangeRate: p.exchangeRate != null ? Number(p.exchangeRate) : null,
@@ -966,7 +976,7 @@ export type PosSaleRow = {
   paymentStatus: PaymentStatus;
   voided: boolean;
   totalCents: number;
-  items: { productId: string; quantity: number }[];
+  items: { productId: string; quantity: number; unit?: string }[];
 };
 
 // «Ventas del día / del periodo» dentro del POS (con «Volver a vender»).
@@ -984,6 +994,6 @@ export async function listPosSales(preset: "today" | "7d" | "month"): Promise<Po
     paymentStatus: s.paymentStatus,
     voided: s.voided,
     totalCents: s.totalCents,
-    items: s.items.filter((i) => i.productId).map((i) => ({ productId: i.productId as string, quantity: i.quantity })),
+    items: s.items.filter((i) => i.productId).map((i) => ({ productId: i.productId as string, quantity: toQty(i.quantity), unit: i.unit })),
   }));
 }

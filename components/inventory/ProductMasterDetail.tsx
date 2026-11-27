@@ -20,6 +20,7 @@ import { Price } from "@/components/money/Price";
 import { LowStockBadge } from "@/components/inventory/LowStockBadge";
 import { MasterDetail, MobileRow } from "@/components/shared/MasterDetail";
 import { isLowStock } from "@/lib/inventory";
+import { formatQtyCompact } from "@/lib/units";
 
 // The product list: a compact list with a sticky detail panel on desktop and a
 // compact list with a bottom sheet on phones (see MasterDetail).
@@ -126,7 +127,7 @@ export function ProductMasterDetail({
                   isLowStock(p) ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
                 }`}
               >
-                {p.stock}
+                {formatQtyCompact(p.stock, p.unit, p.unitLabel)}
               </span>
             )}
           </div>
@@ -143,7 +144,7 @@ export function ProductMasterDetail({
                 <>
                   {" · "}
                   <span className={`font-medium tabular-nums ${isLowStock(p) ? "text-warning" : "text-success"}`}>
-                    Stock {p.stock}
+                    Stock {formatQtyCompact(p.stock, p.unit, p.unitLabel)}
                   </span>
                 </>
               )}
@@ -195,7 +196,7 @@ export function ProductMasterDetail({
             <div className="flex flex-col gap-0.5">
               <dt className="text-xs text-muted-foreground">Stock</dt>
               <dd className="flex items-center gap-2">
-                <span className="font-medium tabular-nums">{selected.stock}</span>
+                <span className="font-medium tabular-nums">{formatQtyCompact(selected.stock, selected.unit, selected.unitLabel)}</span>
                 <LowStockBadge product={selected} />
               </dd>
             </div>

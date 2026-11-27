@@ -13,11 +13,12 @@ import { RowMenu } from "@/components/shared/RowMenu";
 import { Note, SectionCard, TwoCol } from "@/components/shared/SectionCard";
 import { deleteInternalUse, registerInternalUse, type InternalUseRow } from "@/lib/actions/products";
 import { bsOf, money } from "@/lib/money-display";
+import { formatQtyUnit, getUnit, lineTotalCents } from "@/lib/units";
 
 const SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const KIND: Record<string, string> = { SOCIO: "socio", PERSONAL: "personal" };
 
-type Product = { id: string; name: string; stock: number; costCents: number };
+type Product = { id: string; name: string; stock: number; costCents: number; unit: string; unitLabel: string | null };
 
 // «Agregar retiro»: quién retira, tipo (Socio o Personal), producto con buscador y cantidad.
 export function AddWithdrawalButton({ products, currency }: { products: Product[]; currency: string }) {
@@ -40,7 +41,7 @@ export function AddWithdrawalButton({ products, currency }: { products: Product[
         return;
       }
       const p = products.find((x) => x.id === productId);
-      toast.success(`Retiro agregado · costo ${money(currency, (p?.costCents ?? 0) * Number(qty))}`);
+      toast.success(`Retiro agregado · costo ${money(currency, lineTotalCents(p?.costCents ?? 0, Number(qty)))}`);
       setOpen(false);
       setWho("");
       setSearch("");
@@ -87,7 +88,7 @@ export function AddWithdrawalButton({ products, currency }: { products: Product[
                 >
                   <span className="truncate">{p.name}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    costo {money(currency, p.costCents)} · {p.stock} en stock
+                    costo {money(currency, p.costCents)} · {formatQtyUnit(p.stock, p.unit, p.unitLabel)} en stock
                   </span>
                 </button>
               ))
@@ -95,7 +96,7 @@ export function AddWithdrawalButton({ products, currency }: { products: Product[
           </div>
           <FieldPair>
             <Field label="Cantidad">
-              <input className={FIELD_CONTROL} type="number" min="1" step="1" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} />
+              <input className={FIELD_CONTROL} type="number" min="0.001" step={getUnit(products.find((x) => x.id === productId)?.unit).decimals ? "0.001" : "1"} inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
             </Field>
             <span />
           </FieldPair>

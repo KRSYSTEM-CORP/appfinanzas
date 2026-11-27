@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { addQty, getUnit, subQty } from "@/lib/units";
 import { useRouter } from "next/navigation";
 import type { ListedProduct } from "@/lib/product-image";
 import { Button } from "@/components/ui/button";
@@ -56,7 +57,7 @@ export function QuoteClient({
       const existing = prev.find((l) => l.productId === product.id);
       if (existing) {
         return prev.map((l) =>
-          l.productId === product.id ? { ...l, quantity: l.quantity + 1 } : l
+          l.productId === product.id ? { ...l, quantity: addQty(l.quantity, 1) } : l
         );
       }
       return [
@@ -67,6 +68,8 @@ export function QuoteClient({
           unitPriceCents: product.priceCents,
           quantity: 1,
           maxStock: QUOTE_MAX_QUANTITY,
+          unit: product.unit,
+          unitLabel: product.unitLabel,
         },
       ];
     });
@@ -74,14 +77,14 @@ export function QuoteClient({
 
   function increment(productId: string) {
     setLines((prev) =>
-      prev.map((l) => (l.productId === productId ? { ...l, quantity: l.quantity + 1 } : l))
+      prev.map((l) => (l.productId === productId ? { ...l, quantity: addQty(l.quantity, 1) } : l))
     );
   }
 
   function decrement(productId: string) {
     setLines((prev) =>
       prev
-        .map((l) => (l.productId === productId ? { ...l, quantity: l.quantity - 1 } : l))
+        .map((l) => (l.productId === productId ? { ...l, quantity: subQty(l.quantity, 1) } : l))
         .filter((l) => l.quantity > 0)
     );
   }
@@ -94,7 +97,7 @@ export function QuoteClient({
     setLines((prev) =>
       prev.map((l) => {
         if (l.productId !== productId) return l;
-        const clamped = Math.min(Math.max(1, quantity), l.maxStock);
+        const clamped = Math.min(Math.max(getUnit(l.unit).decimals ? 0.001 : 1, quantity), l.maxStock);
         return { ...l, quantity: clamped };
       })
     );
