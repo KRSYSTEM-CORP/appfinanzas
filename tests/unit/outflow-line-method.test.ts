@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lineForMethod, type OutflowLine } from "@/lib/cash-outflow";
+import { convertAmountForCurrency, lineForMethod, type OutflowLine } from "@/lib/cash-outflow";
 import { accountsForMethod, defaultAccountFor } from "@/lib/payment-method-accounts";
 
 const accounts = [
@@ -25,5 +25,15 @@ describe("elegir método en una salida", () => {
   });
   it("pago móvil usa bolívares", () => {
     expect(lineForMethod(base, "CARD", "pm1", true).currency).toBe("LOCAL");
+  });
+});
+
+describe("cambiar de moneda al elegir método", () => {
+  it("convierte el monto escrito con la tasa y no lo toca sin tasa", () => {
+    expect(convertAmountForCurrency("12.77", "REFERENCE", "LOCAL", 926.36)).toBe("11829.62");
+    expect(convertAmountForCurrency("926.36", "LOCAL", "REFERENCE", 926.36)).toBe("1.00");
+    expect(convertAmountForCurrency("12,5", "LOCAL", "LOCAL", 926.36)).toBe("12,5");
+    expect(convertAmountForCurrency("12.77", "REFERENCE", "LOCAL", null)).toBe("12.77");
+    expect(convertAmountForCurrency("", "REFERENCE", "LOCAL", 926.36)).toBe("");
   });
 });

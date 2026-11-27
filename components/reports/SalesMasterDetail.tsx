@@ -98,7 +98,10 @@ export function SalesMasterDetail({
               )}
               <div className="flex flex-col gap-0.5">
                 <dt className="text-xs text-muted-foreground">Artículos</dt>
-                <dd className="font-medium">{s.items.reduce((sum, i) => sum + i.quantity, 0)}</dd>
+                <dd className="font-medium">{s.items.some((i) => !Number.isInteger(Number(i.quantity)))
+                    ? `${s.items.length} ${s.items.length === 1 ? "producto" : "productos"}`
+                    : s.items.reduce((sum, i) => sum + Number(i.quantity), 0)}
+                </dd>
               </div>
               <div className="flex flex-col gap-0.5">
                 <dt className="text-xs text-muted-foreground">Estado</dt>

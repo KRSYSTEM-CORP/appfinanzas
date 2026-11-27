@@ -2,7 +2,7 @@
 
 import { MethodAndAccount, type PickableAccount } from "@/components/payments/MethodAndAccount";
 import { Field, FIELD_CONTROL } from "@/components/shared/Field";
-import { canChooseOutflowCurrency, defaultOutflowCurrency, lineCurrency, lineForMethod, type OutflowLine } from "@/lib/cash-outflow";
+import { canChooseOutflowCurrency, convertAmountForCurrency, defaultOutflowCurrency, lineCurrency, lineForMethod, type OutflowLine } from "@/lib/cash-outflow";
 import { formatCurrencyCents } from "@/lib/currencies";
 import { cn } from "@/lib/utils";
 import type { PaymentMethod } from "@prisma/client";
@@ -35,8 +35,13 @@ export function OutflowLineFields({
         ? formatCurrencyCents(money.referenceCurrency, Math.round(typed / money.rate))
         : formatCurrencyCents(money.localCurrencyCode, Math.round(typed * money.rate))
       : null;
+  // Si al cambiar de método cambia la moneda (dólares → bolívares), el monto escrito se convierte a la tasa del día.
+  function withConverted(next: OutflowLine): OutflowLine {
+    const to = lineCurrency(next, accounts, money.exchangeRateEnabled);
+    return to === cur ? next : { ...next, amount: convertAmountForCurrency(next.amount, cur, to, money.rate) };
+  }
   function pickMethod(m: PaymentMethod) {
-    onChange({ ...line, method: m, currency: defaultOutflowCurrency(m, money.exchangeRateEnabled) });
+    onChange(withConverted({ ...line, method: m, currency: defaultOutflowCurrency(m, money.exchangeRateEnabled) }));
   }
   return (
     <div className="flex flex-col gap-2">
@@ -45,8 +50,8 @@ export function OutflowLineFields({
         onMethod={pickMethod}
         accounts={accounts}
         accountId={line.accountId}
-        onAccount={(id) => onChange({ ...line, accountId: id })}
-        onPick={(m, accountId) => onChange(lineForMethod(line, m, accountId, money.exchangeRateEnabled))}
+        onAccount={(id) => onChange(withConverted({ ...line, accountId: id }))}
+        onPick={(m, accountId) => onChange(withConverted(lineForMethod(line, m, accountId, money.exchangeRateEnabled)))}
       />
       <div className="grid grid-cols-[1fr_auto] items-end gap-2">
         <Field label={`${amountLabel} en ${curCode}`} className="mt-0">
@@ -68,7 +73,7 @@ export function OutflowLineFields({
                 key={c}
                 type="button"
                 aria-pressed={cur === c}
-                onClick={() => onChange({ ...line, currency: c })}
+                onClick={() => onChange({ ...line, currency: c, amount: convertAmountForCurrency(line.amount, cur, c, money.rate) })}
                 className={cn("min-h-11 rounded-[12px] border-2 px-3 text-sm font-bold", cur === c ? "border-primary bg-primary/12" : "border-transparent bg-muted")}
               >
                 {c === "LOCAL" ? money.localCurrencyCode : money.referenceCurrency}
