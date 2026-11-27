@@ -46,6 +46,8 @@ export function BulkPriceIncreaseButton({
   const [preview, setPreview] = useState<PriceIncreasePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // Tras deshacer, el aviso de «último ajuste» se oculta sin esperar a que el servidor refresque.
+  const [undone, setUndone] = useState(false);
   const [pending, start] = useTransition();
 
   const bp = parsePercentBp(percent);
@@ -77,6 +79,7 @@ export function BulkPriceIncreaseButton({
     start(async () => {
       const r = await bulkIncreasePrices({ percent, rounding, category: cat, expectedCount: preview.count });
       if (r.success) {
+        setUndone(false);
         setDone(`Listo: subimos ${pct(bp ?? 0)} a ${r.count} ${r.count === 1 ? "producto" : "productos"}. Puedes deshacerlo durante 24 horas.`);
         setPreview(null);
         router.refresh();
@@ -91,6 +94,7 @@ export function BulkPriceIncreaseButton({
     start(async () => {
       const r = await undoLastPriceAdjustment();
       if (r.success) {
+        setUndone(true);
         setDone(
           r.skipped > 0
             ? `Devolvimos los precios anteriores de ${r.restored} productos. ${r.skipped} se habían editado a mano y los dejamos como están.`
@@ -181,7 +185,7 @@ export function BulkPriceIncreaseButton({
             {done && <p role="status" className="text-sm font-semibold text-primary">{done}</p>}
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
-            {last && !last.undoneAt && last.canUndo && !done && (
+            {last && !last.undoneAt && last.canUndo && !undone && (
               <div className="flex items-center justify-between gap-3 rounded-[14px] border p-3 text-sm">
                 <span>
                   Último ajuste: +{pct(last.percentBp)} a {last.productCount} productos ({new Date(last.createdAt).toLocaleString("es-VE")}, {last.actorName}).
