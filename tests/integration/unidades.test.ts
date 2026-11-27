@@ -146,7 +146,7 @@ describe("importación con unidades", () => {
   it("importa un CSV mixto de limpieza e informa la unidad desconocida", async () => {
     const res = await bulkImportProducts([
       { name: "Detergente Lt", sku: sku("DET"), price: 4, unit: "lt", stock: 12.5, lowStockThreshold: 2 },
-      { name: "Desinfectante ml", sku: sku("DES"), price: 0.004, unit: "mL", stock: 20000, lowStockThreshold: 1000 },
+      { name: "Desinfectante ml", sku: sku("DES"), price: 0.01, unit: "mL", stock: 20000, lowStockThreshold: 1000 },
       { name: "Escoba", sku: sku("ESC"), price: 5, unit: "pza", stock: 30, lowStockThreshold: 5 },
       { name: "Coleto 2", sku: sku("COL2"), price: 3, stock: 15, lowStockThreshold: 5 },
       { name: "Cuerda", sku: sku("CUE"), price: 1, unit: "otra", unitLabel: "rollo", stock: 4, lowStockThreshold: 1 },
